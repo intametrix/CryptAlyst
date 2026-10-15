@@ -34,7 +34,7 @@ import {
 } from '../chartData';
 import { clock, int, isoUtc, multiple, num, px, share, text, usd } from '../format';
 import { saveChipState, getLayout } from '../layout';
-import { LIVE_POLL_MS, bucketStart, liveIndicator, useKlines } from '../hooks/useKlines';
+import { INTERVAL_MS, LIVE_POLL_MS, bucketStart, liveIndicator, useKlines } from '../hooks/useKlines';
 import { useElementSize } from '../hooks/useElementSize';
 import { INTERVALS, type Interval, type ToolsMsg } from '../types';
 import { SplitPane } from './Panel';

@@ -31,6 +31,7 @@ import (
 	"pumpdump/backend/internal/binance"
 	"pumpdump/backend/internal/detect"
 	"pumpdump/backend/internal/events"
+	"pumpdump/backend/internal/fastsample"
 	"pumpdump/backend/internal/flow"
 	"pumpdump/backend/internal/heat"
 	"pumpdump/backend/internal/ledger"
@@ -265,6 +266,14 @@ func main() {
 
 	// Live chart push: flush coalesced ticks on a short interval.
 	go tickerPump.Run(ctx)
+
+	// 1s path sampling for the first minute after each detection, so the
+	// ten-second question is settled by measurement rather than by prior.
+	if opt.ledgerPath != "" {
+		sampler := fastsample.New(fastsample.Config{Path: opt.ledgerPath},
+			enginePrice{engine: engine})
+		go sampler.Run(ctx)
+	}
 
 	// --- background loops --------------------------------------------------
 	var wg sync.WaitGroup
