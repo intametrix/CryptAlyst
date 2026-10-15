@@ -3,6 +3,9 @@ import { MAX_ALERTS, useEventStream } from './api';
 import { AlertFeed } from './components/AlertFeed';
 import { ChartPanel } from './components/ChartPanel';
 import { ChartOverlay } from './components/ChartOverlay';
+import { EventsPanel, type ZoomPreset } from './components/EventsPanel';
+import type { ChartZoomControls } from './components/ChartPanel';
+import type { ChartMarker } from './chartData';
 import { SplitPane } from './components/Panel';
 import { FlowLeaderboard } from './components/FlowLeaderboard';
 import { Header } from './components/Header';
@@ -14,7 +17,7 @@ import { defaultIndicatorState } from './chartData';
 import { SymbolDrilldown } from './components/SymbolDrilldown';
 import { toggleFilter, type FeedFilter, type FilterKey } from './filters';
 import { HeatProvider, useHeatContext } from './heatContext';
-import { bumpLayoutGeneration, resetLayout, saveChipState } from './layout';
+import { bumpLayoutGeneration, readLayoutFlag, resetLayout, saveChipState, saveLayoutFlag } from './layout';
 import { SelectionProvider, readUrlState, useSelection, writeUrlState } from './selection';
 import { Tooltip } from './components/Tooltip';
 import { useTicker } from './hooks/useTicker';
@@ -62,6 +65,44 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
    * populated on the first frame instead of after a round trip.
    */
   const [drillSeed, setDrillSeed] = useState<Partial<SymbolDetailMsg> | null>(null);
+
+  /**
+   * The selected chart event — one piece of state shared by the markers on the
+   * chart and the rows in the event list, so clicking either highlights both.
+   */
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
+  /** The chart's zoom controls, published upward so the panel can drive them. */
+  const [zoomControls, setZoomControls] = useState<ChartZoomControls | null>(null);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [historyLimited, setHistoryLimited] = useState(false);
+  const [eventsExpanded, setEventsExpanded] = useState<boolean>(() => readLayoutFlag('events.expanded', true));
+
+  const handleZoomPreset = useCallback(
+    (preset: ZoomPreset) => {
+      const controls = zoomControlsRef.current;
+      if (controls === null) return;
+      const satisfied = controls.applyPreset(preset);
+      setActivePreset(preset.id);
+      // A preset that wanted more bars than are loaded says so rather than
+      // quietly fetching: the series in memory is the only source.
+      setHistoryLimited(!satisfied);
+    },
+    [],
+  );
+
+  const handleResetZoom = useCallback(() => {
+    zoomControlsRef.current?.reset();
+    setActivePreset(null);
+    setHistoryLimited(false);
+  }, []);
+
+  const toggleEventsExpanded = useCallback(() => {
+    setEventsExpanded((prev) => {
+      const next = !prev;
+      saveLayoutFlag('events.expanded', next);
+      return next;
+    });
+  }, []);
   const [filter, setFilter] = useState<FeedFilter>(() => ({
     severity: initial.current.severity,
     detector: initial.current.detector,
@@ -221,6 +262,27 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
     });
   }, [drillSymbol, drillView, filter, selection.interval]);
 
+  // Keep a ref so the zoom callbacks stay stable while the controls come and go
+  // with the chart's mount state.
+  const zoomControlsRef = useRef<ChartZoomControls | null>(null);
+  zoomControlsRef.current = zoomControls;
+
+  /**
+   * The charted symbol's marks, newest first.
+   *
+   * Published by the chart itself, so the list and the markers are literally the
+   * same objects and cannot disagree.
+   */
+  const [chartEvents, setChartEvents] = useState<ChartMarker[]>([]);
+
+  useEffect(() => {
+    // A new symbol or interval starts from the default view with nothing
+    // selected: reopening the chart must not restore an old zoom.
+    setSelectedEvent(null);
+    setActivePreset(null);
+    setHistoryLimited(false);
+  }, [selection.symbol, selection.interval]);
+
   const resetEverything = useCallback(() => {
     resetLayout();
     saveChipState(defaultIndicatorState());
@@ -336,6 +398,24 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               priceTick={priceTick}
               tickerTick={ticker.tick}
               tickerAtMs={ticker.lastAtMs}
+              selectedEvent={selectedEvent}
+              onSelectEvent={setSelectedEvent}
+              onZoomControls={setZoomControls}
+              onEvents={setChartEvents}
+              bottom={
+                <EventsPanel
+                  events={chartEvents}
+                  selected={selectedEvent}
+                  onSelect={setSelectedEvent}
+                  onZoomPreset={handleZoomPreset}
+                  onResetZoom={handleResetZoom}
+                  activePreset={activePreset}
+                  historyLimited={historyLimited}
+                  expanded={eventsExpanded}
+                  onToggleExpanded={toggleEventsExpanded}
+                  tools={tools}
+                />
+              }
             />
           </ChartOverlay>
         )}

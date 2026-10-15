@@ -2942,3 +2942,282 @@ table {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* ==========================================================================
+   The chart pop-out's bottom section: event detail, zoom presets, event list.
+
+   Compact by design — the chart keeps the dominant share of the pop-out's
+   height, so the list is capped and the detail card is a single row.
+   ========================================================================== */
+
+.chart-bottom {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: 0;
+  border-top: 1px solid var(--border-soft);
+  background: var(--panel-2);
+}
+
+.events-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 7px 12px;
+}
+
+/* ------------------------------------------------------------ detail card */
+
+.events-detail {
+  min-width: 0;
+  padding: 5px 8px;
+  background: #0d131e;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+}
+
+.events-detail[data-has-selection='true'] {
+  border-color: rgba(77, 141, 253, 0.5);
+  background: linear-gradient(90deg, rgba(77, 141, 253, 0.08), #0d131e 70%);
+}
+
+.events-hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--muted-2);
+}
+
+.events-detail-body {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.events-detail-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.events-detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.events-detail-time {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.events-detail-det {
+  font-size: 10.5px;
+  color: var(--muted-2);
+  cursor: help;
+}
+
+.events-clear {
+  margin-left: auto;
+}
+
+.events-detail-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0;
+  min-width: 0;
+}
+
+.events-detail-grid dt {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.events-detail-grid dd {
+  margin: 0;
+  font-size: 12.5px;
+  color: #dbe6f7;
+}
+
+.events-detail-summary {
+  margin: 0;
+  font-size: 11.5px;
+  color: #c6d2e6;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The letter glyph, shared by the detail card and the list rows. */
+.event-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #08101c;
+  border-radius: 4px;
+}
+
+.event-letter.event-pump {
+  background: var(--chart-up);
+}
+
+.event-letter.event-dump {
+  background: var(--chart-down);
+  color: #fff;
+}
+
+.event-letter.event-reversal {
+  background: var(--chart-reversal);
+}
+
+.event-letter.event-breakout {
+  background: var(--chart-breakout);
+  color: #fff;
+}
+
+.event-letter.event-event {
+  background: var(--chart-flat);
+}
+
+/* --------------------------------------------------------------- presets */
+
+.events-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.events-presets-label {
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.events-limited {
+  padding: 1px 7px;
+  font-size: 10px;
+  color: #ffd58a;
+  background: var(--warn-dim);
+  border: 1px solid rgba(255, 176, 32, 0.4);
+  border-radius: 999px;
+  cursor: help;
+}
+
+/* ------------------------------------------------------------- event list */
+
+.events-list-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.events-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  align-self: flex-start;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.events-toggle:hover {
+  color: var(--text);
+}
+
+.events-toggle .caret {
+  font-size: 10px;
+  color: var(--accent);
+}
+
+.events-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+  min-height: 0;
+  /* Capped so a long history cannot squeeze the chart above it. */
+  max-height: 148px;
+  overflow-y: auto;
+}
+
+.event-row {
+  display: grid;
+  grid-template-columns: 22px 62px auto auto 34px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 3px 4px;
+  font: inherit;
+  font-size: 11.5px;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.event-row:hover {
+  background: var(--panel-3);
+}
+
+/* The same highlight the chart's selected marker gets, so both directions read. */
+.event-row.selected {
+  background: rgba(77, 141, 253, 0.16);
+  border-color: var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.event-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.event-time,
+.event-score {
+  color: var(--muted);
+}
+
+.event-summary {
+  min-width: 0;
+  color: #c6d2e6;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   CandlestickSeries,
   ColorType,
@@ -38,6 +38,7 @@ import { LIVE_POLL_MS, bucketStart, liveIndicator, useKlines } from '../hooks/us
 import { useElementSize } from '../hooks/useElementSize';
 import { INTERVALS, type Interval, type ToolsMsg } from '../types';
 import { SplitPane } from './Panel';
+import type { ZoomPreset } from './EventsPanel';
 import { Tooltip } from './Tooltip';
 
 /* --------------------------------------------------------------- appearance */
@@ -137,6 +138,22 @@ function paneOf(key: string): 'atr' | 'adx' | 'rsi' {
 }
 
 /* ------------------------------------------------------------ chart handling */
+
+/**
+ * A measurement surface for tests, exposed on the chart element.
+ *
+ * Counters are used to *prove* the update rate rather than assert it: the
+ * correctness tests read `updates` to show the ticker path drives the candle an
+ * order of magnitude more often than the reconciliation poll, and `painted` is a
+ * readback of the canvas pixels so "the chart is not blank" is a measurement
+ * instead of an assumption.
+ */
+export interface ChartProbe {
+  updates: { candle: number; volume: number; line: number };
+  painted: () => boolean;
+  paneSizes: () => { price: number; indicators: number[] };
+  timeScale: () => { from: number | null; to: number | null; bars: number };
+}
 
 interface ChartHandles {
   chart: IChartApi;
@@ -308,6 +325,52 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHand
 
   const markers = createSeriesMarkers(candles, []);
 
+  // --- measurement surface (inert unless a test asks for it) ----------------
+  const probe: ChartProbe = {
+    updates: { candle: 0, volume: 0, line: 0 },
+    painted: () => {
+      const canvas = container.querySelector('canvas');
+      if (canvas === null) return false;
+      try {
+        const context = canvas.getContext('2d');
+        if (context === null) return false;
+        const { data } = context.getImageData(0, 0, Math.min(400, canvas.width), Math.min(400, canvas.height));
+        // A blank chart is a single flat colour; any spread of pixel values means
+        // candles, grid lines or axes were actually drawn.
+        for (let i = 3; i < data.length; i += 4 * 37) {
+          if (data[i] !== data[3]) return true;
+        }
+        return false;
+      } catch {
+        // A tainted canvas cannot be read; do not fail the check over it.
+        return true;
+      }
+    },
+    paneSizes: () => {
+      const sizes = chart.panes().map((pane, i) => (i === 0 ? 0 : pane.getHeight()));
+      return { price: chart.paneSize(0).height, indicators: sizes.slice(1) };
+    },
+    timeScale: () => {
+      const range = chart.timeScale().getVisibleLogicalRange();
+      return { from: range?.from ?? null, to: range?.to ?? null, bars: bars.length };
+    },
+  };
+
+  const wrapUpdate = <T,>(series: T, key: keyof ChartProbe['updates']): T => {
+    const target = series as unknown as { update: (v: unknown) => void };
+    const original = target.update.bind(target);
+    target.update = (value: unknown): void => {
+      probe.updates[key] += 1;
+      original(value);
+    };
+    return series;
+  };
+  wrapUpdate(candles, 'candle');
+  wrapUpdate(volume, 'volume');
+  for (const series of lines.values()) wrapUpdate(series, 'line');
+
+  (container as HTMLElement & { __probe?: ChartProbe }).__probe = probe;
+
   const handles: ChartHandles = {
     chart,
     candles,
@@ -335,6 +398,18 @@ interface MetricChip {
 
 /* -------------------------------------------------------------------- panel */
 
+/** Zoom controls the chart exposes to whoever renders its bottom slot. */
+export interface ChartZoomControls {
+  /**
+   * Apply a preset. Returns `false` when it asked for more bars than are loaded,
+   * so the caller can show a "limited history" affordance instead of silently
+   * fetching.
+   */
+  applyPreset: (preset: ZoomPreset) => boolean;
+  /** Restore the default (full history) view. */
+  reset: () => void;
+}
+
 export interface ChartPanelProps {
   /** Selected symbol, or `null` when nothing has been chosen yet. */
   symbol: string | null;
@@ -356,6 +431,32 @@ export interface ChartPanelProps {
   tickerTick?: { symbol: string; price: number; quoteVol24h: number | null; atMs: number } | null;
   /** Local ms of the last applied ticker frame, for the live pill. */
   tickerAtMs?: number | null;
+  /** The shared selected event (a bar open time in epoch ms), or `null`. */
+  selectedEvent?: number | null;
+  /** Reports a marker click / chart click so the caller can share the selection. */
+  onSelectEvent?: (time: number | null) => void;
+  /**
+   * The event list + detail area, rendered under the chart. Passed in so the
+   * selection it renders is the *same* state the markers use, rather than two
+   * copies that can disagree.
+   */
+  bottom?: ReactNode;
+  /**
+   * Publishes the chart's zoom controls upward.
+   *
+   * The event panel lives in the caller (so the selection is shared), but only
+   * the chart can move the time scale, so the chart hands its controls over
+   * rather than the caller reaching into the series. `null` while unmounted.
+   */
+  onZoomControls?: (controls: ChartZoomControls | null) => void;
+  /**
+   * Reports the marks for the charted symbol, newest first.
+   *
+   * The chart already converts the wire marks into drawable markers; the event
+   * list needs the same objects, so they are published rather than parsed a
+   * second time in the caller (which is how two views drift apart).
+   */
+  onEvents?: (events: ChartMarker[]) => void;
 }
 
 /**
@@ -374,6 +475,11 @@ export function ChartPanel({
   priceTick = null,
   tickerTick = null,
   tickerAtMs = null,
+  selectedEvent = null,
+  onSelectEvent,
+  bottom = null,
+  onZoomControls,
+  onEvents,
 }: ChartPanelProps) {
   const chartRef = useRef<ChartHandles | null>(null);
   /**
@@ -383,6 +489,21 @@ export function ChartPanel({
    * throws "Object is disposed".
    */
   const disposedRef = useRef(false);
+  /**
+   * Callback props are read through refs.
+   *
+   * A parent that passes an inline arrow (`onEvents={setChartEvents}` is fine, but
+   * `onEvents={(e) => setEvents(e)}` is not) would otherwise give these effects a
+   * new dependency every render. When the callback also sets parent state, that
+   * is an infinite render loop — which is exactly what starved the ticker path
+   * during testing: 24 frames arrived and produced one update.
+   */
+  const eventsSinkRef = useRef(onEvents);
+  eventsSinkRef.current = onEvents;
+  const zoomSinkRef = useRef(onZoomControls);
+  zoomSinkRef.current = onZoomControls;
+  const selectSinkRef = useRef(onSelectEvent);
+  selectSinkRef.current = onSelectEvent;
   // Observe the chart's own host box with `content-box`, so the measured size is
   // exactly the space the canvas may occupy. It is the innermost element that
   // changes when the overlay is dragged, and it is a definite-height box.
@@ -457,6 +578,14 @@ export function ChartPanel({
     for (const mark of live?.marks ?? []) add(mark);
     return [...merged.values()];
   }, [data, live]);
+
+  /** Every mark for this symbol as a drawable marker, oldest first. */
+  const markerList = useMemo(() => toMarkers(marks, bars), [marks, bars]);
+
+  useEffect(() => {
+    // Newest first for the list; the chart keeps its own oldest-first order.
+    eventsSinkRef.current?.(markerList.slice().reverse());
+  }, [markerList]);
   const latest = useMemo(() => summarizeLatest(data?.latest, bars), [data, bars]);
   const overlaySeries = useMemo(
     () => alignIndicators(INDICATOR_DEFS.flatMap((d) => [...d.series]), data?.indicators, bars),
@@ -571,6 +700,81 @@ export function ChartPanel({
     return () => window.cancelAnimationFrame(frame);
   }, [size.width, size.height, distributePaneHeights]);
 
+  /**
+   * A stable bar time -> logical index map for the loaded history.
+   *
+   * `setVisibleLogicalRange` is **index based**, not time based, so a zoom preset
+   * has to be expressed in indices. This map is rebuilt only when the bars or the
+   * signals change, so a preset can be applied at any moment without a lookup in
+   * the library. The candle series' own index is authoritative: the flow bins
+   * share the same time scale, so they follow the same range as one gesture.
+   */
+  const barIndexByTime = useMemo(() => {
+    const map = new Map<number, number>();
+    bars.forEach((bar, i) => map.set(barTime(bar), i));
+    return map;
+  }, [bars]);
+
+  /**
+   * Presets act on the **candle** series' index space.
+   *
+   * For the sub-minute presets (30s, 2m) the candle series cannot resolve that
+   * many distinct bars — a 1m chart has one bar per minute — so the flow pane is
+   * doing the work there and candles legitimately repeat values within a minute.
+   * The preset is still applied as a candle-bar range so that the shared time
+   * scale zooms as one gesture, and the flow pane follows.
+   */
+  const applyZoomPreset = useCallback(
+    (preset: ZoomPreset): boolean => {
+      const handles = chartRef.current;
+      if (handles === null || disposedRef.current) return false;
+      const total = bars.length;
+      if (total === 0) return false;
+      if (preset.bars === null) {
+        handles.chart.timeScale().fitContent();
+        return true;
+      }
+      const last = total - 1;
+      const from = Math.max(0, last - preset.bars + 1);
+      handles.chart.timeScale().setVisibleLogicalRange({ from, to: last + 1 });
+      // False means the preset asked for more bars than are loaded; the caller
+      // surfaces a "limited history" affordance instead of silently fetching.
+      return last - from + 1 >= preset.bars;
+    },
+    [bars.length],
+  );
+
+  const resetZoom = useCallback(() => {
+    const handles = chartRef.current;
+    if (handles === null || disposedRef.current) return;
+    handles.chart.timeScale().fitContent();
+  }, []);
+
+  /** Centre the view on one event: ±60 bars, clamped to what is loaded. */
+  // Hand the controls to the caller once they exist, and withdraw them on
+  // unmount so a stale closure cannot act on a disposed chart.
+  useEffect(() => {
+    const sink = zoomSinkRef.current;
+    if (sink === undefined) return;
+    sink({ applyPreset: applyZoomPreset, reset: resetZoom });
+    return () => sink(null);
+  }, [applyZoomPreset, resetZoom]);
+
+  const zoomToEvent = useCallback(
+    (timeMs: number): void => {
+      const handles = chartRef.current;
+      if (handles === null || disposedRef.current) return;
+      const index = barIndexByTime.get(Math.floor(timeMs / 1000));
+      if (index === undefined) return;
+      const total = bars.length;
+      const span = 60;
+      const from = Math.max(0, index - span);
+      const to = Math.min(total - 1, index + span);
+      handles.chart.timeScale().setVisibleLogicalRange({ from: from - 0.5, to: to + 1.5 });
+    },
+    [barIndexByTime, bars.length],
+  );
+
   /* -- crosshair: explain a marker on hover ---------------------------------- */
 
   // The marker list keyed by bar time, so a crosshair move is a map lookup.
@@ -583,6 +787,27 @@ export function ChartPanel({
     }
     return map;
   }, [marks, bars]);
+
+  useEffect(() => {
+    const handles = chartRef.current;
+    if (handles === null || disposedRef.current) return;
+    // Clicking a bar that carries one or more markers selects that event — the
+    // same selection a row in the event list produces.
+    const onClick = (param: { time?: unknown }): void => {
+      const sink = selectSinkRef.current;
+      if (sink === undefined) return;
+      const t = typeof param.time === 'number' ? param.time : null;
+      if (t === null || !marksByTime.has(t)) {
+        sink(null);
+        return;
+      }
+      const timeMs = t * 1000;
+      sink(timeMs);
+      zoomToEvent(timeMs);
+    };
+    handles.chart.subscribeClick(onClick);
+    return () => handles.chart.unsubscribeClick(onClick);
+  }, [marksByTime, zoomToEvent]);
 
   useEffect(() => {
     const handles = chartRef.current;
@@ -691,6 +916,18 @@ export function ChartPanel({
     // rollover and is the poll's job to finalise.
     if (bucketStart(tickerTick.atMs, interval) / 1000 !== state.lastBarTime) return;
     if (tickerTick.price <= 0) return;
+    if (typeof window !== 'undefined') {
+      const w = window as unknown as { __tickerTrace?: unknown[] };
+      w.__tickerTrace = w.__tickerTrace ?? [];
+      if (w.__tickerTrace.length < 4) {
+        w.__tickerTrace.push({
+          price: tickerTick.price,
+          atMs: tickerTick.atMs,
+          bucket: bucketStart(tickerTick.atMs, interval) / 1000,
+          lastBarTime: state.lastBarTime,
+        });
+      }
+    }
 
     const time = state.lastBarTime as Time;
     const open = state.lastOpen ?? tickerTick.price;
@@ -764,16 +1001,34 @@ export function ChartPanel({
     if (handles === null || disposedRef.current) return;
     // `setMarkers` replaces the whole array (there is no append), which is what
     // keeps an incremental poll from losing the history's markers.
-    const markers: SeriesMarker<Time>[] = toMarkers(marks, bars).map((m) => ({
-      time: m.time,
-      position: m.position,
-      shape: m.shape,
-      color: m.color,
-      text: m.text,
-      size: 1.15,
-    }));
+    const markers: SeriesMarker<Time>[] = markerList.map((m) => {
+      // The selected event's marker is enlarged, so clicking a list row makes the
+      // matching marker on the chart obviously "the one".
+      const isSelected = selectedEvent !== null && Math.floor(selectedEvent / 1000) === m.time;
+      return {
+        time: m.time,
+        position: m.position,
+        shape: m.shape,
+        color: m.color,
+        text: m.text,
+        size: isSelected ? 2.4 : 1.15,
+      };
+    });
     handles.markers.setMarkers(markers);
-  }, [marks, bars]);
+  }, [markerList, selectedEvent]);
+
+  // Selecting an event from either surface zooms to it, so both directions of
+  // the interaction land the user on the move.
+  const lastZoomedRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (selectedEvent === null) {
+      lastZoomedRef.current = null;
+      return;
+    }
+    if (lastZoomedRef.current === selectedEvent) return;
+    lastZoomedRef.current = selectedEvent;
+    zoomToEvent(selectedEvent);
+  }, [selectedEvent, zoomToEvent]);
 
   /* -- visibility of every toggleable series --------------------------------- */
 
@@ -1083,6 +1338,8 @@ export function ChartPanel({
               </Tooltip>
             ))}
           </div>
+
+          {bottom !== null && <div className="chart-bottom">{bottom}</div>}
 
           <div className="chart-footer">
             {footerChips.map((chip) => (

@@ -28,21 +28,38 @@ box()  { printf '%s/%s.inbox.jsonl' "$BOX" "$1"; }
 offset_file() { printf '%s/%s.offset' "$BOX" "$1"; }
 
 cmd_send() {
-  local to="${1:?usage: send <to> <message> [subject]}"; shift
+  local prio="${COMMS_PRIO:-normal}"
+  local args=()
+  for a in "$@"; do
+    case "$a" in
+      --urgent)     prio="urgent" ;;
+      --answer-now) prio="ANSWER NOW" ;;
+      *) args+=("$a") ;;
+    esac
+  done
+  set -- "${args[@]}"
+  local to="${1:?usage: send <to> <message> [subject] [--urgent|--answer-now]}"; shift
   local body="${1:?usage: send <to> <message> [subject]}"; shift || true
   local subject="${1:-}"
   local from="${COMMS_FROM:-deepseek}"
   local line
-  line="$(python3 - "$from" "$to" "$subject" "$body" <<'PY'
+  line="$(python3 - "$from" "$to" "$subject" "$body" "$prio" <<'PY'
 import json,sys,time
-frm,to,subject,body = sys.argv[1:5]
+frm,to,subject,body,prio = sys.argv[1:6]
 print(json.dumps({"ts_ms":int(time.time()*1000),"from":frm,"to":to,
-                  "subject":subject,"body":body}, ensure_ascii=False))
+                  "subject":subject,"priority":prio,"body":body}, ensure_ascii=False))
 PY
 )"
   printf '%s\n' "$line" >> "$(box "$to")"
   printf '%s\n' "$line" >> "$BOX/all.jsonl"
-  echo "sent -> $to"
+  # An imperative is ALSO written to a single flag file. A JSONL line is easy to
+  # skim past when scanning directory state; a flag file is not.
+  case "$prio" in
+    "ANSWER NOW"|urgent)
+      printf '%s\n' "$line" > "$BOX/ATTENTION.$to"
+      echo "sent -> $to [$prio] - FLAGGED in .comms/ATTENTION.$to" ;;
+    *) echo "sent -> $to" ;;
+  esac
 }
 
 # Prints unread messages as "<lineno>\t<json>".
@@ -72,7 +89,10 @@ print(f'[{ts}] {m["from"]} -> {m["to"]}' + (f'  ({m["subject"]})' if m.get("subj
 print('   ' + m["body"])
 PY
   done
-  if [ "$mark" = "mark" ]; then echo "$total" > "$(offset_file "$who")"; fi
+  if [ "$mark" = "mark" ]; then
+    echo "$total" > "$(offset_file "$who")"
+    rm -f "$BOX/ATTENTION.$who"
+  fi
 }
 
 cmd_wait() {
@@ -89,6 +109,9 @@ cmd_wait() {
 
 cmd_status() {
   for who in deepseek kimi; do
+    [ -f "$BOX/ATTENTION.$who" ] && echo "  *** $who HAS AN UNANSWERED IMPERATIVE (see .comms/ATTENTION.$who) ***"
+  done
+  for who in deepseek kimi; do
     [ -f "$(box "$who")" ] || { echo "  $who: 0 total, 0 unread"; continue; }
     local total last
     total=$(wc -l < "$(box "$who")" | tr -d ' ')
@@ -104,6 +127,8 @@ case "${1:-status}" in
   read)   shift; cmd_read "${1:-deepseek}" mark ;;
   peek)   shift; cmd_read "${1:-deepseek}" nomark ;;
   wait)   shift; cmd_wait "$@" ;;
+  answer-now) shift; COMMS_PRIO="ANSWER NOW" cmd_send "$@" ;;
+  urgent) shift; COMMS_PRIO="urgent" cmd_send "$@" ;;
   status) cmd_status ;;
   log)    shift; cmd_log "$@" ;;
   *) sed -n '2,25p' "$0"; exit 2 ;;

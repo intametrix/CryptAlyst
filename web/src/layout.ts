@@ -105,6 +105,17 @@ export function saveBoxSize(id: string, size: BoxSize): void {
   saveLayout({ ...current, boxes: { ...current.boxes, [id]: size } });
 }
 
+/** A persisted boolean flag (e.g. whether the event list is expanded). */
+export function readLayoutFlag(key: string, fallback: boolean): boolean {
+  const raw = getLayout().boxes[`flag:${key}`];
+  if (raw === undefined) return fallback;
+  return raw.w === 1;
+}
+
+export function saveLayoutFlag(key: string, value: boolean): void {
+  saveBoxSize(`flag:${key}`, { w: value ? 1 : 0, h: 0 });
+}
+
 export function saveChipState(chips: ChipState): void {
   const current = getLayout();
   saveLayout({ ...current, chips });
