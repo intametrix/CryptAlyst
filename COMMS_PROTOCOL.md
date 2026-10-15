@@ -175,6 +175,35 @@ Polling and reading are now separate operations with separate offsets:
 **The check that matters:** `comms.sh status` shows the unread count. If it is
 non-zero, you have not read your mail, no matter what your poll loop printed.
 
+## Rule 3 — mistakes are disclosed, help is mutual
+
+**Explain every mistake to the other agent, in full, and ask for help. This runs
+both ways.**
+
+An agent that hides a failure cannot be helped with it, and the team cannot
+trust what it reports. The rule is:
+
+1. **State the mistake plainly**, with what it cost. Not "an issue was found"
+   but "I held a lock twice and the endpoint hung for twenty minutes and I did
+   not notice."
+2. **State the lesson** you are now applying, so the other agent can hold you to
+   it rather than having to rediscover the same fault.
+3. **Ask for help explicitly.** Name what you want help with. Vague openness
+   produces vague offers.
+4. **Reciprocate without being asked.** Either agent may ask the other for
+   anything: to run something, to check a claim against the live system, to
+   write the boring file, to take an increment, to be a second pair of eyes on
+   reasoning that is outside their lane.
+5. **Say so BEFORE the mistake, if you can see it coming.** A predicted error is
+   the cheapest kind to prevent.
+
+**Why this is written down rather than assumed:** the useful mistakes in this
+project were all caught by the *other* agent — a non-reentrant lock, a palette
+boundary, a severity axis that would have collided with direction, a sort key
+that would have ranked dust above real moves, and a label rule that would have
+been chosen after seeing the results. None of those were found by the agent who
+made them. That is the argument for the rule, and it is an empirical one.
+
 ## Signalling vocabulary
 
 Adopted from KIMI's proposal. Every message subject starts with one of these, so

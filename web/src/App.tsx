@@ -81,6 +81,8 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   const defaultInterval = useRef(selection.interval);
   /** A preset waiting for its interval to load; applied once the bars arrive. */
   const pendingPreset = useRef<ZoomPreset | null>(null);
+  /** The preset waiting for the series to be repainted before it is applied. */
+  const appliedFor = useRef<ZoomPreset | null>(null);
 
   /**
    * Apply a preset — from the series in memory when possible, by switching
@@ -129,9 +131,27 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
     if (preset === null) return;
     if (preset.interval === undefined || preset.interval !== selection.interval) return;
     pendingPreset.current = null;
+
+    // Wait for the newly loaded series to be *painted* — this effect runs before
+    // the chart repaints, so applying immediately would set the range against the
+    // previous interval's bars and leave the chart showing everything.
+    appliedFor.current = null;
+    appliedFor.current = preset;
+  }, [selection.interval]);
+
+  /**
+   * Apply the queued preset once the chart reports its series are on screen.
+   *
+   * `readySeq` changes on exactly the commit that painted the new payload, which
+   * is the ordering guarantee a timeout can only approximate.
+   */
+  useEffect(() => {
+    const preset = appliedFor.current;
+    if (preset === null) return;
+    appliedFor.current = null;
     zoomControlsRef.current?.applyPreset(preset);
     setPresetPending(false);
-  }, [selection.interval]);
+  }, [zoomControls?.readySeq]);
 
   /**
    * Reset returns to the view the chart *opens* with: the default interval and

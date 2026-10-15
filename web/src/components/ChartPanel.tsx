@@ -478,6 +478,14 @@ export interface ChartZoomControls {
   applyPreset: (preset: ZoomPreset) => boolean;
   /** True when the preset's interval is the one already loaded. */
   canZoomLocally: (preset: ZoomPreset) => boolean;
+  /**
+   * Bumped every time a fresh payload has been painted into the series.
+   *
+   * An interval switch replaces the data, so a preset that must be applied *to
+   * that data* waits for this to change rather than guessing a delay — effects
+   * run on a commit, and this counter changes on exactly the commit that matters.
+   */
+  readySeq: number;
   /** Restore the default (full history) view. */
   reset: () => void;
 }
@@ -811,6 +819,9 @@ export function ChartPanel({
       }
       const last = total - 1;
       const from = Math.max(0, last - preset.bars + 1);
+      // `to` is exclusive-ish: `last + 1` yields exactly `bars` visible because
+      // the range is inclusive at `from` and the scale adds no padding of its own
+      // inside an explicit range.
       handles.chart.timeScale().setVisibleLogicalRange({ from, to: last + 1 });
       // False means the preset asked for more bars than are loaded. The caller
       // never fetches to satisfy a zoom; it only switches interval when the plan
@@ -832,15 +843,18 @@ export function ChartPanel({
     handles.chart.timeScale().fitContent();
   }, []);
 
+  /** Incremented after each payload is painted, for callers that must wait. */
+  const [readySeq, setReadySeq] = useState(0);
+
   /** Centre the view on one event: ±60 bars, clamped to what is loaded. */
   // Hand the controls to the caller once they exist, and withdraw them on
   // unmount so a stale closure cannot act on a disposed chart.
   useEffect(() => {
     const sink = zoomSinkRef.current;
     if (sink === undefined) return;
-    sink({ applyPreset: applyZoomPreset, canZoomLocally, reset: resetZoom });
+    sink({ applyPreset: applyZoomPreset, canZoomLocally, reset: resetZoom, readySeq });
     return () => sink(null);
-  }, [applyZoomPreset, canZoomLocally, resetZoom]);
+  }, [applyZoomPreset, canZoomLocally, resetZoom, readySeq]);
 
   const zoomToEvent = useCallback(
     (timeMs: number): void => {
@@ -929,6 +943,9 @@ export function ChartPanel({
       series.setData(points.map((p) => ({ time: p.time, value: p.value })));
     }
     handles.chart.timeScale().fitContent();
+    // Announce that this payload is on screen, so a queued zoom preset can be
+    // applied against these bars and not the previous interval's.
+    setReadySeq((n) => n + 1);
     // The newest drawn bar, so a live tick can tell whether SSE is still inside
     // it or has crossed into the next candle.
     const last = bars.length > 0 ? bars[bars.length - 1] : null;
