@@ -177,7 +177,24 @@ function resolvePaneIndex(chart: IChartApi, want: number): number {
  * are toggled with `applyOptions({ visible })` — cheaper and safer than
  * re-creating them, and it keeps the pane list stable.
  */
-function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHandles {
+/**
+ * The series name for a chart element, taken **verbatim** from `/api/tools`.
+ *
+ * Chart copy is not authored here: if the glossary has a title for the key that
+ * is the name the legend shows, and if it does not, the raw key is used rather
+ * than a prettier invention. One source of truth means the chip, the tooltip and
+ * the series cannot say three different things.
+ */
+function seriesTitle(tools: ToolsMsg | null, keys: readonly string[], rawFallback: string): string {
+  for (const key of keys) {
+    const entry = tools?.indicators?.[key] ?? tools?.metrics?.[key] ?? null;
+    const title = typeof entry?.title === 'string' ? entry.title.trim() : '';
+    if (title !== '') return title;
+  }
+  return rawFallback;
+}
+
+function buildChart(container: HTMLElement, bars: readonly SafeBar[], tools: ToolsMsg | null): ChartHandles {
   const chart = createChart(container, {
     autoSize: false,
     layout: {
@@ -238,7 +255,8 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHand
       lastValueVisible: false,
       crosshairMarkerVisible: false,
       visible: false,
-      title: key,
+      // The glossary's own title, verbatim.
+      title: seriesTitle(tools, [key], key),
     });
     lines.set(key, series);
   }
@@ -251,7 +269,7 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHand
     priceLineVisible: false,
     lastValueVisible: true,
     visible: false,
-    title: 'ATR 20',
+    title: seriesTitle(tools, ['atr20', 'atr'], 'atr20'),
   });
   lines.set('atr20', atrLine);
   atrLine.createPriceLine({
@@ -270,7 +288,7 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHand
     priceLineVisible: false,
     lastValueVisible: true,
     visible: false,
-    title: 'ADX 14',
+    title: seriesTitle(tools, ['adx14', 'adx'], 'adx14'),
   });
   const plusLine = adxPane.addSeries(LineSeries, {
     color: COLORS.plusDi,
@@ -279,7 +297,7 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHand
     lastValueVisible: false,
     crosshairMarkerVisible: false,
     visible: false,
-    title: '+DI',
+    title: seriesTitle(tools, ['plus_di'], 'plus_di'),
   });
   const minusLine = adxPane.addSeries(LineSeries, {
     color: COLORS.minusDi,
@@ -288,7 +306,7 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHand
     lastValueVisible: false,
     crosshairMarkerVisible: false,
     visible: false,
-    title: '−DI',
+    title: seriesTitle(tools, ['minus_di'], 'minus_di'),
   });
   lines.set('adx14', adxLine);
   lines.set('plus_di', plusLine);
@@ -309,7 +327,7 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHand
     priceLineVisible: false,
     lastValueVisible: true,
     visible: false,
-    title: 'RSI 14',
+    title: seriesTitle(tools, ['rsi14', 'rsi'], 'rsi14'),
   });
   lines.set('rsi14', rsiLine);
   for (const level of [30, 70] as const) {
@@ -621,7 +639,7 @@ export function ChartPanel({
     if (container === null || symbol === null || bars.length === 0) return;
 
     disposedRef.current = false;
-    const handles = buildChart(container, bars);
+    const handles = buildChart(container, bars, tools);
     chartRef.current = handles;
 
     // Size to the measured box right away; the ResizeObserver effect keeps it in
@@ -640,7 +658,7 @@ export function ChartPanel({
     // Rebuilt only when the *symbol* or the bar count changes: a 30s poll that
     // merely refreshes the forming candle must not throw away the user's zoom.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, bars.length, bars[0]?.t]);
+  }, [symbol, bars.length, bars[0]?.t, tools]);
 
   /* -- container resize: the canvas follows the box, not the viewport -------- */
 

@@ -44,6 +44,7 @@ import {
   HEAT_MIN,
 } from '../src/heatStore.ts';
 import { prettifyEnum, enumWord, kindStyle, severityStyle, detectorLabel } from '../src/types.ts';
+import { resolvePalette, markColor } from '../src/palette.ts';
 
 let pass = 0;
 let fail = 0;
@@ -149,13 +150,16 @@ eq('out-of-window marks are dropped', markers.length, 4, JSON.stringify(markers.
 eq('marks sharing a bar and a letter collapse', markers.filter((x) => x.time === 2).length, 2);
 eq('the same letter is never duplicated on one bar',
   new Set(markers.map((m) => `${m.time}:${m.text}`)).size, markers.length);
-eq('the CRITICAL mark is treated as the bright variant', markers.find((x) => x.time === 2).color, '#ff1f38');
+// Colours come from the shared palette (CSS tokens), not from values re-authored
+// in chartData. In Node there is no stylesheet, so the documented fallbacks apply.
+const PALETTE = resolvePalette();
+eq('a CRITICAL mark uses the critical severity token', markers.find((x) => x.time === 2).color, PALETTE.severity.critical);
 eq('a PUMP points up', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP' }], bars)[0].shape, 'arrowUp');
 eq('a PUMP renders the letter P', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP' }], bars)[0].text, 'P');
 eq('an explicitly lettered mark keeps its letter', markers.find((x) => x.time === 3).text, 'R');
 eq('a DUMP points down', toMarkers([{ t: 2_000, kind: 'DUMP' }], bars)[0].shape, 'arrowDown');
 eq('a DUMP renders the letter D', toMarkers([{ t: 2_000, kind: 'DUMP' }], bars)[0].text, 'D');
-eq('a reversal is amber', toMarkers([{ t: 4_000, kind: 'REVERSAL_DUMP' }], bars)[0].color, '#ffb020');
+eq('a reversal uses the reversal token', toMarkers([{ t: 4_000, kind: 'REVERSAL_DUMP' }], bars)[0].color, PALETTE.reversal);
 eq('a reversal renders the letter R', toMarkers([{ t: 4_000, kind: 'REVERSAL_DUMP' }], bars)[0].text, 'R');
 eq('BREAKOUT_SHORT points down', toMarkers([{ t: 2_000, kind: 'BREAKOUT_SHORT' }], bars)[0].shape, 'arrowDown');
 eq('BREAKOUT_LONG points up', toMarkers([{ t: 2_000, kind: 'BREAKOUT_LONG' }], bars)[0].shape, 'arrowUp');
@@ -163,8 +167,17 @@ eq('a breakout renders the letter B', toMarkers([{ t: 2_000, kind: 'BREAKOUT_LON
 // The server's own letter and direction are authoritative when present.
 eq('an explicit letter is used verbatim', toMarkers([{ t: 2_000, letter: 'R', kind: 'DUMP' }], bars)[0].text, 'R');
 eq('an explicit direction overrides the kind', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', direction: -1 }], bars)[0].position, 'aboveBar');
-eq('severity CRITICAL brightens the colour', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', severity: 'CRITICAL' }], bars)[0].color, '#0fff7d');
-eq('severity WATCH mutes the colour', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', severity: 'WATCH' }], bars)[0].color, 'rgba(46, 224, 106, 0.55)');
+eq('severity CRITICAL takes the critical token', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', severity: 'CRITICAL' }], bars)[0].color, PALETTE.severity.critical);
+eq('severity WATCH is muted to the flat token', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', severity: 'WATCH' }], bars)[0].color, PALETTE.flat);
+eq('a pump uses the up token', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP' }], bars)[0].color, PALETTE.up);
+eq('a dump uses the down token', toMarkers([{ t: 2_000, letter: 'D', kind: 'DUMP' }], bars)[0].color, PALETTE.down);
+eq('a breakout uses the breakout token', toMarkers([{ t: 2_000, letter: 'B', kind: 'BREAKOUT_LONG' }], bars)[0].color, PALETTE.breakout);
+// The backend sends an explicit colour per mark and stays authoritative.
+eq('a server-supplied colour wins', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', color: '#123456' }], bars)[0].color, '#123456');
+eq('markColor prefers the server value', markColor({ serverColor: '#abcdef', severity: 'CRITICAL', kind: 'DUMP' }), '#abcdef');
+eq('markColor ignores a blank server value', markColor({ serverColor: '  ', severity: 'CRITICAL', kind: 'DUMP' }), PALETTE.severity.critical);
+ok('the palette exposes every token', Object.keys(PALETTE).length >= 20, Object.keys(PALETTE).join(','));
+ok('the palette has no empty values', Object.entries(PALETTE).every(([k, v]) => (k === 'severity' ? true : typeof v === 'string' && v.trim() !== '')));
 eq('the label is carried for the tooltip', toMarkers([{ t: 2_000, letter: 'D', label: 'Dump detected' }], bars)[0].label, 'Dump detected');
 eq('the label falls back to a readable title', toMarkers([{ t: 2_000, letter: 'D' }], bars)[0].label, 'Dump detected');
 eq('score and flow ride along for the tooltip', toMarkers([{ t: 2_000, letter: 'D', score: 86, flow_quote: 16600, burst_multiple: 47 }], bars)[0].score, 86);

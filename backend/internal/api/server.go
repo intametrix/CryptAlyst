@@ -47,6 +47,12 @@ type Alert struct {
 	// Summary is the detector's one-line rendering, so the UI can show a
 	// readable description without reassembling one from metrics.
 	Summary string `json:"summary"`
+	// Color is the canonical colour for this alert's kind, resolved by the
+	// backend so the feed badge, the chart marker and the legend cannot
+	// drift apart. The UI renders this value rather than mapping the kind
+	// to its own constant.
+	Color string `json:"color"`
+
 	// Probability is P(reach +target before -stop within the horizon | these
 	// features), and ProbabilityBasis MUST be displayed with it. It is omitted
 	// entirely when no fitted model is loaded, so the UI cannot render a bare
@@ -215,6 +221,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/klines/latest", s.handleKlinesLatest)
 	mux.HandleFunc("/api/ticker", s.handleTicker)
 	mux.HandleFunc("/api/outlook", s.handleOutlook)
+	mux.HandleFunc("/api/colors", s.handleColors)
 	mux.HandleFunc("/api/tools", s.handleTools)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/", s.handleStatic)
@@ -290,46 +297,205 @@ func (s *Server) handleFlow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Split into the biggest pumps and the biggest dumps by move size.
-	pumps := make([]flow.Candidate, 0, len(rows))
-	dumps := make([]flow.Candidate, 0, len(rows))
+	splits, stats := s.splitFlow(rows, now, limit)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"type":          "flow",
+		"ts_ms":         now,
+		"window_sec":    engine.Config().WindowSec,
+		"split":         true,
+		"pumps":         splits.pumps,
+		"dumps":         splits.dumps,
+		"pump_count":    len(splits.pumps),
+		"dump_count":    len(splits.dumps),
+		"symbols":       len(rows),
+		"min_flow_usd":  splitMinFlowUSD,
+		"max_stale_ms":  splitMaxStaleMS,
+		"dropped_thin":  stats.thin,
+		"dropped_stale": stats.stale,
+		"dropped_quiet": stats.quiet,
+		"min_move_pct":  splitMinMovePct,
+	})
+}
+
+// Split thresholds, agreed with the other agent before this was built.
+// The floor exists because move size alone ranks a thin symbol's 8% wick above
+// a real move backed by real money, so "Biggest Pumps" would fill with
+// illiquid noise exactly when the user is looking for signal. The staleness cap
+// exists because a symbol that stopped ticking would otherwise sit frozen at
+// number one indefinitely, which is worse than a short list.
+const (
+	splitMinFlowUSD = 5000.0
+	splitMaxStaleMS = 30000
+	// splitMinMovePct is the smallest move worth calling a pump or a dump.
+	//
+	// Without it the lists rank NOISE: in a quiet ten-second window every
+	// symbol moves about +-0.001%, and sorting those descending produces a
+	// confidently ordered leaderboard of nothing. A panel titled "Biggest
+	// Pumps" showing +0.001% is worse than an empty one, because it looks like
+	// information. Below this threshold the correct output is an empty list.
+	splitMinMovePct = 0.10
+)
+
+type flowSplit struct {
+	pumps []map[string]any
+	dumps []map[string]any
+}
+
+type splitStats struct {
+	thin  int
+	stale int
+	quiet int
+}
+
+// splitFlow partitions rows into the biggest pumps and dumps.
+//
+// Sort key is absolute 10s move, falling back to 60s then flow, because the
+// question is "biggest move" -- not "most money" and not "most abnormal". Those
+// are different questions with different winners, and conflating them is how a
+// leaderboard becomes quietly misleading.
+func (s *Server) splitFlow(rows []flow.Candidate, now int64, limit int) (flowSplit, splitStats) {
+	return splitFlowRows(rows, s.deps.Universe, now, limit)
+}
+
+func splitFlowRows(rows []flow.Candidate, universe *market.Universe, now int64, limit int) (flowSplit, splitStats) {
+	var out flowSplit
+	var stats splitStats
+
 	for _, row := range rows {
 		move, ok := moveOf(row)
 		if !ok || move == 0 {
 			continue
 		}
+		if row.UpdatedMS > 0 && now-row.UpdatedMS > splitMaxStaleMS {
+			stats.stale++
+			continue
+		}
+		if row.FlowQuote < splitMinFlowUSD {
+			stats.thin++
+			continue
+		}
+		if abs64(move) < splitMinMovePct {
+			stats.quiet++
+			continue
+		}
+		enriched := enrichFlowRow(row, universe)
 		if move > 0 {
-			pumps = append(pumps, row)
+			out.pumps = append(out.pumps, enriched)
 		} else {
-			dumps = append(dumps, row)
-		}
-	}
-	sort.SliceStable(pumps, func(i, j int) bool {
-		return absMove(pumps[i]) > absMove(pumps[j])
-	})
-	sort.SliceStable(dumps, func(i, j int) bool {
-		return absMove(dumps[i]) > absMove(dumps[j])
-	})
-	if limit > 0 {
-		if len(pumps) > limit {
-			pumps = pumps[:limit]
-		}
-		if len(dumps) > limit {
-			dumps = dumps[:limit]
+			out.dumps = append(out.dumps, enriched)
 		}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"type":       "flow",
-		"ts_ms":      now,
-		"window_sec": engine.Config().WindowSec,
-		"split":      true,
-		"pumps":      pumps,
-		"dumps":      dumps,
-		"pump_count": len(pumps),
-		"dump_count": len(dumps),
-		"symbols":    len(rows),
-	})
+	byMove := func(list []map[string]any) func(i, j int) bool {
+		return func(i, j int) bool { return rowMagnitude(list[i]) > rowMagnitude(list[j]) }
+	}
+	sort.SliceStable(out.pumps, byMove(out.pumps))
+	sort.SliceStable(out.dumps, byMove(out.dumps))
+	if limit > 0 {
+		if len(out.pumps) > limit {
+			out.pumps = out.pumps[:limit]
+		}
+		if len(out.dumps) > limit {
+			out.dumps = out.dumps[:limit]
+		}
+	}
+	return out, stats
+}
+
+// SplitFlowRows is the exported entry point for the periodic SSE message, so the
+// live panel and the polled endpoint cannot disagree about the same instant.
+//
+// It is a package-level function rather than a method because the scanner's
+// broadcast loop runs before the HTTP server is constructed, and a method would
+// force a reordering that has nothing to do with the feature.
+func SplitFlowRows(engine *flow.Engine, universe *market.Universe, now int64, limit int) (pumps, dumps []map[string]any, stats map[string]int) {
+	empty := []map[string]any{}
+	if engine == nil {
+		return empty, empty, map[string]int{"thin": 0, "stale": 0, "quiet": 0}
+	}
+	splits, counted := splitFlowRows(engine.Snapshot(0, now), universe, now, limit)
+	if splits.pumps == nil {
+		splits.pumps = empty
+	}
+	if splits.dumps == nil {
+		splits.dumps = empty
+	}
+	return splits.pumps, splits.dumps, map[string]int{
+		"thin": counted.thin, "stale": counted.stale, "quiet": counted.quiet,
+	}
+}
+
+// enrichRow adds the 24h context that stops a bounce being read as a pump.
+//
+// A symbol up 8% in ten seconds while down 20% on the day is bouncing inside a
+// downtrend, not pumping. Without the daily figure beside the ten-second one,
+// the row is technically true and practically a lie.
+func enrichFlowRow(row flow.Candidate, universe *market.Universe) map[string]any {
+	data, err := json.Marshal(row)
+	if err != nil {
+		return map[string]any{"symbol": row.Symbol}
+	}
+	var out map[string]any
+	if err := json.Unmarshal(data, &out); err != nil {
+		return map[string]any{"symbol": row.Symbol}
+	}
+	out["change_24h_pct"] = change24hFrom(universe, row.Symbol)
+	// Same colour the chart marker would use for the same move direction.
+	direction := 0
+	if move, ok := moveOf(row); ok {
+		if move > 0 {
+			direction = 1
+		} else if move < 0 {
+			direction = -1
+		}
+	}
+	out["color"] = DirectionColor(direction)
+	return out
+}
+
+// change24h reads the daily change from the universe, tolerating whatever shape
+// it arrives in rather than binding to a struct field.
+func change24hFrom(universe *market.Universe, symbol string) float64 {
+	if universe == nil {
+		return 0
+	}
+	context, ok := universe.Get(symbol)
+	if !ok {
+		return 0
+	}
+	data, err := json.Marshal(context)
+	if err != nil {
+		return 0
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return 0
+	}
+	for _, key := range []string{"change_24h_pct", "price_change_pct_24h", "change_pct"} {
+		if value, ok := fields[key].(float64); ok {
+			return value
+		}
+	}
+	return 0
+}
+
+func abs64(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
+func rowMagnitude(row map[string]any) float64 {
+	for _, key := range []string{"change_10s", "change_60s", "flow_quote"} {
+		if value, ok := row[key].(float64); ok {
+			if value < 0 {
+				return -value
+			}
+			return value
+		}
+	}
+	return 0
 }
 
 // moveOf returns the best available short-horizon move for a candidate,

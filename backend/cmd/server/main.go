@@ -299,7 +299,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, outlookSvc, opt)
+		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, outlookSvc, universe, opt)
 	}()
 	wg.Add(1)
 	go func() {
@@ -500,6 +500,7 @@ func scanLoop(
 	heatSvc *heat.Service,
 	recorder ledger.Recorder,
 	outlookSvc *outlook.Service,
+	universe *market.Universe,
 	opt options,
 ) {
 	cfg := engine.Config()
@@ -536,6 +537,19 @@ func scanLoop(
 				"ts_ms": stamp,
 				"rows":  heatSvc.Compute(stamp, 200),
 			})
+			// Its own message type, because the top-25-by-flow set above is
+			// provably NOT the top pumps and dumps set: publishing only the
+			// flow message would give the split panel two disagreeing truths.
+			splitPumps, splitDumps, splitStats := api.SplitFlowRows(engine, universe, stamp, 10)
+			hub.Broadcast(map[string]any{
+				"type":          "flow_split",
+				"ts_ms":         stamp,
+				"pumps":         splitPumps,
+				"dumps":         splitDumps,
+				"dropped_thin":  splitStats["thin"],
+				"dropped_stale": splitStats["stale"],
+				"dropped_quiet": splitStats["quiet"],
+			})
 		case <-scan.C:
 			scans++
 			now := time.Now().UnixMilli()
@@ -555,6 +569,7 @@ func scanLoop(
 					Market:     "spot",
 					Symbol:     sig.Symbol,
 					Kind:       sig.Kind,
+					Color:      api.KindColor(sig.Kind),
 					Summary:    sig.Summary,
 					Severity:   sig.Severity,
 					Score:      sig.Score,
