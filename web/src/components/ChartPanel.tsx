@@ -906,6 +906,10 @@ export function ChartPanel({
   // takes the chart from the poll's cadence to the ticker's, without a request:
   // `series.update()` on the forming bar is cheap and keeps the user's pan/zoom.
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const w = window as unknown as { __tickerFire?: number };
+      w.__tickerFire = (w.__tickerFire ?? 0) + 1;
+    }
     const handles = chartRef.current;
     if (handles === null || disposedRef.current || tickerTick === null || symbol === null) return;
     if (tickerTick.symbol !== symbol) return;

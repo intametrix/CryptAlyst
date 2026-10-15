@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"math"
 	"os"
+	"strconv"
 	"sync"
 
 	"pumpdump/backend/internal/binance"
@@ -212,7 +213,7 @@ func (s *Service) ModelStatus() map[string]any {
 	basis := s.model.Basis
 	if basis == "" {
 		basis = "calibrated on " + itoa(s.model.samples()) + " resolved predictions, brier " +
-			round3(s.model.Brier)
+			strconv.FormatFloat(s.model.Brier, 'f', 3, 64)
 	}
 	return map[string]any{
 		"calibrated":  true,
