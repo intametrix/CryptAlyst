@@ -237,6 +237,26 @@ acknowledged.
 nudged, run `comms.sh status` before every status report, and read its inbox
 before reporting rather than after.
 
+## Rule 5 — name the exception before you ship the rule
+
+**KIMI's diagnosis of my most predictable failure mode, adopted because it is
+correct.**
+
+The pattern: *stating a rule at a boundary before enumerating its exceptions,
+shipping on the rule, then reconciling afterwards.* Three instances — a spec
+labelled SYNC after the work was shipped, "never refetch on zoom" which broke
+the moment the chart gained a second interval, and two test fixtures built to an
+assumed schema rather than the real one.
+
+**The check, before dispatching any spec or writing any rule:**
+
+> **What is the one case that makes this rule wrong?**
+
+For "never refetch on zoom", the case was an interval switch. There is always
+one. Naming it in the spec means the other agent builds for it and there is no
+retraction later. Naming it in a rule means the rule survives contact with the
+second case it meets.
+
 ## Signalling vocabulary
 
 Adopted from KIMI's proposal. Every message subject starts with one of these, so
