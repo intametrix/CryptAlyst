@@ -370,6 +370,10 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[]): ChartHand
   for (const series of lines.values()) wrapUpdate(series, 'line');
 
   (container as HTMLElement & { __probe?: ChartProbe }).__probe = probe;
+  if (typeof window !== 'undefined') {
+    const w = window as unknown as { __chartsBuilt?: number };
+    w.__chartsBuilt = (w.__chartsBuilt ?? 0) + 1;
+  }
 
   const handles: ChartHandles = {
     chart,
@@ -911,27 +915,31 @@ export function ChartPanel({
       w.__tickerFire = (w.__tickerFire ?? 0) + 1;
     }
     const handles = chartRef.current;
-    if (handles === null || disposedRef.current || tickerTick === null || symbol === null) return;
-    if (tickerTick.symbol !== symbol) return;
+    const trace: { reason: string; price?: number; bucket?: number; lastBarTime?: number | null } | null =
+      typeof window === 'undefined'
+        ? null
+        : (() => {
+            const w = window as unknown as { __tickerTrace?: unknown[] };
+            w.__tickerTrace = w.__tickerTrace ?? [];
+            return w.__tickerTrace.length < 6 ? (w.__tickerTrace as never) : null;
+          })();
+    const note = (reason: string, extra: Record<string, unknown> = {}): void => {
+      if (trace !== null) (trace as unknown as unknown[]).push({ reason, ...extra });
+    };
+    if (handles === null || disposedRef.current) return note('no-chart');
+    if (tickerTick === null) return note('no-tick');
+    if (symbol === null) return note('no-symbol');
+    if (tickerTick.symbol !== symbol) return note('symbol-mismatch', { got: tickerTick.symbol });
 
     const state = liveStateRef.current;
-    if (state.lastBarTime === null) return;
+    if (state.lastBarTime === null) return note('no-bar-time');
     // Only touch the bar the tick belongs to; a tick in the next interval is a
     // rollover and is the poll's job to finalise.
-    if (bucketStart(tickerTick.atMs, interval) / 1000 !== state.lastBarTime) return;
-    if (tickerTick.price <= 0) return;
-    if (typeof window !== 'undefined') {
-      const w = window as unknown as { __tickerTrace?: unknown[] };
-      w.__tickerTrace = w.__tickerTrace ?? [];
-      if (w.__tickerTrace.length < 4) {
-        w.__tickerTrace.push({
-          price: tickerTick.price,
-          atMs: tickerTick.atMs,
-          bucket: bucketStart(tickerTick.atMs, interval) / 1000,
-          lastBarTime: state.lastBarTime,
-        });
-      }
-    }
+    const bucket = bucketStart(tickerTick.atMs, interval) / 1000;
+    if (bucket !== state.lastBarTime) return note('bucket-mismatch', { bucket, lastBarTime: state.lastBarTime });
+    if (tickerTick.price <= 0) return note('non-positive-price', { price: tickerTick.price });
+    note('applied', { price: tickerTick.price });
+
 
     const time = state.lastBarTime as Time;
     const open = state.lastOpen ?? tickerTick.price;

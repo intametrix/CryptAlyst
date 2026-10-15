@@ -290,7 +290,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, opt)
+		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, outlookSvc, opt)
 	}()
 	wg.Add(1)
 	go func() {
@@ -490,6 +490,7 @@ func scanLoop(
 	stream *binance.Stream,
 	heatSvc *heat.Service,
 	recorder ledger.Recorder,
+	outlookSvc *outlook.Service,
 	opt options,
 ) {
 	cfg := engine.Config()
@@ -552,6 +553,18 @@ func scanLoop(
 					Reasons:    sig.Reasons,
 					Components: sig.Components,
 					Metrics:    sig.Metrics,
+				}
+				// Attach the calibrated probability when a fitted model
+				// exists. The basis travels with the number so the UI can
+				// never show a percentage without saying where it came from.
+				if outlookSvc != nil {
+					if prob, ok, basis := outlookSvc.Probability(signalFeatures(sig)); ok {
+						value := prob
+						alert.Probability = &value
+						alert.ProbabilityBasis = basis
+					} else if basis != "" {
+						alert.ProbabilityBasis = basis
+					}
 				}
 				alerts.Add(alert)
 				hub.Broadcast(alert)
@@ -704,6 +717,36 @@ func surveyProvider(s *turtle.Survey) api.SurveyProvider {
 }
 
 // toFloat coerces an untyped JSON number from the survey payload.
+// signalFeatures extracts the model's feature vector from a signal's metrics.
+//
+// Missing features are simply absent: the scorer refuses to evaluate a partial
+// vector rather than substituting a zero, because a zero is a real value for
+// these features and would silently change the prediction.
+func signalFeatures(sig detect.Signal) map[string]float64 {
+	names := []string{
+		"burst_multiple", "burst_z", "flow_quote", "coverage",
+		"change_10s", "change_60s", "taker_buy_ratio",
+	}
+	out := make(map[string]float64, len(names))
+	for _, name := range names {
+		if value, ok := sig.Metrics[name]; ok {
+			switch n := value.(type) {
+			case float64:
+				out[name] = n
+			case int:
+				out[name] = float64(n)
+			case int64:
+				out[name] = float64(n)
+			}
+			continue
+		}
+		if value, ok := sig.Components[name]; ok {
+			out[name] = value
+		}
+	}
+	return out
+}
+
 // enginePrice adapts the in-memory flow engine to ledger.PriceFetcher.
 //
 // Sampling the engine rather than the REST API is deliberate: the tracker polls

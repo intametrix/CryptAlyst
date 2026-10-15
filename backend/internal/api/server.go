@@ -22,8 +22,8 @@ import (
 	"pumpdump/backend/internal/events"
 	"pumpdump/backend/internal/flow"
 	"pumpdump/backend/internal/heat"
-	"pumpdump/backend/internal/outlook"
 	"pumpdump/backend/internal/market"
+	"pumpdump/backend/internal/outlook"
 	"pumpdump/backend/internal/screen"
 )
 
@@ -35,23 +35,29 @@ type Alert struct {
 	Type string `json:"type"`
 	// Detector names the pluggable model that produced this alert, so the UI
 	// can render a mixed feed from several models without special-casing.
-	Detector   string             `json:"detector"`
-	Batch      bool               `json:"batch"`
-	SnapshotMS int64              `json:"snapshot_ms,omitempty"`
-	EventID    string             `json:"event_id"`
-	TSMS       int64              `json:"ts_ms"`
-	Market     string             `json:"market"`
-	Symbol     string             `json:"symbol"`
-	Kind       string             `json:"kind"`
+	Detector   string `json:"detector"`
+	Batch      bool   `json:"batch"`
+	SnapshotMS int64  `json:"snapshot_ms,omitempty"`
+	EventID    string `json:"event_id"`
+	TSMS       int64  `json:"ts_ms"`
+	Market     string `json:"market"`
+	Symbol     string `json:"symbol"`
+	Kind       string `json:"kind"`
 	// Summary is the detector's one-line rendering, so the UI can show a
 	// readable description without reassembling one from metrics.
-	Summary    string             `json:"summary"`
-	Severity   string             `json:"severity"`
-	Score      float64            `json:"score"`
-	Price      float64            `json:"price"`
-	Reasons    []string           `json:"reasons"`
-	Components map[string]float64 `json:"components"`
-	Metrics    map[string]any     `json:"metrics"`
+	Summary string `json:"summary"`
+	// Probability is P(reach +target before -stop within the horizon | these
+	// features), and ProbabilityBasis MUST be displayed with it. It is omitted
+	// entirely when no fitted model is loaded, so the UI cannot render a bare
+	// percentage that looks measured when it is not.
+	Probability      *float64           `json:"probability,omitempty"`
+	ProbabilityBasis string             `json:"probability_basis,omitempty"`
+	Severity         string             `json:"severity"`
+	Score            float64            `json:"score"`
+	Price            float64            `json:"price"`
+	Reasons          []string           `json:"reasons"`
+	Components       map[string]float64 `json:"components"`
+	Metrics          map[string]any     `json:"metrics"`
 }
 
 // AlertBuffer is a bounded, newest-first ring of alerts.
@@ -150,12 +156,12 @@ type SurveyProvider interface {
 
 // Deps are the server's collaborators.
 type Deps struct {
-	Hub           *events.Hub
-	Engine        *flow.Engine
-	Universe      *market.Universe
-	Screener      *screen.Screener
-	Alerts        *AlertBuffer
-	Survey        SurveyProvider
+	Hub      *events.Hub
+	Engine   *flow.Engine
+	Universe *market.Universe
+	Screener *screen.Screener
+	Alerts   *AlertBuffer
+	Survey   SurveyProvider
 	// Detectors is the pluggable-model registry driving detection.
 	Detectors *detect.Registry
 	// Heat scores how interesting each symbol currently is, for the UI glow.
@@ -289,11 +295,11 @@ func (s *Server) handleScreen(w http.ResponseWriter, r *http.Request) {
 		rows = []screen.Row{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"type":             "screen",
-		"ts_ms":            generatedMS,
-		"symbols_scanned":  scanned,
-		"thresholds":       s.deps.Screener.Thresholds(),
-		"rows":             rows,
+		"type":            "screen",
+		"ts_ms":           generatedMS,
+		"symbols_scanned": scanned,
+		"thresholds":      s.deps.Screener.Thresholds(),
+		"rows":            rows,
 	})
 }
 

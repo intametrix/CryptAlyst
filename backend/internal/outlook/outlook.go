@@ -227,6 +227,46 @@ func (s *Service) ModelStatus() map[string]any {
 	}
 }
 
+// Probability scores a live feature vector with the fitted model.
+//
+// Returns ok=false when no usable model is loaded, along with a basis string
+// that says so. Callers must publish the basis alongside the number: a
+// probability shown without its provenance is the one output this system must
+// never produce.
+func (s *Service) Probability(features map[string]float64) (float64, bool, string) {
+	model := s.modelOrNil()
+	if model == nil {
+		return 0, false, "uncalibrated prior"
+	}
+	row := flow.Candidate{}
+	for name, value := range features {
+		switch name {
+		case "burst_multiple":
+			row.BurstMultiple = value
+		case "burst_z":
+			row.BurstZ = value
+		case "flow_quote":
+			row.FlowQuote = value
+		case "coverage":
+			row.Coverage = value
+		case "change_10s":
+			v := value
+			row.Change10s = &v
+		case "change_60s":
+			v := value
+			row.Change60s = &v
+		case "taker_buy_ratio":
+			row.TakerBuyRatio = value
+		}
+	}
+	prob, ok := evaluate(model, row)
+	if !ok {
+		return 0, false, "uncalibrated prior"
+	}
+	return prob, true, "calibrated n=" + itoa(model.samples()) + " brier " +
+		strconv.FormatFloat(model.Brier, 'f', 3, 64)
+}
+
 // Compute builds the outlook for one symbol.
 func (s *Service) Compute(
 	symbol string,

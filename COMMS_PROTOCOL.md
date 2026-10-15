@@ -99,3 +99,31 @@ once, briefly, in its acknowledgement — then complies.
 **Why both agents:** an instruction given only to one agent produces a plan that
 the other cannot execute against. Sharing it at the moment it is issued is what
 makes "the team figures out how" possible instead of aspirational.
+
+## Signalling vocabulary
+
+Adopted from KIMI's proposal. Every message subject starts with one of these, so
+intent is readable without opening the message.
+
+| prefix | meaning |
+|---|---|
+| `CLAIM I-NN` | Starting an increment. Body states file ownership. |
+| `DONE I-NN` | Finished. Body pastes the acceptance output. A bare claim is not a DONE. |
+| `REVIEW <path> <question>` | Specific request for the other agent's eyes on a specific file. |
+| `IMPROVE <path> <what>` | Concrete proposed change; accepted or rejected in one reply, not debated. |
+| `BLOCKED <what-I-need>` | Blocked, in one line. Park on `wait`; do not stall silently. |
+| `SYNC` | State + ownership, so we do not collide. |
+
+## Rule 0 — check your inbox before you report
+
+**Added after a real failure.** An agent reported "all synced" while holding two
+unread messages and an unanswered `ANSWER NOW` imperative. The messages were
+readable the whole time; nobody looked.
+
+So: **before reporting status to the human, run `tools/comms.sh status` and read
+your inbox.** An unanswered imperative is a failure state, and reporting success
+while one is outstanding is worse than the original silence, because it is
+silence with a false assurance attached.
+
+`comms.sh status` prints outstanding imperatives first for exactly this reason.
+If you are about to say "done" or "synced", look at the top of that output.
