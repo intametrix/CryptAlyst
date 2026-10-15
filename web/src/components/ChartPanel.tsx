@@ -186,6 +186,8 @@ function paneOf(key: string): 'atr' | 'adx' | 'rsi' {
  */
 export interface ChartProbe {
   updates: { candle: number; volume: number; line: number };
+  /** Whole-series loads, i.e. real reloads — not incremental updates. */
+  loads: { candle: number; volume: number; line: number; fit: number };
   painted: () => boolean;
   paneSizes: () => { price: number; indicators: number[] };
   timeScale: () => {
@@ -200,6 +202,27 @@ export interface ChartProbe {
     /** The interval the loaded bars belong to, from the payload. */
     interval: string;
   };
+  /** True while the viewport is following new bars at the right edge. */
+  follow: () => boolean;
+  /**
+   * Every programmatic visible-range change, with its caller.
+   *
+   * A viewport that moves on its own is the bug being fixed, so the only way to
+   * close it out is to name the call site responsible. Kept small and inert.
+   */
+  rangeSets: { kind: string; from: number; to: number; at: number; stack: string }[];
+  /** Every observed change to the visible logical range, with its caller. */
+  rangeChanges: { from: number; to: number; at: number; stack: string }[];
+  /** Every rollover's follow decision. */
+  shiftTrace: { at: number; follow: boolean; bars: number; from: number; to: number }[];
+  /**
+   * Move the viewport, for tests that need to reproduce a user pan or zoom.
+   *
+   * Scrolling left is the state the bug report is about, and there is no other
+   * way to reach it from outside: the zoom presets all anchor at the right edge.
+   */
+  scrollTo: (from: number, to: number) => void;
+
   /**
    * What the flow pane is drawing: the bar heights (the burst multiples) and the
    * baseline the reference line sits on. Acceptance is "a visible burst bar whose
@@ -283,8 +306,19 @@ function buildChart(
   bars: readonly SafeBar[],
   tools: ToolsMsg | null,
   label: { interval: string },
+  /** Called when follow mode arms or disarms, so the panel can mirror it. */
+  sinkFollow: (following: boolean) => void,
+  /** Rollover decisions are recorded here for the scroll acceptance test. */
+  traceShift: { at: number; follow: boolean; bars: number; from: number; to: number }[],
 ): ChartHandles {
   const chart = createChart(container, {
+    /**
+     * The library shifts the visible range whenever a new bar arrives. That is
+     * wrong for a chart people scroll into: it moves the viewport under a reader
+     * who deliberately scrolled back. Follow mode below decides instead, and only
+     * when the user is actually at the right edge.
+     */
+    // (set on the time scale below, where the option lives)
     autoSize: false,
     layout: {
       background: { type: ColorType.Solid, color: 'transparent' },
@@ -459,9 +493,81 @@ function buildChart(
 
   const markers = createSeriesMarkers(candles, []);
 
+  /**
+   * Whole-series call counters.
+   *
+   * An acceptance test needs to know how often the chart *reloads* rather than
+   * updates, because a reload is what resets the viewport. Wrapping the methods
+   * is the only way to observe that from outside.
+   */
+  const loads = { candle: 0, volume: 0, line: 0, fit: 0 };
+
+  /**
+   * Follow mode.
+   *
+   * `shiftVisibleRangeOnNewBar: false` stops the library moving the viewport, but
+   * on its own it would let new bars scroll off-screen forever. So the chart
+   * tracks whether the reader is at the right edge and re-shifts only then:
+   *
+   * - **at the edge** -> the viewport follows, so live bars scroll in;
+   * - **scrolled back or zoomed in** -> nothing moves. New data lands silently and
+   *   the reader's context is preserved until they return to the edge, which
+   *   re-arms follow mode by itself (re-evaluated on every range change).
+   */
+  const followRef = { current: true };
+  {
+    const scale = chart.timeScale();
+    scale.applyOptions({ shiftVisibleRangeOnNewBar: false });
+    const isAtRightEdge = (): boolean => {
+      const range = scale.getVisibleLogicalRange();
+      if (range === null) return true;
+      const total = candles.data().length;
+      if (total === 0) return true;
+      // Within ~1 bar of the end counts as "at the live edge".
+      return range.to >= total - 1;
+    };
+    followRef.current = isAtRightEdge();
+    sinkFollow(isAtRightEdge());
+    scale.subscribeVisibleLogicalRangeChange((range) => {
+      if (probe.rangeChanges.length < 4000) {
+        probe.rangeChanges.push({
+          from: range?.from ?? -1,
+          to: range?.to ?? -1,
+          at: Date.now(),
+          stack: new Error('chg').stack?.split('\n').slice(2, 6).join(' | ') ?? '',
+        });
+      }
+    });
+    scale.subscribeVisibleLogicalRangeChange(() => {
+      const at = isAtRightEdge();
+      // Only report a change, so a pan does not write to React on every frame.
+      if (at !== followRef.current) {
+        followRef.current = at;
+        sinkFollow(at);
+      }
+    });
+  }
+
   // --- measurement surface (inert unless a test asks for it) ----------------
   const probe: ChartProbe = {
     updates: { candle: 0, volume: 0, line: 0 },
+    loads,
+    rangeSets: [],
+    rangeChanges: [],
+    shiftTrace: traceShift,
+    follow: () => followRef.current,
+    scrollTo: (from: number, to: number) => {
+      const scaleForMove = chart.timeScale();
+      scaleForMove.setVisibleLogicalRange({ from, to });
+      // Re-derive follow mode from where the viewport actually landed.
+      const total = candles.data().length;
+      const range = scaleForMove.getVisibleLogicalRange();
+      const atEdge = range === null || total === 0 ? true : range.to >= total - 1;
+      if (atEdge !== followRef.current) {
+        followRef.current = atEdge;
+        sinkFollow(atEdge);
+      }
+    },
     painted: () => {
       const canvas = container.querySelector('canvas');
       if (canvas === null) return false;
@@ -476,33 +582,27 @@ function buildChart(
         }
         return false;
       } catch {
-        // A tainted canvas cannot be read; do not fail the check over it.
+        // A tainted canvas cannot be read; assume it painted rather than
+        // reporting a false blank.
         return true;
       }
     },
-    paneSizes: () => {
-      const sizes = chart.panes().map((pane, i) => (i === 0 ? 0 : pane.getHeight()));
-      return { price: chart.paneSize(0).height, indicators: sizes.slice(1) };
-    },
-    flow: () => {
-      const data = flow.data() as readonly { value?: number }[];
-      return {
-        values: data.map((p) => (typeof p.value === 'number' ? p.value : 0)),
-        // The reference line is created at 1.0; `options()` reads it back from the
-        // library rather than trusting a constant kept alongside.
-        baseline: flowBaseline.options().price,
-        paneHeight: chart.paneSize(chart.panes().length - 1).height,
-        status: '',
-        allPanes: chart.panes().map((pane, i) => pane.getHeight() + (i === 0 ? 0 : 0)),
-        panes: chart.panes().length,
-      };
-    },
+    paneSizes: () => ({
+      price: chart.paneSize(0).height,
+      indicators: chart.panes().slice(1).map((_pane, i) => chart.paneSize(i + 1).height),
+    }),
+    flow: () => ({
+      values: (flow.data() as readonly { value?: number }[]).map((point) => (typeof point.value === 'number' ? point.value : 0)),
+      baseline: flowBaseline.options().price,
+      paneHeight: chart.paneSize(chart.panes().length - 1).height,
+      status: '',
+      allPanes: chart.panes().map((pane) => pane.getHeight()),
+      panes: chart.panes().length,
+    }),
     timeScale: () => {
       const range = chart.timeScale().getVisibleLogicalRange();
       const from = range?.from ?? null;
       const to = range?.to ?? null;
-      // Report *times*, not indices: "a 5s preset showed 5 bars" is only
-      // checkable against the data, and an index can silently mean anything.
       const at = (index: number): number | null => {
         if (bars.length === 0) return null;
         const i = Math.max(0, Math.min(bars.length - 1, Math.round(index)));
@@ -519,6 +619,55 @@ function buildChart(
       };
     },
   };
+
+  // Count whole-series loads, which are the operations that reset the viewport.
+  {
+    // Record any programmatic viewport change with the frame that made it.
+    const scaleForTrace = chart.timeScale();
+    const realSetRange = scaleForTrace.setVisibleLogicalRange.bind(scaleForTrace);
+    scaleForTrace.setVisibleLogicalRange = ((range: Parameters<typeof realSetRange>[0]) => {
+      probe.rangeSets.push({
+        kind: 'setVisibleLogicalRange',
+        from: range?.from ?? -1,
+        to: range?.to ?? -1,
+        at: Date.now(),
+        stack: new Error('range').stack?.split('\n').slice(2, 9).join(' | ') ?? '',
+      });
+      if (probe.rangeSets.length > 20) probe.rangeSets.shift();
+      return realSetRange(range);
+    }) as typeof scaleForTrace.setVisibleLogicalRange;
+    const realFitTrace = scaleForTrace.fitContent.bind(scaleForTrace);
+    scaleForTrace.fitContent = (() => {
+      probe.rangeSets.push({
+        kind: 'fitContent',
+        from: -1,
+        to: -1,
+        at: Date.now(),
+        stack: new Error('fit').stack?.split('\n').slice(2, 5).join(' | ') ?? '',
+      });
+      if (probe.rangeSets.length > 20) probe.rangeSets.shift();
+      return realFitTrace();
+    }) as typeof scaleForTrace.fitContent;
+  }
+
+  {
+    const realSetData = candles.setData.bind(candles);
+    candles.setData = ((next: Parameters<typeof realSetData>[0]) => {
+      loads.candle += 1;
+      return realSetData(next);
+    }) as typeof candles.setData;
+    const realVolume = volume.setData.bind(volume);
+    volume.setData = ((next: Parameters<typeof realVolume>[0]) => {
+      loads.volume += 1;
+      return realVolume(next);
+    }) as typeof volume.setData;
+    const scale = chart.timeScale();
+    const realFit = scale.fitContent.bind(scale);
+    scale.fitContent = (() => {
+      loads.fit += 1;
+      realFit();
+    }) as typeof scale.fitContent;
+  }
 
   const wrapUpdate = <T,>(series: T, key: keyof ChartProbe['updates']): T => {
     const target = series as unknown as { update: (v: unknown) => void };
@@ -689,6 +838,18 @@ export function ChartPanel({
    * throws "Object is disposed".
    */
   const disposedRef = useRef(false);
+  /**
+   * Whether the viewport is following new bars, read by the update path.
+   *
+   * `buildChart` owns the authoritative flag (it subscribes to range changes);
+   * this ref mirrors it so the ticker effect — which lives outside that closure —
+   * can consult it without re-creating the chart.
+   */
+  const followMirror = useRef(true);
+  /** Trace of every rollover decision, for the scroll acceptance test. */
+  const traceShift: { at: number; follow: boolean; bars: number; from: number; to: number }[] = useRef<{ at: number; follow: boolean; bars: number; from: number; to: number }[]>([]).current;
+  // The chart is rebuilt on a reload, so the mirror is re-armed with it.
+
   /** The box height the panes were last distributed for. */
   const lastDistributed = useRef<number>(-1);
   /**
@@ -720,7 +881,7 @@ export function ChartPanel({
 
   // `active` is the pop-out's mount state: closing the overlay unmounts this
   // component, so polling stops with it, and reopening starts it again.
-  const { data, loading, refreshing, error, atMs, live, liveAtMs, polling, refresh } = useKlines(symbol, interval, {
+  const { data, loadSeq, loading, refreshing, error, atMs, live, liveAtMs, polling, refresh } = useKlines(symbol, interval, {
     active: true,
   });
   /**
@@ -884,7 +1045,16 @@ export function ChartPanel({
     if (container === null || symbol === null || bars.length === 0) return;
 
     disposedRef.current = false;
-    const handles = buildChart(container, bars, tools, { interval });
+    const handles = buildChart(
+      container,
+      bars,
+      tools,
+      { interval },
+      (following) => {
+        followMirror.current = following;
+      },
+      traceShift,
+    );
     chartRef.current = handles;
     setLayer({ chart: handles.chart, series: handles.candles });
 
@@ -905,7 +1075,16 @@ export function ChartPanel({
     // Rebuilt only when the *symbol* or the bar count changes: a 30s poll that
     // merely refreshes the forming candle must not throw away the user's zoom.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, bars.length, bars[0]?.t, tools]);
+    // Keyed on the *load*, not on the rolling window.
+    //
+    // This used to depend on `bars.length` and `bars[0].t`, which change on every
+    // poll because the backend returns the latest N bars — a sliding window whose
+    // first bar advances each tick. That rebuilt the whole chart (a new instance,
+    // `setData`, and `fitContent`) roughly every 20 seconds and reset the viewport
+    // with it. A reload is the only legitimate reason to rebuild, and `loadSeq` is
+    // exactly that signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, loadSeq, tools]);
 
   /* -- container resize: the canvas follows the box, not the viewport -------- */
 
@@ -1224,9 +1403,16 @@ export function ChartPanel({
 
   /* -- initial data into the series ----------------------------------------- */
 
-  // `setData` is deliberately confined to this effect: it is the initial load
-  // and the symbol/interval change. Polls below only ever call `update`, which
-  // is what keeps the user's pan and zoom intact and the candles from flickering.
+  /**
+   * A whole-series load: `setData` plus the initial fit.
+   *
+   * Keyed on `loadSeq`, **not** on `bars`. `bars` gets a new identity on every
+   * incremental poll, so keying on it re-ran `setData()` and `fitContent()` every
+   * ten seconds — which is exactly the jump the user reported: the viewport was
+   * being reset to the latest bars underneath them. `loadSeq` changes only when a
+   * fresh payload arrives (initial load, symbol/interval change, explicit
+   * refresh), which is the only time the series is legitimately rebuilt.
+   */
   useEffect(() => {
     const handles = chartRef.current;
     if (handles === null) return;
@@ -1258,7 +1444,11 @@ export function ChartPanel({
       lastOpen: last === null ? null : last.o,
       lastClose: last === null ? null : last.c,
     };
-  }, [bars, overlaySeries, data, distributePaneHeights]);
+    // Deliberately *not* depending on `bars`: see the note above. The values are
+    // read at run time, which is correct because the effect only re-runs when the
+    // payload itself is replaced.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadSeq]);
 
   /* -- support / resistance levels ------------------------------------------- */
 
@@ -1521,6 +1711,29 @@ function colorWithAlpha(color: string, alpha: number): string {
       });
       volumeRef.current = { barTime: bucket, counter: tickerTick.quoteVol24h, accumulated: 0, pushed: 0 };
       liveStateRef.current = { lastBarTime: bucket, lastOpen: tickerTick.price, lastClose: tickerTick.price };
+      // A new bar only appears once the previous one has closed, and its arrival
+      // is the one moment the viewport may legitimately move — but only for a
+      // reader who is already at the live edge, and only by the same sliver the
+      // library would have used, so the zoom level is untouched.
+      {
+        const r = handles.chart.timeScale().getVisibleLogicalRange();
+        traceShift.push({
+          at: Date.now(),
+          follow: followMirror.current,
+          bars: handles.candles.data().length,
+          from: r?.from ?? -1,
+          to: r?.to ?? -1,
+        });
+      }
+      if (followMirror.current) {
+        const scale = handles.chart.timeScale();
+        const range = scale.getVisibleLogicalRange();
+        if (range !== null && range.to - range.from > 0) {
+          const width = range.to - range.from;
+          const total = handles.candles.data().length;
+          if (total > 0) scale.setVisibleLogicalRange({ from: total - width, to: total });
+        }
+      }
       return;
     }
 

@@ -125,7 +125,7 @@ func (s *Server) handleKlinesLatest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	full := buildChart(symbol, interval, klines, s.marksFor(symbol))
+	full := buildChart(symbol, interval, klines, s.marksFor(symbol), s.alertsFor(symbol))
 	last := len(full.Bars) - 1
 
 	// Only the newest value of each indicator series; the chart already has the

@@ -259,3 +259,32 @@ func (b *AlertBuffer) ReadHistory(symbol string, sinceMS int64, limit int) ([]Al
 	}
 	return matched, total, nil
 }
+
+// HistoryForSymbol answers the "load this ticker's alerts NOW" path.
+//
+// It reads from memory first, because the user is waiting: an on-disk scan is
+// O(file) and the file grows forever, so the fastest path is the one that does
+// not touch it. The file is consulted only when memory cannot satisfy the
+// request, which is the correct trade -- immediacy for the common case, and
+// completeness when explicitly asked for.
+//
+// Newest first, because a ticker panel wants the recent past at the top.
+func (b *AlertBuffer) HistoryForSymbol(symbol string, limit int) []Alert {
+	if limit <= 0 {
+		limit = 200
+	}
+	b.mu.RLock()
+	history := b.bySymbol[symbol]
+	if len(history) > limit {
+		history = history[len(history)-limit:]
+	}
+	// Copy under the lock, reverse after, so the reverse cannot race a writer.
+	out := make([]Alert, len(history))
+	copy(out, history)
+	b.mu.RUnlock()
+
+	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+		out[i], out[j] = out[j], out[i]
+	}
+	return out
+}

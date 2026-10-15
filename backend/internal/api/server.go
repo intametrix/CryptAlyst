@@ -25,6 +25,7 @@ import (
 	"pumpdump/backend/internal/heat"
 	"pumpdump/backend/internal/market"
 	"pumpdump/backend/internal/outlook"
+	"pumpdump/backend/internal/perf"
 	"pumpdump/backend/internal/screen"
 )
 
@@ -109,9 +110,11 @@ func (b *AlertBuffer) Add(a Alert) {
 		b.items = b.items[len(b.items)-b.limit:]
 	}
 
-	// Per-symbol history for chart markers, capped independently.
+	// Per-symbol history, served from memory so selecting a ticker is instant.
+	// The cap is a memory bound, never a retention bound: the file keeps every
+	// alert and HistoryForSymbol falls back to it beyond this depth.
 	history := append(b.bySymbol[a.Symbol], a)
-	const perSymbol = 400
+	const perSymbol = 4000
 	if len(history) > perSymbol {
 		history = history[len(history)-perSymbol:]
 	}
@@ -181,6 +184,8 @@ type Deps struct {
 	// Outlook reports event state, ETA to reversal and the short-horizon
 	// distribution for one symbol.
 	Outlook *outlook.Service
+	// Perf reports what each symbol's predictions have actually done.
+	Perf *perf.Service
 	// Market is the REST client used for chart klines. The survey and screen
 	// own their own clients, but the chart endpoint is ad-hoc per request, so
 	// it borrows this one.
@@ -212,6 +217,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/alerts", s.handleAlerts)
 	mux.HandleFunc("/api/alerts/history", s.handleAlertHistory)
 	mux.HandleFunc("/api/alerts/groups", s.handleAlertGroups)
+	mux.HandleFunc("/api/perf", s.handlePerf)
 	mux.HandleFunc("/api/screen", s.handleScreen)
 	mux.HandleFunc("/api/screen/refresh", s.handleScreenRefresh)
 	mux.HandleFunc("/api/survey", s.handleSurvey)

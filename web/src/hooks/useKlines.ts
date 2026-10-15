@@ -84,6 +84,13 @@ export interface LiveBar {
 export interface KlinesState {
   /** The last full payload; only replaced by a full fetch. */
   data: KlinesMsg | null;
+  /**
+   * Increments each time a fresh payload replaces the series wholesale.
+   *
+   * The chart calls `setData()` and re-fits the viewport exactly then — never on
+   * the incremental poll, which only moves the last candle.
+   */
+  loadSeq: number;
   /** A full history load is in flight (and nothing is drawn yet). */
   loading: boolean;
   /** A full history refresh is in flight on top of already-drawn data. */
@@ -162,6 +169,15 @@ export function useKlines(
   const pollMs = options.pollMs ?? LIVE_POLL_MS;
 
   const [data, setData] = useState<KlinesMsg | null>(null);
+  /**
+   * Increments each time a **fresh payload** replaces the series wholesale.
+   *
+   * The chart must call `setData()` and re-fit the viewport exactly then — and
+   * *never* on the incremental poll, which only moves the last candle. Without
+   * this counter the chart cannot tell the two apart, and re-fitting on a poll
+   * yanks the user back to the present every few seconds.
+   */
+  const [loadSeq, setLoadSeq] = useState(0);
   const [loading, setLoading] = useState(symbol !== null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -184,6 +200,7 @@ export function useKlines(
   useEffect(() => {
     if (symbol === null) {
       setData(null);
+      setLoadSeq((n) => n + 1);
       setLoading(false);
       setRefreshing(false);
       setError(null);
@@ -210,6 +227,7 @@ export function useKlines(
         return;
       }
       setData(body);
+      setLoadSeq((n) => n + 1);
       setError(null);
       setLoading(false);
       setRefreshing(false);
@@ -333,7 +351,7 @@ export function useKlines(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol, interval, active, pollMs]);
 
-  return { data, loading, refreshing, error, atMs, live, liveAtMs, polling, refresh };
+  return { data, loadSeq, loading, refreshing, error, atMs, live, liveAtMs, polling, refresh };
 }
 
 /**

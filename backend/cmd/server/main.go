@@ -37,6 +37,7 @@ import (
 	"pumpdump/backend/internal/ledger"
 	"pumpdump/backend/internal/market"
 	"pumpdump/backend/internal/outlook"
+	"pumpdump/backend/internal/perf"
 	"pumpdump/backend/internal/screen"
 	"pumpdump/backend/internal/turtle"
 	"pumpdump/backend/web"
@@ -243,6 +244,9 @@ func main() {
 
 	// --- event outlook: state, ETA to reversal, short-horizon distribution ---
 	outlookSvc := outlook.New(outlook.DefaultParams(), opt.calibrationPath)
+	// Per-symbol track record, so confidence can learn which instruments
+	// actually follow through on their detections.
+	perfSvc := perf.New(opt.ledgerPath, perf.DefaultParams())
 
 	// --- prediction ledger -------------------------------------------------
 	// Every emitted signal is recorded with its feature vector and then tracked
@@ -322,6 +326,7 @@ func main() {
 		KlinesCache:   api.NewKlinesCache(),
 		TickerPump:    tickerPump,
 		Outlook:       outlookSvc,
+		Perf:          perfSvc,
 		Market:        client,
 		Static:        web.Dist(),
 		ConfigSummary: summary,

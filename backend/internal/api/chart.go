@@ -141,6 +141,11 @@ type ChartResponse struct {
 	// displaced from its recent anchor. Absent means "nothing to project",
 	// which is the common and correct case.
 	Forecast *forecast.Forecast `json:"forecast,omitempty"`
+	// Alerts is this symbol's PERSISTED alert history, returned with the chart
+	// so selecting a ticker loads its events in the SAME round trip rather than
+	// waiting for a second request. Persistence without immediacy is storage the
+	// user never sees.
+	Alerts []Alert `json:"alerts"`
 }
 
 func (s *Server) handleKlines(w http.ResponseWriter, r *http.Request) {
@@ -195,7 +200,7 @@ func (s *Server) handleKlines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, buildChart(symbol, interval, klineRows, s.marksFor(symbol)))
+	writeJSON(w, http.StatusOK, buildChart(symbol, interval, klineRows, s.marksFor(symbol), s.alertsFor(symbol)))
 }
 
 // marksFor returns recent onset alerts for one symbol.
@@ -287,7 +292,10 @@ func markStyle(kind string) (letter, label string, direction int) {
 	}
 }
 
-func buildChart(symbol, interval string, klines []binance.Kline, marks []Mark) ChartResponse {
+func buildChart(symbol, interval string, klines []binance.Kline, marks []Mark, alerts []Alert) ChartResponse {
+	if alerts == nil {
+		alerts = []Alert{}
+	}
 	count := len(klines)
 	bars := make([]Bar, 0, count)
 	closes := make([]float64, 0, count)
@@ -376,6 +384,7 @@ func buildChart(symbol, interval string, klines []binance.Kline, marks []Mark) C
 		Marks:      marks,
 		Latest:     latest,
 		Forecast:   forecast.Compute(klines, intervalMillis[interval], forecast.DefaultParams()),
+		Alerts:     alerts,
 	}
 }
 
@@ -509,4 +518,20 @@ func trendOf(closes []float64, index int) string {
 	default:
 		return "flat"
 	}
+}
+
+// alertsFor returns this symbol's persisted alert history for the chart payload.
+//
+// Bounded because the chart does not need everything: it draws the recent past
+// and the full history remains available from /api/alerts/history for anyone who
+// asks for it explicitly.
+func (s *Server) alertsFor(symbol string) []Alert {
+	if s.deps.Alerts == nil {
+		return []Alert{}
+	}
+	alerts := s.deps.Alerts.HistoryForSymbol(symbol, 300)
+	if alerts == nil {
+		return []Alert{}
+	}
+	return alerts
 }

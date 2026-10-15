@@ -53,7 +53,14 @@ export function MarkerLayer({
       setPlaced([]);
       return;
     }
+    // Reading coordinates forces the library to resolve the time scale, so a pan
+    // fires this on every frame. Coalescing to one recompute per animation frame
+    // keeps a 2.5Hz update rate from becoming a reflow storm.
+    let frame = 0;
     const compute = (): void => {
+      // Positions are computed from the scale *before* any DOM write, so the read
+      // phase is not interleaved with React's commit.
+      frame = 0;
       const next: Placed[] = [];
       for (const marker of markers) {
         const x = chart.timeScale().timeToCoordinate(marker.time as Time);
@@ -70,15 +77,21 @@ export function MarkerLayer({
       }
       setPlaced(next);
     };
+    const schedule = (): void => {
+      if (frame !== 0) return; // one recompute per frame
+      frame = window.requestAnimationFrame(compute);
+    };
+    // The first pass is immediate, so badges appear with the chart rather than a
+    // frame later.
     compute();
     // Recompute whenever the time scale moves: a pan or a zoom invalidates every
     // pixel position, and a stale badge would point at the wrong bar.
-    const onRangeChange = (): void => compute();
-    chart.timeScale().subscribeVisibleLogicalRangeChange(onRangeChange);
-    window.addEventListener('resize', onRangeChange);
+    chart.timeScale().subscribeVisibleLogicalRangeChange(schedule);
+    window.addEventListener('resize', schedule);
     return () => {
-      chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRangeChange);
-      window.removeEventListener('resize', onRangeChange);
+      if (frame !== 0) window.cancelAnimationFrame(frame);
+      chart.timeScale().unsubscribeVisibleLogicalRangeChange(schedule);
+      window.removeEventListener('resize', schedule);
     };
   }, [chart, series, markers, repaintKey]);
 
