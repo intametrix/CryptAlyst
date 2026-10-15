@@ -165,6 +165,7 @@ func (p prediction) expectancy() float64 {
 type store struct {
 	byID  map[string]*prediction
 	order []*prediction
+	short []*shortLabel
 }
 
 func newStore() *store { return &store{byID: map[string]*prediction{}} }
@@ -289,6 +290,15 @@ func load(path string, target, stop float64) (*store, error) {
 				return nil, fmt.Errorf("line %d: %w", lineNo, err)
 			}
 			st.attachResolution(lr.ID, lr)
+		case "label_10s":
+			var sl struct {
+				ID    string `json:"id"`
+				Label string `json:"label"`
+			}
+			if err := json.Unmarshal(line, &sl); err != nil {
+				return nil, fmt.Errorf("line %d: %w", lineNo, err)
+			}
+			st.short = append(st.short, &shortLabel{id: sl.ID, label: sl.Label})
 		case "", "alert":
 			var a alertRecord
 			if err := json.Unmarshal(line, &a); err != nil {
@@ -357,7 +367,8 @@ func main() {
 	stop := flag.Float64("stop", 1.0, "fail threshold %% for expectancy")
 	holdout := flag.Float64("holdout", 0.25, "unused: retained for flag compatibility")
 	calibrate := flag.Bool("calibrate", false, "fit logistic calibration and write -out")
-	calOut := flag.String("out", "calibration.json", "calibration output path (with -calibrate)")
+	calOut := flag.String("out", "", "calibration output path (default calibration.json, or calibration_10s.json with -short)")
+	shortMode := flag.Bool("short", false, "short-horizon (10s) report and fit from label_10s records")
 	var params paramFlags
 	flag.Var(&params, "param", "gate parameter name=min:max:step (repeatable)")
 	flag.Parse()
@@ -402,17 +413,28 @@ func main() {
 	fmt.Printf("ledger: %s\n", *ledgerPath)
 	fmt.Printf("registered=%d  resolved=%d  UNRESOLVED=%d\n", len(all), resolved, unresolved)
 
-	if resolved == 0 {
+	if resolved == 0 && !*shortMode {
 		fmt.Printf("insufficient sample: %d resolved, need %d\n", resolved, minSamples)
 		return
 	}
 
-	fmt.Printf("overall:            %s\n", accumulate(all, nil))
-	for _, sev := range []string{"CRITICAL", "ALERT", "WATCH"} {
-		fmt.Printf("severity %-9s %s\n", sev+":", accumulate(all, func(p *prediction) bool { return p.severity == sev }))
+	if resolved > 0 {
+		fmt.Printf("overall:            %s\n", accumulate(all, nil))
+		for _, sev := range []string{"CRITICAL", "ALERT", "WATCH"} {
+			fmt.Printf("severity %-9s %s\n", sev+":", accumulate(all, func(p *prediction) bool { return p.severity == sev }))
+		}
+		fmt.Printf("direction LONG:     %s\n", accumulate(all, func(p *prediction) bool { return p.direction > 0 }))
+		fmt.Printf("direction SHORT:    %s\n", accumulate(all, func(p *prediction) bool { return p.direction < 0 }))
 	}
-	fmt.Printf("direction LONG:     %s\n", accumulate(all, func(p *prediction) bool { return p.direction > 0 }))
-	fmt.Printf("direction SHORT:    %s\n", accumulate(all, func(p *prediction) bool { return p.direction < 0 }))
+
+	out := *calOut
+	if out == "" {
+		if *shortMode {
+			out = "calibration_10s.json"
+		} else {
+			out = "calibration.json"
+		}
+	}
 
 	if *calibrate {
 		var resolvedRows []*prediction
@@ -421,7 +443,12 @@ func main() {
 				resolvedRows = append(resolvedRows, p)
 			}
 		}
-		runCalibration(resolvedRows, *calOut)
+		runCalibration(resolvedRows, out)
+		return
+	}
+
+	if *shortMode {
+		computeShort(st, out)
 		return
 	}
 

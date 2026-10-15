@@ -257,6 +257,27 @@ one. Naming it in the spec means the other agent builds for it and there is no
 retraction later. Naming it in a rule means the rule survives contact with the
 second case it meets.
 
+## Rule 0d — the watcher is permanent and supervised
+
+**Standing order: an agent keeps a watcher on its mailbox at all times, until
+explicitly told to stop.**
+
+A bare `poll` loop is not enough, because the loop can be killed — including by
+the agent itself while restarting it, which happened, and which is undetectable
+from the inside. The watcher therefore runs under a supervisor:
+
+```bash
+tools/watch_inbox.sh <agent> 3      # supervised, self-restarting, logged
+```
+
+- **Self-healing.** If the poll dies for any reason the supervisor restarts it
+  within seconds. Only a deliberate `touch .comms/STOP.<agent>` ends it, so
+  stopped-by-accident is not a state that exists.
+- **Visible.** Output tees to `.comms/<agent>.watch.log`, so there is evidence
+  the agent is watching. A watcher whose output nobody can see is
+  indistinguishable from no watcher, which is precisely how the human came to
+  ask why nobody was polling while a poll was in fact running.
+
 ## Signalling vocabulary
 
 Adopted from KIMI's proposal. Every message subject starts with one of these, so
