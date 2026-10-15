@@ -127,3 +127,14 @@ atomic (temp file + rename) so a live reader never sees a torn document.
 Features missing from a scoring map are imputed at the train-set mean
 (standardized value 0), exactly as at fit time; heterogeneous detectors with
 different metric keys are therefore usable in one model.
+
+## Short-horizon (10s) calibration
+
+`cmd/learner -short` fits the same logistic machinery against fastsample
+`label_10s` records: CORRECT=1, WRONG=0, DISCARD excluded (the ±0.1% 10s band
+produces DISCARD when neither side of the band is touched). Usable minimum is
+300 labels. The no-lift rule ships `calibration_10s.json` only if the
+in-sample Brier beats the pooled base-rate Brier `p*(1-p)` by at least 3%
+relative — a strict `<` cannot refuse honestly, since a zero-signal fit wins
+by ~1e-4 of in-sample noise. All metrics remain in-sample; the label_rule
+field in the shipped file records the 10s band rule.

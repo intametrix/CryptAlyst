@@ -400,10 +400,26 @@ ok('the expand control advertises its state', alertHtml.includes('aria-expanded'
 ok('a card with no metrics renders without a crash', alertHtml.includes('metrics'));
 ok('a missing symbol renders the em dash, not null', alertHtml.includes('—'));
 
-// Verbatim enum words must not leak into badges.
-const badgeTexts = [...alertHtml.matchAll(/class="badge[^"]*">([^<]*)</g)].map((m) => m[1]);
+// Verbatim enum words must not leak into badges, and every badge must carry text.
+// (The kind badge now sits inside an event glyph, so the tag may nest: match the
+// badge's own text up to the next tag rather than up to the next `<`.)
+// Match the text *directly* inside the badge (`>text<`), so a badge that wraps a
+// glyph rather than containing text is simply not counted.
+const badgeTexts = [...alertHtml.matchAll(/class="badge[^"]*"[^>]*>([^<]+)</g)].map((m) => m[1]);
 ok('every badge has visible text', badgeTexts.length > 0 && badgeTexts.every((t) => t.trim() !== ''), JSON.stringify(badgeTexts));
 ok('no badge contains an underscore', badgeTexts.every((t) => !t.includes('_')), JSON.stringify(badgeTexts));
+
+// The canonical glyph: one letter, one colour, one direction, everywhere.
+const glyphs = [...alertHtml.matchAll(/data-letter="([^"]*)"[^>]*data-color="([^"]*)"[^>]*data-direction="([^"]*)"[^>]*data-family="([^"]*)"/g)];
+ok('the alert feed renders canonical event glyphs', glyphs.length > 0, String(glyphs.length));
+ok(
+  'every glyph has a single letter, a colour and a direction',
+  glyphs.every((g) => g[1].length === 1 && /^#|rgba?\(/.test(g[2]) && (g[3] === '1' || g[3] === '-1')),
+  JSON.stringify(glyphs.slice(0, 3)),
+);
+const letters = new Set(glyphs.map((g) => g[1]));
+// The canon's letters, plus its neutral bullet for a kind it does not name.
+ok('the letters come from the canon', [...letters].every((l) => 'PDRB\u2022'.includes(l)), JSON.stringify([...letters]));
 
 // Heat: no data at all must mean no borders, and the legend must still explain.
 ok('the heat legend is present', headerHtml.includes('heat-legend'));

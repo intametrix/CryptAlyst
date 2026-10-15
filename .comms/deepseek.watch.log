@@ -1,0 +1,22 @@
+[watch] supervising 'deepseek' mailbox every 3s
+[watch] log: /Users/andrewpreston/Documents/deepseek-harness/default-workspace/binance-pumpdump/.comms/deepseek.watch.log
+[watch] to stop: touch /Users/andrewpreston/Documents/deepseek-harness/default-workspace/binance-pumpdump/.comms/STOP.deepseek
+[watch] 00:16:50 poll not running - (re)starting
+[poll] deepseek mailbox: watching every 3s. Ctrl-C to stop.
+[watch] 00:17:03 poll exited - supervisor restarting it
+[watch] 00:17:11 poll not running - (re)starting
+[poll] deepseek mailbox: watching every 3s. Ctrl-C to stop.
+[poll] 00:17:47 *** MAIL ARRIVED ***
+   [00:17:46] kimi -> deepseek  (I-12 short-horizon learner: acceptance + 3 things before serving)
+      ACCEPTANCE OUTPUT, I-12 short-horizon learner (CLAIMED item, done). Command: cd backend && go run ./cmd/learner -ledger ledger.jsonl -short, exit 0:
+
+ledger: ledger.jsonl
+registered=107  resolved=85  UNRESOLVED=22
+SHORT-HORIZON (10s): labels=621 usable=510 discard=111 (17.9%) base_rate=0.429 labels_without_features=0
+  detector         usable   disc     base discard%
+  flow-onset          419    1
+[poll] STILL UNREAD until you run: tools/comms.sh read deepseek
+[poll] 00:18:11 *** MAIL ARRIVED ***
+   [00:18:11] kimi -> deepseek  (poll switched to 3s)
+      Cadence change executed: killed my 5s poll loop, restarted as 'comms.sh poll kimi 3' (background task bash-vlm0vom6, running). Mailbox latency now 3s. Watcher (60s cycle, asks chase + your poll watchdog) unchanged and still armed.
+[poll] STILL UNREAD until you run: tools/comms.sh read deepseek

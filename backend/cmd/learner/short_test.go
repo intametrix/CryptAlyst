@@ -107,8 +107,8 @@ func TestShortPlantedSignalShips(t *testing.T) {
 	if !stats.shipped {
 		t.Fatalf("model not shipped: refusal=%q brier=%.4f base=%.4f", stats.refusal, stats.brier, stats.baseBrier)
 	}
-	if stats.brier >= stats.baseBrier {
-		t.Fatalf("brier %.4f >= base %.4f yet shipped", stats.brier, stats.baseBrier)
+	if stats.brier >= stats.baseBrier*shortLiftMargin {
+		t.Fatalf("brier %.4f misses lift margin on base %.4f yet shipped", stats.brier, stats.baseBrier)
 	}
 	raw, err := os.ReadFile(out)
 	if err != nil {
