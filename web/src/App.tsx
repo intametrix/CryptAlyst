@@ -8,6 +8,7 @@ import type { ChartZoomControls } from './components/ChartPanel';
 import type { ChartMarker } from './chartData';
 import { SplitPane } from './components/Panel';
 import { FlowLeaderboard } from './components/FlowLeaderboard';
+import { FlowSplit } from './components/FlowSplit';
 import { Header } from './components/Header';
 import { ScreenTable } from './components/ScreenTable';
 import { StatStrip } from './components/StatStrip';
@@ -430,7 +431,14 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
                 onDrill={drillInto}
               />
             }
-            second={<FlowLeaderboard flow={flow} tools={tools} onDrill={drillInto} />}
+            second={
+              <div className="flow-column">
+                <FlowLeaderboard flow={flow} tools={tools} onDrill={drillInto} />
+                {/* The two-panel split: the strongest bursts up and down, with an
+                    empty state built from the backend's own drop counters. */}
+                <FlowSplit flow={flow} tools={tools} onDrill={drillInto} />
+              </div>
+            }
           />
         </div>
 

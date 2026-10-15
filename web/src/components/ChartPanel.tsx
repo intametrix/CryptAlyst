@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { UTCTimestamp } from 'lightweight-charts';
 import {
+  AreaSeries,
   CandlestickSeries,
   ColorType,
   CrosshairMode,
@@ -39,11 +40,13 @@ import type { ColorCanon } from '../colors';
 import { saveChipState, getLayout } from '../layout';
 import { INTERVAL_MS, LIVE_POLL_MS, bucketStart, liveIndicator, useKlines } from '../hooks/useKlines';
 import { useFlowHistory, type FlowHistoryState } from '../hooks/useFlowHistory';
+import { useOutlook, type OutlookLevel } from '../hooks/useOutlook';
 import { resolvePalette } from '../palette';
 import { useElementSize } from '../hooks/useElementSize';
 import { INTERVALS, type Interval, type ToolsMsg } from '../types';
 import { eventIdentity } from '../colors';
 import { EventGlyph } from './EventGlyph';
+import { OutlookStrip } from './OutlookStrip';
 import { SplitPane } from './Panel';
 import { presetAction, type ZoomPreset } from '../zoom';
 import { Tooltip } from './Tooltip';
@@ -232,6 +235,13 @@ interface ChartHandles {
   flowPaneIndex: number;
   /** The reference line at 1.0× — normal flow. */
   flowBaseline: IPriceLine;
+  /** The support/resistance lines currently drawn, so they can be replaced. */
+  levelLines: IPriceLine[];
+  /** The forecast projection: a dashed mid line plus its uncertainty band. */
+  forecastLine: ISeriesApi<'Line'> | null;
+  /** The band's two halves (upper = fill down from, lower = paint over). */
+  bandUpper: ISeriesApi<'Area'> | null;
+  bandLower: ISeriesApi<'Area'> | null;
 }
 
 /** Resolve the pane index an indicator's pane landed in (v5 exposes `panes()`). */
@@ -539,6 +549,10 @@ function buildChart(
     flow,
     flowPaneIndex: resolvePaneIndex(chart, 4),
     flowBaseline,
+    levelLines: [],
+    forecastLine: null,
+    bandUpper: null,
+    bandLower: null,
   };
 
   return handles;
@@ -700,6 +714,14 @@ export function ChartPanel({
    * no flow — drawn flat) and `untracked` (a 404 — a coverage gap, not an error).
    */
   const flowHistory = useFlowHistory(symbol);
+  /**
+   * The support/resistance map, the forecast, and the ETA to reversal.
+   *
+   * Fetched from `/api/outlook`, which is where the levels the user asked for
+   * actually live. Absent sections are normal: a symbol with no measured levels
+   * simply gets no lines.
+   */
+  const outlook = useOutlook(symbol);
   /** The forming candle's identity, shared by the poll and the SSE tick. */
   const liveStateRef = useRef<{ lastBarTime: number | null; lastOpen: number | null; lastClose: number | null }>({
     lastBarTime: null,
@@ -1087,6 +1109,149 @@ export function ChartPanel({
       lastClose: last === null ? null : last.c,
     };
   }, [bars, overlaySeries, data, distributePaneHeights]);
+
+  /* -- support / resistance levels ------------------------------------------- */
+
+  // Horizontal price lines on the candle pane, labelled with the price, the
+  // touch count and the strength. Opacity tracks strength, so the level that has
+  // been tested most is the one that reads strongest — a bare line would imply
+  // every level is equally meaningful.
+  useEffect(() => {
+    const handles = chartRef.current;
+    if (handles === null || disposedRef.current) return;
+
+    for (const line of handles.levelLines) {
+      try {
+        handles.candles.removePriceLine(line);
+      } catch {
+        // Already detached; nothing to do.
+      }
+    }
+    handles.levelLines = [];
+    if (outlook === null) return;
+
+    const palette = resolvePalette();
+    // Draw the strongest few: a wall of lines hides the candles it is annotating.
+    const selected: OutlookLevel[] = [...outlook.resistances.slice(0, 4), ...outlook.supports.slice(0, 4)];
+    for (const level of selected) {
+      const strength = Math.max(0.25, Math.min(1, level.strength));
+      const color = level.kind === 'support' ? palette.up : palette.down;
+      const line = handles.candles.createPriceLine({
+        price: level.price,
+        color,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: `${level.kind === 'support' ? 'S' : 'R'} ${level.touches}x ${(strength * 100).toFixed(0)}%`,
+      });
+      // `applyOptions` carries the alpha: strength is the level's confidence.
+      line.applyOptions({ color: colorWithAlpha(color, 0.3 + strength * 0.6) });
+      handles.levelLines.push(line);
+    }
+  }, [outlook]);
+
+  /* -- the forecast: a projection, drawn as one --------------------------------- */
+
+  // The forecast is a *projection*, so it must not look like history: dashed, its
+  // own series, and with the lower/upper band visible — a bare line would imply a
+  // precision the model explicitly disclaims.
+  useEffect(() => {
+    const handles = chartRef.current;
+    if (handles === null || disposedRef.current) return;
+    const points = outlook?.forecast.points ?? [];
+    if (points.length === 0) {
+      if (handles.forecastLine !== null) {
+        handles.forecastLine.setData([]);
+      }
+      return;
+    }
+    const palette = resolvePalette();
+    if (handles.forecastLine === null) {
+      // A line series on the price pane: dashed, so it cannot be mistaken for a
+      // historical series, and created once and reused.
+      handles.forecastLine = handles.chart.addSeries(LineSeries, {
+        color: palette.accent,
+        lineWidth: 2,
+        lineStyle: LineStyle.Dashed,
+        priceLineVisible: false,
+        lastValueVisible: true,
+        crosshairMarkerVisible: true,
+        title: 'forecast',
+      });
+    }
+    handles.forecastLine.setData(
+      points.map((point) => ({ time: Math.floor(point.t / 1000) as UTCTimestamp, value: point.value })),
+    );
+
+    // The uncertainty band: an area from the lower bound to the upper bound.
+    //
+    // Done with two area series, not a line — an area filled *to* the upper bound
+    // and one filled *down from* the lower bound, with the lower one painted in
+    // the pane background. That keeps the visual weight on the interval without
+    // inventing interpolated values between the model's own points.
+    const banded = points.filter((p) => p.lower !== null && p.upper !== null);
+    if (banded.length === 0) return;
+    const geom = bandGeometry(banded, palette);
+    const pane = handles.chart.panes()[handles.paneIndex.atr];
+    if (pane === undefined || pane === null) return;
+    if (handles.bandUpper === null || handles.bandLower === null) {
+      handles.bandUpper = pane.addSeries(AreaSeries, {
+        lineWidth: 1,
+        lineStyle: LineStyle.Dotted,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        topColor: geom.fill,
+        bottomColor: geom.transparent,
+        lineColor: geom.edge,
+        title: 'forecast band',
+      });
+      handles.bandLower = pane.addSeries(AreaSeries, {
+        lineWidth: 1,
+        lineStyle: LineStyle.Dotted,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        topColor: geom.background,
+        bottomColor: geom.transparent,
+        lineColor: geom.edge,
+        title: 'forecast band',
+      });
+    }
+    handles.bandUpper.setData(banded.map((p) => ({ time: Math.floor(p.t / 1000) as UTCTimestamp, value: p.upper as number })));
+    handles.bandLower.setData(banded.map((p) => ({ time: Math.floor(p.t / 1000) as UTCTimestamp, value: p.lower as number })));
+  }, [outlook]);
+
+/**
+ * The two colours the forecast band needs.
+ *
+ * `fill` is the wash between the bounds; `background` is the pane's own colour,
+ * painted over the lower series so the band appears to hang between the bounds
+ * rather than extending down to the axis.
+ */
+function bandGeometry(
+  points: readonly { lower: number | null; upper: number | null }[],
+  palette: { accent: string; background: string },
+): { fill: string; edge: string; background: string; transparent: string } {
+  void points;
+  return {
+    fill: colorWithAlpha(palette.accent, 0.18),
+    edge: colorWithAlpha(palette.accent, 0.55),
+    background: palette.background,
+    transparent: 'rgba(0,0,0,0)',
+  };
+}
+
+/** Convert a colour to one with the given alpha, when it is a hex literal. */
+function colorWithAlpha(color: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (hex === null) return color;
+  const value = hex[1];
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+}
 
   /* -- the flow pane's data -------------------------------------------------- */
 
@@ -1655,6 +1820,10 @@ export function ChartPanel({
               );
             })}
           </div>
+
+          {/* The support/resistance map, ETA and short-horizon read: the values
+              the outlook endpoint publishes, with its own wording preserved. */}
+          <OutlookStrip outlook={outlook} tools={tools} />
 
           {bottom !== null && <div className="chart-bottom">{bottom}</div>}
 

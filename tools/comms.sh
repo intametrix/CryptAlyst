@@ -155,11 +155,14 @@ PYIN
     else
       beats=$((beats+1))
       # A heartbeat every ~60s. Silence should be visibly deliberate.
-      # A frequent heartbeat makes the log's mtime a reliable freshness signal,
-      # so an outside observer can distinguish "idle" from "dead" by timestamp
-      # instead of having to trust that the process is alive.
-      if [ $((beats % (15/interval>0?15/interval:1))) -eq 0 ]; then
-        echo "[poll] $(date +%H:%M:%S) alive, mailbox empty"
+      # Log EVERY check. A heartbeat proves liveness eventually; a per-check
+      # line proves it for the exact second in question, which is what "show me
+      # you are polling" actually asks for. The log is bounded by rotating it
+      # when it grows, so verbosity cannot become an unbounded file.
+      echo "[poll] $(date +%H:%M:%S) checking $(basename "$(box "$who")") - empty, unread=0"
+      if [ -f "$(box "$who")" ] && [ "$(wc -l < "$(box "$who")" | tr -d ' ')" -gt 4000 ]; then
+        tail -n 1000 "$(box "$who")" > "$(box "$who").tmp" && mv "$(box "$who").tmp" "$(box "$who")"
+        echo 1000 > "$(offset_file "$who")"
       fi
     fi
     sleep "$interval"

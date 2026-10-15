@@ -37,6 +37,8 @@ export interface ChartPalette {
   volumeDown: string;
   volumeFlat: string;
   severity: { watch: string; alert: string; critical: string };
+  /** The pane background, so a band can mask what is beneath it. */
+  background: string;
 }
 
 /** The documented defaults; also what a missing token degrades to. */
@@ -62,6 +64,7 @@ const FALLBACK: ChartPalette = {
   volumeUp: 'rgba(46, 224, 106, 0.45)',
   volumeDown: 'rgba(255, 77, 94, 0.45)',
   volumeFlat: 'rgba(132, 146, 169, 0.35)',
+  background: '#111725',
   severity: {
     watch: CANON_FALLBACK.severity.WATCH,
     alert: CANON_FALLBACK.severity.ALERT,
@@ -91,6 +94,7 @@ const TOKEN: Record<Exclude<keyof ChartPalette, 'severity'>, string> = {
   volumeUp: '--chart-volume-up',
   volumeDown: '--chart-volume-down',
   volumeFlat: '--chart-volume-flat',
+  background: '--panel',
 };
 
 let cached: ChartPalette | null = null;
@@ -108,6 +112,7 @@ export function resolvePalette(force = false): ChartPalette {
   for (const [key, token] of Object.entries(TOKEN) as Array<[keyof typeof TOKEN, string]>) {
     next[key] = read(token, FALLBACK[key]);
   }
+  next.background = read('--panel', FALLBACK.background);
   next.severity = {
     watch: read('--c-sev-watch', FALLBACK.severity.watch),
     alert: read('--c-sev-alert', FALLBACK.severity.alert),

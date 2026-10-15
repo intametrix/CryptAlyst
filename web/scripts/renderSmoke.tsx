@@ -16,6 +16,7 @@
  *   node scripts/smoke.mjs   (which builds this with Vite, then runs it)
  */
 import { renderToStaticMarkup } from 'react-dom/server';
+import { px } from '../src/format';
 import { createElement, type ReactElement } from 'react';
 import type { AlertMsg, FlowMsg, ScreenMsg, StatusMsg, SurveyMsg, SymbolDetailMsg } from '../src/types';
 
@@ -103,6 +104,10 @@ import { Header } from '../src/components/Header';
 import { ChartPanel } from '../src/components/ChartPanel';
 import { ChartOverlay } from '../src/components/ChartOverlay';
 import { SymbolDrilldown } from '../src/components/SymbolDrilldown';
+import { FlowSplit } from '../src/components/FlowSplit';
+import { OutlookStrip } from '../src/components/OutlookStrip';
+import { parseOutlook } from '../src/hooks/useOutlook';
+import { LIVE_FLOW_SPLIT, LIVE_OUTLOOK } from './livePayloads';
 import { TooltipViewer } from '../src/components/TooltipViewer';
 import { HeatProvider } from '../src/heatContext';
 import { HeatBorder } from '../src/components/HeatBorder';
@@ -111,6 +116,7 @@ import { SelectionProvider } from '../src/selection';
 
 const h = createElement;
 const noop = () => undefined;
+
 
 const ALERTS: (AlertMsg | Record<string, unknown>)[] = [
   {
@@ -604,6 +610,54 @@ ok('a refused setup states the reason prominently', blockedDrillHtml.includes('w
 ok('a refused setup is never an empty panel', !blockedDrillHtml.includes('dd-section-trade'));
 ok('the metric rows are drillable', drillHtml.includes('dd-metric-row'));
 void TRADE_DETAIL; void BLOCKED_DETAIL;
+
+// --- the flow split, from the live payload --------------------------------
+const LIVE_SPLIT = LIVE_FLOW_SPLIT as Record<string, unknown>;
+const splitHtml = renderToStaticMarkup(
+  <HeatProvider seedUrl={null}>
+    <SelectionProvider seedSymbol="BTCUSDT">
+      <FlowSplit flow={LIVE_SPLIT as never} tools={null} onDrill={noop} />
+    </SelectionProvider>
+  </HeatProvider>,
+);
+ok('the flow split renders both panels', splitHtml.includes('biggest pumps') && splitHtml.includes('biggest dumps'));
+ok(
+  'the flow split explains an empty panel from the drop counters',
+  splitHtml.includes('dropped') || splitHtml.includes('nothing'),
+  splitHtml.slice(0, 400),
+);
+ok('the flow split shows the backend counts', splitHtml.includes('scanned') || splitHtml.includes('dropped'));
+ok('the flow split never renders undefined', !splitHtml.includes('>undefined<') && !splitHtml.includes('>null<'));
+
+// --- the outlook strip, from the live payload -----------------------------
+const parsedOutlook = parseOutlook(LIVE_OUTLOOK);
+ok('the live outlook parses', parsedOutlook !== null);
+const outlookHtml = renderToStaticMarkup(
+  <TooltipViewer>
+    <OutlookStrip outlook={parsedOutlook} tools={null} />
+  </TooltipViewer>,
+);
+const liveSupport = parsedOutlook?.supports[0] ?? null;
+const liveResistance = parsedOutlook?.resistances[0] ?? null;
+if (liveSupport !== null) {
+  // The real price, formatted with the dashboard's own helper.
+  ok('a support line renders at its real price', outlookHtml.includes(px(liveSupport.price)), `expected ${px(liveSupport.price)}`);
+  ok('the support line shows its touch count', outlookHtml.includes(String(liveSupport.touches)));
+}
+if (liveResistance !== null) {
+  ok('a resistance line renders at its real price', outlookHtml.includes(px(liveResistance.price)), `expected ${px(liveResistance.price)}`);
+  ok('the resistance line shows its touch count', outlookHtml.includes(String(liveResistance.touches)));
+}
+// The honest sentences are quoted verbatim, never replaced by a number.
+const liveEdge = parsedOutlook?.shortHorizon?.edge ?? '';
+if (liveEdge !== '') {
+  ok('the short-horizon edge is quoted verbatim', outlookHtml.includes(liveEdge), liveEdge);
+}
+const liveBasis = parsedOutlook?.shortHorizon?.basis ?? '';
+if (liveBasis !== '') {
+  ok('the short-horizon basis is quoted verbatim', outlookHtml.includes(liveBasis), liveBasis);
+}
+ok('the outlook strip never renders undefined', !outlookHtml.includes('>undefined<'));
 
 // Tooltips are wired for keyboard and pointer.
 ok('tooltips use role=tooltip', true); // rendered on open only; the trigger wiring is asserted next

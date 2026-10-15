@@ -9,11 +9,12 @@
     "preview": "vite preview",
     "verify": "node scripts/verify.mjs",
     "audit:css": "node scripts/audit-css.mjs",
-    "smoke": "node scripts/build-smoke.mjs && node scripts/smoke.mjs",
+    "smoke": "node scripts/capture-live.mjs && node scripts/build-smoke.mjs && node scripts/smoke.mjs",
     "rt:build": "node scripts/rt-bundle.mjs main.tsx",
     "rt": "node scripts/rt-bundle.mjs main.tsx && node scripts/rt-drive.mjs",
-    "check": "tsc -b --force && tsc -p scripts/tsconfig.json && node scripts/audit-css.mjs && node scripts/verify.mjs && node scripts/smoke.mjs",
-    "check:all": "tsc -b --force && tsc -p scripts/tsconfig.json && node scripts/audit-css.mjs && node scripts/verify.mjs && node scripts/build-smoke.mjs && node scripts/smoke.mjs && node scripts/rt-bundle.mjs main.tsx && node scripts/rt-drive.mjs"
+    "check": "tsc -b --force && tsc -p scripts/tsconfig.json && node scripts/audit-css.mjs && node scripts/verify.mjs && node scripts/capture-live.mjs && node scripts/build-smoke.mjs && node scripts/smoke.mjs",
+    "check:all": "tsc -b --force && tsc -p scripts/tsconfig.json && node scripts/audit-css.mjs && node scripts/verify.mjs && node scripts/build-smoke.mjs && node scripts/smoke.mjs && node scripts/rt-bundle.mjs main.tsx && node scripts/rt-drive.mjs",
+    "rt:presets": "node scripts/rt-bundle.mjs presets.tsx && node scripts/rt-drive.mjs"
   },
   "dependencies": {
     "lightweight-charts": "^5.2.1",

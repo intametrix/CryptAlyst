@@ -49,7 +49,19 @@ if (!built) {
   process.exit(1);
 }
 
+// `RT_LIVE=1` emits a page that talks to the live backend from an http origin
+// instead of inlining for file:// (a file:// page cannot call the API).
 const js = readFileSync(join(outDir, 'rt.js'), 'utf8');
+if (process.env.RT_LIVE === '1') {
+  writeFileSync(
+    join(outDir, 'live.html'),
+    `<!doctype html>\n<html lang="en" data-theme="dark"><head><meta charset="UTF-8">` +
+      `<title>live check</title><link rel="stylesheet" href="./style.css"></head>` +
+      `<body>\n<script type="module" src="./rt.js"></script>\n</body></html>\n`,
+    'utf8',
+  );
+  console.log('rt-bundle: live.html written (serve the directory over http)');
+}
 writeFileSync(
   join(outDir, 'index.html'),
   `<!doctype html>\n<html lang="en" data-theme="dark"><head><meta charset="UTF-8">` +

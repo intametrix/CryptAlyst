@@ -71,6 +71,34 @@ export interface StatusMsg {
   stream_connected?: boolean | null;
 }
 
+/** One row of the flow split (pumps / dumps). */
+export interface FlowSplitRow extends FlowRow {
+  /** The 24h change, so a bounce inside a downtrend is not read as a pump. */
+  change_24h_pct?: number | null;
+}
+
+/**
+ * The `split`-shaped flow payload: `pumps` and `dumps` are the two panels, and
+ * the `dropped_*` counters are what explain an empty one.
+ */
+export interface FlowSplitMsg {
+  type?: string | null;
+  ts_ms?: number | null;
+  split?: boolean | null;
+  window_sec?: number | null;
+  symbols?: number | null;
+  pumps?: FlowSplitRow[] | null;
+  dumps?: FlowSplitRow[] | null;
+  pump_count?: number | null;
+  dump_count?: number | null;
+  dropped_thin?: number | null;
+  dropped_stale?: number | null;
+  dropped_quiet?: number | null;
+  min_move_pct?: number | null;
+  min_flow_usd?: number | null;
+  max_stale_ms?: number | null;
+}
+
 /** One row of the flow leaderboard. */
 export interface FlowRow {
   symbol?: string | null;

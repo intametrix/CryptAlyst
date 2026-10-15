@@ -3358,3 +3358,233 @@ table {
   border-color: color-mix(in srgb, var(--eglyph-color, currentColor) 45%, transparent);
   background: color-mix(in srgb, var(--eglyph-color, currentColor) 14%, transparent);
 }
+
+/* ==========================================================================
+   The flow split: biggest pumps / biggest dumps.
+   ========================================================================== */
+
+.flow-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.flow-split-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding: 8px 10px 10px;
+}
+
+.flow-split-side {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+  padding: 7px 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.flow-split-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.flow-split-title .num {
+  margin-left: auto;
+  color: var(--muted-2);
+}
+
+/* An empty panel must explain itself: the drop counters are the reason. */
+.flow-split-empty {
+  margin: 0;
+  padding: 4px 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted-2);
+}
+
+.flow-split-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+  min-height: 0;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.flow-split-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 0.7fr);
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 3px 4px;
+  font: inherit;
+  font-size: 11.5px;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.flow-split-row:hover {
+  background: var(--panel-3);
+}
+
+.flow-split-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.flow-split-sym {
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.flow-split-price,
+.flow-split-quote,
+.flow-split-mult {
+  color: var(--muted);
+}
+
+/* The daily change sits beside the 10s move deliberately: a bounce inside a
+   downtrend must not read as a pump. */
+.flow-split-daily {
+  color: var(--muted-2);
+  cursor: help;
+}
+
+/* ---------------------------------------------------------- outlook strip */
+
+.outlook-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--panel-2);
+}
+
+.outlook-label {
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.outlook-muted {
+  font-size: 11px;
+  color: var(--muted-2);
+}
+
+.outlook-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+  padding: 1px 8px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+  background: #0d131e;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: help;
+}
+
+.outlook-chip b {
+  font-family: var(--sans);
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+
+.outlook-sub {
+  font-size: 10px;
+  color: var(--muted-2);
+}
+
+/* Supports read green, resistances red — the canon's direction tokens. */
+.outlook-support {
+  border-color: color-mix(in srgb, var(--c-up) 45%, transparent);
+}
+
+.outlook-support b {
+  color: var(--c-up);
+}
+
+.outlook-resistance {
+  border-color: color-mix(in srgb, var(--c-down) 45%, transparent);
+}
+
+.outlook-resistance b {
+  color: var(--c-down);
+}
+
+.outlook-forecast {
+  border-color: color-mix(in srgb, var(--chart-accent) 50%, transparent);
+}
+
+.outlook-horizon .outlook-sub {
+  max-width: 190px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The server's own sentences: readable as text, not hidden in a tooltip. An
+   empty box or a paraphrase would be worse than the sentence itself. */
+.outlook-said {
+  max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--warn);
+}
+
+.outlook-basis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  min-width: 0;
+  font-size: 10px;
+  color: var(--muted-2);
+}
+
+.outlook-basis span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}

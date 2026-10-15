@@ -200,6 +200,55 @@ export const LOCAL_INDICATORS: Readonly<Record<string, ToolEntry>> = {
     reading: 'Breakouts can arrive as batch alerts, so check the snapshot age.',
     units: 'text',
   },
+  support: {
+    title: 'Support',
+    formula: 'a price where buying has repeatedly absorbed selling',
+    meaning:
+      'A level below the current price with a measured strength and a count of how many times price has tested it.',
+    reading:
+      'The stronger and more-tested the level, the more meaningful a bounce from it. Lines on the chart are drawn more opaque the stronger they are.',
+    units: 'price',
+  },
+  resistance: {
+    title: 'Resistance',
+    formula: 'a price where selling has repeatedly capped buying',
+    meaning: 'A level above the current price, measured the same way as support.',
+    reading: 'Distance to the level is shown as a percentage, so you can judge whether it is worth waiting for.',
+    units: 'price',
+  },
+  eta_reversal: {
+    title: 'ETA to reversal',
+    formula: 'from the forecast half-life, measured against prior excursions on this symbol',
+    meaning: 'How long the current excursion is expected to keep running before it turns.',
+    reading:
+      'It is an estimate with a range, not a deadline — the low/high figures are given because the distribution is wide. The basis names how many prior excursions it was measured from.',
+    units: 'seconds',
+  },
+  short_horizon: {
+    title: 'Short horizon',
+    formula: 'p_up and p_down over the horizon, from an uncalibrated heuristic',
+    meaning: 'The model\u2019s read on the next few seconds, with an explicit statement of whether it has any edge.',
+    reading:
+      'The edge line is quoted verbatim. It currently says there is no measurable edge at this horizon, and that is the honest answer — the model needs 30 resolved predictions in the ledger before it is fitted.',
+    units: 'probability',
+  },
+  forecast: {
+    title: 'Forecast',
+    formula: 'half-life decay from the current anchor, with a lower and upper bound per point',
+    meaning: 'A projection of where price is expected to go, drawn differently from history on purpose.',
+    reading:
+      'The dashed line is the expected path and the shaded band is the uncertainty around it. A bare line would imply precision the model does not have.',
+    units: 'price',
+  },
+  flow_split: {
+    title: 'Flow split',
+    formula: 'the strongest bursts up and down in the current window',
+    meaning:
+      'The same flow measurement as the leaderboard, separated by direction so a pump and a dump are never mixed in one list.',
+    reading:
+      'Each row shows the 10-second move next to the 24-hour change: a +2% 10s bounce inside a -15% day is not a pump. When both panels are empty the drop counters say why.',
+    units: 'text',
+  },
   flow_burst: {
     title: 'Flow pane — burst multiple',
     formula: 'flow_quote / baseline_quote, per 10-second bin',
