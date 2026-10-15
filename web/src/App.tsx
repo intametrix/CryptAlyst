@@ -1,0 +1,404 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MAX_ALERTS, useEventStream } from './api';
+import { AlertFeed } from './components/AlertFeed';
+import { ChartPanel } from './components/ChartPanel';
+import { ChartOverlay } from './components/ChartOverlay';
+import { SplitPane } from './components/Panel';
+import { FlowLeaderboard } from './components/FlowLeaderboard';
+import { Header } from './components/Header';
+import { ScreenTable } from './components/ScreenTable';
+import { StatStrip } from './components/StatStrip';
+import { SurveyPanel } from './components/SurveyPanel';
+import { TooltipViewer } from './components/TooltipViewer';
+import { defaultIndicatorState } from './chartData';
+import { SymbolDrilldown } from './components/SymbolDrilldown';
+import { toggleFilter, type FeedFilter, type FilterKey } from './filters';
+import { HeatProvider, useHeatContext } from './heatContext';
+import { bumpLayoutGeneration, resetLayout, saveChipState } from './layout';
+import { SelectionProvider, readUrlState, useSelection, writeUrlState } from './selection';
+import { Tooltip } from './components/Tooltip';
+import { useTicker } from './hooks/useTicker';
+import { TICKER_SEED_URL } from './hooks/useKlines';
+import { useTools } from './useTools';
+import type { AlertMsg, FlowRow, ScreenRow, Setup, SetupPlan, SymbolDetailMsg, ScreenMsg, SurveyMsg } from './types';
+import './styles.css';
+
+/** First usable symbol, so the chart has something to show before any click. */
+function firstSymbol(screen: ScreenMsg | null, survey: SurveyMsg | null): string | null {
+  const fromScreen = screen?.rows?.[0]?.symbol;
+  if (typeof fromScreen === 'string' && fromScreen !== '') return fromScreen;
+  const fromSurvey = survey?.setups?.[0]?.symbol;
+  if (typeof fromSurvey === 'string' && fromSurvey !== '') return fromSurvey;
+  return null;
+}
+
+/**
+ * The dashboard shell.
+ *
+ * `{ symbol, interval }` lives in `SelectionProvider`, so every symbol rendered
+ * anywhere (alerts, leaderboard, screen, survey, chart header) loads the same
+ * chart. Heat lives in `HeatProvider`: it is pushed for the whole universe every
+ * ~2s, so it is kept in a store that rows subscribe to individually instead of
+ * in state, which would re-render the whole feed on every tick.
+ */
+function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
+  const heat = useHeatContext();
+  const selection = useSelection();
+  const [activeHeat, setActiveHeat] = useState(0);
+
+  /**
+   * The drill-down subject and the feed filter.
+   *
+   * Both are initialised from the URL hash so a shared link (or a reload) lands
+   * on the same view, and both are written back whenever they change.
+   */
+  const initial = useRef(readUrlState());
+  const [drillSymbol, setDrillSymbol] = useState<string | null>(initial.current.symbol);
+  const [drillView, setDrillView] = useState<string>(initial.current.view ?? 'trade');
+  /**
+   * What the caller already knew about the symbol it drilled into.
+   *
+   * Seeding the panel means the trade card (or the reason there is none) is
+   * populated on the first frame instead of after a round trip.
+   */
+  const [drillSeed, setDrillSeed] = useState<Partial<SymbolDetailMsg> | null>(null);
+  const [filter, setFilter] = useState<FeedFilter>(() => ({
+    severity: initial.current.severity,
+    detector: initial.current.detector,
+    kind: initial.current.kind,
+  }));
+
+  const drillInto = useCallback(
+    (
+      symbol: string,
+      seed?: {
+        screen?: ScreenRow;
+        setup?: Setup;
+        trade?: SetupPlan | null;
+        flow?: FlowRow;
+        alerts?: AlertMsg[];
+      },
+    ) => {
+      const clean = symbol.trim().toUpperCase();
+      if (clean === '') return;
+      setDrillSeed(
+        seed === undefined
+          ? null
+          : {
+              type: 'symbol',
+              symbol: clean,
+              screen: seed.screen ?? null,
+              setup: seed.setup ?? null,
+              trade: seed.trade ?? null,
+              flow: seed.flow ?? null,
+              alerts: seed.alerts ?? null,
+              // A seeded setup with no plan and no reason still explains itself.
+              why_no_trade:
+                seed.setup !== undefined && seed.setup !== null && seed.trade == null
+                  ? (seed.setup.reject_reason ?? 'no trade plan in this survey pass')
+                  : null,
+            },
+      );
+      setDrillSymbol(clean);
+      setDrillView('trade');
+      // Drilling also charts the symbol, so the overlay and the panel agree.
+      selection.selectSymbol(clean);
+    },
+    [selection],
+  );
+
+  const handleFilterToggle = useCallback((key: FilterKey, value: string) => {
+    setFilter((prev) => toggleFilter(prev, key, value));
+  }, []);
+
+  /**
+   * The per-tick price push (~4 Hz) for the charted symbol.
+   *
+   * `ticker.ingest` is handed to the SSE handler, so frames never enter React
+   * state; `ticker.tick` is the charted symbol's latest value, which the chart
+   * applies to the forming candle.
+   */
+  const ticker = useTicker(selection.symbol);
+
+  const {
+    connection,
+    serverTimeMs,
+    lastEventMs,
+    config,
+    status,
+    flow,
+    screen,
+    survey,
+    alerts,
+    alertStats,
+    flashIds,
+    paused,
+    pendingAlerts,
+    setPaused,
+    refreshScreen,
+    refreshSurvey,
+    clearAlerts,
+  } = useEventStream({
+    onHeat: (payload) => heat?.ingest(payload),
+    onTicker: ticker.ingest,
+  });
+
+  const { tools, fallback: toolsFallback, reload: reloadTools } = useTools();
+
+  // A one-shot seed so the first candle update does not wait for a frame. The
+  // SSE `ticker` channel remains the primary source after this.
+  useEffect(() => {
+    if (selection.symbol === null) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch(`${TICKER_SEED_URL}?symbol=${encodeURIComponent(selection.symbol as string)}`, {
+          headers: { accept: 'application/json' },
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        if (!(res.headers.get('content-type') ?? '').toLowerCase().includes('json')) return;
+        ticker.ingest(await res.json());
+      } catch {
+        // The push will arrive shortly; a failed seed is not an error.
+      }
+    })();
+    return () => controller.abort();
+    // `ticker.ingest` is stable, and re-seeding is only needed on symbol change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selection.symbol]);
+  const [layoutNonce, setLayoutNonce] = useState(0);
+
+  const togglePause = useCallback(() => setPaused(!paused), [paused, setPaused]);
+
+  // `status.alerts` is the backend's own counter; the buffer tally is the
+  // fallback before the first status frame arrives.
+  const alertCount = status?.alerts ?? alertStats.total;
+
+  // Offer a symbol for adoption once the slow-cadence panels have data. The
+  // provider ignores it if the user has already clicked something.
+  const candidate = firstSymbol(screen, survey);
+  useEffect(() => {
+    if (candidate !== null) onSeed(candidate);
+  }, [candidate, onSeed]);
+
+  /**
+   * The newest SSE price for the charted symbol.
+   *
+   * The `flow` leaderboard already arrives every second, so re-using it gives the
+   * forming candle sub-second movement at no extra request cost. Only the
+   * charted symbol's row is forwarded, and only while a chart is open (the
+   * overlay is unmounted otherwise), so an idle dashboard pays nothing.
+   */
+  const priceTick = useMemo(() => {
+    if (selection.symbol === null) return null;
+    // The ticker is the primary path; the once-a-second flow leaderboard is the
+    // fallback when the ticker channel has not delivered for this symbol.
+    if (ticker.tick !== null && ticker.tick.symbol === selection.symbol) {
+      return { symbol: ticker.tick.symbol, price: ticker.tick.price, atMs: ticker.tick.atMs };
+    }
+    const rows = Array.isArray(flow?.rows) ? flow.rows : [];
+    for (const row of rows) {
+      if (typeof row.symbol !== 'string' || row.symbol !== selection.symbol) continue;
+      const price = typeof row.last_price === 'number' && Number.isFinite(row.last_price) ? row.last_price : null;
+      if (price === null) return null;
+      const atMs = typeof row.updated_ms === 'number' ? row.updated_ms : typeof flow?.ts_ms === 'number' ? flow.ts_ms : Date.now();
+      return { symbol: row.symbol, price, atMs };
+    }
+    return null;
+  }, [flow, selection.symbol, ticker.tick]);
+
+  // Reflect the drillable state in the URL. `replaceState` keeps the back
+  // button useful instead of adding one entry per click.
+  useEffect(() => {
+    writeUrlState({
+      symbol: drillSymbol,
+      interval: selection.interval,
+      view: drillSymbol === null ? null : drillView,
+      severity: filter.severity,
+      detector: filter.detector,
+      kind: filter.kind,
+    });
+  }, [drillSymbol, drillView, filter, selection.interval]);
+
+  const resetEverything = useCallback(() => {
+    resetLayout();
+    saveChipState(defaultIndicatorState());
+    bumpLayoutGeneration();
+    setLayoutNonce((n) => n + 1);
+  }, []);
+
+  // The legend's count is coarse and low-frequency: polling a counter every 2s
+  // is far cheaper than re-rendering rows on every heat payload.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const next = heat?.store.activeCount() ?? 0;
+      setActiveHeat((prev) => (prev === next ? prev : next));
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [heat]);
+
+  return (
+    <div className="app" data-layout-nonce={layoutNonce}>
+      <TooltipViewer>
+        <Header
+          connection={connection}
+          status={status}
+          config={config}
+          alertCount={alertCount}
+          lastEventMs={lastEventMs}
+          serverTimeMs={serverTimeMs}
+          paused={paused}
+          tools={tools}
+          heatCount={activeHeat}
+          onResetLayout={resetEverything}
+          onReloadTools={reloadTools}
+          toolsFallback={toolsFallback}
+        />
+
+        <StatStrip stats={alertStats} status={status} tools={tools} />
+
+        <div className="main-grid">
+          <SplitPane
+            id="main.columns"
+            side="first"
+            defaultSize={620}
+            min={280}
+            max={1200}
+            firstClassName="col-alerts"
+            secondClassName="col-flow"
+            first={
+              <AlertFeed
+                alerts={alerts}
+                flashIds={flashIds}
+                paused={paused}
+                pending={pendingAlerts}
+                onTogglePause={togglePause}
+                onClear={clearAlerts}
+                maxAlerts={MAX_ALERTS}
+                tools={tools}
+                filter={filter}
+                onFilterChange={setFilter}
+                onFilterToggle={handleFilterToggle}
+                onDrill={drillInto}
+              />
+            }
+            second={<FlowLeaderboard flow={flow} tools={tools} onDrill={drillInto} />}
+          />
+        </div>
+
+        <ScreenTable
+          key={`screen-${layoutNonce}`}
+          screen={screen}
+          onRefresh={refreshScreen}
+          tools={tools}
+          onDrill={drillInto}
+        />
+
+        <SurveyPanel survey={survey} onRefresh={refreshSurvey} tools={tools} onDrill={drillInto} />
+
+        {/*
+          The chart is a floating overlay, not a grid cell: opening it must not
+          reflow the feed, the leaderboard, the table or the survey behind it.
+          It is only mounted while a symbol is selected, so closing it unmounts
+          (and disposes) the lightweight-charts instance, and picking a symbol
+          again builds a fresh one.
+        */}
+        {selection.symbol !== null && (
+          <ChartOverlay
+            id="chart"
+            title={`chart — ${selection.symbol} ${selection.interval}`}
+            onClose={selection.clearSymbol}
+            header={
+              <Tooltip
+                keys={['close']}
+                tools={tools}
+                fallbackTitle="Close chart"
+                label="Dismisses the chart and clears the selected symbol. Escape does the same, as does clicking the backdrop."
+                tone="stat"
+              >
+                <button
+                  type="button"
+                  className="overlay-close"
+                  aria-label="Close chart"
+                  onClick={selection.clearSymbol}
+                >
+                  ×
+                </button>
+              </Tooltip>
+            }
+          >
+            <ChartPanel
+              symbol={selection.symbol}
+              interval={selection.interval}
+              tools={tools}
+              onIntervalChange={selection.selectInterval}
+              priceTick={priceTick}
+              tickerTick={ticker.tick}
+              tickerAtMs={ticker.lastAtMs}
+            />
+          </ChartOverlay>
+        )}
+
+        {/*
+          The drill-down shares the pop-out shell with the chart: same resizable,
+          draggable, dismissible panel, different subject, its own persisted
+          geometry. `trade` is the destination and `why_no_trade` is shown just
+          as prominently when there is none, so the panel is never empty.
+        */}
+        {drillSymbol !== null && (
+          <ChartOverlay
+            id="drill"
+            title={`${drillSymbol} › ${drillView}`}
+            onClose={() => setDrillSymbol(null)}
+            defaultWidth={760}
+            defaultHeight={680}
+            header={
+              <Tooltip
+                keys={['close']}
+                tools={tools}
+                fallbackTitle="Close drill-down"
+                label="Dismisses the drill-down. Escape does the same, as does clicking the backdrop."
+                tone="stat"
+              >
+                <button
+                  type="button"
+                  className="overlay-close"
+                  aria-label="Close drill-down"
+                  onClick={() => setDrillSymbol(null)}
+                >
+                  ×
+                </button>
+              </Tooltip>
+            }
+          >
+            <SymbolDrilldown
+              symbol={drillSymbol}
+              tools={tools}
+              trail={['alerts', drillSymbol, drillView]}
+              onTrailStep={(step) => {
+                if (step === 'alerts') setDrillSymbol(null);
+                else setDrillView(step);
+              }}
+              onInspect={drillInto}
+              initialDetail={drillSeed !== null && drillSeed.symbol === drillSymbol ? (drillSeed as SymbolDetailMsg) : null}
+            />
+          </ChartOverlay>
+        )}
+      </TooltipViewer>
+    </div>
+  );
+}
+
+export default function App() {
+  const [seed, setSeed] = useState<string | null>(null);
+  const onSeed = useCallback((symbol: string) => setSeed((prev) => prev ?? symbol), []);
+
+  return (
+    <HeatProvider>
+      <SelectionProvider seedSymbol={seed}>
+        <Dashboard onSeed={onSeed} />
+      </SelectionProvider>
+    </HeatProvider>
+  );
+}

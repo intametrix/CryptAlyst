@@ -10,24 +10,42 @@
 
 # Test binary, built with `go test -c`
 *.test
-
 # Code coverage profiles and other test artifacts
 *.out
 coverage.*
 !coverage.go
 *.coverprofile
 profile.cov
-
 # Dependency directories (remove the comment below to include it)
 # vendor/
-
 # Go workspace file
 go.work
 go.work.sum
-
 # env file
 .env
-
 # Editor/IDE
 # .idea/
 # .vscode/
+# --- project-specific -------------------------------------------------------
+# Runtime data, regenerated on every run and specific to a session.
+backend/alerts.jsonl
+backend/ledger.jsonl
+backend/calibration.json
+backend/bin/
+.comms/*.jsonl
+.comms/*.log
+.comms/*.polled
+.comms/*.offset
+.comms/.bridge.*
+# Go build state, redirected inward because the module cache lives outside the
+# workspace and must not be committed.
+.gopath/
+.gocache/
+# Node
+web/node_modules/
+__pycache__/
+.venv/
+.DS_Store
+# KIMI's private agent state: device id, session index, logs, model cache.
+# Agent runtime data, not project source, and it holds a device identifier.
+.kimi-home/

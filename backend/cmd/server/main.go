@@ -1,0 +1,745 @@
+// Command server runs the pumpdump backend: a Binance spot flow scanner, a
+// market-wide pump/dump screener, a Turtle survey, and the HTTP/SSE API that
+// feeds the React dashboard.
+//
+// Wiring, in one picture:
+//
+//	Binance @ticker  -> flow.Engine ----------\
+//	Binance @aggTrade-> flow.Engine ----------> scan loop (1/s)
+//	                                            |-> onset scoring -> alerts
+//	                                            |-> SSE broadcast
+//	REST klines      -> screen.Screener -------/  (every 60s)
+//	REST klines      -> turtle.Survey ---------/  (every 5 min)
+//	                           HTTP + SSE -> React dashboard
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"pumpdump/backend/internal/api"
+	"pumpdump/backend/internal/binance"
+	"pumpdump/backend/internal/detect"
+	"pumpdump/backend/internal/events"
+	"pumpdump/backend/internal/flow"
+	"pumpdump/backend/internal/heat"
+	"pumpdump/backend/internal/ledger"
+	"pumpdump/backend/internal/market"
+	"pumpdump/backend/internal/outlook"
+	"pumpdump/backend/internal/screen"
+	"pumpdump/backend/internal/turtle"
+	"pumpdump/backend/web"
+)
+
+type options struct {
+	addr            string
+	minLiquidity    float64
+	maxSymbols      int
+	windowSec       float64
+	minBurstMult    float64
+	minBurstZ       float64
+	minMovePct      float64
+	minSigmaMult    float64
+	minCoverage     float64
+	minTrades       int64
+	minFlowUSD      float64
+	cooldownSec     float64
+	severityMin     string
+	bootstrapTopN   int
+	screenTopN      int
+	surveyTopN      int
+	equity          float64
+	timeframes      string
+	adxMin          float64
+	longOnly        bool
+	disableScreen   bool
+	disableSurvey   bool
+	alertHistory    string
+	ledgerPath      string
+	ledgerHorizon   time.Duration
+	calibrationPath string
+}
+
+func main() {
+	log.SetFlags(log.Ltime)
+	opt := parseFlags()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	client := binance.NewClient(binance.SpotBase)
+	universe := market.New(market.Config{
+		QuoteAssets:       []string{"USDT"},
+		MinQuoteVolume24h: opt.minLiquidity,
+		MaxSymbols:        opt.maxSymbols,
+		ExcludePatterns:   []string{"UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"},
+		// Stablecoins and fiat pairs trade enormous volume with almost no
+		// price movement, so their flow "bursts" are peg noise. Left in, they
+		// permanently top the heat table and the glow stops meaning anything.
+		ExcludeSymbols: []string{
+			"USDCUSDT", "FDUSDUSDT", "TUSDUSDT", "BUSDUSDT", "USDPUSDT",
+			"DAIUSDT", "USD1USDT", "USDEUSDT", "AEURUSDT", "EURUSDT",
+			"GBPUSDT", "TRYUSDT", "BRLUSDT", "ARSUSDT", "JPYUSDT",
+		},
+	})
+	engine := flow.NewEngine(flow.Config{
+		Market:           "spot",
+		WindowSec:        opt.windowSec,
+		MinBurstMultiple: opt.minBurstMult,
+		MinBurstZ:        opt.minBurstZ,
+		MinAbsFlow:       opt.minFlowUSD,
+		MinMovePct:       opt.minMovePct,
+		MinSigmaMultiple: opt.minSigmaMult,
+		MinCoverage:      opt.minCoverage,
+		MaxSpreadPct:     0.004,
+		MinBookDepthUSD:  500,
+		MaxLatePct60s:    6,
+		Max24hMovePct:    60,
+		// Acceleration is what separates an onset from a tail, so it stays on
+		// even in the sensitive WATCH configuration.
+		RequireAcceleration:   true,
+		MinTrades:             opt.minTrades,
+		BaselineFloorFraction: 0.25,
+		TrackCapacitySeconds:  600,
+	})
+
+	hub := events.NewHub()
+	alerts := api.NewAlertBuffer(2000)
+	// Durable alert history so chart markers show what a symbol did EARLIER,
+	// not merely since this process started.
+	alerts.SetHistoryPath(opt.alertHistory)
+	cfg := engine.Config()
+
+	// The detector registry. Created before the stream so the stream's handler
+	// can route into it without a nil race; models are registered below, once
+	// the components they wrap exist.
+	registry := detect.NewRegistry()
+
+	// --- startup: metadata + universe + baseline seeding -------------------
+	log.Printf("pumpdump backend starting")
+	if err := client.Ping(ctx); err != nil {
+		log.Fatalf("binance unreachable: %v", err)
+	}
+	if n, err := universe.LoadMetadata(ctx, client); err != nil {
+		log.Fatalf("exchangeInfo failed: %v", err)
+	} else {
+		log.Printf("universe: %d USDT symbols from exchangeInfo", n)
+	}
+	if _, err := universe.Refresh(ctx, client); err != nil {
+		log.Fatalf("24h ticker failed: %v", err)
+	}
+	log.Printf("universe: %s", universe.Summary())
+
+	tracked := universe.Tracked()
+	engine.SetUniverse(tracked)
+	seedBaselines(ctx, client, universe, engine, opt.bootstrapTopN)
+
+	// Ticker pump: coalesces per-symbol ticks for the live chart push. Created
+	// before the stream so the handler can forward into it.
+	tickerPump := api.NewTickerPump(hub)
+
+	stream := binance.NewStream(binance.SpotStreamBase, func(name string, data json.RawMessage) {
+		// Route by stream name; the registry fans out to every enabled model.
+		switch {
+		case strings.HasSuffix(name, "@ticker"):
+			registry.Observe(detect.Event{Type: detect.EventTicker, Raw: data})
+			tickerPump.Observe(data)
+		case strings.HasSuffix(name, "@aggTrade"):
+			registry.Observe(detect.Event{Type: detect.EventAggTrade, Raw: data})
+		}
+	}, func(connected bool, count int) {
+		hub.Broadcast(map[string]any{
+			"type":      "status",
+			"ts_ms":     time.Now().UnixMilli(),
+			"stream_up": connected,
+			"streams":   count,
+		})
+	})
+	setStreamUniverse(stream, tracked)
+	go stream.Run(ctx)
+
+	// --- collaborators -----------------------------------------------------
+	screener := screen.New(client, universe, screen.DefaultThresholds(),
+		opt.screenTopN, screen.DefaultKlineLimit, 8, "1m")
+
+	var survey *turtle.Survey
+	if !opt.disableSurvey {
+		survey = turtle.NewSurvey(client, universe, turtle.DefaultParams(),
+			splitCSV(opt.timeframes), opt.equity, opt.surveyTopN, 250, 8, opt.longOnly)
+	}
+
+	// --- heat: how interesting each symbol is, for the UI glow -------------
+	// Enrichment accessors are closures over the cached screen and survey
+	// results, so heat stays a pure consumer and this package does not have to
+	// know about either.
+	heatSvc := heat.New(engine, heat.DefaultParams(),
+		func() map[string]heat.ScreenFacts {
+			rows, _, _ := screener.Cached()
+			out := make(map[string]heat.ScreenFacts, len(rows))
+			for _, row := range rows {
+				facts := heat.ScreenFacts{
+					ATRPct:        row.ATRPct,
+					ClosePosition: row.ClosePosition,
+					VolRatio:      row.VolRatio,
+				}
+				if row.From24hHigh != nil {
+					facts.From24hHigh = *row.From24hHigh
+				}
+				if row.From24hLow != nil {
+					facts.From24hLow = *row.From24hLow
+				}
+				out[row.Symbol] = facts
+			}
+			return out
+		},
+		func() map[string]heat.TurtleFacts {
+			if survey == nil {
+				return nil
+			}
+			payload, ok := survey.Current().(map[string]any)
+			if !ok {
+				return nil
+			}
+			setups, ok := payload["setups"].([]map[string]any)
+			if !ok {
+				return nil
+			}
+			out := make(map[string]heat.TurtleFacts, len(setups))
+			for _, setup := range setups {
+				symbol, _ := setup["symbol"].(string)
+				if symbol == "" {
+					continue
+				}
+				out[symbol] = heat.TurtleFacts{
+					ADX:          toFloat(setup["adx"]),
+					RSI:          toFloat(setup["rsi"]),
+					ExtensionATR: toFloat(setup["extension_up_atr"]),
+					ATRPct:       toFloat(setup["atr_pct"]),
+				}
+			}
+			return out
+		})
+
+	// --- pluggable detection models ----------------------------------------
+	// Each detection strategy registers itself here. Adding a model means
+	// implementing detect.Detector and adding one line; nothing else in the
+	// scanner changes.
+	flowDetector := detect.NewFlowOnset(engine, time.Duration(opt.cooldownSec)*time.Second, 180*time.Second, 12)
+	registry.Register(flowDetector)
+	registry.Register(detect.NewPumpScreen(screener))
+	registry.Register(detect.NewTurtleBreakout(survey))
+	log.Printf("detectors registered: %s", strings.Join(registry.Names(), ", "))
+
+	// --- event outlook: state, ETA to reversal, short-horizon distribution ---
+	outlookSvc := outlook.New(outlook.DefaultParams(), opt.calibrationPath)
+
+	// --- prediction ledger -------------------------------------------------
+	// Every emitted signal is recorded with its feature vector and then tracked
+	// along its price path until a fixed horizon, so the thresholds in this
+	// system can be measured rather than argued. Tracking samples the engine's
+	// own last price, so it costs no REST weight.
+	var recorder ledger.Recorder
+	if opt.ledgerPath != "" {
+		rec, err := ledger.New(opt.ledgerPath, enginePrice{engine: engine}, ledger.Config{
+			Path:    opt.ledgerPath,
+			Horizon: opt.ledgerHorizon,
+		})
+		if err != nil {
+			log.Printf("ledger disabled: %v", err)
+		} else {
+			recorder = rec
+			go rec.Track(ctx)
+			log.Printf("prediction ledger: %s (horizon %s)", opt.ledgerPath, opt.ledgerHorizon)
+		}
+	}
+
+	// Live chart push: flush coalesced ticks on a short interval.
+	go tickerPump.Run(ctx)
+
+	// --- background loops --------------------------------------------------
+	var wg sync.WaitGroup
+	if !opt.disableScreen {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			screenLoop(ctx, screener, hub, 60*time.Second)
+		}()
+	}
+	if survey != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			surveyLoop(ctx, survey, hub, 5*time.Minute)
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		universeLoop(ctx, client, universe, engine, stream, 60*time.Second)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, opt)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		housekeepingLoop(ctx, engine, hub, screener, survey, stream)
+	}()
+
+	// --- HTTP --------------------------------------------------------------
+	startedAt := time.Now()
+	summary := configSummary(opt, cfg)
+	server := api.New(api.Deps{
+		Hub:           hub,
+		Engine:        engine,
+		Universe:      universe,
+		Screener:      screener,
+		Alerts:        alerts,
+		Survey:        surveyProvider(survey),
+		Detectors:     registry,
+		Heat:          heatSvc,
+		KlinesCache:   api.NewKlinesCache(),
+		TickerPump:    tickerPump,
+		Outlook:       outlookSvc,
+		Market:        client,
+		Static:        web.Dist(),
+		ConfigSummary: summary,
+		StartedAt:     startedAt,
+		StreamUp:      stream.IsConnected,
+	})
+
+	httpServer := &http.Server{
+		Addr:              opt.addr,
+		Handler:           server.Routes(),
+		ReadHeaderTimeout: 10 * time.Second,
+		// No WriteTimeout: the SSE stream is long-lived by design.
+	}
+	go func() {
+		log.Printf("dashboard: http://127.0.0.1%s", displayAddr(opt.addr))
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("http server failed: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	// Cancelling ctx (via the signal handler) is what stops the stream and the
+	// background loops; there is nothing else to tear down explicitly.
+	log.Printf("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_ = httpServer.Shutdown(shutdownCtx)
+	wg.Wait()
+}
+
+func parseFlags() options {
+	var o options
+	flag.StringVar(&o.addr, "addr", "127.0.0.1:8787", "HTTP listen address")
+	// $5M, not the $750k first drafted: below roughly this level, expected
+	// slippage on a 2N stop exit runs 0.3-1% and thin books manufacture false
+	// flow bursts. This is the precision-over-recall lever.
+	flag.Float64Var(&o.minLiquidity, "min-liq", 5_000_000, "minimum 24h quote volume to track a symbol")
+	flag.IntVar(&o.maxSymbols, "max-symbols", 400, "max symbols tracked (by 24h volume)")
+	flag.Float64Var(&o.windowSec, "window", 10, "seconds of flow to measure")
+	flag.Float64Var(&o.minBurstMult, "min-burst-mult", 8, "flow multiple vs the symbol's own baseline")
+	flag.Float64Var(&o.minBurstZ, "min-burst-z", 4, "flow z-score vs the symbol's own baseline")
+	flag.Float64Var(&o.minMovePct, "min-move-pct", 0.4, "minimum move % within the window")
+	flag.Float64Var(&o.minSigmaMult, "min-sigma-mult", 3, "minimum move as a multiple of window volatility")
+	flag.Float64Var(&o.minCoverage, "min-coverage", 0.7,
+		"required fraction of the flow window covered by received ticks; lower it when "+
+			"the universe includes symbols that tick less than once a second")
+	flag.Int64Var(&o.minTrades, "min-trades", 8, "minimum trades inside the window")
+	flag.Float64Var(&o.minFlowUSD, "min-flow-usd", 5000, "absolute minimum flow in the window (USD)")
+	flag.Float64Var(&o.cooldownSec, "cooldown", 900, "seconds before re-alerting the same symbol+direction")
+	flag.StringVar(&o.severityMin, "min-severity", "WATCH", "WATCH | ALERT | CRITICAL")
+	flag.IntVar(&o.bootstrapTopN, "bootstrap-top-n", 150, "symbols to seed flow baselines for at startup")
+	flag.IntVar(&o.screenTopN, "screen-top", 200, "symbols to include in the pump/dump screen")
+	flag.IntVar(&o.surveyTopN, "survey-top", 150, "symbols to include in the Turtle survey")
+	flag.Float64Var(&o.equity, "equity", 10_000, "account equity for position sizing")
+	flag.StringVar(&o.timeframes, "timeframes", "1d,4h,1h", "survey timeframes")
+	flag.Float64Var(&o.adxMin, "adx-min", 20, "ADX trend filter (0 disables)")
+	flag.BoolVar(&o.longOnly, "long-only", true, "spot cannot short; report only upside breakouts")
+	flag.BoolVar(&o.disableScreen, "no-screen", false, "disable the periodic pump/dump screen")
+	flag.BoolVar(&o.disableSurvey, "no-survey", false, "disable the periodic Turtle survey")
+	flag.StringVar(&o.alertHistory, "alert-history", "alerts.jsonl",
+		"JSONL file for durable alert history (chart markers); empty disables")
+	flag.StringVar(&o.ledgerPath, "ledger", "ledger.jsonl",
+		"JSONL prediction ledger for the offline learner; empty disables")
+	flag.StringVar(&o.calibrationPath, "calibration", "calibration.json",
+		"fitted probability model written by cmd/learner; absent means uncalibrated")
+	flag.DurationVar(&o.ledgerHorizon, "ledger-horizon", 15*time.Minute,
+		"how long a prediction is tracked before it is labelled")
+	flag.Parse()
+	return o
+}
+
+func displayAddr(addr string) string {
+	if strings.HasPrefix(addr, "127.0.0.1") || strings.HasPrefix(addr, "0.0.0.0") {
+		_, port, err := splitHostPort(addr)
+		if err == nil {
+			return ":" + port
+		}
+	}
+	return addr
+}
+
+// seedBaselines warms the flow baselines from 1s klines.
+//
+// Without this the scanner needs ~80 seconds of live ticks before any symbol
+// has a usable baseline, so a restart would be blind to exactly the moves it
+// exists to catch.
+func seedBaselines(ctx context.Context, client *binance.Client, universe *market.Universe, engine *flow.Engine, topN int) {
+	targets := universe.TopByVolume(topN)
+	if len(targets) == 0 {
+		return
+	}
+	log.Printf("seeding flow baselines from 1s klines for %d symbols...", len(targets))
+	start := time.Now()
+	pool := binance.NewPool(8)
+	var seeded int64
+	var mu sync.Mutex
+
+	for _, item := range targets {
+		item := item
+		pool.Go(func() {
+			klines, err := client.Klines(ctx, item.Symbol, "1s", 1000)
+			if err != nil || len(klines) == 0 {
+				return
+			}
+			series := make([]flow.Series1s, 0, len(klines))
+			for _, k := range klines {
+				series = append(series, flow.Series1s{
+					OpenTime:    k.OpenTime,
+					Close:       k.Close,
+					QuoteVolume: k.QuoteVolume,
+				})
+			}
+			// Prime the 24h volume first so the liquidity floor is correct
+			// from the very first scan rather than after the first live tick.
+			engine.SetQuoteVolume(item.Symbol, item.QuoteVolume24h)
+			if n := engine.SeedBaseline(item.Symbol, series); n > 0 {
+				mu.Lock()
+				seeded++
+				mu.Unlock()
+			}
+		})
+	}
+	pool.Wait()
+	log.Printf("seeded %d/%d baselines in %s", seeded, len(targets), time.Since(start).Round(time.Second))
+}
+
+func setStreamUniverse(stream *binance.Stream, symbols []string) {
+	names := make([]string, 0, len(symbols))
+	for _, s := range symbols {
+		names = append(names, binance.TickerStream(s))
+	}
+	stream.SetStreams(names)
+}
+
+// universeLoop refreshes 24h context and resizes the subscription.
+func universeLoop(ctx context.Context, client *binance.Client, universe *market.Universe, engine *flow.Engine, stream *binance.Stream, every time.Duration) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if _, err := universe.Refresh(ctx, client); err != nil {
+				log.Printf("universe refresh failed: %v", err)
+				continue
+			}
+			tracked := universe.Tracked()
+			engine.SetUniverse(tracked)
+			setStreamUniverse(stream, tracked)
+			engine.ApplyFloors()
+			log.Printf("universe: %s", universe.Summary())
+		}
+	}
+}
+
+// hotSymbols tracks which symbols have been escalated to trade-level data.
+// --------------------------------------------------------------------------
+// scan loop
+// --------------------------------------------------------------------------
+
+// scanLoop drives the detector registry: once per second it asks every enabled
+// model for signals, publishes them, and honours escalation requests.
+//
+// The loop deliberately contains no detection logic. Cooldowns, scoring and
+// escalation decisions all live inside the detectors, so adding a model does
+// not mean touching this function.
+func scanLoop(
+	ctx context.Context,
+	engine *flow.Engine,
+	registry *detect.Registry,
+	flowDetector *detect.FlowOnset,
+	hub *events.Hub,
+	alerts *api.AlertBuffer,
+	stream *binance.Stream,
+	heatSvc *heat.Service,
+	recorder ledger.Recorder,
+	opt options,
+) {
+	cfg := engine.Config()
+
+	scan := time.NewTicker(1 * time.Second)
+	defer scan.Stop()
+	flowTick := time.NewTicker(1 * time.Second)
+	defer flowTick.Stop()
+
+	var scans, signals int64
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-flowTick.C:
+			// The leaderboard is raw engine state, not a detection, so it is
+			// read straight from the engine rather than through the registry.
+			stamp := time.Now().UnixMilli()
+			rows := engine.Snapshot(25, stamp)
+			hub.Broadcast(map[string]any{
+				"type":       "flow",
+				"ts_ms":      stamp,
+				"window_sec": cfg.WindowSec,
+				"rows":       rows,
+				"scans":      scans,
+				"signals":    signals,
+			})
+			// Heat drives the UI's green ticker glow. Capped so the payload
+			// stays small; the floor inside the service means only symbols that
+			// actually earned a border are sent at all.
+			hub.Broadcast(map[string]any{
+				"type":  "heat",
+				"ts_ms": stamp,
+				"rows":  heatSvc.Compute(stamp, 200),
+			})
+		case <-scan.C:
+			scans++
+			now := time.Now().UnixMilli()
+
+			for _, sig := range registry.Evaluate(now) {
+				if severityRank(sig.Severity) < severityRank(opt.severityMin) {
+					continue
+				}
+				signals++
+				alert := api.Alert{
+					Type:       "alert",
+					Detector:   sig.Detector,
+					Batch:      sig.Batch,
+					SnapshotMS: sig.SnapshotMS,
+					EventID:    eventID(),
+					TSMS:       now,
+					Market:     "spot",
+					Symbol:     sig.Symbol,
+					Kind:       sig.Kind,
+					Summary:    sig.Summary,
+					Severity:   sig.Severity,
+					Score:      sig.Score,
+					Price:      sig.Price,
+					Reasons:    sig.Reasons,
+					Components: sig.Components,
+					Metrics:    sig.Metrics,
+				}
+				alerts.Add(alert)
+				hub.Broadcast(alert)
+				if recorder != nil {
+					// Record before logging: the ledger is the measurement, and
+					// a signal that fires but is not recorded is an unmeasured
+					// claim, which is the thing this whole layer exists to stop.
+					recorder.Record(sig)
+				}
+				log.Printf("SIGNAL [%s] %s %s %s score=%.0f",
+					sig.Detector, sig.Severity, sig.Kind, sig.Symbol, sig.Score)
+			}
+
+			// Escalations: a detector asks for trade-level detail on a symbol
+			// that just tripped, without knowing that websockets exist.
+			for _, request := range registry.Escalations() {
+				stream.Subscribe(binance.AggTradeStream(request.Symbol))
+			}
+			// Release escalations that have lapsed so the stream count stays
+			// bounded once the burst of interest is over.
+			for _, symbol := range flowDetector.ExpiredEscalations() {
+				stream.Unsubscribe(binance.AggTradeStream(symbol))
+			}
+		}
+	}
+}
+
+// screenLoop refreshes the pump/dump screen and broadcasts the result.
+func screenLoop(ctx context.Context, screener *screen.Screener, hub *events.Hub, every time.Duration) {
+	run := func() {
+		rows, scanned, err := screener.Run(ctx)
+		if err != nil {
+			log.Printf("screen failed: %v", err)
+			return
+		}
+		hub.Broadcast(map[string]any{
+			"type":            "screen",
+			"ts_ms":           time.Now().UnixMilli(),
+			"symbols_scanned": scanned,
+			"rows":            rows,
+		})
+		log.Printf("screen: %d candidates from %d symbols", len(rows), scanned)
+	}
+	run()
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
+// surveyLoop refreshes the Turtle survey and broadcasts the result.
+func surveyLoop(ctx context.Context, survey *turtle.Survey, hub *events.Hub, every time.Duration) {
+	run := func() {
+		if err := survey.Refresh(); err != nil {
+			log.Printf("survey failed: %v", err)
+			return
+		}
+		hub.Broadcast(survey.Current())
+	}
+	run()
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
+		}
+	}
+}
+
+// housekeepingLoop emits the status heartbeat and bounds memory.
+func housekeepingLoop(ctx context.Context, engine *flow.Engine, hub *events.Hub, screener *screen.Screener, survey *turtle.Survey, stream *binance.Stream) {
+	status := time.NewTicker(2 * time.Second)
+	defer status.Stop()
+	prune := time.NewTicker(30 * time.Second)
+	defer prune.Stop()
+	started := time.Now()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-prune.C:
+			engine.PruneTaker()
+		case <-status.C:
+			stats := engine.Stats()
+			_, screenMS, _ := screener.Cached()
+			var surveyMS int64
+			if survey != nil {
+				surveyMS = survey.LastMS()
+			}
+			hub.Broadcast(map[string]any{
+				"type":                   "status",
+				"ts_ms":                  time.Now().UnixMilli(),
+				"uptime_sec":             int(time.Since(started).Seconds()),
+				"symbols_tracked":        stats.SymbolsTracked,
+				"baselines_ready":        stats.BaselinesReady,
+				"messages":               stats.Messages,
+				"truncated":              stats.Truncated,
+				"stream_messages":        stream.Messages(),
+				"stream_streams":         stream.Streams(),
+				"stream_reconnects":      stream.Reconnects(),
+				"stream_up":              stream.IsConnected(),
+				"stream_last_msg_age_ms": stats.LastMessageMS,
+				"screen_generated_ms":    screenMS,
+				"survey_generated_ms":    surveyMS,
+				"clients":                hub.Clients(),
+			})
+		}
+	}
+}
+
+func configSummary(opt options, cfg flow.Config) map[string]any {
+	return map[string]any{
+		"market":               "spot",
+		"window_sec":           cfg.WindowSec,
+		"min_burst_multiple":   cfg.MinBurstMultiple,
+		"min_burst_z":          cfg.MinBurstZ,
+		"min_move_pct_10s":     cfg.MinMovePct,
+		"min_flow_usd":         cfg.MinAbsFlow,
+		"min_quote_volume_24h": opt.minLiquidity,
+		"max_symbols":          opt.maxSymbols,
+		"cooldown_sec":         opt.cooldownSec,
+		"severity_min":         opt.severityMin,
+		"equity":               opt.equity,
+		"timeframes":           splitCSV(opt.timeframes),
+		"adx_min":              opt.adxMin,
+		"long_only":            opt.longOnly,
+		"screen_enabled":       !opt.disableScreen,
+		"survey_enabled":       !opt.disableSurvey,
+	}
+}
+
+// surveyProvider adapts a possibly-nil survey to the api interface. Returning
+// an untyped nil *turtle.Survey would satisfy the interface and then panic on
+// the first call, so the nil check happens here instead.
+func surveyProvider(s *turtle.Survey) api.SurveyProvider {
+	if s == nil {
+		return nil
+	}
+	return s
+}
+
+// toFloat coerces an untyped JSON number from the survey payload.
+// enginePrice adapts the in-memory flow engine to ledger.PriceFetcher.
+//
+// Sampling the engine rather than the REST API is deliberate: the tracker polls
+// every few seconds per open prediction, and doing that over HTTP would burn
+// exchange weight on data the process already holds.
+type enginePrice struct{ engine *flow.Engine }
+
+func (e enginePrice) Price(_ context.Context, symbol string) (float64, error) {
+	if price, ok := e.engine.LastPrice(symbol); ok && price > 0 {
+		return price, nil
+	}
+	return 0, fmt.Errorf("no live price for %s", symbol)
+}
+
+func toFloat(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	default:
+		return 0
+	}
+}
+
+func splitCSV(s string) []string {
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}

@@ -1,0 +1,7 @@
+# Runtime dependencies for binance-pumpdump.
+#
+# Everything else (HTTP, JSON, gzip, HMAC signing, statistics, CSV) is Python
+# standard library. The REST client deliberately avoids `requests` so the
+# scanner has the smallest possible footprint -- and so a venue-specific
+# dependency problem can never stop the detection loop.
+websockets>=12.0
