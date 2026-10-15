@@ -18,10 +18,16 @@ mkdir -p "$STATE"
 touch "$STATE/asks.tsv"
 cd "$REPO" || exit 1
 
-ack_check() { # keyword ask_ts -> "yes" if a newer kimi->deepseek entry mentions it
+ack_check() { # keyword ask_ts -> "yes" if a newer kimi->deepseek entry mentions it.
+  # Token-overlap match, not exact substring: seeded keywords are full subject
+  # lines, and replies rarely repeat them verbatim. Ack when >=60% of the
+  # keyword's content words appear in the candidate message, or vice versa.
   python3 - "$1" "$2" <<'PY'
-import json,sys,subprocess
+import json,sys,subprocess,re
 kw,ts=sys.argv[1],int(sys.argv[2])
+def words(s): return set(w for w in re.findall(r"[a-z0-9]+", s.lower()) if len(w)>2)
+kws=words(kw)
+if not kws: kws={kw.lower()}
 out=subprocess.run(["tools/comms.sh","log","200"],capture_output=True,text=True).stdout
 for line in out.splitlines():
     line=line.strip()
@@ -29,7 +35,10 @@ for line in out.splitlines():
     try: m=json.loads(line)
     except Exception: continue
     if m.get("from")=="kimi" and m.get("to")=="deepseek" and m.get("ts_ms",0)>ts:
-        if kw.lower() in (m.get("subject","")+m.get("body","")).lower():
+        ws=words(m.get("subject","")+" "+m.get("body",""))
+        if not ws: continue
+        ov=len(kws&ws)/max(1,min(len(kws),len(ws)))
+        if ov>=0.6:
             print("yes"); break
 PY
 }

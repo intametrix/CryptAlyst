@@ -104,8 +104,8 @@ const PANE_MIN_PX = { atr: 40, adx: 44, rsi: 40 } as const;
  * is given a readable floor rather than the sliver a pure proportional split left
  * it (measured at 24–28px, which shows nothing).
  */
-const FLOW_PANE_TARGET_PX = 108;
-const FLOW_PANE_MIN_PX = 64;
+const FLOW_PANE_TARGET_PX = 148;
+const FLOW_PANE_MIN_PX = 72;
 /** Height the time/price axes take inside the box; the panes split the rest. */
 const AXIS_ALLOWANCE_PX = 30;
 
@@ -207,6 +207,9 @@ export interface ChartProbe {
     baseline: number | null;
     paneHeight: number;
     status: string;
+    /** Every pane's height, for diagnosing the distribution. */
+    allPanes: number[];
+    panes: number;
   };
 }
 
@@ -480,6 +483,8 @@ function buildChart(
         baseline: flowBaseline.options().price,
         paneHeight: chart.paneSize(chart.panes().length - 1).height,
         status: '',
+        allPanes: chart.panes().map((pane, i) => pane.getHeight() + (i === 0 ? 0 : 0)),
+        panes: chart.panes().length,
       };
     },
     timeScale: () => {
@@ -857,7 +862,8 @@ export function ChartPanel({
 
     // The flow pane holds a readable floor of its own, capped so it cannot
     // dominate a short box.
-    const flowHeight = Math.max(FLOW_PANE_MIN_PX, Math.min(FLOW_PANE_TARGET_PX, Math.round(available * 0.22)));
+    // A quarter of the box, bounded: enough to read a burst, never dominant.
+    const flowHeight = Math.max(FLOW_PANE_MIN_PX, Math.min(FLOW_PANE_TARGET_PX, Math.round(available * 0.25)));
     const flowIndex = handles.flowPaneIndex;
     if (flowIndex > 0 && flowIndex < panes.length) {
       reserved += flowHeight;
@@ -1067,6 +1073,11 @@ export function ChartPanel({
     // Announce that this payload is on screen, so a queued zoom preset can be
     // applied against these bars and not the previous interval's.
     setReadySeq((n) => n + 1);
+    // Share the height on the initial load too, not only on a resize: the flow
+    // pane is the evidence layer and a default proportional split leaves it a
+    // 28px sliver that shows nothing.
+    const box = containerRef.current;
+    if (box !== null && box.clientHeight > 0) distributePaneHeights(handles.chart, box.clientHeight);
     // The newest drawn bar, so a live tick can tell whether SSE is still inside
     // it or has crossed into the next candle.
     const last = bars.length > 0 ? bars[bars.length - 1] : null;
@@ -1075,7 +1086,7 @@ export function ChartPanel({
       lastOpen: last === null ? null : last.o,
       lastClose: last === null ? null : last.c,
     };
-  }, [bars, overlaySeries, data]);
+  }, [bars, overlaySeries, data, distributePaneHeights]);
 
   /* -- the flow pane's data -------------------------------------------------- */
 
