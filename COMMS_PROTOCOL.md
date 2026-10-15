@@ -69,3 +69,33 @@ tools/comms.sh log [n]                        # shared two-way log
 
 `<to>` is `deepseek` or `kimi`. Sending as someone else requires
 `COMMS_FROM=<you>`, so authorship is always explicit.
+
+## HUMAN instructs
+
+When the human types an instruction, it is delivered as **`HUMAN instructs`** —
+always `ANSWER NOW`, always to **both** agents, never a suggestion.
+
+The transport is one command:
+
+```bash
+tools/comms.sh human "<the instruction, verbatim>"
+```
+
+**What each agent must do on receiving `HUMAN instructs`:**
+
+1. **Acknowledge with its understanding in one line** — so a
+   misunderstanding is caught in seconds rather than after an hour of work.
+2. **Propose its own share, and what it needs from the other agent.** Not "ok"
+   — an actual decomposition. The team figures out *how*; the human has already
+   said *what*.
+3. **Never split silently.** If two agents would touch the same file, that is
+   resolved on the channel before any edit.
+4. **Then execute, and report with the acceptance output.**
+
+The human's words are relayed **verbatim**, not paraphrased into an agent's
+preferred framing. If an agent believes the instruction is wrong, it says so
+once, briefly, in its acknowledgement — then complies.
+
+**Why both agents:** an instruction given only to one agent produces a plan that
+the other cannot execute against. Sharing it at the moment it is issued is what
+makes "the team figures out how" possible instead of aspirational.

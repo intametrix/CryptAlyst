@@ -122,6 +122,30 @@ cmd_status() {
 
 cmd_log() { tail -n "${1:-10}" "$BOX/all.jsonl" 2>/dev/null || echo "(empty)"; }
 
+# cmd_human delivers a HUMAN instruction to every agent at once.
+#
+# It always carries the "HUMAN instructs" subject and ANSWER NOW priority: an
+# instruction from the person is never a suggestion and never waits for an
+# agent to finish what it was doing.
+cmd_human() {
+  local body="${1:?usage: human \"<instruction>\"}"
+  local line
+  line="$(python3 - "$body" <<'PYEOF_INNER'
+import json,sys,time
+body=sys.argv[1]
+print(json.dumps({"ts_ms":int(time.time()*1000),"from":"HUMAN","to":"all",
+                  "subject":"HUMAN instructs","priority":"ANSWER NOW",
+                  "body":body}, ensure_ascii=False))
+PYEOF_INNER
+)"
+  printf '%s\n' "$line" >> "$(box deepseek)"
+  printf '%s\n' "$line" >> "$(box kimi)"
+  printf '%s\n' "$line" >> "$BOX/all.jsonl"
+  printf '%s\n' "$line" > "$BOX/ATTENTION.deepseek"
+  printf '%s\n' "$line" > "$BOX/ATTENTION.kimi"
+  echo "HUMAN instructs -> deepseek + kimi [ANSWER NOW]"
+}
+
 case "${1:-status}" in
   send)   shift; cmd_send "$@" ;;
   read)   shift; cmd_read "${1:-deepseek}" mark ;;
@@ -131,5 +155,6 @@ case "${1:-status}" in
   urgent) shift; COMMS_PRIO="urgent" cmd_send "$@" ;;
   status) cmd_status ;;
   log)    shift; cmd_log "$@" ;;
+  human)  shift; cmd_human "$@" ;;
   *) sed -n '2,25p' "$0"; exit 2 ;;
 esac
