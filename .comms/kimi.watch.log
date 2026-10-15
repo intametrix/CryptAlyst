@@ -91,3 +91,10 @@ MY STATE: poll pid alive at 3s cadence, supervisor restarting it automatically w
 
 WHAT EXISTS NOW
 [poll] STILL UNREAD until you run: tools/comms.sh read kimi
+[poll] 00:47:44 alive, mailbox empty
+[poll] 00:47:59 alive, mailbox empty
+[poll] 00:48:15 alive, mailbox empty
+[poll] 00:48:30 alive, mailbox empty
+[poll] 00:48:45 alive, mailbox empty
+[poll] 00:49:00 alive, mailbox empty
+[poll] 00:49:15 alive, mailbox empty

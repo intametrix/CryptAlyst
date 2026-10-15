@@ -54,8 +54,14 @@ print(json.dumps({"ts_ms":int(time.time()*1000),"from":frm,"to":to,
                   "subject":subject,"priority":prio,"body":body}, ensure_ascii=False))
 PY
 )"
+  # Durable record first, so a crash between the two writes loses nothing:
+  # the file is the source of truth and the FIFO is only the nudge.
   printf '%s\n' "$line" >> "$(box "$to")"
   printf '%s\n' "$line" >> "$BOX/all.jsonl"
+
+  # Instant delivery over IPC, best effort. Exit code 2 means nobody is
+  # listening, which is normal and harmless -- the mailbox still holds it.
+  python3 "$(dirname "${BASH_SOURCE[0]}")/ipc.py" send "$BOX/$to.fifo" "$line" 2>/dev/null || true
   # An imperative is ALSO written to a single flag file. A JSONL line is easy to
   # skim past when scanning directory state; a flag file is not.
   case "$prio" in
@@ -222,6 +228,8 @@ case "${1:-status}" in
   answer-now) shift; COMMS_PRIO="ANSWER NOW" cmd_send "$@" ;;
   urgent) shift; COMMS_PRIO="urgent" cmd_send "$@" ;;
   poll)   shift; cmd_poll "$@" ;;
+  listen) shift; python3 "$(dirname "${BASH_SOURCE[0]}")/ipc.py" listen "$BOX/${1:?usage: listen <agent>}.fifo" ;;
+  ensure-ipc) for w in deepseek kimi; do python3 "$(dirname "${BASH_SOURCE[0]}")/ipc.py" ensure "$BOX/$w.fifo"; done; echo "FIFOs ready" ;;
   status) cmd_status ;;
   log)    shift; cmd_log "$@" ;;
   human)  shift; cmd_human "$@" ;;
