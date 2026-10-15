@@ -169,6 +169,15 @@ export interface AlertMsg {
   snapshot_ms?: number | null;
   /** One-line human summary of the signal. */
   summary?: string | null;
+  /**
+   * The server's resolved colour for this event. Authoritative: the UI must use
+   * it rather than mapping kind to a constant of its own.
+   */
+  color?: string | null;
+  /** The server's letter for this kind (P/D/R/B), when it sends one. */
+  letter?: string | null;
+  /** The server's arrow direction: +1 up, −1 down. */
+  direction?: number | null;
 }
 
 /** One row of the market-wide screen. */

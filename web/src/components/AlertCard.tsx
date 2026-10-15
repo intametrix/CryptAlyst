@@ -21,6 +21,8 @@ import { useSelection } from '../selection';
 import { detectorLabel, prettifyEnum } from '../types';
 import type { AlertMsg, AlertMetrics, ToolsMsg } from '../types';
 import { BatchBadge, KindBadge, SeverityBadge } from './Badges';
+import { EventGlyph } from './EventGlyph';
+import type { ColorCanon } from '../colors';
 import { Tooltip } from './Tooltip';
 
 interface Props {
@@ -41,6 +43,8 @@ interface Props {
    * the drill-down for this alert's symbol.
    */
   onDrill?: (symbol: string, seed?: { alerts: AlertMsg[] }) => void;
+  /** The canonical palette, so the feed badge matches the chart marker. */
+  canon?: ColorCanon | null;
 }
 
 /** How one metrics key is rendered, and how it reads in a tooltip. */
@@ -169,6 +173,7 @@ export const AlertCard = memo(function AlertCard({
   nowMs,
   onFilterToggle,
   onDrill,
+  canon = null,
 }: Props) {
   const [open, setOpen] = useState(false);
   const { ref, size } = useElementSize<HTMLElement>();
@@ -240,7 +245,20 @@ export const AlertCard = memo(function AlertCard({
             onClick={() => onFilterToggle?.('kind', String(alert.kind ?? ''))}
             title={`filter the feed to ${prettifyEnum(alert.kind)}`}
           >
-            <KindBadge kind={alert.kind} />
+            {/*
+              The same letter, colour and arrow the chart draws for this event:
+              one visual identity, resolved from the server's own values.
+            */}
+            <EventGlyph
+              kind={alert.kind}
+              severity={alert.severity}
+              color={alert.color}
+              letter={alert.letter}
+              direction={alert.direction}
+              canon={canon}
+              size="sm"
+            />
+            <KindBadge kind={alert.kind} color={alert.color} canon={canon} />
           </button>
         </Tooltip>
         <Tooltip
@@ -257,7 +275,7 @@ export const AlertCard = memo(function AlertCard({
             onClick={() => onFilterToggle?.('severity', String(alert.severity ?? ''))}
             title={`filter the feed to ${text(alert.severity)}`}
           >
-            <SeverityBadge severity={alert.severity} />
+            <SeverityBadge severity={alert.severity} canon={canon} />
           </button>
         </Tooltip>
         <Tooltip

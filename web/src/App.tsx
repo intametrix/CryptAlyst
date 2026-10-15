@@ -22,7 +22,7 @@ import { SelectionProvider, readUrlState, useSelection, writeUrlState } from './
 import { Tooltip } from './components/Tooltip';
 import { useTicker } from './hooks/useTicker';
 import { TICKER_SEED_URL } from './hooks/useKlines';
-import { useTools } from './useTools';
+import { useColorCanon, useTools } from './useTools';
 import type { AlertMsg, FlowRow, ScreenRow, Setup, SetupPlan, SymbolDetailMsg, ScreenMsg, SurveyMsg } from './types';
 import './styles.css';
 
@@ -185,6 +185,13 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   });
 
   const { tools, fallback: toolsFallback, reload: reloadTools } = useTools();
+  /**
+   * The canonical colour + glyph language, fetched once from `/api/colors` and
+   * published as CSS custom properties. Every surface below draws from it, so the
+   * chart marker, the legend, the event row, the detail panel and the feed badge
+   * render one event one way.
+   */
+  const canon = useColorCanon();
 
   // A one-shot seed so the first candle update does not wait for a frame. The
   // SSE `ticker` channel remains the primary source after this.
@@ -339,6 +346,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
                 onClear={clearAlerts}
                 maxAlerts={MAX_ALERTS}
                 tools={tools}
+                canon={canon}
                 filter={filter}
                 onFilterChange={setFilter}
                 onFilterToggle={handleFilterToggle}
@@ -398,6 +406,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               priceTick={priceTick}
               tickerTick={ticker.tick}
               tickerAtMs={ticker.lastAtMs}
+              canon={canon}
               selectedEvent={selectedEvent}
               onSelectEvent={setSelectedEvent}
               onZoomControls={setZoomControls}
@@ -414,6 +423,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
                   expanded={eventsExpanded}
                   onToggleExpanded={toggleEventsExpanded}
                   tools={tools}
+                  canon={canon}
                 />
               }
             />

@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react';
+import type { ColorCanon } from '../colors';
 import { activeFilters, clearFilter, hasFilters, matchesFilter, type FeedFilter, type FilterKey } from '../filters';
 import { int } from '../format';
 import { useSelection } from '../selection';
@@ -24,6 +25,8 @@ interface Props {
   onFilterToggle: (key: FilterKey, value: string) => void;
   /** A metric row or badge was activated: drill into that symbol. */
   onDrill: (symbol: string, seed?: { alerts: AlertMsg[] }) => void;
+  /** The canonical palette, shared with the chart. */
+  canon?: ColorCanon | null;
 }
 
 export const AlertFeed = memo(function AlertFeed({
@@ -39,6 +42,7 @@ export const AlertFeed = memo(function AlertFeed({
   onFilterChange,
   onFilterToggle,
   onDrill,
+  canon = null,
 }: Props) {
   const selection = useSelection();
   const [onlySelected, setOnlySelected] = useState(false);
@@ -156,6 +160,7 @@ export const AlertFeed = memo(function AlertFeed({
                     nowMs={nowMs}
                     onFilterToggle={onFilterToggle}
                     onDrill={onDrill}
+                    canon={canon}
                   />
                 );
               })

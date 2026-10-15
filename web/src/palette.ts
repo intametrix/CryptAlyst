@@ -1,16 +1,19 @@
 /**
- * The chart palette, read from the CSS custom properties in `styles.css`.
+ * The chart palette, read from the CSS custom properties.
  *
- * The rule is one definition per colour: the dashboard chrome uses the custom
- * properties directly in CSS, and the chart library (which needs concrete
- * strings) reads those same properties here. Neither side re-authors a colour,
- * so the chart and the feed cannot drift apart.
+ * The directional and severity values are the **canon's**: `/api/colors` is
+ * fetched once and written onto `:root` as `--c-*` (see `src/colors.ts`), and
+ * `styles.css` seeds those same tokens with the documented fallback. This module
+ * is only the accessor the chart library needs, because it wants concrete colour
+ * strings rather than `var()` references — it is not a second palette.
  *
  * `resolvePalette()` is called once when a chart is created. If the stylesheet
  * has not loaded (or the tokens are missing), it falls back to the documented
  * values rather than producing `undefined` colours, which the library would
  * render as black.
  */
+
+import { CANON_FALLBACK, onCanonChange } from './colors';
 
 export interface ChartPalette {
   up: string;
@@ -38,12 +41,13 @@ export interface ChartPalette {
 
 /** The documented defaults; also what a missing token degrades to. */
 const FALLBACK: ChartPalette = {
-  up: '#2ee06a',
-  down: '#ff4d5e',
-  flat: '#8492a9',
+  // Directional and severity hues come from the canonical palette in one place.
+  up: CANON_FALLBACK.direction.up,
+  down: CANON_FALLBACK.direction.down,
+  flat: CANON_FALLBACK.severity.WATCH,
   accent: '#4d8dfd',
-  reversal: '#ffb020',
-  breakout: '#4d8dfd',
+  reversal: CANON_FALLBACK.direction.reversal,
+  breakout: CANON_FALLBACK.direction.neutral,
   donchian: '#4d8dfd',
   donchianSlow: '#8b5cf6',
   emaFast: '#22d3ee',
@@ -58,16 +62,21 @@ const FALLBACK: ChartPalette = {
   volumeUp: 'rgba(46, 224, 106, 0.45)',
   volumeDown: 'rgba(255, 77, 94, 0.45)',
   volumeFlat: 'rgba(132, 146, 169, 0.35)',
-  severity: { watch: '#8492a9', alert: '#ffb020', critical: '#ff2d55' },
+  severity: {
+    watch: CANON_FALLBACK.severity.WATCH,
+    alert: CANON_FALLBACK.severity.ALERT,
+    critical: CANON_FALLBACK.severity.CRITICAL,
+  },
 };
 
 const TOKEN: Record<Exclude<keyof ChartPalette, 'severity'>, string> = {
-  up: '--chart-up',
-  down: '--chart-down',
-  flat: '--chart-flat',
+  // Directional hues are the canon's tokens; the rest are chart-specific.
+  up: '--c-up',
+  down: '--c-down',
+  flat: '--c-sev-watch',
   accent: '--chart-accent',
-  reversal: '--chart-reversal',
-  breakout: '--chart-breakout',
+  reversal: '--c-reversal',
+  breakout: '--c-neutral',
   donchian: '--chart-donchian',
   donchianSlow: '--chart-donchian-slow',
   emaFast: '--chart-ema-fast',
@@ -100,18 +109,22 @@ export function resolvePalette(force = false): ChartPalette {
     next[key] = read(token, FALLBACK[key]);
   }
   next.severity = {
-    watch: read('--sev-watch', FALLBACK.severity.watch),
-    alert: read('--sev-alert', FALLBACK.severity.alert),
-    critical: read('--sev-critical', FALLBACK.severity.critical),
+    watch: read('--c-sev-watch', FALLBACK.severity.watch),
+    alert: read('--c-sev-alert', FALLBACK.severity.alert),
+    critical: read('--c-sev-critical', FALLBACK.severity.critical),
   };
   cached = next;
   return next;
 }
 
-/** Invalidate the cache (used when the theme changes). */
+/** Invalidate the cache (used when the canon or the theme changes). */
 export function resetPaletteCache(): void {
   cached = null;
 }
+
+// The canon is fetched after the first chart may already have resolved a palette,
+// so a resolved cache is dropped whenever it changes.
+onCanonChange(resetPaletteCache);
 
 /**
  * Colour for a marker, preferring the server's own value.

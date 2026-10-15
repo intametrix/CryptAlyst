@@ -19,12 +19,17 @@ import (
 // signal.
 
 var allowedIntervals = map[string]bool{
+	// 1s exists so the chart can actually SHOW a five-second window. Zoom
+	// presets finer than the bar interval do not zoom, they just repeat the
+	// same candle, which looks like a rendering bug to the user. Binance spot
+	// serves 1s candles with a 1000-bar cap, which is 16.6 minutes of history.
+	"1s": true,
 	"1m": true, "5m": true, "15m": true, "1h": true, "4h": true, "1d": true,
 }
 
 // Bar is one OHLCV candle for the chart.
 type Bar struct {
-	T  int64   `json:"t"`  // bar OPEN time, epoch ms
+	T  int64   `json:"t"` // bar OPEN time, epoch ms
 	O  float64 `json:"o"`
 	H  float64 `json:"h"`
 	L  float64 `json:"l"`
@@ -57,8 +62,45 @@ type Mark struct {
 // intervalMillis is the bar duration per supported interval, used to snap
 // marker times onto bar boundaries.
 var intervalMillis = map[string]int64{
+	"1s": 1_000,
 	"1m": 60_000, "5m": 300_000, "15m": 900_000,
 	"1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000,
+}
+
+// IntervalBarCap is the most bars the exchange will return for an interval.
+// 1s is capped at 1000, which is 16.6 minutes -- the reason the one-hour preset
+// must switch to 1m bars rather than asking for 3600 one-second bars.
+func IntervalBarCap(interval string) int {
+	if interval == "1s" {
+		return 1000
+	}
+	return 1000
+}
+
+// PresetPlan maps a zoom preset to the interval and bar count that can actually
+// draw it. Returning both makes the constraint explicit instead of leaving the
+// UI to request bars that cannot exist.
+func PresetPlan(preset string) (interval string, bars int, ok bool) {
+	switch preset {
+	case "5s":
+		return "1s", 5, true
+	case "10s":
+		return "1s", 10, true
+	case "30s":
+		return "1s", 30, true
+	case "1m":
+		return "1s", 60, true
+	case "2m":
+		return "1s", 120, true
+	case "5m":
+		return "1s", 300, true
+	case "1h":
+		return "1m", 60, true
+	case "all":
+		return "", 0, true
+	default:
+		return "", 0, false
+	}
 }
 
 // buildMarks snaps every marker to its containing bar's open time. Markers are
@@ -87,18 +129,18 @@ func buildMarks(marks []Mark, interval string) []Mark {
 
 // ChartResponse is the /api/klines payload.
 type ChartResponse struct {
-	Type       string               `json:"type"`
-	Symbol     string               `json:"symbol"`
-	Interval   string               `json:"interval"`
-	TSMS       int64                `json:"ts_ms"`
-	Bars       []Bar                `json:"bars"`
+	Type       string                `json:"type"`
+	Symbol     string                `json:"symbol"`
+	Interval   string                `json:"interval"`
+	TSMS       int64                 `json:"ts_ms"`
+	Bars       []Bar                 `json:"bars"`
 	Indicators map[string][]*float64 `json:"indicators"`
-	Marks      []Mark               `json:"marks"`
-	Latest     map[string]any       `json:"latest"`
+	Marks      []Mark                `json:"marks"`
+	Latest     map[string]any        `json:"latest"`
 	// Forecast is a reversion projection, present only when price is actually
 	// displaced from its recent anchor. Absent means "nothing to project",
 	// which is the common and correct case.
-	Forecast   *forecast.Forecast    `json:"forecast,omitempty"`
+	Forecast *forecast.Forecast `json:"forecast,omitempty"`
 }
 
 func (s *Server) handleKlines(w http.ResponseWriter, r *http.Request) {
@@ -298,13 +340,13 @@ func buildChart(symbol, interval string, klines []binance.Kline, marks []Mark) C
 
 	last := count - 1
 	latest := map[string]any{
-		"close":    closes[last],
-		"atr20":    nullable(atr, last),
-		"atr_pct":  nullable(atrPct, last),
-		"adx14":    nullable(adxResult.ADX, last),
-		"rsi14":    nullable(rsi, last),
-		"plus_di":  nullable(adxResult.PlusDI, last),
-		"minus_di": nullable(adxResult.MinusDI, last),
+		"close":            closes[last],
+		"atr20":            nullable(atr, last),
+		"atr_pct":          nullable(atrPct, last),
+		"adx14":            nullable(adxResult.ADX, last),
+		"rsi14":            nullable(rsi, last),
+		"plus_di":          nullable(adxResult.PlusDI, last),
+		"minus_di":         nullable(adxResult.MinusDI, last),
 		"donchian20_upper": nullable(don20.Upper, last),
 		"donchian20_lower": nullable(don20.Lower, last),
 		"donchian55_upper": nullable(don55.Upper, last),

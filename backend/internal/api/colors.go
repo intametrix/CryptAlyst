@@ -119,3 +119,38 @@ func DirectionColor(direction int) string {
 func (s *Server) handleColors(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, PaletteFor())
 }
+
+// handleZoomPresets publishes the zoom presets and, for each, the interval and
+// bar count that can actually draw it.
+//
+// The UI must not guess this. A five-second window cannot be drawn from
+// one-minute candles without repeating the same bar, and a one-hour window
+// cannot be drawn from one-second candles because the exchange caps the
+// response at 1000 bars. Encoding the mapping server-side means the presets and
+// the data can never disagree.
+func (s *Server) handleZoomPresets(w http.ResponseWriter, r *http.Request) {
+	order := []string{"5s", "10s", "30s", "1m", "2m", "5m", "1h", "all"}
+	presets := make([]map[string]any, 0, len(order))
+	for _, name := range order {
+		interval, bars, _ := PresetPlan(name)
+		entry := map[string]any{"preset": name}
+		if interval == "" {
+			entry["mode"] = "fit"
+			entry["label"] = "All loaded history"
+		} else {
+			entry["interval"] = interval
+			entry["bars"] = bars
+			entry["mode"] = "range"
+		}
+		presets = append(presets, entry)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"type":              "zoom_presets",
+		"presets":           presets,
+		"reset":             "reset zoom restores the default view",
+		"allowed_intervals": []string{"1s", "1m", "5m", "15m", "1h", "4h", "1d"},
+		"note": "Presets finer than the currently loaded interval require an interval " +
+			"switch, which IS a data fetch. Only presets within the loaded interval are " +
+			"pure zoom.",
+	})
+}

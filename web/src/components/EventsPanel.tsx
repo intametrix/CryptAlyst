@@ -1,9 +1,11 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { clock, int, isoUtc, multiple, num, usd } from '../format';
-import { markTitle, type ChartMarker } from '../chartData';
+import type { ChartMarker } from '../chartData';
 import { detectorLabel, prettifyEnum } from '../types';
 import type { ToolsMsg } from '../types';
 import { KindBadge, SeverityBadge } from './Badges';
+import { EventGlyph } from './EventGlyph';
+import type { ColorCanon } from '../colors';
 import { Tooltip } from './Tooltip';
 
 /**
@@ -54,6 +56,8 @@ export interface EventsPanelProps {
   tools: ToolsMsg | null;
   /** The chart's own reason for a missing event, if any. */
   emptyNote?: string;
+  /** The canonical palette, so the rows match the markers exactly. */
+  canon?: ColorCanon | null;
 }
 
 /**
@@ -77,6 +81,7 @@ export const EventsPanel = memo(function EventsPanel({
   onToggleExpanded,
   tools,
   emptyNote,
+  canon = null,
 }: EventsPanelProps) {
   const selectedMark = useMemo(
     () => (selected === null ? null : events.find((m) => m.time === selected) ?? null),
@@ -105,14 +110,20 @@ export const EventsPanel = memo(function EventsPanel({
           </p>
         ) : (
           <div className="events-detail-body">
-            <span className={`event-letter event-${markTitle(selectedMark.letter).toLowerCase()}`} aria-hidden="true">
-              {selectedMark.letter}
-            </span>
+            <EventGlyph
+              kind={selectedMark.kind}
+              severity={selectedMark.severity}
+              color={selectedMark.color}
+              letter={selectedMark.letter}
+              direction={selectedMark.direction}
+              canon={canon}
+              size="lg"
+            />
             <div className="events-detail-fields">
               <div className="events-detail-head">
                 <Tooltip keys={['kind']} tools={tools} fallbackTitle="Kind" value={prettifyEnum(selectedMark.kind)}>
                   <span tabIndex={0}>
-                    <KindBadge kind={selectedMark.kind} />
+                    <KindBadge kind={selectedMark.kind} color={selectedMark.color} canon={canon} />
                   </span>
                 </Tooltip>
                 <Tooltip
@@ -122,7 +133,7 @@ export const EventsPanel = memo(function EventsPanel({
                   value={prettifyEnum(selectedMark.severity, 'unrated')}
                 >
                   <span tabIndex={0}>
-                    <SeverityBadge severity={selectedMark.severity} />
+                    <SeverityBadge severity={selectedMark.severity} canon={canon} />
                   </span>
                 </Tooltip>
                 <span className="events-detail-time num" title={isoUtc(selectedMark.time * 1000)}>
@@ -248,12 +259,18 @@ export const EventsPanel = memo(function EventsPanel({
                       onClick={() => onSelect(isSelected ? null : mark.time)}
                       title={`zoom to ${clock(mark.time * 1000)}`}
                     >
-                      <span className={`event-letter event-${markTitle(mark.letter).toLowerCase()}`} aria-hidden="true">
-                        {mark.letter}
-                      </span>
+                      <EventGlyph
+                        kind={mark.kind}
+                        severity={mark.severity}
+                        color={mark.color}
+                        letter={mark.letter}
+                        direction={mark.direction}
+                        canon={canon}
+                        size="sm"
+                      />
                       <span className="event-time num">{clock(mark.time * 1000)}</span>
-                      <KindBadge kind={mark.kind} />
-                      <SeverityBadge severity={mark.severity} />
+                      <KindBadge kind={mark.kind} color={mark.color} canon={canon} />
+                      <SeverityBadge severity={mark.severity} canon={canon} />
                       <span className="event-score num">{mark.score === null ? '—' : num(mark.score, 0)}</span>
                       <span className="event-summary">{rowSummary(mark)}</span>
                     </button>

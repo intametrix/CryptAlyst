@@ -1,7 +1,44 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchJson } from './api';
+import { CANON_FALLBACK, applyCanonToCss, parseCanon, type ColorCanon } from './colors';
 import { LOCAL_TOOLS, resolveTooltip, type TooltipSpec } from './glossary';
 import type { ToolEntry, ToolsMsg } from './types';
+
+/**
+ * Fetch `/api/colors` **once** and publish it.
+ *
+ * The palette becomes CSS custom properties, so both the dashboard chrome and the
+ * chart library read one set of values. A failure is silent: the documented
+ * fallbacks are already in the stylesheet, so the UI renders identically except
+ * for the exact hues.
+ */
+export function useColorCanon(): ColorCanon {
+  const [canon, setCanon] = useState<ColorCanon>(CANON_FALLBACK);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    void (async () => {
+      const body = await fetchJson<unknown>('/api/colors', controller.signal);
+      if (cancelled) return;
+      const parsed = parseCanon(body);
+      if (parsed === null) return;
+      setCanon(parsed);
+      applyCanonToCss(parsed);
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, []);
+
+  // The fallback is applied first so the tokens exist even before the fetch.
+  useEffect(() => {
+    applyCanonToCss(canon);
+  }, [canon]);
+
+  return canon;
+}
 
 export interface ToolsState {
   /** Raw `/api/tools` payload, or `null` while it is absent (offline/404). */

@@ -16,7 +16,6 @@ import {
 } from 'lightweight-charts';
 import {
   INDICATOR_DEFS,
-  MARK_LETTERS,
   alignIndicators,
   barTime,
   defaultIndicatorState,
@@ -33,15 +32,35 @@ import {
   type SafeBar,
 } from '../chartData';
 import { clock, int, isoUtc, multiple, num, px, share, text, usd } from '../format';
+import type { ColorCanon } from '../colors';
 import { saveChipState, getLayout } from '../layout';
 import { INTERVAL_MS, LIVE_POLL_MS, bucketStart, liveIndicator, useKlines } from '../hooks/useKlines';
 import { useElementSize } from '../hooks/useElementSize';
 import { INTERVALS, type Interval, type ToolsMsg } from '../types';
+import { eventIdentity } from '../colors';
+import { EventGlyph } from './EventGlyph';
 import { SplitPane } from './Panel';
 import type { ZoomPreset } from './EventsPanel';
 import { Tooltip } from './Tooltip';
 
 /* --------------------------------------------------------------- appearance */
+
+/**
+ * One sample per marker family, so the legend shows exactly the letters, colours
+ * and arrows the chart draws — resolved through the canonical palette rather than
+ * re-typed here.
+ */
+const MARK_SAMPLES: readonly {
+  kind: string;
+  title: string;
+  blurb: string;
+  toolKeys: string[];
+}[] = [
+  { kind: 'PUMP', title: 'Pump', blurb: 'An upward onset detected on this bar.', toolKeys: ['mark_p'] },
+  { kind: 'DUMP', title: 'Dump', blurb: 'A downward onset detected on this bar.', toolKeys: ['mark_d'] },
+  { kind: 'REVERSAL_DUMP', title: 'Reversal', blurb: 'An exhaustion turn, either direction.', toolKeys: ['mark_r'] },
+  { kind: 'BREAKOUT_LONG', title: 'Breakout', blurb: 'A channel breakout from the Turtle detector.', toolKeys: ['mark_b'] },
+];
 
 /**
  * How container height is shared between panes — **measured**, not assumed.
@@ -449,6 +468,8 @@ export interface ChartPanelProps {
   tickerTick?: { symbol: string; price: number; quoteVol24h: number | null; atMs: number } | null;
   /** Local ms of the last applied ticker frame, for the live pill. */
   tickerAtMs?: number | null;
+  /** The canonical palette; the chart draws with the server's own colours. */
+  canon?: ColorCanon | null;
   /** The shared selected event (a bar open time in epoch ms), or `null`. */
   selectedEvent?: number | null;
   /** Reports a marker click / chart click so the caller can share the selection. */
@@ -493,6 +514,7 @@ export function ChartPanel({
   priceTick = null,
   tickerTick = null,
   tickerAtMs = null,
+  canon = null,
   selectedEvent = null,
   onSelectEvent,
   bottom = null,
@@ -598,7 +620,7 @@ export function ChartPanel({
   }, [data, live]);
 
   /** Every mark for this symbol as a drawable marker, oldest first. */
-  const markerList = useMemo(() => toMarkers(marks, bars), [marks, bars]);
+  const markerList = useMemo(() => toMarkers(marks, bars, canon), [marks, bars, canon]);
 
   useEffect(() => {
     // Newest first for the list; the chart keeps its own oldest-first order.
@@ -798,7 +820,7 @@ export function ChartPanel({
   // The marker list keyed by bar time, so a crosshair move is a map lookup.
   const marksByTime = useMemo(() => {
     const map = new Map<number, ChartMarker[]>();
-    for (const marker of toMarkers(marks, bars)) {
+    for (const marker of toMarkers(marks, bars, canon)) {
       const list = map.get(marker.time);
       if (list === undefined) map.set(marker.time, [marker]);
       else list.push(marker);
@@ -1370,21 +1392,26 @@ export function ChartPanel({
 
           <div className="chart-marker-legend" role="group" aria-label="chart marker legend">
             <span className="marker-legend-label">markers</span>
-            {MARK_LETTERS.map((item) => (
-              <Tooltip
-                key={item.letter}
-                keys={[`mark_${item.letter.toLowerCase()}`]}
-                tools={tools}
-                fallbackTitle={`${item.title} marker`}
-                label={`A ${item.title.toLowerCase()} detected on this bar. Hover the letter on the chart for the event's score, flow and burst multiple.`}
-                tone="badge"
-              >
-                <span className={`marker-key marker-${item.tone}`} tabIndex={0}>
-                  <b>{item.letter}</b>
-                  {item.title}
-                </span>
-              </Tooltip>
-            ))}
+            {MARK_SAMPLES.map((sample) => {
+              const identity = eventIdentity({ kind: sample.kind, canon });
+              return (
+                <Tooltip
+                  key={sample.kind}
+                  keys={sample.toolKeys}
+                  tools={tools}
+                  fallbackTitle={`${sample.title} marker`}
+                  label={`${sample.blurb} The chart draws ${identity.letter} in this colour with a${
+                    identity.direction === 1 ? 'n up' : ' down'
+                  } arrow — the same glyph and colour as the alert-feed badge and the event list.`}
+                  tone="badge"
+                >
+                  <span className="marker-key" tabIndex={0}>
+                    <EventGlyph kind={sample.kind} canon={canon} size="sm" />
+                    {sample.title}
+                  </span>
+                </Tooltip>
+              );
+            })}
           </div>
 
           {bottom !== null && <div className="chart-bottom">{bottom}</div>}

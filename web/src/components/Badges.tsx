@@ -1,3 +1,4 @@
+import { eventIdentity, severityColor, type ColorCanon } from '../colors';
 import { detectorLabel, kindStyle, prettifyEnum, severityStyle } from '../types';
 import type { AlertKind, Severity } from '../types';
 
@@ -46,19 +47,58 @@ const SEV_SHORT: Readonly<Record<string, string>> = {
  * `kind` badge — PUMP / DUMP / REVERSAL_* / BREAKOUT_*, and anything new the
  * backend grows. Unknown words are title-cased, never "UNKNOWN".
  */
-export function KindBadge({ kind }: { kind?: AlertKind | string | null }) {
+export function KindBadge({
+  kind,
+  /** The server's resolved colour for this event, when it sent one. */
+  color,
+  canon = null,
+}: {
+  kind?: AlertKind | string | null;
+  color?: string | null;
+  canon?: ColorCanon | null;
+}) {
   const style = kindStyle(kind);
   const word = typeof kind === 'string' ? kind.trim().toUpperCase() : '';
   const label = KIND_SHORT[word] ?? prettifyEnum(kind, 'Unclassified');
-  return <span className={`badge ${KIND_CLASS[style] ?? KIND_CLASS.other}`}>{label}</span>;
+  // The identity supplies the colour: the payload's own value when present, the
+  // canonical palette otherwise. Direction is not severity, so this badge and the
+  // severity badge next to it stay on separate axes.
+  const identity = eventIdentity({ kind, color, canon });
+  const serverColor = typeof color === 'string' && color.trim() !== '';
+  return (
+    <span
+      className={`badge ${KIND_CLASS[style] ?? KIND_CLASS.other}${serverColor ? ' badge-canon' : ''}`}
+      data-color={identity.color}
+      data-letter={identity.letter}
+      data-direction={identity.direction}
+      style={serverColor ? { ['--eglyph-color' as string]: identity.color } : undefined}
+    >
+      {label}
+    </span>
+  );
 }
 
 /** `severity` badge — WATCH / ALERT / CRITICAL; anything else reads neutrally. */
-export function SeverityBadge({ severity }: { severity?: Severity | string | null }) {
+export function SeverityBadge({
+  severity,
+  canon = null,
+}: {
+  severity?: Severity | string | null;
+  canon?: ColorCanon | null;
+}) {
   const style = severityStyle(severity);
   const word = typeof severity === 'string' ? severity.trim().toUpperCase() : '';
   const label = SEV_SHORT[word] ?? prettifyEnum(severity, 'Unrated');
-  return <span className={`badge ${SEV_CLASS[style] ?? SEV_CLASS.other}`}>{label}</span>;
+  // Severity is its own axis: a WATCH pump is green while this badge is grey.
+  return (
+    <span
+      className={`badge ${SEV_CLASS[style] ?? SEV_CLASS.other}`}
+      data-color={severityColor(severity, canon)}
+      style={{ ['--eglyph-color' as string]: severityColor(severity, canon) }}
+    >
+      {label}
+    </span>
+  );
 }
 
 /** Which model produced an alert: `flow-onset`, `pump-screen`, `turtle-breakout`. */

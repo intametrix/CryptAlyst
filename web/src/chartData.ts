@@ -16,6 +16,7 @@
 
 import type { UTCTimestamp } from 'lightweight-charts';
 import { toNum } from './format';
+import { eventIdentity, type ColorCanon } from './colors';
 import { resolvePalette } from './palette';
 import type { ChartBar, ChartIndicatorMap, ChartMark, ToolEntry } from './types';
 
@@ -222,37 +223,6 @@ export const MARK_LETTERS: readonly { letter: string; title: string; tone: strin
  * authoritative about how it should look.
  */
 
-/** Which colour family a mark belongs to. Kind first, then its letter. */
-function markFamily(kind: string, letter: string): 'pump' | 'dump' | 'reversal' | 'breakout' | 'other' {
-  const upper = `${kind} ${letter}`.toUpperCase();
-  if (upper.includes('REVERSAL') || /(^|\s)R(\s|$)/.test(upper)) return 'reversal';
-  if (upper.includes('BREAKOUT') || /(^|\s)B(\s|$)/.test(upper)) return 'breakout';
-  if (upper.includes('DUMP') || /(^|\s)D(\s|$)/.test(upper)) return 'dump';
-  if (upper.includes('PUMP') || /(^|\s)P(\s|$)/.test(upper)) return 'pump';
-  return 'other';
-}
-
-/** Direction from the wire field, falling back to the kind/letter. */
-function markDirection(mark: ChartMark): 1 | -1 {
-  const wire = toNum(mark.direction);
-  if (wire !== null) return wire < 0 ? -1 : 1;
-  const upper = `${typeof mark.kind === 'string' ? mark.kind : ''} ${typeof mark.letter === 'string' ? mark.letter : ''}`.toUpperCase();
-  if (upper.includes('DUMP') || upper.includes('SHORT') || upper.includes('BEAR') || upper.includes('DOWN')) return -1;
-  return 1;
-}
-
-/** The single letter the server assigns, or one derived from the kind. */
-function markLetter(mark: ChartMark): string {
-  const letter = typeof mark.letter === 'string' ? mark.letter.trim().toUpperCase() : '';
-  if (letter !== '') return letter.slice(0, 1);
-  const kind = typeof mark.kind === 'string' ? mark.kind.toUpperCase() : '';
-  if (kind.includes('BREAKOUT')) return 'B';
-  if (kind.includes('REVERSAL')) return 'R';
-  if (kind.includes('DUMP')) return 'D';
-  if (kind.includes('PUMP')) return 'P';
-  return '\u2022';
-}
-
 /**
  * Snap each mark to the bar it belongs to and build the marker the library wants.
  *
@@ -263,7 +233,7 @@ function markLetter(mark: ChartMark): string {
  * kind, so a bar can legitimately carry both a P and a D) — the CRITICAL one
  * wins only when two marks collide on the same bar *and* the same letter.
  */
-export function toMarkers(marks: unknown, bars: readonly SafeBar[]): ChartMarker[] {
+export function toMarkers(marks: unknown, bars: readonly SafeBar[], canon: ColorCanon | null = null): ChartMarker[] {
   if (!Array.isArray(marks) || bars.length === 0) return [];
   const bySlot = new Map<string, ChartMarker>();
   const severityRank = (m: ChartMarker): number =>
@@ -278,34 +248,30 @@ export function toMarkers(marks: unknown, bars: readonly SafeBar[]): ChartMarker
     if (time === null) continue;
 
     const kind = typeof mark.kind === 'string' ? mark.kind : '';
-    const letter = markLetter(mark);
-    const direction = markDirection(mark);
-    const family = markFamily(kind, letter);
     const severity = typeof mark.severity === 'string' ? mark.severity.toUpperCase() : '';
-    const palette = resolvePalette();
-    // The server's colour wins when it sends one; otherwise the shared tokens.
-    const serverColor = typeof mark.color === 'string' ? mark.color.trim() : '';
-    const color =
-      serverColor !== ''
-        ? serverColor
-        : severity === 'CRITICAL'
-          ? palette.severity.critical
-          : severity === 'WATCH'
-            ? palette.flat
-            : family === 'dump'
-              ? palette.down
-              : family === 'reversal'
-                ? palette.reversal
-                : family === 'breakout'
-                  ? palette.breakout
-                  : family === 'pump'
-                    ? palette.up
-                    : palette.flat;
+    // One resolution path for every surface: the payload's own colour and letter
+    // when present, the canonical palette otherwise. Nothing is re-derived here,
+    // which is what keeps the marker and the feed badge identical.
+    const identity = eventIdentity({
+      kind,
+      severity,
+      color: mark.color,
+      letter: mark.letter,
+      direction: mark.direction,
+      canon,
+    });
+    const letter = identity.letter;
+    const direction = identity.direction;
+    // The glyph is the server's arrow for this kind, so the marker and the badge
+    // point the same way.
+    const shape: ChartMarker['shape'] =
+      identity.glyph === 'arrowDown' ? 'arrowDown' : identity.glyph === 'arrowUp' ? 'arrowUp' : 'circle';
+    const color = identity.color;
 
     const candidate: ChartMarker = {
       time,
       position: direction === 1 ? 'belowBar' : 'aboveBar',
-      shape: direction === 1 ? 'arrowUp' : 'arrowDown',
+      shape,
       color,
       // The letter is the whole point: one glyph, no wrapping, no overlap.
       text: letter,

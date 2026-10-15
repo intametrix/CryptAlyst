@@ -24,12 +24,12 @@
      two cannot drift apart. The chart library needs concrete colour strings, so
      `src/palette.ts` mirrors these names and reads them from the computed style
      at runtime — the CSS remains the definition, this is just the accessor. */
-  --chart-up: #2ee06a;
-  --chart-down: #ff4d5e;
-  --chart-flat: #8492a9;
+  --chart-up: var(--c-up);
+  --chart-down: var(--c-down);
+  --chart-flat: var(--c-sev-watch);
   --chart-accent: #4d8dfd;
-  --chart-reversal: #ffb020;
-  --chart-breakout: #4d8dfd;
+  --chart-reversal: var(--c-reversal);
+  --chart-breakout: var(--c-neutral);
   --chart-donchian: #4d8dfd;
   --chart-donchian-slow: #8b5cf6;
   --chart-ema-fast: #22d3ee;
@@ -44,10 +44,22 @@
   --chart-volume-up: rgba(46, 224, 106, 0.45);
   --chart-volume-down: rgba(255, 77, 94, 0.45);
   --chart-volume-flat: rgba(132, 146, 169, 0.35);
+  /* ---- the canonical colour + glyph language -----------------------------
+     `/api/colors` is the single source of truth and overwrites these tokens at
+     runtime (see `src/colors.ts`). The values here are the documented fallback,
+     so the UI renders before the fetch lands and if it never does. Every chart,
+     badge, legend entry and event row reads these tokens rather than a hex. */
+  --c-up: #00e676;
+  --c-down: #ff1744;
+  --c-reversal: #ffab00;
+  --c-neutral: #40c4ff;
+  --c-sev-watch: #78909c;
+  --c-sev-alert: #ffab00;
+  --c-sev-critical: #ff1744;
   /* Severity, shared by badges and markers. */
-  --sev-watch: #8492a9;
-  --sev-alert: #ffb020;
-  --sev-critical: #ff2d55;
+  --sev-watch: var(--c-sev-watch);
+  --sev-alert: var(--c-sev-alert);
+  --sev-critical: var(--c-sev-critical);
 
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -3220,4 +3232,102 @@ table {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   The canonical event glyph.
+
+   One element renders an event's letter, its colour and its arrow everywhere the
+   event appears. The colour arrives as an inline custom property because its
+   value comes from the server (`/api/colors`, or the payload's own `color`) —
+   a class per colour would be a second, client-side copy of the palette.
+   ========================================================================== */
+
+.eglyph {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  min-width: 0;
+  color: var(--eglyph-color, var(--chart-flat));
+}
+
+.eglyph-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 0;
+  width: 17px;
+  height: 17px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  /* Dark text on every palette hue: the canon's colours are all bright. */
+  color: #08101c;
+  background: var(--eglyph-color, var(--chart-flat));
+  border-radius: 4px;
+}
+
+.eglyph-arrow {
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1;
+  color: var(--eglyph-color, var(--chart-flat));
+}
+
+.eglyph-md .eglyph-letter {
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+}
+
+.eglyph-lg .eglyph-letter {
+  width: 24px;
+  height: 24px;
+  font-size: 13px;
+  border-radius: 5px;
+}
+
+.eglyph-lg .eglyph-arrow {
+  font-size: 11px;
+}
+
+/* A colour-carrying badge takes the canon's hue rather than a class's. */
+.badge-canon {
+  color: var(--eglyph-color);
+  background: color-mix(in srgb, var(--eglyph-color) 18%, transparent);
+  border-color: color-mix(in srgb, var(--eglyph-color) 55%, transparent);
+}
+
+/* The severity badge keeps its own axis, but follows the canon's colours. */
+.sev-watch {
+  color: var(--sev-watch);
+  border-color: color-mix(in srgb, var(--sev-watch) 40%, transparent);
+  background: color-mix(in srgb, var(--sev-watch) 14%, transparent);
+}
+
+.sev-alert {
+  color: var(--sev-alert);
+  border-color: color-mix(in srgb, var(--sev-alert) 40%, transparent);
+  background: color-mix(in srgb, var(--sev-alert) 14%, transparent);
+}
+
+.sev-critical {
+  color: #fff;
+  background: var(--sev-critical);
+  border-color: color-mix(in srgb, var(--sev-critical) 70%, transparent);
+}
+
+.kind-pump,
+.kind-dump,
+.kind-rev-pump,
+.kind-rev-dump,
+.kind-breakout,
+.kind-breakout-long,
+.kind-breakout-short {
+  /* Directional badges follow the canon too; severity stays on its own axis. */
+  color: var(--eglyph-color, currentColor);
+  border-color: color-mix(in srgb, var(--eglyph-color, currentColor) 45%, transparent);
+  background: color-mix(in srgb, var(--eglyph-color, currentColor) 14%, transparent);
 }

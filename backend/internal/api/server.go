@@ -222,6 +222,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/ticker", s.handleTicker)
 	mux.HandleFunc("/api/outlook", s.handleOutlook)
 	mux.HandleFunc("/api/colors", s.handleColors)
+	mux.HandleFunc("/api/zoom-presets", s.handleZoomPresets)
 	mux.HandleFunc("/api/tools", s.handleTools)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/", s.handleStatic)

@@ -45,6 +45,7 @@ import {
 } from '../src/heatStore.ts';
 import { prettifyEnum, enumWord, kindStyle, severityStyle, detectorLabel } from '../src/types.ts';
 import { resolvePalette, markColor } from '../src/palette.ts';
+import { eventIdentity, parseCanon, severityColor, familyOf, CANON_FALLBACK } from '../src/colors.ts';
 
 let pass = 0;
 let fail = 0;
@@ -159,7 +160,7 @@ eq('a PUMP renders the letter P', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUM
 eq('an explicitly lettered mark keeps its letter', markers.find((x) => x.time === 3).text, 'R');
 eq('a DUMP points down', toMarkers([{ t: 2_000, kind: 'DUMP' }], bars)[0].shape, 'arrowDown');
 eq('a DUMP renders the letter D', toMarkers([{ t: 2_000, kind: 'DUMP' }], bars)[0].text, 'D');
-eq('a reversal uses the reversal token', toMarkers([{ t: 4_000, kind: 'REVERSAL_DUMP' }], bars)[0].color, PALETTE.reversal);
+eq('a reversal uses the canon reversal colour', toMarkers([{ t: 4_000, kind: 'REVERSAL_DUMP' }], bars)[0].color, PALETTE.reversal);
 eq('a reversal renders the letter R', toMarkers([{ t: 4_000, kind: 'REVERSAL_DUMP' }], bars)[0].text, 'R');
 eq('BREAKOUT_SHORT points down', toMarkers([{ t: 2_000, kind: 'BREAKOUT_SHORT' }], bars)[0].shape, 'arrowDown');
 eq('BREAKOUT_LONG points up', toMarkers([{ t: 2_000, kind: 'BREAKOUT_LONG' }], bars)[0].shape, 'arrowUp');
@@ -168,10 +169,14 @@ eq('a breakout renders the letter B', toMarkers([{ t: 2_000, kind: 'BREAKOUT_LON
 eq('an explicit letter is used verbatim', toMarkers([{ t: 2_000, letter: 'R', kind: 'DUMP' }], bars)[0].text, 'R');
 eq('an explicit direction overrides the kind', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', direction: -1 }], bars)[0].position, 'aboveBar');
 eq('severity CRITICAL takes the critical token', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', severity: 'CRITICAL' }], bars)[0].color, PALETTE.severity.critical);
-eq('severity WATCH is muted to the flat token', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', severity: 'WATCH' }], bars)[0].color, PALETTE.flat);
-eq('a pump uses the up token', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP' }], bars)[0].color, PALETTE.up);
-eq('a dump uses the down token', toMarkers([{ t: 2_000, letter: 'D', kind: 'DUMP' }], bars)[0].color, PALETTE.down);
-eq('a breakout uses the breakout token', toMarkers([{ t: 2_000, letter: 'B', kind: 'BREAKOUT_LONG' }], bars)[0].color, PALETTE.breakout);
+// Direction and severity are separate axes: a WATCH pump is still green, while
+// its severity badge (asked for separately) is grey. Collapsing them would make a
+// critical dump and a critical pump indistinguishable.
+eq('a WATCH pump stays green', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', severity: 'WATCH' }], bars)[0].color, PALETTE.up);
+eq('its severity colour is grey', severityColor('WATCH'), CANON_FALLBACK.severity.WATCH);
+eq('a pump uses the canon up colour', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP' }], bars)[0].color, PALETTE.up);
+eq('a dump uses the canon down colour', toMarkers([{ t: 2_000, letter: 'D', kind: 'DUMP' }], bars)[0].color, PALETTE.down);
+eq('a breakout uses the canon neutral colour', toMarkers([{ t: 2_000, letter: 'B', kind: 'BREAKOUT_LONG' }], bars)[0].color, PALETTE.breakout);
 // The backend sends an explicit colour per mark and stays authoritative.
 eq('a server-supplied colour wins', toMarkers([{ t: 2_000, letter: 'P', kind: 'PUMP', color: '#123456' }], bars)[0].color, '#123456');
 eq('markColor prefers the server value', markColor({ serverColor: '#abcdef', severity: 'CRITICAL', kind: 'DUMP' }), '#abcdef');
@@ -492,6 +497,63 @@ eq('detectorLabel prettifies', detectorLabel('turtle-breakout'), 'Turtle Breakou
 eq('detectorLabel handles flow-onset', detectorLabel('flow-onset'), 'Flow Onset');
 eq('detectorLabel handles pump-screen', detectorLabel('pump-screen'), 'Pump Screen');
 eq('detectorLabel never says undefined', detectorLabel(undefined), 'Unknown detector');
+
+/* ============================ the colour canon ============================= */
+
+// `GET /api/colors` — the live body captured from the running backend.
+const LIVE_CANON = {
+  direction: { down: '#ff1744', neutral: '#40c4ff', reversal: '#ffab00', up: '#00e676' },
+  severity: { ALERT: '#ffab00', CRITICAL: '#ff1744', WATCH: '#78909c' },
+  letters: { BREAKOUT: 'B', BREAKOUT_LONG: 'B', BREAKOUT_SHORT: 'B', DUMP: 'D', PUMP: 'P', REVERSAL_DUMP: 'R', REVERSAL_PUMP: 'R' },
+  glyphs: { BREAKOUT: 'arrowUp', BREAKOUT_LONG: 'arrowUp', BREAKOUT_SHORT: 'arrowDown', DUMP: 'arrowDown', PUMP: 'arrowUp', REVERSAL_DUMP: 'arrowDown', REVERSAL_PUMP: 'arrowUp' },
+};
+const canon = parseCanon(LIVE_CANON);
+ok('the live canon parses', canon !== null);
+eq('a missing payload falls back rather than failing', parseCanon(null), null);
+eq('a partial payload is merged with the fallback', parseCanon({ direction: { up: '#111111' } }).direction.up, '#111111');
+eq('an absent section keeps the fallback', parseCanon({ direction: {} }).severity.CRITICAL, CANON_FALLBACK.severity.CRITICAL);
+
+const ident = (kind, extra = {}) => eventIdentity({ kind, canon, ...extra });
+// Letters and arrows come from the server's own maps.
+eq('PUMP is P', ident('PUMP').letter, 'P');
+eq('DUMP is D', ident('DUMP').letter, 'D');
+eq('REVERSAL_PUMP is R', ident('REVERSAL_PUMP').letter, 'R');
+eq('REVERSAL_DUMP is R', ident('REVERSAL_DUMP').letter, 'R');
+eq('BREAKOUT_LONG is B', ident('BREAKOUT_LONG').letter, 'B');
+eq('BREAKOUT_SHORT is B', ident('BREAKOUT_SHORT').letter, 'B');
+eq('PUMP points up', ident('PUMP').glyph, 'arrowUp');
+eq('DUMP points down', ident('DUMP').glyph, 'arrowDown');
+eq('BREAKOUT_LONG points up', ident('BREAKOUT_LONG').glyph, 'arrowUp');
+eq('BREAKOUT_SHORT points down', ident('BREAKOUT_SHORT').glyph, 'arrowDown');
+eq('REVERSAL_DUMP points down', ident('REVERSAL_DUMP').glyph, 'arrowDown');
+eq('the glyph decides the direction', ident('DUMP').direction, -1);
+// Colours are the canon's, never a client constant.
+eq('PUMP uses the canon up colour', ident('PUMP').color, '#00e676');
+eq('DUMP uses the canon down colour', ident('DUMP').color, '#ff1744');
+eq('a reversal uses the canon reversal colour', ident('REVERSAL_PUMP').color, '#ffab00');
+eq('a breakout uses the canon neutral colour', ident('BREAKOUT_LONG').color, '#40c4ff');
+eq('a CRITICAL pump keeps the critical colour', ident('PUMP', { severity: 'CRITICAL' }).color, '#ff1744');
+// The payload's own colour wins over any mapping.
+eq('the payload colour wins for a pump', ident('PUMP', { color: '#abcdef' }).color, '#abcdef');
+eq('the payload colour wins for a dump', ident('DUMP', { color: '#123456' }).color, '#123456');
+eq('a blank payload colour is ignored', ident('DUMP', { color: '   ' }).color, '#ff1744');
+eq('the payload letter wins', ident('PUMP', { letter: 'Z' }).letter, 'Z');
+eq('the payload direction wins over the glyph', ident('PUMP', { direction: -1 }).direction, -1);
+// Direction and severity are separate axes.
+eq('a WATCH pump stays green', ident('PUMP', { severity: 'WATCH' }).color, '#00e676');
+eq('its severity colour is grey', severityColor('WATCH', canon), '#78909c');
+eq('a CRITICAL pump is its severity colour', ident('PUMP', { severity: 'CRITICAL' }).color, '#ff1744');
+eq('a CRITICAL dump is the same severity colour', ident('DUMP', { severity: 'CRITICAL' }).color, '#ff1744');
+eq('ALERT severity colour', severityColor('ALERT', canon), '#ffab00');
+eq('an unseen severity degrades to WATCH', severityColor('EXTREME', canon), '#78909c');
+eq('an unseen kind still gets a glyph', ident('SQUEEZE_RELEASE').letter.length, 1);
+eq('an unseen kind is family other', ident('SQUEEZE_RELEASE').family, 'other');
+eq('familyOf classifies reversals', familyOf('REVERSAL_DUMP'), 'reversal');
+eq('familyOf classifies breakouts', familyOf('BREAKOUT_SHORT'), 'breakout');
+// One event, one identity: the same inputs must produce the same object shape.
+const a1 = ident('DUMP', { severity: 'CRITICAL', color: '#ff1744' });
+const a2 = ident('DUMP', { severity: 'CRITICAL', color: '#ff1744' });
+ok('identity is deterministic', JSON.stringify(a1) === JSON.stringify(a2));
 
 const summary = fail === 0 ? `${pass}/${pass + fail} checks passed` : `${pass}/${pass + fail} checks passed, ${fail} FAILED`;
 console.log(`verify: ${summary}`);
