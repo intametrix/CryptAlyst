@@ -27,6 +27,9 @@ mkdir -p "$BOX"
 now_ms() { python3 -c 'import time;print(int(time.time()*1000))'; }
 box()  { printf '%s/%s.inbox.jsonl' "$BOX" "$1"; }
 offset_file() { printf '%s/%s.offset' "$BOX" "$1"; }
+# polled_file tracks what the poll loop has ANNOUNCED, separately from what has
+# been READ. Keeping them apart is what stops polling from consuming mail.
+polled_file() { printf '%s/%s.polled' "$BOX" "$1"; }
 
 cmd_send() {
   local prio="${COMMS_PRIO:-normal}"
@@ -123,11 +126,31 @@ cmd_poll() {
   local beats=0
   echo "[poll] $who mailbox: watching every ${interval}s. Ctrl-C to stop."
   while true; do
-    local found
-    found="$(unread "$who")"
-    if [ -n "$found" ]; then
-      echo "[poll] $(date +%H:%M:%S) MAIL ARRIVED"
-      cmd_read "$who" mark
+    # Announce only what this loop has not already announced, tracked in its
+    # OWN offset file. The READ offset is deliberately untouched: polling must
+    # never consume a message, because a message consumed into a background
+    # job's output is a message nobody reads.
+    local total polled fresh
+    total=$(wc -l < "$(box "$who")" 2>/dev/null | tr -d ' ' || echo 0)
+    [ -z "$total" ] && total=0
+    polled=$(cat "$(polled_file "$who")" 2>/dev/null || echo 0)
+    [ -z "$polled" ] && polled=0
+    if [ "$total" -gt "$polled" ]; then
+      echo "[poll] $(date +%H:%M:%S) *** MAIL ARRIVED ***"
+      awk -v start="$polled" 'NR>start' "$(box "$who")" | while IFS= read -r line; do
+        python3 - "$line" <<'PYIN'
+import json,sys,datetime
+try:
+    m=json.loads(sys.argv[1])
+except Exception:
+    raise SystemExit
+ts=datetime.datetime.fromtimestamp(m["ts_ms"]/1000).strftime("%H:%M:%S")
+print(f'   [{ts}] {m["from"]} -> {m["to"]}' + (f'  ({m["subject"]})' if m.get("subject") else ''))
+print('      ' + (m.get("body") or "")[:400])
+PYIN
+      done
+      echo "$total" > "$(polled_file "$who")"
+      echo "[poll] STILL UNREAD until you run: tools/comms.sh read $who"
       beats=0
     else
       beats=$((beats+1))

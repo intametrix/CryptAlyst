@@ -128,6 +128,23 @@ once, briefly, in its acknowledgement — then complies.
 the other cannot execute against. Sharing it at the moment it is issued is what
 makes "the team figures out how" possible instead of aspirational.
 
+## Rule 0c — polling must not consume
+
+**Added after a real failure, again.** `poll` originally marked messages read as
+it printed them. Because poll runs as a background job, its output went
+somewhere nobody looks: mail was being **consumed invisibly**. Another agent
+replied `AGREE` with three amendments, the offset advanced, `status` reported
+"0 unread", and the human had to tell us the reply had been sent.
+
+Polling and reading are now separate operations with separate offsets:
+
+- `poll` **notifies** — prints new mail, advances only its own `.polled` offset,
+  and says `STILL UNREAD until you run: comms.sh read <who>`.
+- `read` **consumes** — advances the read offset and clears the attention flag.
+
+**The check that matters:** `comms.sh status` shows the unread count. If it is
+non-zero, you have not read your mail, no matter what your poll loop printed.
+
 ## Signalling vocabulary
 
 Adopted from KIMI's proposal. Every message subject starts with one of these, so

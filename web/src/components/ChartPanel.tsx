@@ -883,6 +883,26 @@ export function ChartPanel({
     if (handles === null || disposedRef.current || live === null) return;
 
     const time: Time = barTime({ ...live });
+    /**
+     * `series.update()` only accepts a time **at or after** the last one and
+     * throws otherwise ("Cannot update oldest data") — and a throw inside the
+     * library during a render pass takes the whole tree down with it, which is a
+     * blank dashboard rather than a wrong candle.
+     *
+     * So the live payload is checked before it is applied: a bar at the last
+     * known time updates in place, one exactly one interval later may append, and
+     * anything out of order is ignored — the reconciliation fetch is what
+     * re-bases the series, not a stray payload.
+     */
+    const lastTime = liveStateRef.current.lastBarTime;
+    if (lastTime !== null) {
+      const intervalSec = (INTERVAL_MS[interval] ?? 60_000) / 1000;
+      const delta = time - lastTime;
+      const inPlace = delta === 0;
+      const appends = delta > 0 && delta <= intervalSec * 1.5;
+      if (!inPlace && !appends) return;
+    }
+
     handles.candles.update({ time, open: live.o, high: live.h, low: live.l, close: live.c });
     handles.volume.update({ time, value: live.v, color: volumeColor(live) });
 
