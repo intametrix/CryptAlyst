@@ -1789,6 +1789,32 @@ tr.selected {
   color: #ffd58a;
 }
 
+.pane-flow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: help;
+}
+
+.pane-flow-state {
+  font-size: 9px;
+  color: var(--muted-2);
+}
+
+/* The two empty states must be visibly different: quiet is normal, untracked is
+   a coverage gap. Neither is an error. */
+.pane-flow-quiet .pane-flow-state {
+  color: var(--sev-watch);
+}
+
+.pane-flow-untracked .pane-flow-state {
+  color: var(--c-reversal);
+}
+
+.pane-flow-ready .pane-flow-state {
+  color: var(--c-up);
+}
+
 .chart-pane-labels {
   display: flex;
   gap: 6px;

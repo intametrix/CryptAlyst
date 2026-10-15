@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { UTCTimestamp } from 'lightweight-charts';
 import {
   CandlestickSeries,
   ColorType,
@@ -6,11 +7,13 @@ import {
   HistogramSeries,
   LineSeries,
   LineStyle,
+  PriceScaleMode,
   createChart,
   createSeriesMarkers,
   type IChartApi,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
+  type IPriceLine,
   type SeriesMarker,
   type Time,
 } from 'lightweight-charts';
@@ -35,6 +38,8 @@ import { clock, int, isoUtc, multiple, num, px, share, text, usd } from '../form
 import type { ColorCanon } from '../colors';
 import { saveChipState, getLayout } from '../layout';
 import { INTERVAL_MS, LIVE_POLL_MS, bucketStart, liveIndicator, useKlines } from '../hooks/useKlines';
+import { useFlowHistory, type FlowHistoryState } from '../hooks/useFlowHistory';
+import { resolvePalette } from '../palette';
 import { useElementSize } from '../hooks/useElementSize';
 import { INTERVALS, type Interval, type ToolsMsg } from '../types';
 import { eventIdentity } from '../colors';
@@ -92,6 +97,15 @@ const MARK_SAMPLES: readonly {
 const PANE_INDICATOR_PX = { atr: 84, adx: 92, rsi: 84 } as const;
 /** Indicator panes shrink to these floors before the price pane gives up space. */
 const PANE_MIN_PX = { atr: 40, adx: 44, rsi: 40 } as const;
+/**
+ * The flow pane's own height.
+ *
+ * It is the evidence layer — the pane that shows *why* the detector fired — so it
+ * is given a readable floor rather than the sliver a pure proportional split left
+ * it (measured at 24–28px, which shows nothing).
+ */
+const FLOW_PANE_TARGET_PX = 108;
+const FLOW_PANE_MIN_PX = 64;
 /** Height the time/price axes take inside the box; the panes split the rest. */
 const AXIS_ALLOWANCE_PX = 30;
 
@@ -183,6 +197,17 @@ export interface ChartProbe {
     /** The interval the loaded bars belong to, from the payload. */
     interval: string;
   };
+  /**
+   * What the flow pane is drawing: the bar heights (the burst multiples) and the
+   * baseline the reference line sits on. Acceptance is "a visible burst bar whose
+   * height matches the payload", which needs the drawn values, not the source.
+   */
+  flow: () => {
+    values: number[];
+    baseline: number | null;
+    paneHeight: number;
+    status: string;
+  };
 }
 
 interface ChartHandles {
@@ -193,6 +218,17 @@ interface ChartHandles {
   markers: ISeriesMarkersPluginApi<Time>;
   /** Pane index for each indicator pane, resolved after panes are created. */
   paneIndex: Record<'atr' | 'adx' | 'rsi', number>;
+  /**
+   * The flow pane: one histogram bar per 10-second bin, `burst_multiple` tall.
+   *
+   * This is the evidence layer. A 1s candle shows price, not the abnormal
+   * quote-volume burst the detector actually thresholds on, so without this pane
+   * a user watching a 5-second zoom has no way to see *why* an alert fired.
+   */
+  flow: ISeriesApi<'Histogram'>;
+  flowPaneIndex: number;
+  /** The reference line at 1.0× — normal flow. */
+  flowBaseline: IPriceLine;
 }
 
 /** Resolve the pane index an indicator's pane landed in (v5 exposes `panes()`). */
@@ -200,6 +236,11 @@ function resolvePaneIndex(chart: IChartApi, want: number): number {
   const panes = chart.panes();
   if (want >= 0 && want < panes.length) return want;
   return Math.max(0, panes.length - 1);
+}
+
+/** The pane index a just-added series landed in, for `priceScale(id, pane)`. */
+function flowPaneIndexOrZero(chart: IChartApi): number {
+  return Math.max(0, chart.panes().length - 1);
 }
 
 /**
@@ -376,6 +417,33 @@ function buildChart(
     });
   }
 
+  // --- the flow pane: burst multiple per 10-second bin -----------------------
+  // Log scale on purpose: bursts are heavy-tailed, so one 47x bar would flatten
+  // every other bin on a linear axis. `logarithmic` is a valid `PriceScaleMode`
+  // in the installed typings (verified in `typings.d.ts`).
+  const flowPane = chart.addPane();
+  const flow = flowPane.addSeries(HistogramSeries, {
+    priceScaleId: 'right',
+    priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+    priceLineVisible: false,
+    lastValueVisible: true,
+    base: 0,
+    title: 'flow burst',
+  });
+  chart.priceScale('right', flowPaneIndexOrZero(chart)).applyOptions({
+    mode: PriceScaleMode.Logarithmic,
+    borderColor: '#1e2636',
+  });
+  // The 1.0 reference line: the boundary between normal and abnormal flow.
+  const flowBaseline = flow.createPriceLine({
+    price: 1,
+    color: '#8492a9',
+    lineWidth: 1,
+    lineStyle: LineStyle.Dashed,
+    axisLabelVisible: true,
+    title: '1.0x baseline',
+  });
+
   const markers = createSeriesMarkers(candles, []);
 
   // --- measurement surface (inert unless a test asks for it) ----------------
@@ -402,6 +470,17 @@ function buildChart(
     paneSizes: () => {
       const sizes = chart.panes().map((pane, i) => (i === 0 ? 0 : pane.getHeight()));
       return { price: chart.paneSize(0).height, indicators: sizes.slice(1) };
+    },
+    flow: () => {
+      const data = flow.data() as readonly { value?: number }[];
+      return {
+        values: data.map((p) => (typeof p.value === 'number' ? p.value : 0)),
+        // The reference line is created at 1.0; `options()` reads it back from the
+        // library rather than trusting a constant kept alongside.
+        baseline: flowBaseline.options().price,
+        paneHeight: chart.paneSize(chart.panes().length - 1).height,
+        status: '',
+      };
     },
     timeScale: () => {
       const range = chart.timeScale().getVisibleLogicalRange();
@@ -452,6 +531,9 @@ function buildChart(
       adx: resolvePaneIndex(chart, 2),
       rsi: resolvePaneIndex(chart, 3),
     },
+    flow,
+    flowPaneIndex: resolvePaneIndex(chart, 4),
+    flowBaseline,
   };
 
   return handles;
@@ -513,6 +595,10 @@ export interface ChartPanelProps {
   tickerAtMs?: number | null;
   /** The canonical palette; the chart draws with the server's own colours. */
   canon?: ColorCanon | null;
+  /** Toggle the flow pane with the other chart elements. */
+  showFlow?: boolean;
+  /** The flow pane's own history state, reported up for the label and legend. */
+  onFlowState?: (state: FlowHistoryState) => void;
   /** The shared selected event (a bar open time in epoch ms), or `null`. */
   selectedEvent?: number | null;
   /** Reports a marker click / chart click so the caller can share the selection. */
@@ -558,6 +644,8 @@ export function ChartPanel({
   tickerTick = null,
   tickerAtMs = null,
   canon = null,
+  showFlow = true,
+  onFlowState,
   selectedEvent = null,
   onSelectEvent,
   bottom = null,
@@ -599,6 +687,14 @@ export function ChartPanel({
   const { data, loading, refreshing, error, atMs, live, liveAtMs, polling, refresh } = useKlines(symbol, interval, {
     active: true,
   });
+  /**
+   * The 10-second flow bins for this symbol.
+   *
+   * Fetched from `/api/flow/history`, which returns the ratio the detector
+   * thresholds on. Three states are distinguished: `ready`, `quiet` (tracked but
+   * no flow — drawn flat) and `untracked` (a 404 — a coverage gap, not an error).
+   */
+  const flowHistory = useFlowHistory(symbol);
   /** The forming candle's identity, shared by the poll and the SSE tick. */
   const liveStateRef = useRef<{ lastBarTime: number | null; lastOpen: number | null; lastClose: number | null }>({
     lastBarTime: null,
@@ -759,6 +855,15 @@ export function ChartPanel({
       if (panes[item.index].getHeight() !== want) panes[item.index].setHeight(want);
     });
 
+    // The flow pane holds a readable floor of its own, capped so it cannot
+    // dominate a short box.
+    const flowHeight = Math.max(FLOW_PANE_MIN_PX, Math.min(FLOW_PANE_TARGET_PX, Math.round(available * 0.22)));
+    const flowIndex = handles.flowPaneIndex;
+    if (flowIndex > 0 && flowIndex < panes.length) {
+      reserved += flowHeight;
+      if (panes[flowIndex].getHeight() !== flowHeight) panes[flowIndex].setHeight(flowHeight);
+    }
+
     // The price pane takes everything left, with a sane floor.
     const priceHeight = Math.max(60, available - reserved);
     if (panes[0].getHeight() !== priceHeight) panes[0].setHeight(priceHeight);
@@ -850,6 +955,10 @@ export function ChartPanel({
   // Hand the controls to the caller once they exist, and withdraw them on
   // unmount so a stale closure cannot act on a disposed chart.
   useEffect(() => {
+    onFlowState?.(flowHistory);
+  }, [flowHistory, onFlowState]);
+
+  useEffect(() => {
     const sink = zoomSinkRef.current;
     if (sink === undefined) return;
     sink({ applyPreset: applyZoomPreset, canZoomLocally, reset: resetZoom, readySeq });
@@ -927,6 +1036,18 @@ export function ChartPanel({
 
   const hoveredMarks = hover === null ? [] : marksByTime.get(Number(hover.key)) ?? [];
 
+  /** A one-line read of the flow pane, for its tooltip. */
+  const flowSummary = useMemo(() => {
+    if (flowHistory.status === 'untracked') return 'this symbol is not tracked for flow';
+    if (flowHistory.status === 'quiet') return 'tracked, but no flow in the window';
+    if (flowHistory.status === 'loading') return 'loading';
+    if (flowHistory.status === 'error') return 'flow history unavailable';
+    const bins = flowHistory.bins;
+    if (bins.length === 0) return 'no bins';
+    const peak = bins.reduce((best, bin) => (bin.burstMultiple > best.burstMultiple ? bin : best), bins[0]);
+    return `${multiple(peak.burstMultiple)} peak · ${usd(peak.flowQuote)} in that bin`;
+  }, [flowHistory]);
+
   /* -- initial data into the series ----------------------------------------- */
 
   // `setData` is deliberately confined to this effect: it is the initial load
@@ -955,6 +1076,25 @@ export function ChartPanel({
       lastClose: last === null ? null : last.c,
     };
   }, [bars, overlaySeries, data]);
+
+  /* -- the flow pane's data -------------------------------------------------- */
+
+  // Bars are coloured from the canonical palette: above the 1.0 baseline is the
+  // "up" token, below it the "down" token. A second colour language for this pane
+  // is exactly what the canon exists to prevent.
+  useEffect(() => {
+    const handles = chartRef.current;
+    if (handles === null || disposedRef.current) return;
+    const palette = resolvePalette();
+    const points = flowHistory.bins.map((bin) => ({
+      time: Math.floor(bin.t / 1000) as UTCTimestamp,
+      value: bin.burstMultiple,
+      color: bin.burstMultiple >= 1 ? palette.up : palette.down,
+    }));
+    // `setData` is correct here: the flow history is a whole series, not an
+    // increment, and it arrives on the same cadence as the candles' history.
+    handles.flow.setData(points);
+  }, [flowHistory.bins]);
 
   /* -- reconciliation: re-anchor the volume counter from the poll ------------ */
 
@@ -1168,7 +1308,8 @@ export function ChartPanel({
       series.applyOptions({ visible: enabledKeys.has(key) });
     }
     handles.volume.applyOptions({ visible: showVolume });
-  }, [enabledKeys, showVolume, data]);
+    handles.flow.applyOptions({ visible: showFlow });
+  }, [enabledKeys, showVolume, showFlow, data]);
 
   /* -- latest values in the footer ------------------------------------------- */
 
@@ -1427,14 +1568,45 @@ export function ChartPanel({
                   </div>
                 }
                 second={
-                  <div className="chart-pane-labels" aria-hidden="true">
+                  <div className="chart-pane-labels">
                     {(['atr', 'adx', 'rsi'] as const)
                       .filter((pane) => [...enabledKeys].some((key) => paneOf(key) === pane))
                       .map((pane) => (
-                        <span key={pane} className="pane-label" style={{ borderColor: PANE_TINT[pane] }}>
+                        <span key={pane} className="pane-label" style={{ borderColor: PANE_TINT[pane] }} aria-hidden="true">
                           {pane.toUpperCase()}
                         </span>
                       ))}
+                    {/*
+                      The flow pane's own label carries its state, because the two
+                      empty cases are different things: a tracked-but-quiet symbol
+                      is drawn flat, while an untracked one is a coverage gap and
+                      must not look like a failure.
+                    */}
+                    {showFlow && (
+                      <Tooltip
+                        keys={['flow_burst']}
+                        tools={tools}
+                        fallbackTitle="Flow pane — burst multiple"
+                        label="Each bar is one 10-second bin: its traded quote value divided by that symbol's own baseline for the same window. The dashed line is 1.0x, normal flow. The axis is logarithmic because bursts are heavy-tailed — one 47x bar would flatten every other bin on a linear axis. Bins share the time scale with the candles, so both zoom as one gesture; at a 5s or 10s zoom there is at most one bin in view, which is why the candle pane does the work there."
+                        value={flowSummary}
+                        tone="stat"
+                      >
+                        <span className={`pane-label pane-flow pane-flow-${flowHistory.status}`} tabIndex={0}>
+                          FLOW · 10s
+                          <span className="pane-flow-state">
+                            {flowHistory.status === 'ready'
+                              ? `${int(flowHistory.bins.length)} bins`
+                              : flowHistory.status === 'quiet'
+                                ? 'quiet'
+                                : flowHistory.status === 'untracked'
+                                  ? 'not tracked'
+                                  : flowHistory.status === 'loading'
+                                    ? 'loading…'
+                                    : 'unavailable'}
+                          </span>
+                        </span>
+                      </Tooltip>
+                    )}
                   </div>
                 }
               />

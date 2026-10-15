@@ -200,6 +200,15 @@ export const LOCAL_INDICATORS: Readonly<Record<string, ToolEntry>> = {
     reading: 'Breakouts can arrive as batch alerts, so check the snapshot age.',
     units: 'text',
   },
+  flow_burst: {
+    title: 'Flow pane — burst multiple',
+    formula: 'flow_quote / baseline_quote, per 10-second bin',
+    meaning:
+      'Each bar is one ten-second window: the quote value traded in it, divided by that symbol\u2019s own baseline for the same window. It is the number the onset detector actually thresholds on.',
+    reading:
+      'The dashed line is 1.0x — normal flow. Above it, volume arrived faster than this symbol usually manages; 8x is the alert gate and 20x+ is exceptional. Flow and price answer different questions: a candle shows what price did, this pane shows whether abnormal volume caused it.',
+    units: 'x baseline',
+  },
   live: {
     title: 'Live updates',
     formula: 'GET /api/klines/latest polled every second, plus SSE price ticks',
