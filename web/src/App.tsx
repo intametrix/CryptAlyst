@@ -3,7 +3,7 @@ import { MAX_ALERTS, useEventStream } from './api';
 import { AlertFeed } from './components/AlertFeed';
 import { ChartPanel } from './components/ChartPanel';
 import { ChartOverlay } from './components/ChartOverlay';
-import { EventsPanel, type ZoomPreset } from './components/EventsPanel';
+import { EventsPanel } from './components/EventsPanel';
 import type { ChartZoomControls } from './components/ChartPanel';
 import type { ChartMarker } from './chartData';
 import { SplitPane } from './components/Panel';
@@ -22,8 +22,9 @@ import { SelectionProvider, readUrlState, useSelection, writeUrlState } from './
 import { Tooltip } from './components/Tooltip';
 import { useTicker } from './hooks/useTicker';
 import { TICKER_SEED_URL } from './hooks/useKlines';
-import { useColorCanon, useTools } from './useTools';
-import type { AlertMsg, FlowRow, ScreenRow, Setup, SetupPlan, SymbolDetailMsg, ScreenMsg, SurveyMsg } from './types';
+import { useColorCanon, useTools, useZoomPlan } from './useTools';
+import { presetAction, type ZoomPreset } from './zoom';
+import { isInterval, type AlertMsg, type FlowRow, type ScreenRow, type Setup, type SetupPlan, type SymbolDetailMsg, type ScreenMsg, type SurveyMsg } from './types';
 import './styles.css';
 
 /** First usable symbol, so the chart has something to show before any click. */
@@ -74,27 +75,80 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   /** The chart's zoom controls, published upward so the panel can drive them. */
   const [zoomControls, setZoomControls] = useState<ChartZoomControls | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
-  const [historyLimited, setHistoryLimited] = useState(false);
+  const [presetPending, setPresetPending] = useState(false);
   const [eventsExpanded, setEventsExpanded] = useState<boolean>(() => readLayoutFlag('events.expanded', true));
+  /** The default interval a "reset" returns to. */
+  const defaultInterval = useRef(selection.interval);
+  /** A preset waiting for its interval to load; applied once the bars arrive. */
+  const pendingPreset = useRef<ZoomPreset | null>(null);
 
+  /**
+   * Apply a preset — from the series in memory when possible, by switching
+   * interval when the plan says otherwise.
+   *
+   * A 5-second window cannot be drawn from one-minute candles, so the fine
+   * presets name `1s` candles and selecting one *is* a fetch. Presenting that as
+   * a free zoom (or, worse, silently showing a 5s window of 1m candles) is the
+   * bug this replaces.
+   */
   const handleZoomPreset = useCallback(
     (preset: ZoomPreset) => {
-      const controls = zoomControlsRef.current;
-      if (controls === null) return;
-      const satisfied = controls.applyPreset(preset);
-      setActivePreset(preset.id);
-      // A preset that wanted more bars than are loaded says so rather than
-      // quietly fetching: the series in memory is the only source.
-      setHistoryLimited(!satisfied);
+      const action = presetAction(preset, selection.interval);
+      if (action === 'fit') {
+        zoomControlsRef.current?.reset();
+        setActivePreset(preset.preset);
+        setPresetPending(false);
+        return;
+      }
+      if (action === 'zoom') {
+        zoomControlsRef.current?.applyPreset(preset);
+        setActivePreset(preset.preset);
+        setPresetPending(false);
+        return;
+      }
+      // Interval switch: remember the preset, change the interval, and apply it
+      // once that interval's bars are loaded (the effect below).
+      pendingPreset.current = preset;
+      setActivePreset(preset.preset);
+      setPresetPending(true);
+      if (preset.interval !== undefined && isInterval(preset.interval)) {
+        selection.selectInterval(preset.interval);
+      }
     },
-    [],
+    [selection],
   );
 
+  /**
+   * Finish a pending preset once its interval has loaded.
+   *
+   * Keyed on the interval rather than on the bars, so it runs exactly when the
+   * switch completes; `applyPreset` then acts on the freshly loaded series.
+   */
+  useEffect(() => {
+    const preset = pendingPreset.current;
+    if (preset === null) return;
+    if (preset.interval === undefined || preset.interval !== selection.interval) return;
+    pendingPreset.current = null;
+    zoomControlsRef.current?.applyPreset(preset);
+    setPresetPending(false);
+  }, [selection.interval]);
+
+  /**
+   * Reset returns to the view the chart *opens* with: the default interval and
+   * the full history. If a preset switched the interval, reset switches it back —
+   * otherwise "reset" would leave the user somewhere they have never been.
+   */
   const handleResetZoom = useCallback(() => {
-    zoomControlsRef.current?.reset();
+    pendingPreset.current = null;
+    setPresetPending(false);
+    if (selection.interval !== defaultInterval.current) {
+      selection.selectInterval(defaultInterval.current);
+      // The interval change reloads the data; the new series opens fitted.
+    } else {
+      zoomControlsRef.current?.reset();
+    }
     setActivePreset(null);
-    setHistoryLimited(false);
-  }, []);
+  }, [selection]);
 
   const toggleEventsExpanded = useCallback(() => {
     setEventsExpanded((prev) => {
@@ -192,6 +246,8 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
    * render one event one way.
    */
   const canon = useColorCanon();
+  /** The zoom presets, straight from the server's plan. */
+  const zoomPlan = useZoomPlan();
 
   // A one-shot seed so the first candle update does not wait for a frame. The
   // SSE `ticker` channel remains the primary source after this.
@@ -287,7 +343,8 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
     // selected: reopening the chart must not restore an old zoom.
     setSelectedEvent(null);
     setActivePreset(null);
-    setHistoryLimited(false);
+    setPresetPending(false);
+    pendingPreset.current = null;
   }, [selection.symbol, selection.interval]);
 
   const resetEverything = useCallback(() => {
@@ -416,10 +473,12 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
                   events={chartEvents}
                   selected={selectedEvent}
                   onSelect={setSelectedEvent}
+                  presets={zoomPlan.presets}
                   onZoomPreset={handleZoomPreset}
                   onResetZoom={handleResetZoom}
                   activePreset={activePreset}
-                  historyLimited={historyLimited}
+                  presetPending={presetPending}
+                  loadedInterval={selection.interval}
                   expanded={eventsExpanded}
                   onToggleExpanded={toggleEventsExpanded}
                   tools={tools}

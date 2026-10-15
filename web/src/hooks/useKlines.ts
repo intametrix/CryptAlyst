@@ -21,8 +21,18 @@ export const TICKER_SEED_URL = '/api/ticker';
 /** API.md: `limit` is clamped by the backend to 2..1000; the spec asks for 300. */
 export const KLINES_LIMIT = 300;
 
+/**
+ * The exchange caps a 1-second kline response at 1000 bars (16.6 minutes), so a
+ * finer preset asks for that many and the coarse ones step up to `1m` — exactly
+ * what `/api/zoom-presets` publishes.
+ */
+export const KLINES_LIMIT_BY_INTERVAL: Readonly<Record<string, number>> = {
+  '1s': 1000,
+};
+
 /** Milliseconds per bar, by interval — used to bucket incoming live prices. */
 export const INTERVAL_MS: Readonly<Record<string, number>> = {
+  '1s': 1_000,
   '1m': 60_000,
   '5m': 300_000,
   '15m': 900_000,
@@ -186,7 +196,8 @@ export function useKlines(
 
     let cancelled = false;
     const controller = new AbortController();
-    const url = `/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${KLINES_LIMIT}&_r=${nonce}`;
+    const limit = KLINES_LIMIT_BY_INTERVAL[interval] ?? KLINES_LIMIT;
+    const url = `/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}&_r=${nonce}`;
 
     void (async () => {
       const body = await fetchJson<KlinesMsg>(url, controller.signal);

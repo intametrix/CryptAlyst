@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchJson } from './api';
 import { CANON_FALLBACK, applyCanonToCss, parseCanon, type ColorCanon } from './colors';
+import { ZOOM_PLAN_FALLBACK, parseZoomPlan, type ZoomPlan } from './zoom';
 import { LOCAL_TOOLS, resolveTooltip, type TooltipSpec } from './glossary';
 import type { ToolEntry, ToolsMsg } from './types';
 
@@ -38,6 +39,32 @@ export function useColorCanon(): ColorCanon {
   }, [canon]);
 
   return canon;
+}
+
+/**
+ * Fetch the zoom preset plan once.
+ *
+ * The buttons are rendered from the response, so the plan and the data cannot
+ * disagree. A failure is silent: the documented fallback is identical to the
+ * live response, so a cold start behaves the same.
+ */
+export function useZoomPlan(): ZoomPlan {
+  const [plan, setPlan] = useState<ZoomPlan>(ZOOM_PLAN_FALLBACK);
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    void (async () => {
+      const body = await fetchJson<unknown>('/api/zoom-presets', controller.signal);
+      if (cancelled) return;
+      const parsed = parseZoomPlan(body);
+      if (parsed !== null) setPlan(parsed);
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, []);
+  return plan;
 }
 
 export interface ToolsState {

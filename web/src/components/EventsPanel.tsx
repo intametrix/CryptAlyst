@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { clock, int, isoUtc, multiple, num, usd } from '../format';
+import { presetAction, type ZoomPreset } from '../zoom';
 import type { ChartMarker } from '../chartData';
 import { detectorLabel, prettifyEnum } from '../types';
 import type { ToolsMsg } from '../types';
@@ -7,26 +8,6 @@ import { KindBadge, SeverityBadge } from './Badges';
 import { EventGlyph } from './EventGlyph';
 import type { ColorCanon } from '../colors';
 import { Tooltip } from './Tooltip';
-
-/**
- * Zoom presets, in bars of the series they act on.
- *
- * The list is deliberately shared between the two callers below so the candle
- * presets and the flow-bin presets cannot drift apart. `null` means "everything".
- */
-export interface ZoomPreset {
-  id: string;
-  label: string;
-  bars: number | null;
-}
-
-export const ZOOM_PRESETS: readonly ZoomPreset[] = [
-  { id: '30s', label: '30s', bars: 3 },
-  { id: '2m', label: '2m', bars: 12 },
-  { id: '10m', label: '10m', bars: 60 },
-  { id: '1h', label: '1h', bars: 360 },
-  { id: 'all', label: 'all', bars: null },
-];
 
 /** A compact one-line summary of an event, for the list rows. */
 function rowSummary(mark: ChartMarker): string {
@@ -37,20 +18,26 @@ function rowSummary(mark: ChartMarker): string {
   return bits.join(' · ');
 }
 
+export type { ZoomPreset };
+
 export interface EventsPanelProps {
   /** Every mark for the charted symbol, newest first. */
   events: readonly ChartMarker[];
   /** The shared selection — the same value the chart highlights. */
   selected: number | null;
   onSelect: (time: number | null) => void;
-  /** Apply a preset (bar counts are interpreted by the chart). */
+  /** The presets to offer, straight from the server's plan. */
+  presets: readonly ZoomPreset[];
+  /** Apply a preset. */
   onZoomPreset: (preset: ZoomPreset) => void;
-  /** Restore the default view. */
+  /** Restore the default view — including the default interval. */
   onResetZoom: () => void;
-  /** Which preset the chart currently considers active, for the pressed state. */
+  /** Which preset is active, for the pressed state. */
   activePreset: string | null;
-  /** True when a preset wanted more history than is loaded. */
-  historyLimited: boolean;
+  /** True while a preset is waiting for its interval to load. */
+  presetPending: boolean;
+  /** The interval currently loaded, so a preset can say what it needs. */
+  loadedInterval: string;
   expanded: boolean;
   onToggleExpanded: () => void;
   tools: ToolsMsg | null;
@@ -73,10 +60,12 @@ export const EventsPanel = memo(function EventsPanel({
   events,
   selected,
   onSelect,
+  presets,
   onZoomPreset,
   onResetZoom,
   activePreset,
-  historyLimited,
+  presetPending,
+  loadedInterval,
   expanded,
   onToggleExpanded,
   tools,
@@ -181,50 +170,58 @@ export const EventsPanel = memo(function EventsPanel({
       {/* --- zoom presets ---------------------------------------------------- */}
       <div className="events-presets" role="group" aria-label="zoom presets">
         <span className="events-presets-label">zoom</span>
-        {ZOOM_PRESETS.map((preset) => (
-          <Tooltip
-            key={preset.id}
-            keys={['zoom']}
-            tools={tools}
-            fallbackTitle={`Zoom · ${preset.label}`}
-            label={
-              preset.bars === null
-                ? 'Fit the whole loaded history. Nothing is re-fetched: every preset is satisfied from the series already in memory.'
-                : `Show the newest ${preset.label} — ${int(preset.bars)} bars at the current interval.`
-            }
-            value={activePreset === preset.id ? 'active' : null}
-          >
-            <button
-              type="button"
-              className={`chip chip-toggle${activePreset === preset.id ? ' on' : ''}`}
-              aria-pressed={activePreset === preset.id}
-              onClick={() => onZoomPreset(preset)}
+        {presets.map((preset) => {
+          // The button says what it will actually do: a preset already covered by
+          // the loaded interval is a pure zoom, anything else is an interval
+          // switch — which is a fetch, and must not be presented as free.
+          const action = presetAction(preset, loadedInterval);
+          const needsSwitch = action === 'switch';
+          return (
+            <Tooltip
+              key={preset.preset}
+              keys={['zoom']}
+              tools={tools}
+              fallbackTitle={`Zoom · ${preset.preset}`}
+              label={
+                preset.mode === 'fit'
+                  ? 'Fit the whole loaded history.'
+                  : needsSwitch
+                    ? `Show the newest ${preset.preset} (${int(preset.bars)} bars of ${preset.interval} candles). It switches the chart to ${preset.interval} candles, which loads new data.`
+                    : `Show the newest ${preset.preset} — ${int(preset.bars)} bars already in memory, so this is a pure zoom.`
+              }
+              value={activePreset === preset.preset ? 'active' : null}
             >
-              {preset.label}
-            </button>
-          </Tooltip>
-        ))}
+              <button
+                type="button"
+                className={`chip chip-toggle${activePreset === preset.preset ? ' on' : ''}${needsSwitch ? ' chip-switch' : ''}`}
+                aria-pressed={activePreset === preset.preset}
+                disabled={presetPending}
+                onClick={() => onZoomPreset(preset)}
+              >
+                {preset.preset}
+                {needsSwitch && (
+                  <span className="chip-needs" aria-hidden="true">
+                    {preset.interval}
+                  </span>
+                )}
+              </button>
+            </Tooltip>
+          );
+        })}
         <Tooltip
           keys={['zoom']}
           tools={tools}
-          fallbackTitle="Reset zoom"
-          label="Restore the default view: the full loaded history. Escape and reopening the chart also reset it."
+          fallbackTitle="Reset"
+          label="Restore the view the chart opens with — the default interval and the full loaded history. Escape and reopening the chart do the same."
         >
           <button type="button" className="btn" onClick={onResetZoom}>
-            reset zoom
+            reset
           </button>
         </Tooltip>
-        {historyLimited && (
-          <Tooltip
-            keys={['history']}
-            tools={tools}
-            fallbackTitle="History limit"
-            label="This preset asked for more bars than are loaded, so it zoomed to what is available. Load more history by switching to a longer interval or reloading the chart."
-          >
-            <span className="events-limited" tabIndex={0}>
-              limited history
-            </span>
-          </Tooltip>
+        {presetPending && (
+          <span className="events-limited" title="switching interval to satisfy the preset">
+            loading…
+          </span>
         )}
       </div>
 

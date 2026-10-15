@@ -18,17 +18,47 @@ words, so the commitment is explicit rather than assumed.
 
 ## Rule 1 — Plan, share, agree, THEN build
 
-**No half-work. Ever.**
-
-Before writing code for anything larger than a one-line fix:
+**No half-work. Ever. And no building before the team has actually answered.**
 
 1. **Write the plan.** Goal, the split of work by owner, the acceptance test,
    and the open questions where you are genuinely unsure.
-2. **Share it with every agent** on the channel
-   (`tools/comms.sh send <agent> "..."`), labelled `PLAN <id>`.
-3. **Get agreement.** Each agent replies `AGREE`, or `DISAGREE <reason>`, or
-   `AMEND <change>`. Silence is not agreement — chase it.
+2. **Share it with every agent** on the channel, labelled `PLAN <id>`.
+3. **WAIT for a real reply.** Each agent replies `AGREE`, `DISAGREE <reason>` or
+   `AMEND <change>`. **Silence is not agreement.** Check the mailbox with
+   `comms.sh status` before proceeding — a zero unread count is the only proof
+   that the team has been heard.
 4. **Only then build.**
+
+### A SYNC after the fact is NOT a discussion
+
+This rule was strengthened after a real failure. An agent built a feature,
+dispatched the UI work, **and only then** sent the other agent a message
+labelled `SYNC` describing what it had done. The other agent happened to agree,
+which is exactly what makes the failure dangerous: had it disagreed, the work
+was already built and shipped.
+
+The difference is not cosmetic:
+
+| | |
+|---|---|
+| **Discussion** | "Here is the plan and my reasoning. Do you agree?" — *then* build. |
+| **Announcement** | "Here is what I built." — the decision is already made. |
+
+Label it honestly. If the other agent's input cannot change the outcome, you are
+announcing, not discussing, and you should say so plainly.
+
+### Quoting: `$` will be eaten
+
+Two messages in a row were corrupted because `$5,000` inside double quotes had
+`$5` expanded away, arriving as `,000`. A number that arrives mangled is worse
+than no number, because it looks like a value.
+
+**Use single quotes** for any message containing `$`, backticks, or `!`:
+
+```bash
+tools/comms.sh send kimi 'the floor is $5,000 in the window'   # correct
+tools/comms.sh send kimi "the floor is $5,000 in the window"   # arrives as ",000"
+```
 
 The failure this prevents is real and happened: an agent began implementing a
 feature, the work was interrupted half-applied, and it left `go build ./...`

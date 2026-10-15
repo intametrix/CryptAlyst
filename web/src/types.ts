@@ -334,10 +334,17 @@ export type StreamMsg =
 /* ------------------------------------------------------------------ charting */
 
 /** Chart intervals documented in API.md ("Charting & indicators (added)"). */
-export type Interval = '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
+/**
+ * Chart intervals.
+ *
+ * `1s` is first-class: the backend serves one-second candles (the exchange caps
+ * such a response at 1000 bars, which is why the finer zoom presets use `1s` and
+ * the coarser ones step up to `1m`).
+ */
+export type Interval = '1s' | '1m' | '5m' | '15m' | '1h' | '4h' | '1d';
 
 /** Selectable intervals, in ascending timeframe order. */
-export const INTERVALS: readonly Interval[] = ['1m', '5m', '15m', '1h', '4h', '1d'];
+export const INTERVALS: readonly Interval[] = ['1s', '1m', '5m', '15m', '1h', '4h', '1d'];
 
 /** True when `v` is one of the documented intervals. */
 export function isInterval(v: unknown): v is Interval {

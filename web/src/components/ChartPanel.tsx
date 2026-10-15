@@ -40,7 +40,7 @@ import { INTERVALS, type Interval, type ToolsMsg } from '../types';
 import { eventIdentity } from '../colors';
 import { EventGlyph } from './EventGlyph';
 import { SplitPane } from './Panel';
-import type { ZoomPreset } from './EventsPanel';
+import { presetAction, type ZoomPreset } from '../zoom';
 import { Tooltip } from './Tooltip';
 
 /* --------------------------------------------------------------- appearance */
@@ -171,7 +171,18 @@ export interface ChartProbe {
   updates: { candle: number; volume: number; line: number };
   painted: () => boolean;
   paneSizes: () => { price: number; indicators: number[] };
-  timeScale: () => { from: number | null; to: number | null; bars: number };
+  timeScale: () => {
+    from: number | null;
+    to: number | null;
+    bars: number;
+    /** Bar count currently in view. */
+    visible: number;
+    /** Epoch ms of the first and last visible bar, for a readable report. */
+    firstMs: number | null;
+    lastMs: number | null;
+    /** The interval the loaded bars belong to, from the payload. */
+    interval: string;
+  };
 }
 
 interface ChartHandles {
@@ -213,7 +224,12 @@ function seriesTitle(tools: ToolsMsg | null, keys: readonly string[], rawFallbac
   return rawFallback;
 }
 
-function buildChart(container: HTMLElement, bars: readonly SafeBar[], tools: ToolsMsg | null): ChartHandles {
+function buildChart(
+  container: HTMLElement,
+  bars: readonly SafeBar[],
+  tools: ToolsMsg | null,
+  label: { interval: string },
+): ChartHandles {
   const chart = createChart(container, {
     autoSize: false,
     layout: {
@@ -389,7 +405,24 @@ function buildChart(container: HTMLElement, bars: readonly SafeBar[], tools: Too
     },
     timeScale: () => {
       const range = chart.timeScale().getVisibleLogicalRange();
-      return { from: range?.from ?? null, to: range?.to ?? null, bars: bars.length };
+      const from = range?.from ?? null;
+      const to = range?.to ?? null;
+      // Report *times*, not indices: "a 5s preset showed 5 bars" is only
+      // checkable against the data, and an index can silently mean anything.
+      const at = (index: number): number | null => {
+        if (bars.length === 0) return null;
+        const i = Math.max(0, Math.min(bars.length - 1, Math.round(index)));
+        return bars[i].t;
+      };
+      return {
+        from,
+        to,
+        bars: bars.length,
+        visible: from === null || to === null ? bars.length : Math.max(0, Math.round(to - from)),
+        firstMs: from === null ? null : at(from),
+        lastMs: to === null ? null : at(to),
+        interval: label.interval,
+      };
     },
   };
 
@@ -443,6 +476,8 @@ export interface ChartZoomControls {
    * fetching.
    */
   applyPreset: (preset: ZoomPreset) => boolean;
+  /** True when the preset's interval is the one already loaded. */
+  canZoomLocally: (preset: ZoomPreset) => boolean;
   /** Restore the default (full history) view. */
   reset: () => void;
 }
@@ -661,7 +696,7 @@ export function ChartPanel({
     if (container === null || symbol === null || bars.length === 0) return;
 
     disposedRef.current = false;
-    const handles = buildChart(container, bars, tools);
+    const handles = buildChart(container, bars, tools, { interval });
     chartRef.current = handles;
 
     // Size to the measured box right away; the ResizeObserver effect keeps it in
@@ -770,18 +805,25 @@ export function ChartPanel({
       if (handles === null || disposedRef.current) return false;
       const total = bars.length;
       if (total === 0) return false;
-      if (preset.bars === null) {
+      if (preset.mode === 'fit' || preset.bars === undefined) {
         handles.chart.timeScale().fitContent();
         return true;
       }
       const last = total - 1;
       const from = Math.max(0, last - preset.bars + 1);
       handles.chart.timeScale().setVisibleLogicalRange({ from, to: last + 1 });
-      // False means the preset asked for more bars than are loaded; the caller
-      // surfaces a "limited history" affordance instead of silently fetching.
+      // False means the preset asked for more bars than are loaded. The caller
+      // never fetches to satisfy a zoom; it only switches interval when the plan
+      // says a different interval is required.
       return last - from + 1 >= preset.bars;
     },
     [bars.length],
+  );
+
+  /** Can this preset be satisfied from the bars already loaded? */
+  const canZoomLocally = useCallback(
+    (preset: ZoomPreset): boolean => presetAction(preset, interval) === 'zoom' && preset.mode !== 'fit',
+    [interval],
   );
 
   const resetZoom = useCallback(() => {
@@ -796,9 +838,9 @@ export function ChartPanel({
   useEffect(() => {
     const sink = zoomSinkRef.current;
     if (sink === undefined) return;
-    sink({ applyPreset: applyZoomPreset, reset: resetZoom });
+    sink({ applyPreset: applyZoomPreset, canZoomLocally, reset: resetZoom });
     return () => sink(null);
-  }, [applyZoomPreset, resetZoom]);
+  }, [applyZoomPreset, canZoomLocally, resetZoom]);
 
   const zoomToEvent = useCallback(
     (timeMs: number): void => {

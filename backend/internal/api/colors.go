@@ -149,6 +149,12 @@ func (s *Server) handleZoomPresets(w http.ResponseWriter, r *http.Request) {
 		"presets":           presets,
 		"reset":             "reset zoom restores the default view",
 		"allowed_intervals": []string{"1s", "1m", "5m", "15m", "1h", "4h", "1d"},
+		// Published so the UI can DISABLE anything implying deeper 1s history,
+		// rather than letting the user discover the cap as a truncated chart.
+		// A silently short chart reads as missing data, not as a limit.
+		"max_bars_1s":        1000,
+		"deepest_1s_preset":  "5m",
+		"deepest_1s_seconds": 1000,
 		"note": "Presets finer than the currently loaded interval require an interval " +
 			"switch, which IS a data fetch. Only presets within the loaded interval are " +
 			"pure zoom.",
