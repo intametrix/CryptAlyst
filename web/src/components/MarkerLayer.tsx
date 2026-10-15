@@ -60,12 +60,12 @@ export function MarkerLayer({
         // `timeToCoordinate` returns null for a bar outside the visible range,
         // which is the natural way to hide off-screen badges.
         if (x === null) continue;
-        // Vertically: below the bar's low for a pump, above its high for a dump.
-        // The price itself is not on the marker, so the candle series converts
-        // the pane's top/bottom and the badge is offset from there — that keeps
-        // it clear of the body and wicks at every zoom level.
-        const pane = chart.paneSize(0);
-        const y = marker.direction === 1 ? pane.height - 18 : 12;
+        // Vertically: below the bar's low for a pump, above its high for a dump,
+        // so the badge is anchored to the event's own bar rather than floating in
+        // the pane. The candle series converts price to a pixel.
+        const price = marker.direction === 1 ? marker.low : marker.high;
+        const anchor = price === undefined ? null : series.priceToCoordinate(price);
+        const y = anchor === null ? chart.paneSize(0).height / 2 : marker.direction === 1 ? anchor + 6 : anchor - 26;
         next.push({ marker, x, y });
       }
       setPlaced(next);

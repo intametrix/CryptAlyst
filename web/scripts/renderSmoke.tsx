@@ -107,6 +107,9 @@ import { SymbolDrilldown } from '../src/components/SymbolDrilldown';
 import { FlowSplit } from '../src/components/FlowSplit';
 import { OutlookStrip } from '../src/components/OutlookStrip';
 import { parseOutlook } from '../src/hooks/useOutlook';
+import { parseCanon, CANON_FALLBACK } from '../src/colors';
+import { EventGlyph } from '../src/components/EventGlyph';
+import { toMarkers } from '../src/chartData';
 import { LIVE_FLOW_SPLIT, LIVE_OUTLOOK } from './livePayloads';
 import { TooltipViewer } from '../src/components/TooltipViewer';
 import { HeatProvider } from '../src/heatContext';
@@ -658,6 +661,31 @@ if (liveBasis !== '') {
   ok('the short-horizon basis is quoted verbatim', outlookHtml.includes(liveBasis), liveBasis);
 }
 ok('the outlook strip never renders undefined', !outlookHtml.includes('>undefined<'));
+
+// --- the canon's text colour, in the badge itself -------------------------
+// A pump must be a bright-green fill with black text, everywhere.
+const parsedCanon = parseCanon(CANON_FALLBACK);
+/** A minimal bar set, so the marker path can be exercised with no fixtures. */
+const smokeBars = Array.from({ length: 4 }, (_, i) => ({
+  t: 1_800_000_000_000 + i * 60_000, o: 100, h: 101, l: 99, c: 100.5, v: 5, q: 500, n: 2, tb: 0.5,
+}));
+const pumpGlyph = renderToStaticMarkup(<EventGlyph kind="PUMP" canon={parsedCanon} size="sm" />);
+const pumpText = /data-text-color="([^"]*)"/.exec(pumpGlyph)?.[1] ?? null;
+const pumpFill = /data-color="([^"]*)"/.exec(pumpGlyph)?.[1] ?? null;
+ok('the pump badge fill is the canon direction colour', pumpFill === parsedCanon?.direction.up, `${pumpFill} vs ${parsedCanon?.direction.up}`);
+ok('the pump badge text is the canon text colour', pumpText === parsedCanon?.text.up, `${pumpText} vs ${parsedCanon?.text.up}`);
+ok('the pump badge letter is P', /data-letter="P"/.test(pumpGlyph));
+ok(
+  'the fill and its text are a legible pair (dark on the bright fill)',
+  pumpText !== null && /^#0[0-9a-f]{5}$/i.test(pumpText),
+  pumpText ?? 'null',
+);
+const dumpGlyph = renderToStaticMarkup(<EventGlyph kind="DUMP" canon={parsedCanon} size="sm" />);
+ok('the dump badge text is the canon text colour', /data-text-color="([^"]*)"/.exec(dumpGlyph)?.[1] === parsedCanon?.text.down);
+// The marker path resolves the identity identically, so the chart's badge cannot
+// differ from the toolbar's.
+const pumpMarker = toMarkers([{ t: 1_800_000_000_000, kind: 'PUMP', severity: 'CRITICAL', color: '#00e676' }], smokeBars, parsedCanon)[0];
+ok('the chart marker uses the canon fill', pumpMarker.color === parsedCanon?.direction.up, pumpMarker.color);
 
 // Tooltips are wired for keyboard and pointer.
 ok('tooltips use role=tooltip', true); // rendered on open only; the trigger wiring is asserted next

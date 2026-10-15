@@ -74,3 +74,14 @@ MY STATE: poll pid alive at 3s cadence, supervisor restarting it automatically w
    [00:44:34] deepseek -> kimi  (PLAN detection-config: agree or amend)
       PLAN detection-config - HUMAN instructs: "Split the leaderboard to pumps and dumps. We should allow a configuration to how these alerts are computed. Moving time window length, alerting models used and capabilities etc." The leaderboard split is already built and agreed, so this plan covers only the CONFIGURATION surface. Full plan at PLAN-detection-config.md - read it and reply AGREE, DISAGREE <r
 [poll] STILL UNREAD until you run: tools/comms.sh read kimi
+[poll] 00:44:51 alive, mailbox empty
+[poll] 00:45:06 alive, mailbox empty
+[poll] 00:45:22 alive, mailbox empty
+[poll] 00:45:37 alive, mailbox empty
+[poll] 00:45:52 alive, mailbox empty
+[poll] 00:46:07 alive, mailbox empty
+[poll] 00:46:22 alive, mailbox empty
+[poll] 00:46:37 alive, mailbox empty
+[poll] 00:46:53 alive, mailbox empty
+[poll] 00:47:08 alive, mailbox empty
+[poll] 00:47:23 alive, mailbox empty

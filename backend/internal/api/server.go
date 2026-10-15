@@ -210,6 +210,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/flow", s.handleFlow)
 	mux.HandleFunc("/api/flow/history", s.handleFlowHistory)
 	mux.HandleFunc("/api/alerts", s.handleAlerts)
+	mux.HandleFunc("/api/alerts/history", s.handleAlertHistory)
+	mux.HandleFunc("/api/alerts/groups", s.handleAlertGroups)
 	mux.HandleFunc("/api/screen", s.handleScreen)
 	mux.HandleFunc("/api/screen/refresh", s.handleScreenRefresh)
 	mux.HandleFunc("/api/survey", s.handleSurvey)
@@ -520,6 +522,36 @@ func absMove(row flow.Candidate) float64 {
 		return -move
 	}
 	return move
+}
+
+// handleAlertHistory queries the FULL retained alert history on disk, as
+// opposed to the in-memory ring the live feed uses.
+func (s *Server) handleAlertHistory(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Alerts == nil {
+		http.Error(w, "alert history unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	query := r.URL.Query()
+	symbol := strings.ToUpper(strings.TrimSpace(query.Get("symbol")))
+	since := int64(queryInt(r, "since_ms", 0))
+	limit := queryInt(r, "limit", 200)
+
+	alerts, total, err := s.deps.Alerts.ReadHistory(symbol, since, limit)
+	if err != nil {
+		http.Error(w, "history read failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if alerts == nil {
+		alerts = []Alert{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"type":     "alert_history",
+		"symbol":   symbol,
+		"alerts":   alerts,
+		"matched":  total,
+		"returned": len(alerts),
+		"stats":    s.deps.Alerts.HistoryStats(),
+	})
 }
 
 func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {

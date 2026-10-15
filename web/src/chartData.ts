@@ -187,6 +187,15 @@ export interface ChartMarker {
   score: number | null;
   flowQuote: number | null;
   burstMultiple: number | null;
+  /**
+   * The bar's low and high.
+   *
+   * The HTML badge layer converts these to pixels to anchor a badge to the
+   * wick — the library's own markers do that internally, but they cannot carry a
+   * text colour, so the badge is rendered outside the canvas.
+   */
+  low: number;
+  high: number;
 }
 
 /* ---------------------------------------------------------------- markers */
@@ -245,6 +254,8 @@ export function toMarkers(marks: unknown, bars: readonly SafeBar[], canon: Color
     const t = toNum(mark.t);
     if (t === null) continue;
     const time = snapToBar(t, bars);
+    // The bar the mark landed on, for the badge anchor.
+    const anchorBar = time === null ? null : bars.find((b) => Math.floor(b.t / 1000) === time) ?? null;
     if (time === null) continue;
 
     const kind = typeof mark.kind === 'string' ? mark.kind : '';
@@ -270,6 +281,8 @@ export function toMarkers(marks: unknown, bars: readonly SafeBar[], canon: Color
 
     const candidate: ChartMarker = {
       time,
+      low: anchorBar?.l ?? 0,
+      high: anchorBar?.h ?? 0,
       position: direction === 1 ? 'belowBar' : 'aboveBar',
       shape,
       color,

@@ -100,3 +100,145 @@ func (b *AlertBuffer) appendToDisk(path string, alert Alert) {
 		log.Printf("alert history: write failed: %v", err)
 	}
 }
+
+// --------------------------------------------------------------------------
+// Retention
+// --------------------------------------------------------------------------
+//
+// The alert history file is APPEND-ONLY and is never truncated, rotated or
+// rewritten. That is a deliberate guarantee, not an accident of the current
+// code, so it is written down here where a future change would have to
+// consciously break it:
+//
+//   - alerts are opened with O_APPEND|O_CREATE|O_WRONLY and never O_TRUNC
+//   - nothing in this package rotates, renames or compacts the file
+//   - the in-memory caps (a ring of `limit`, and 400 per symbol) bound MEMORY
+//     only; they never delete history
+//
+// The reason: a detector whose past is erasable cannot be evaluated. Every
+// measurement in this project -- the ledger, the learner, the marker history on
+// every chart -- reads from records that were written once and never revised.
+// Deleting history to save disk would quietly invalidate all of it.
+
+// HistoryStats describes the retained alert history.
+type HistoryStats struct {
+	Path     string `json:"path"`
+	Records  int    `json:"records"`
+	Bytes    int64  `json:"bytes"`
+	OldestMS int64  `json:"oldest_ms"`
+	NewestMS int64  `json:"newest_ms"`
+	Symbols  int    `json:"symbols"`
+	// Retained is always true; it is reported so a client can render the
+	// guarantee rather than assume it.
+	Retained bool   `json:"retained"`
+	Note     string `json:"note"`
+}
+
+// HistoryStats scans the retained file. It is O(file) and reads line by line,
+// so it is safe on a history far larger than memory.
+func (b *AlertBuffer) HistoryStats() HistoryStats {
+	b.mu.RLock()
+	path := b.path
+	b.mu.RUnlock()
+
+	stats := HistoryStats{
+		Path:     path,
+		Retained: true,
+		Note:     "alert history is append-only; nothing truncates or rotates it",
+	}
+	if path == "" {
+		stats.Note = "alert history is disabled (no path configured)"
+		return stats
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return stats
+	}
+	defer file.Close()
+	if info, err := file.Stat(); err == nil {
+		stats.Bytes = info.Size()
+	}
+
+	symbols := make(map[string]struct{}, 64)
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var alert Alert
+		if err := json.Unmarshal(line, &alert); err != nil {
+			continue
+		}
+		stats.Records++
+		if alert.Symbol != "" {
+			symbols[alert.Symbol] = struct{}{}
+		}
+		if stats.OldestMS == 0 || alert.TSMS < stats.OldestMS {
+			stats.OldestMS = alert.TSMS
+		}
+		if alert.TSMS > stats.NewestMS {
+			stats.NewestMS = alert.TSMS
+		}
+	}
+	stats.Symbols = len(symbols)
+	return stats
+}
+
+// ReadHistory answers queries against the FULL retained history, not the
+// in-memory ring.
+//
+// The ring holds the most recent `limit` alerts for the live feed. Without this
+// reader, "history is kept" would be true on disk and useless in practice: an
+// alert from yesterday would exist and be unreachable. Newest-first, capped.
+func (b *AlertBuffer) ReadHistory(symbol string, sinceMS int64, limit int) ([]Alert, int, error) {
+	b.mu.RLock()
+	path := b.path
+	b.mu.RUnlock()
+	if path == "" {
+		return nil, 0, nil
+	}
+	if limit <= 0 || limit > 2000 {
+		limit = 200
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer file.Close()
+
+	// Keep a bounded tail while scanning, so a large history is read in one
+	// pass without holding all of it in memory.
+	matched := make([]Alert, 0, limit)
+	total := 0
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var alert Alert
+		if err := json.Unmarshal(line, &alert); err != nil {
+			continue
+		}
+		if symbol != "" && alert.Symbol != symbol {
+			continue
+		}
+		if sinceMS > 0 && alert.TSMS < sinceMS {
+			continue
+		}
+		total++
+		matched = append(matched, alert)
+		if len(matched) > limit {
+			matched = matched[len(matched)-limit:]
+		}
+	}
+	// Newest first for a feed reader.
+	for i, j := 0, len(matched)-1; i < j; i, j = i+1, j-1 {
+		matched[i], matched[j] = matched[j], matched[i]
+	}
+	return matched, total, nil
+}

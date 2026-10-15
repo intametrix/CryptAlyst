@@ -100,7 +100,6 @@ const MARK_SAMPLES: readonly {
  */
 const PANE_INDICATOR_PX = { atr: 84, adx: 92, rsi: 84 } as const;
 /** Indicator panes shrink to these floors before the price pane gives up space. */
-const PANE_MIN_PX = { atr: 40, adx: 44, rsi: 40 } as const;
 /**
  * The flow pane's own height.
  *
@@ -693,6 +692,11 @@ export function ChartPanel({
   /** The box height the panes were last distributed for. */
   const lastDistributed = useRef<number>(-1);
   /**
+   * The current mode, readable from the resize callback without making it a
+   * dependency (which would re-subscribe the observer on every toggle).
+   */
+  const eventsOnlyRef = useRef(false);
+  /**
    * Callback props are read through refs.
    *
    * A parent that passes an inline arrow (`onEvents={setChartEvents}` is fine, but
@@ -912,7 +916,7 @@ export function ChartPanel({
    * library from splitting the new height evenly, which is what made a taller
    * container leave the candles the same size.
    */
-  const distributePaneHeights = useCallback((chart: IChartApi, boxHeight: number): void => {
+  const distributePaneHeights = useCallback((chart: IChartApi, boxHeight: number, collapse: boolean): void => {
     const handles = chartRef.current;
     const panes = chart.panes();
     if (handles === null || panes.length < 2) return;
@@ -932,41 +936,107 @@ export function ChartPanel({
      * guaranteed share. Growth still lands on the candles, because the budget is
      * a fraction of the box, not a fixed number of pixels.
      */
-    const auxBudget = available * 0.42;
-    const requested = [
-      ...indicators.map((item) => ({ index: item.index, want: PANE_INDICATOR_PX[item.key], floor: PANE_MIN_PX[item.key] })),
-      ...(handles.flowPaneIndex > 0 && handles.flowPaneIndex < panes.length
-        ? [
-            {
-              index: handles.flowPaneIndex,
-              want: Math.max(FLOW_PANE_MIN_PX, Math.min(FLOW_PANE_TARGET_PX, Math.round(available * 0.25))),
-              floor: Math.min(FLOW_PANE_MIN_PX, Math.round(available * 0.12)),
-            },
-          ]
-        : []),
-    ];
-
-    const totalWant = requested.reduce((sum, item) => sum + item.want, 0);
-    const scale = totalWant > auxBudget && totalWant > 0 ? auxBudget / totalWant : 1;
-
-    let reserved = 0;
-    for (const item of requested) {
-      // Never below the (scaled) floor, and never above what was wanted.
-      const scaled = Math.max(Math.round(item.floor * Math.min(1, scale + 0.35)), Math.round(item.want * scale));
-      const height = Math.min(item.want, Math.max(12, scaled));
-      reserved += height;
-      if (panes[item.index].getHeight() !== height) panes[item.index].setHeight(height);
+    // Events-only: the indicator panes and the flow pane are given the minimum,
+    // so the price pane takes the whole box. A hidden *series* would leave its
+    // pane in place, which is why this is handled here rather than by the chips.
+    if (collapse) {
+      let reclaimed = 0;
+      for (const item of indicators) {
+        const now = panes[item.index].getHeight();
+        reclaimed += Math.max(0, now - 1);
+        if (now !== 1) panes[item.index].setHeight(1);
+      }
+      if (handles.flowPaneIndex > 0 && handles.flowPaneIndex < panes.length) {
+        const now = panes[handles.flowPaneIndex].getHeight();
+        reclaimed += Math.max(0, now - 1);
+        if (now !== 1) panes[handles.flowPaneIndex].setHeight(1);
+      }
+      void reclaimed;
+      const priceHeight = Math.max(80, available - 1);
+      if (panes[0].getHeight() !== priceHeight) panes[0].setHeight(priceHeight);
+      lastDistributed.current = boxHeight;
+      return;
     }
 
-    // The price pane takes everything left, with a floor of its own so the
-    // candles are always legible — and the auxiliaries can never take so much
-    // that the candles lose the majority of the box.
-    const priceHeight = Math.max(Math.round(available * 0.55), available - reserved);
-    if (panes[0].getHeight() !== priceHeight) panes[0].setHeight(priceHeight);
-    // Every pane now fits inside the box, so the host cannot be pushed past it by
-    // a pane that grew after this ran.
+    /**
+     * Allocation.
+     *
+     * The library re-divides the panes to fit the box, so the targets must **sum
+     * to the available height** — a set that over-reserves is scaled back
+     * proportionally and the flow pane ends up at 42px no matter what it asked
+     * for (measured). So the heights are computed arithmetically first and then
+     * applied.
+     *
+     * Priority: the flow pane (the evidence layer) takes a readable share, the
+     * indicator panes share a bounded budget, and the price pane gets everything
+     * left — which is what makes the candles absorb any released height.
+     */
+    const flowIndex = handles.flowPaneIndex > 0 && handles.flowPaneIndex < panes.length ? handles.flowPaneIndex : -1;
+    const flowWant = flowIndex === -1 ? 0 : Math.max(FLOW_PANE_MIN_PX, Math.min(FLOW_PANE_TARGET_PX, Math.round(available * 0.25)));
+
+    // The price pane keeps at least this much; below it the chart is unreadable.
+    const priceFloor = Math.max(60, Math.round(available * 0.3));
+    // Indicators share whatever is left after the flow pane, capped so they can
+    // never crowd out the candles.
+    const indicatorBudget =
+      indicators.length === 0
+        ? 0
+        : Math.max(0, Math.min(Math.round(available * 0.4), available - priceFloor - flowWant));
+
+    const targets = new Map<number, number>();
+    if (flowIndex !== -1) targets.set(flowIndex, flowWant);
+
+    if (indicators.length > 0 && indicatorBudget > 0) {
+      const share = Math.floor(indicatorBudget / indicators.length);
+      let allocated = 0;
+      indicators.forEach((item, position) => {
+        const isLast = position === indicators.length - 1;
+        // The last one takes the remainder, so the budget is used exactly and
+        // rounding cannot push the total over.
+        const height = isLast ? Math.max(12, indicatorBudget - allocated) : Math.max(12, Math.min(PANE_INDICATOR_PX[item.key], share));
+        allocated += height;
+        targets.set(item.index, height);
+      });
+    }
+
+    const auxTotal = [...targets.values()].reduce((sum, value) => sum + value, 0);
+    // The price pane is the remainder by construction, so the set always fits.
+    const priceHeight = Math.max(priceFloor, available - auxTotal);
+    targets.set(0, priceHeight);
+
+    // Shrink the auxiliaries if the price pane's floor forced the total over.
+    let overflow = auxTotal + priceHeight - available;
+    if (overflow > 0) {
+      const shrinkable = [...targets.entries()].filter(([index]) => index !== 0).sort((a, b) => b[1] - a[1]);
+      for (const [index, value] of shrinkable) {
+        if (overflow <= 0) break;
+        const room = Math.max(0, value - 12);
+        const take = Math.min(room, overflow);
+        targets.set(index, value - take);
+        overflow -= take;
+      }
+    }
+
+    for (const [index, height] of targets) {
+      if (index < panes.length && panes[index].getHeight() !== height) panes[index].setHeight(height);
+    }
     lastDistributed.current = boxHeight;
   }, []);
+
+  useEffect(() => {
+    eventsOnlyRef.current = eventsOnlyActive;
+    const handles = chartRef.current;
+    const box = containerRef.current;
+    if (handles === null || disposedRef.current || box === null || box.clientHeight <= 0) return;
+    // The pane heights must be recomputed *after* React has committed the chip
+    // changes, so the collapse happens on the next frame.
+    const frame = window.requestAnimationFrame(() => {
+      if (disposedRef.current) return;
+      lastDistributed.current = -1;
+      distributePaneHeights(handles.chart, box.clientHeight, eventsOnlyActive);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [eventsOnlyActive, distributePaneHeights]);
 
   // lightweight-charts never observes its container, so this is the only thing
   // that makes it repaint mid-drag. The measurement is already rAF-throttled by
@@ -986,7 +1056,7 @@ export function ChartPanel({
       // The most recent measurement always wins: a stale call cannot undo a
       // newer distribution.
       if (lastDistributed.current === height) return;
-      distributePaneHeights(handles.chart, height);
+      distributePaneHeights(handles.chart, height, eventsOnlyRef.current);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [size.width, size.height, distributePaneHeights]);
@@ -1174,7 +1244,7 @@ export function ChartPanel({
     const box = containerRef.current;
     if (box !== null && box.clientHeight > 0 && lastDistributed.current !== box.clientHeight) {
       lastDistributed.current = box.clientHeight;
-      distributePaneHeights(handles.chart, box.clientHeight);
+      distributePaneHeights(handles.chart, box.clientHeight, eventsOnlyRef.current);
     }
     // Announce that this payload is on screen, so a queued zoom preset can be
     // applied against these bars and not the previous interval's.
