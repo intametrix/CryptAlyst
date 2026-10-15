@@ -110,13 +110,46 @@ type Outlook struct {
 // The loader is tolerant on purpose: an absent or partial file must degrade to
 // an explicitly uncalibrated heuristic, never to a fabricated probability.
 type calibration struct {
-	Features     []string  `json:"features"`
+	Version  string   `json:"version"`
+	Features []string `json:"features"`
+	// The offline learner calls these weights; an earlier draft of this loader
+	// expected `coefficients`. Accept both rather than silently ignoring a
+	// model over a field name -- a rejected model looks exactly like no model,
+	// which is the failure this whole layer exists to prevent.
+	Weights      []float64 `json:"weights"`
 	Coefficients []float64 `json:"coefficients"`
-	Intercept    float64   `json:"intercept"`
-	SampleSize   int       `json:"sample_size"`
-	Brier        float64   `json:"brier"`
-	HorizonSec   int       `json:"horizon_sec"`
-	Basis        string    `json:"basis"`
+	// Features are standardised before the weights are applied, so the live
+	// vector must be normalised with the same mean and standard deviation the
+	// fit used. Without this the coefficients are applied to raw magnitudes and
+	// the probability is meaningless.
+	Mean      []float64 `json:"mean"`
+	Std       []float64 `json:"std"`
+	Intercept float64   `json:"intercept"`
+	// n in the learner's contract; sample_size in the older draft.
+	N          int     `json:"n"`
+	SampleSize int     `json:"sample_size"`
+	Brier      float64 `json:"brier"`
+	LogLoss    float64 `json:"log_loss"`
+	BaseRate   float64 `json:"base_rate"`
+	LabelRule  string  `json:"label_rule"`
+	HorizonSec int     `json:"horizon_sec"`
+	Basis      string  `json:"basis"`
+}
+
+// weights returns whichever coefficient field the file populated.
+func (c *calibration) weights() []float64 {
+	if len(c.Weights) > 0 {
+		return c.Weights
+	}
+	return c.Coefficients
+}
+
+// samples returns whichever sample-size field the file populated.
+func (c *calibration) samples() int {
+	if c.N > 0 {
+		return c.N
+	}
+	return c.SampleSize
 }
 
 // Service computes outlooks and caches the loaded calibration.
@@ -153,11 +186,12 @@ func (s *Service) LoadCalibration(path string) {
 		return
 	}
 	// Reject a model that cannot actually be evaluated.
-	if len(model.Features) == 0 || len(model.Coefficients) != len(model.Features) {
+	weights := model.weights()
+	if len(model.Features) == 0 || len(weights) != len(model.Features) {
 		return
 	}
 	// Refuse a model the learner itself would have refused to publish.
-	if model.SampleSize < s.params.MinResolvedForCalibration {
+	if model.samples() < s.params.MinResolvedForCalibration {
 		return
 	}
 	s.model = &model
@@ -175,13 +209,20 @@ func (s *Service) ModelStatus() map[string]any {
 				itoa(s.params.MinResolvedForCalibration) + " resolved predictions)",
 		}
 	}
+	basis := s.model.Basis
+	if basis == "" {
+		basis = "calibrated on " + itoa(s.model.samples()) + " resolved predictions, brier " +
+			round3(s.model.Brier)
+	}
 	return map[string]any{
 		"calibrated":  true,
 		"source":      s.loaded,
-		"sample_size": s.model.SampleSize,
+		"sample_size": s.model.samples(),
 		"brier":       s.model.Brier,
-		"horizon_sec": s.model.HorizonSec,
-		"basis":       s.model.Basis,
+		"log_loss":    s.model.LogLoss,
+		"base_rate":   s.model.BaseRate,
+		"label_rule":  s.model.LabelRule,
+		"basis":       basis,
 	}
 }
 
@@ -382,6 +423,7 @@ func evaluate(model *calibration, row flow.Candidate) (float64, bool) {
 		"change_60s":      absOf(row.Change60s),
 		"taker_buy_ratio": row.TakerBuyRatio,
 	}
+	weights := model.weights()
 	z := model.Intercept
 	used := 0
 	for i, name := range model.Features {
@@ -389,7 +431,13 @@ func evaluate(model *calibration, row flow.Candidate) (float64, bool) {
 		if !ok {
 			return 0, false
 		}
-		z += model.Coefficients[i] * value
+		// Standardise with the fitted statistics: the weights were learned
+		// against normalised inputs, so applying them to raw values would be
+		// applying a different model.
+		if i < len(model.Mean) && i < len(model.Std) && model.Std[i] > 0 {
+			value = (value - model.Mean[i]) / model.Std[i]
+		}
+		z += weights[i] * value
 		used++
 	}
 	if used == 0 {
