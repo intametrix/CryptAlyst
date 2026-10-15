@@ -144,3 +144,91 @@ popup-blocked).
 
 **Not built, on purpose:** any order placement. This system detects, measures
 and explains. It does not trade.
+
+---
+
+## Entry 5 — Calibration, and the first evidence against our own design
+
+Added after the other agent read the journal and pointed out it predated the
+measurement work. It was right: a journal that stops before the first real
+result is a build log, not a record.
+
+### The short-horizon question, and how it was settled honestly
+
+The prior, argued before any data: direction over the next ten seconds is not
+learnable from public spot data — that signal lives in order-book queue position
+and latency, owned by colocated market makers. A prior is not a measurement, and
+Rule 6 forbids serving one as a number, so we sampled it rather than arguing:
+**1-second price paths for the first 60 seconds after every detection**, 1,013
+records so far.
+
+The label rule was **written down and committed before any data was collected**,
+because a rule chosen after seeing results is a rationalisation, not a test:
+three-way, band ±0.10 %, middle band recorded as `DISCARD` rather than forced
+into win or loss. Every label record carries
+`label_rule: "locked before data collection"` so the commitment travels with the
+data.
+
+**Outcome: 17.9 % discard, under the 40 % threshold we pre-committed to, so the
+band stays at ±0.10 %.** That decision only means something because it was
+locked first.
+
+### The result that matters
+
+Pooled 10s hit rate is **42.9 % — below a coin flip.** And the fitted model
+shipped anyway. Both are true, and the reconciliation is the whole point:
+**pooling hides conditional structure.** The largest standardised coefficients:
+
+```
+vol_ratio −1.59    vol_z −1.35    quote_volume_24h +0.95    baseline_quote −0.91
+```
+
+**High `vol_ratio` at alert time predicts WORSE 10-second outcomes** — a big
+relative volume spike means the move is already mature. That is a *late entry*
+signature.
+
+This independently confirms a hypothesis formed **before any fitting**, from
+reasoning about score composition alone: severity is score-based, score rewards
+burst size and extension, and burst size is exactly what a late-stage pump looks
+like. **Two independent routes to the same conclusion.** It is the strongest
+evidence this project has produced, and it is evidence *against our own severity
+design*.
+
+Nothing is re-tiered on it. The follow-up is pre-committed so it cannot be
+retrofitted: at n ≥ 100 resolved, if CRITICAL expectancy is below ALERT **and**
+Wilson intervals do not overlap, the first test is whether severity should
+incorporate a **lateness** feature (`vol_ratio` or extension at alert time)
+rather than raw score. If the intervals overlap, the published answer is
+*"unresolved, keep collecting."*
+
+### Why strict "better than baseline" is unimplementable
+
+The no-lift rule was agreed as *ship only if fitted Brier beats base Brier*. The
+other agent disclosed deviating from it, with the empirical reason: **with a
+strict `<`, a provably-zero-signal synthetic shipped at 0.2397 vs 0.2399** —
+in-sample noise wins by 1e-4 every time, so strict `<` can never honestly
+refuse. A rule that cannot refuse is a rubber stamp. The corrected rule is a
+**3 % relative margin**, and the deviation was disclosed rather than quietly
+applied. That disclosure is the reason the rule is now trustworthy.
+
+### The model is a file, not a number
+
+`calibration_10s.json` exists. **Nothing serves it.** It is in-sample, ~510
+labels, one market regime, 26 features against 510 rows. The honest basis string
+would have to read *"in-sample n=510"*, which is not good enough to act on.
+Promotion rule, pre-committed: refit on a **chronological holdout** (last 30 %
+of labels by `ts_ms`), same 3 % margin.
+
+**So the answer to "is a 10-second probability learnable" is currently: measured,
+conditionally informative, not yet trustworthy.** And the UI says exactly that —
+`"no measurable edge at this horizon"` — rather than showing a number.
+
+### The process lesson
+
+Every useful catch in this project came from the *other* agent. The lateness
+finding, the palette boundary, the severity-on-a-non-colour-channel rule, the
+sort key that would have ranked dust above real moves, the label rule needing to
+be locked before data, and the 3 % margin that made a rule enforceable. **None
+were found by the agent who made them.** That is the empirical argument for
+Rule 3, and it is why the calibration machinery is written to refuse rather than
+to report.

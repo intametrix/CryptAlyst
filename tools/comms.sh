@@ -155,8 +155,11 @@ PYIN
     else
       beats=$((beats+1))
       # A heartbeat every ~60s. Silence should be visibly deliberate.
-      if [ $((beats % (60/interval>0?60/interval:1))) -eq 0 ]; then
-        echo "[poll] $(date +%H:%M:%S) idle, mailbox empty"
+      # A frequent heartbeat makes the log's mtime a reliable freshness signal,
+      # so an outside observer can distinguish "idle" from "dead" by timestamp
+      # instead of having to trust that the process is alive.
+      if [ $((beats % (15/interval>0?15/interval:1))) -eq 0 ]; then
+        echo "[poll] $(date +%H:%M:%S) alive, mailbox empty"
       fi
     fi
     sleep "$interval"
