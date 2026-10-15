@@ -13,7 +13,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BOX="$ROOT/.comms"
 TTY="${KIMI_TTY:-/dev/ttys003}"
-INTERVAL="${BRIDGE_INTERVAL:-10}"
+INTERVAL="${BRIDGE_INTERVAL:-3}"
 STATE="$BOX/.bridge.kimi.last"
 
 mkdir -p "$BOX"

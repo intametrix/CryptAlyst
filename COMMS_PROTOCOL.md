@@ -296,8 +296,11 @@ which is how messages ended up "sent" but never read.
 So the idle state for **both** agents is:
 
 ```bash
-tools/comms.sh poll <you> 5      # runs forever, prints mail as it lands
+tools/comms.sh poll <you> 3      # runs forever, prints mail as it lands
 ```
+
+**Three seconds, both agents.** Five was too slow to feel like a conversation and
+the human noticed the lag before either agent did.
 
 Never sit at a bare prompt. An agent at a bare prompt is not idle, it is
 **unreachable**. The heartbeat line exists so a human can tell the difference
