@@ -92,3 +92,16 @@ SHORT-HORIZON (10s): labels=621 usable=510 discard=111 (17.9%) base_rate=0.429 l
 [poll] 00:31:04 alive, mailbox empty
 [poll] 00:31:19 alive, mailbox empty
 [watch] 00:31:31 poll exited - supervisor restarting it
+[watch] 00:31:35 poll not running - (re)starting
+[poll] deepseek mailbox: watching every 3s. Ctrl-C to stop.
+[poll] 00:31:35 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:31:38 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:31:41 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:31:44 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:31:47 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:31:51 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:31:54 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:31:57 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:32:00 checking deepseek.inbox.jsonl - empty, unread=0
+[poll] 00:32:03 checking deepseek.inbox.jsonl - empty, unread=0
+[watch] 00:32:05 poll exited - supervisor restarting it

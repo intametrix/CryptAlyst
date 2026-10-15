@@ -159,7 +159,13 @@ PYIN
       # line proves it for the exact second in question, which is what "show me
       # you are polling" actually asks for. The log is bounded by rotating it
       # when it grows, so verbosity cannot become an unbounded file.
-      echo "[poll] $(date +%H:%M:%S) checking $(basename "$(box "$who")") - empty, unread=0"
+      # Count for real. An earlier version of this line hardcoded "unread=0",
+      # which meant the log confidently reported an empty mailbox while the
+      # inbox held two messages -- a monitoring line that lies is worse than no
+      # monitoring line, because it is trusted.
+      _total=$(wc -l < "$(box "$who")" 2>/dev/null | tr -d ' ' || echo 0)
+      _off=$(cat "$(offset_file "$who")" 2>/dev/null || echo 0); [ -z "$_off" ] && _off=0
+      echo "[poll] $(date +%H:%M:%S) checking $who - unread=$((_total-_off)) total=${_total}"
       if [ -f "$(box "$who")" ] && [ "$(wc -l < "$(box "$who")" | tr -d ' ')" -gt 4000 ]; then
         tail -n 1000 "$(box "$who")" > "$(box "$who").tmp" && mv "$(box "$who").tmp" "$(box "$who")"
         echo 1000 > "$(offset_file "$who")"
