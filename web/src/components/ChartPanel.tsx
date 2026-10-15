@@ -907,31 +907,37 @@ export function ChartPanel({
   // `series.update()` on the forming bar is cheap and keeps the user's pan/zoom.
   useEffect(() => {
     const handles = chartRef.current;
-    const trace: { reason: string; price?: number; bucket?: number; lastBarTime?: number | null } | null =
-      typeof window === 'undefined'
-        ? null
-        : (() => {
-            const w = window as unknown as { __tickerTrace?: unknown[] };
-            w.__tickerTrace = w.__tickerTrace ?? [];
-            return w.__tickerTrace.length < 6 ? (w.__tickerTrace as never) : null;
-          })();
-    const note = (reason: string, extra: Record<string, unknown> = {}): void => {
-      if (trace !== null) (trace as unknown as unknown[]).push({ reason, ...extra });
-    };
-    if (handles === null || disposedRef.current) return note('no-chart');
-    if (tickerTick === null) return note('no-tick');
-    if (symbol === null) return note('no-symbol');
-    if (tickerTick.symbol !== symbol) return note('symbol-mismatch', { got: tickerTick.symbol });
+    if (handles === null || disposedRef.current) return;
+    if (tickerTick === null || symbol === null) return;
+    if (tickerTick.symbol !== symbol) return; // a frame for another symbol
+    if (tickerTick.price <= 0) return;
 
     const state = liveStateRef.current;
-    if (state.lastBarTime === null) return note('no-bar-time');
-    // Only touch the bar the tick belongs to; a tick in the next interval is a
-    // rollover and is the poll's job to finalise.
-    const bucket = bucketStart(tickerTick.atMs, interval) / 1000;
-    if (bucket !== state.lastBarTime) return note('bucket-mismatch', { bucket, lastBarTime: state.lastBarTime });
-    if (tickerTick.price <= 0) return note('non-positive-price', { price: tickerTick.price });
-    note('applied', { price: tickerTick.price });
-
+    if (state.lastBarTime === null) return;
+    const bucket = Math.floor(bucketStart(tickerTick.atMs, interval) / 1000);
+    const intervalSec = (INTERVAL_MS[interval] ?? 60_000) / 1000;
+    // A tick belongs to the forming bar while it falls inside that bar's window,
+    // with a grace of half an interval so a bar whose own timestamps are not
+    // exactly interval-aligned is still matched. Once it is clearly past the
+    // window, the push opens the next candle itself.
+    const grace = intervalSec / 2;
+    if (tickerTick.atMs / 1000 < state.lastBarTime - grace) return; // out of order
+    if (bucket > state.lastBarTime && tickerTick.atMs / 1000 >= state.lastBarTime + intervalSec - grace) {
+      // --- rollover: the push opens the new candle --------------------------
+      // Waiting for the reconciliation poll would freeze the chart for up to its
+      // whole interval at every bar boundary. The new bar starts from this tick;
+      // the poll later finalises the closed bar and its indicator values.
+      handles.candles.update({
+        time: bucket as Time,
+        open: tickerTick.price,
+        high: tickerTick.price,
+        low: tickerTick.price,
+        close: tickerTick.price,
+      });
+      volumeRef.current = { barTime: bucket, counter: tickerTick.quoteVol24h, accumulated: 0, pushed: 0 };
+      liveStateRef.current = { lastBarTime: bucket, lastOpen: tickerTick.price, lastClose: tickerTick.price };
+      return;
+    }
 
     const time = state.lastBarTime as Time;
     const open = state.lastOpen ?? tickerTick.price;

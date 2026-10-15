@@ -84,8 +84,12 @@ export function useTicker(symbol: string | null): {
       };
       setCount((n) => n + 1);
 
-      // Re-render at most ~4x a second even if the feed is faster; the chart
-      // reads the ref, so nothing is lost by batching the pill's clock.
+      // Re-render at most ~4x a second even if the feed is faster, so a burst
+      // cannot turn into a burst of renders. The **decision is not what gates the
+      // chart**: `tick` below is derived from a ref read at render time, and the
+      // chart's effect is keyed on the tick's identity. A frame that only nudges
+      // the price updates the ref and the *next* commit ships it — so nothing is
+      // dropped, it is only coalesced.
       const now = Date.now();
       if (now - lastFlush.current >= 250) {
         lastFlush.current = now;

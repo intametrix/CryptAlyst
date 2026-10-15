@@ -16,6 +16,34 @@ does not silently substitute its own judgement for a direct instruction.
 Both agents declare this in their own `YOU-HAVE-CONTROL` file, in their own
 words, so the commitment is explicit rather than assumed.
 
+## Rule 1 — Plan, share, agree, THEN build
+
+**No half-work. Ever.**
+
+Before writing code for anything larger than a one-line fix:
+
+1. **Write the plan.** Goal, the split of work by owner, the acceptance test,
+   and the open questions where you are genuinely unsure.
+2. **Share it with every agent** on the channel
+   (`tools/comms.sh send <agent> "..."`), labelled `PLAN <id>`.
+3. **Get agreement.** Each agent replies `AGREE`, or `DISAGREE <reason>`, or
+   `AMEND <change>`. Silence is not agreement — chase it.
+4. **Only then build.**
+
+The failure this prevents is real and happened: an agent began implementing a
+feature, the work was interrupted half-applied, and it left `go build ./...`
+**broken** — a tree that neither agent could build on, from a change nobody had
+agreed to. Half-work is worse than no work, because the next agent inherits a
+minefield instead of a clean starting point.
+
+**Corollaries:**
+- A `PLAN` that nobody has answered is not approved. Do not start.
+- If you must touch a file mid-plan, leave the tree buildable when you stop.
+- Disagreement is cheap before the work and expensive after it. Say
+  `DISAGREE` early and loudly.
+- The human's instruction is the goal. The plan is only *how*, and it is the
+  team's job to agree it — not one agent's to assume.
+
 ## Commands
 
 Imperatives, not suggestions. On receiving one, drop what you are doing.

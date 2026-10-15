@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -266,16 +267,92 @@ func (s *Server) handleFlow(w http.ResponseWriter, r *http.Request) {
 	limit := queryInt(r, "limit", 25)
 	engine := s.deps.Engine
 	now := time.Now().UnixMilli()
-	rows := engine.Snapshot(limit, now)
+	// Snapshot over the whole tracked universe when splitting, because the top
+	// N by flow and the top N by move are different sets: taking the flow
+	// leaders first and then splitting them would systematically hide the
+	// biggest dumps whenever the market is broadly rising.
+	snapshotLimit := limit
+	if r.URL.Query().Get("split") != "" {
+		snapshotLimit = 0
+	}
+	rows := engine.Snapshot(snapshotLimit, now)
 	if rows == nil {
 		rows = []flow.Candidate{}
 	}
+
+	if r.URL.Query().Get("split") == "" {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"type":       "flow",
+			"ts_ms":      now,
+			"window_sec": engine.Config().WindowSec,
+			"rows":       rows,
+		})
+		return
+	}
+
+	// Split into the biggest pumps and the biggest dumps by move size.
+	pumps := make([]flow.Candidate, 0, len(rows))
+	dumps := make([]flow.Candidate, 0, len(rows))
+	for _, row := range rows {
+		move, ok := moveOf(row)
+		if !ok || move == 0 {
+			continue
+		}
+		if move > 0 {
+			pumps = append(pumps, row)
+		} else {
+			dumps = append(dumps, row)
+		}
+	}
+	sort.SliceStable(pumps, func(i, j int) bool {
+		return absMove(pumps[i]) > absMove(pumps[j])
+	})
+	sort.SliceStable(dumps, func(i, j int) bool {
+		return absMove(dumps[i]) > absMove(dumps[j])
+	})
+	if limit > 0 {
+		if len(pumps) > limit {
+			pumps = pumps[:limit]
+		}
+		if len(dumps) > limit {
+			dumps = dumps[:limit]
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"type":       "flow",
 		"ts_ms":      now,
 		"window_sec": engine.Config().WindowSec,
-		"rows":       rows,
+		"split":      true,
+		"pumps":      pumps,
+		"dumps":      dumps,
+		"pump_count": len(pumps),
+		"dump_count": len(dumps),
+		"symbols":    len(rows),
 	})
+}
+
+// moveOf returns the best available short-horizon move for a candidate,
+// preferring the 10s window the onset engine actually acts on.
+func moveOf(row flow.Candidate) (float64, bool) {
+	if row.Change10s != nil {
+		return *row.Change10s, true
+	}
+	if row.Change60s != nil {
+		return *row.Change60s, true
+	}
+	return 0, false
+}
+
+func absMove(row flow.Candidate) float64 {
+	move, ok := moveOf(row)
+	if !ok {
+		return 0
+	}
+	if move < 0 {
+		return -move
+	}
+	return move
 }
 
 func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
