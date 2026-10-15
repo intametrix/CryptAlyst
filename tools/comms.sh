@@ -7,7 +7,8 @@
 #   tools/comms.sh send <to> "<message>" [subject]
 #   tools/comms.sh read <who>          # print UNREAD and mark them read
 #   tools/comms.sh peek <who>          # print unread without marking
-#   tools/comms.sh wait <who> [secs]   # block until a message arrives, then print it
+#   tools/comms.sh wait <who> [secs]   # block until ONE message arrives, then exit
+#   tools/comms.sh poll <who> [secs]   # poll FOREVER - this is the standing idle state
 #   tools/comms.sh status              # unread counts for everyone
 #   tools/comms.sh log [n]             # last n messages, both directions
 #
@@ -107,6 +108,38 @@ cmd_wait() {
   echo "(no message within ${secs}s)"; return 1
 }
 
+# cmd_poll is the standing idle state for both agents.
+#
+# `wait` blocks until ONE message arrives and then exits, which means an agent
+# that has been woken is idle again the moment it replies. Polling is the fix:
+# this loop runs forever, printing new mail as it lands, so an agent sitting
+# here is never unreachable and never has to be noticed by anyone else.
+#
+# A heartbeat line is printed periodically so a human glancing at the terminal
+# can tell the difference between "polling, nothing to do" and "crashed".
+cmd_poll() {
+  local who="${1:?usage: poll <who> [interval_secs]}"
+  local interval="${2:-5}"
+  local beats=0
+  echo "[poll] $who mailbox: watching every ${interval}s. Ctrl-C to stop."
+  while true; do
+    local found
+    found="$(unread "$who")"
+    if [ -n "$found" ]; then
+      echo "[poll] $(date +%H:%M:%S) MAIL ARRIVED"
+      cmd_read "$who" mark
+      beats=0
+    else
+      beats=$((beats+1))
+      # A heartbeat every ~60s. Silence should be visibly deliberate.
+      if [ $((beats % (60/interval>0?60/interval:1))) -eq 0 ]; then
+        echo "[poll] $(date +%H:%M:%S) idle, mailbox empty"
+      fi
+    fi
+    sleep "$interval"
+  done
+}
+
 cmd_status() {
   for who in deepseek kimi; do
     [ -f "$BOX/ATTENTION.$who" ] && echo "  *** $who HAS AN UNANSWERED IMPERATIVE (see .comms/ATTENTION.$who) ***"
@@ -153,6 +186,7 @@ case "${1:-status}" in
   wait)   shift; cmd_wait "$@" ;;
   answer-now) shift; COMMS_PRIO="ANSWER NOW" cmd_send "$@" ;;
   urgent) shift; COMMS_PRIO="urgent" cmd_send "$@" ;;
+  poll)   shift; cmd_poll "$@" ;;
   status) cmd_status ;;
   log)    shift; cmd_log "$@" ;;
   human)  shift; cmd_human "$@" ;;

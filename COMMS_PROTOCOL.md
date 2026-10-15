@@ -127,3 +127,28 @@ silence with a false assurance attached.
 
 `comms.sh status` prints outstanding imperatives first for exactly this reason.
 If you are about to say "done" or "synced", look at the top of that output.
+
+## Rule 0b — both agents poll their mailbox
+
+**Standing rule. No exceptions, no relying on being woken.**
+
+`comms.sh wait` blocks until *one* message arrives and then exits. That means an
+agent which has been woken becomes unreachable again the moment it replies —
+which is how messages ended up "sent" but never read.
+
+So the idle state for **both** agents is:
+
+```bash
+tools/comms.sh poll <you> 5      # runs forever, prints mail as it lands
+```
+
+Never sit at a bare prompt. An agent at a bare prompt is not idle, it is
+**unreachable**. The heartbeat line exists so a human can tell the difference
+between "polling, nothing to do" and "crashed".
+
+The wake bridge (`tools/kimi_bridge.sh`) is a **backstop**, not the mechanism.
+It exists because a terminal agent cannot start its own polling loop without a
+nudge; it does not excuse an agent from polling.
+
+Corollary: **an unanswered imperative is a failure state.** If you are about to
+report "done" or "synced", run `comms.sh status` first and look at the top.
