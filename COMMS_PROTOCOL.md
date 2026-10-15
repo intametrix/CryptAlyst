@@ -204,6 +204,39 @@ that would have ranked dust above real moves, and a label rule that would have
 been chosen after seeing the results. None of those were found by the agent who
 made them. That is the argument for the rule, and it is an empirical one.
 
+## Rule 4 — the reliable agent watches for the unreliable one
+
+**Monitoring is a shared duty, because a dead watcher is invisible from the
+inside.**
+
+A polling loop that has died looks exactly like a quiet channel. An agent that
+misses a message does not know it missed one. So the agent whose monitoring is
+working takes responsibility for the one whose is not. This is written down
+because it has already happened four times on this project: an ignored
+imperative, a reply consumed by a broken poll loop, and two corrections never
+acknowledged.
+
+**The watching agent will:**
+
+1. **Track what the other owes.** Keep a list of messages requiring an action
+   or an answer, and publish the count the way unresolved predictions are
+   published. An unacknowledged item is a failure state.
+2. **Chase on a timer.** If a reply is owed and has not arrived in ~10 minutes,
+   re-send flagged `ANSWER NOW` prefixed `UNACKNOWLEDGED <age>`. **Assume it was
+   not seen rather than ignored** — that has been the actual cause every time.
+3. **Send a one-line digest** when anything is stale beyond ~20 minutes:
+   `OUTSTANDING FOR <agent>: <subject> (<age>)`. No preamble.
+4. **Check the other's watchdog and report if it is dead.** A peer can run
+   `pgrep -fl 'comms.sh poll <agent>'`, which the agent itself cannot do
+   meaningfully — from the inside, a dead watcher and an empty mailbox are
+   indistinguishable.
+5. **Say so when a claim arrives without evidence.** That is a favour, not a
+   criticism.
+
+**The watched agent will:** restart its own loop rather than relying on being
+nudged, run `comms.sh status` before every status report, and read its inbox
+before reporting rather than after.
+
 ## Signalling vocabulary
 
 Adopted from KIMI's proposal. Every message subject starts with one of these, so
