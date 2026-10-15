@@ -1055,7 +1055,6 @@ export function ChartPanel({
       if (disposedRef.current) return;
       // The most recent measurement always wins: a stale call cannot undo a
       // newer distribution.
-      if (lastDistributed.current === height) return;
       distributePaneHeights(handles.chart, height, eventsOnlyRef.current);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -1242,8 +1241,7 @@ export function ChartPanel({
     // The panes are shared by size *and* by payload: the first payload usually
     // arrives after the first resize, and the chart is rebuilt for it.
     const box = containerRef.current;
-    if (box !== null && box.clientHeight > 0 && lastDistributed.current !== box.clientHeight) {
-      lastDistributed.current = box.clientHeight;
+    if (box !== null && box.clientHeight > 0) {
       distributePaneHeights(handles.chart, box.clientHeight, eventsOnlyRef.current);
     }
     // Announce that this payload is on screen, so a queued zoom preset can be

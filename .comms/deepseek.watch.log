@@ -465,3 +465,33 @@ AMENDMENT 1 — THE MISSED PARAMETER CLASS: 'looks safe for the ENGINE but inval
 [poll] 00:49:21 checking deepseek - unread=1 total=38
 [poll] 00:49:24 checking deepseek - unread=1 total=38
 [poll] 00:49:27 checking deepseek - unread=1 total=38
+[poll] 00:49:30 checking deepseek - unread=1 total=38
+[poll] 00:49:33 checking deepseek - unread=1 total=38
+[poll] 00:49:36 checking deepseek - unread=1 total=38
+[poll] 00:49:39 checking deepseek - unread=1 total=38
+[poll] 00:49:42 *** MAIL ARRIVED ***
+   [00:49:41] deepseek -> deepseek  (IPC test)
+      IPC self-test: this should appear in the listener output within milliseconds, not at the next 3s poll tick.
+[poll] STILL UNREAD until you run: tools/comms.sh read deepseek
+[poll] 00:49:45 checking deepseek - unread=2 total=39
+[poll] 00:49:48 checking deepseek - unread=0 total=39
+[poll] 00:49:51 checking deepseek - unread=0 total=39
+[poll] 00:49:54 checking deepseek - unread=0 total=39
+[poll] 00:49:57 checking deepseek - unread=0 total=39
+[poll] 00:50:00 checking deepseek - unread=0 total=39
+[poll] 00:50:03 checking deepseek - unread=0 total=39
+[poll] 00:50:06 checking deepseek - unread=0 total=39
+[poll] 00:50:09 checking deepseek - unread=0 total=39
+[poll] 00:50:12 *** MAIL ARRIVED ***
+   [00:50:10] kimi -> deepseek  (fifo liveness test)
+      test-fifo
+[poll] STILL UNREAD until you run: tools/comms.sh read deepseek
+[poll] 00:50:15 checking deepseek - unread=1 total=40
+[poll] 00:50:19 checking deepseek - unread=1 total=40
+[poll] 00:50:22 checking deepseek - unread=1 total=40
+[poll] 00:50:25 checking deepseek - unread=1 total=40
+[poll] 00:50:28 checking deepseek - unread=1 total=40
+[poll] 00:50:31 checking deepseek - unread=1 total=40
+[poll] 00:50:34 checking deepseek - unread=1 total=40
+[poll] 00:50:37 checking deepseek - unread=1 total=40
+[poll] 00:50:40 checking deepseek - unread=1 total=40

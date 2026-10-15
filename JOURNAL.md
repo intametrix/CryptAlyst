@@ -232,3 +232,64 @@ be locked before data, and the 3 % margin that made a rule enforceable. **None
 were found by the agent who made them.** That is the empirical argument for
 Rule 3, and it is why the calibration machinery is written to refuse rather than
 to report.
+
+---
+
+## Entry 6 — Retention, IPC, and a deferred rotation
+
+### Alert history is append-only, and that is a guarantee not a coincidence
+
+`alerts.jsonl` opens `O_APPEND`, never `O_TRUNC`. Nothing rotates, renames or
+compacts it. The in-memory caps (a 2000 ring, 400 per symbol) bound **memory
+only** and never delete history. The reason is stated where a future change
+would have to consciously break it: **a detector whose past is erasable cannot
+be evaluated.** Every measurement here — the ledger, the learner, the marker
+history on every chart — reads from records written once and never revised.
+
+### KNOWN DEFERRAL — rotation, due around 2027-10
+
+At ~200 KB per 90 minutes the file grows ~3.2 MB/day, **~1.2 GB/year** (the
+other agent did the arithmetic rather than guessing). That is a real but *slow*
+problem: roughly a year of runway. It is deliberately **not built yet**.
+
+**The plan when it is needed:** monthly archival to `alerts-YYYY-MM.jsonl`, with
+every reader globbing the set rather than opening one fixed path. Not a
+truncation — an archival, because the whole point of the guarantee above is that
+nothing is ever deleted to save space.
+
+**Write-down date:** 2026-10. **Revisit by:** 2027-10, or sooner if the
+detection rate rises by an order of magnitude.
+
+### Crash tolerance, and why silent skipping is not enough
+
+Append-only JSONL on a laptop will eventually take a partial trailing line from
+a crash or power loss. A strict parser would then declare the **entire history**
+unreadable over one bad byte, so readers skip malformed lines.
+
+But skipping **silently** is its own failure — a reader quietly dropping records
+looks identical to one reading a shorter history, which is the same class of
+error as a dead watcher that looks idle. So malformed lines are **counted and
+logged**, and the count is published in `HistoryStats.malformed`.
+
+**Verified by deliberately corrupting the file:** appended `{"broken": ` to the
+live history, restarted, and got 174 records readable with `malformed: 1` and
+`alert history: skipped 1 malformed line(s) in alerts.jsonl (partial write or
+corruption)` in the log. The history survived; the damage was visible.
+
+### The IPC channel
+
+Polling has latency, and it is **silent when it dies** — a dead poll and an
+empty mailbox look identical, a failure this project hit three times. So
+`.comms/<agent>.fifo` was added: a real FIFO whose reader blocks and wakes on the
+first byte.
+
+**It deliberately does not replace the mailbox file.** A FIFO has no memory — a
+message written with no reader is lost, and a reader that restarts misses
+everything sent while it was down. So they have distinct jobs: the JSONL file is
+the durable record, the FIFO is the wake-up, and **the file is written first** so
+a crash between the two loses nothing. Sending is non-blocking; `ENXIO` (no
+reader) is treated as success because the mailbox already holds the message.
+
+Six layers now: durable record → instant IPC → poll fallback → supervisor →
+**peer watcher** → self-check. The peer watcher is the only layer an agent
+cannot fake, which is why it exists.

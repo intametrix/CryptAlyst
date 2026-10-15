@@ -130,8 +130,14 @@ type HistoryStats struct {
 	Symbols  int    `json:"symbols"`
 	// Retained is always true; it is reported so a client can render the
 	// guarantee rather than assume it.
-	Retained bool   `json:"retained"`
-	Note     string `json:"note"`
+	Retained bool `json:"retained"`
+	// Malformed counts unparseable lines. A crash or power loss can leave a
+	// partial trailing line, and a strict parser would then declare the whole
+	// history unreadable over one bad byte. Skipping is right; skipping
+	// SILENTLY is not, because a reader that quietly drops records looks
+	// identical to one reading a shorter history.
+	Malformed int    `json:"malformed"`
+	Note      string `json:"note"`
 }
 
 // HistoryStats scans the retained file. It is O(file) and reads line by line,
@@ -169,6 +175,8 @@ func (b *AlertBuffer) HistoryStats() HistoryStats {
 		}
 		var alert Alert
 		if err := json.Unmarshal(line, &alert); err != nil {
+			// Skipped, not fatal -- and counted, so it is visible.
+			stats.Malformed++
 			continue
 		}
 		stats.Records++
@@ -183,6 +191,10 @@ func (b *AlertBuffer) HistoryStats() HistoryStats {
 		}
 	}
 	stats.Symbols = len(symbols)
+	if stats.Malformed > 0 {
+		log.Printf("alert history: skipped %d malformed line(s) in %s (partial write or corruption)",
+			stats.Malformed, path)
+	}
 	return stats
 }
 
@@ -213,6 +225,7 @@ func (b *AlertBuffer) ReadHistory(symbol string, sinceMS int64, limit int) ([]Al
 	// pass without holding all of it in memory.
 	matched := make([]Alert, 0, limit)
 	total := 0
+	malformed := 0
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
@@ -222,6 +235,7 @@ func (b *AlertBuffer) ReadHistory(symbol string, sinceMS int64, limit int) ([]Al
 		}
 		var alert Alert
 		if err := json.Unmarshal(line, &alert); err != nil {
+			malformed++
 			continue
 		}
 		if symbol != "" && alert.Symbol != symbol {
@@ -239,6 +253,9 @@ func (b *AlertBuffer) ReadHistory(symbol string, sinceMS int64, limit int) ([]Al
 	// Newest first for a feed reader.
 	for i, j := 0, len(matched)-1; i < j; i, j = i+1, j-1 {
 		matched[i], matched[j] = matched[j], matched[i]
+	}
+	if malformed > 0 {
+		log.Printf("alert history: %d malformed line(s) skipped while reading %s", malformed, path)
 	}
 	return matched, total, nil
 }
