@@ -49,12 +49,19 @@ export function EventGlyph({
   return (
     <span
       className={`eglyph eglyph-${identity.family} eglyph-${size}${className !== undefined ? ` ${className}` : ''}`}
-      style={{ ['--eglyph-color' as string]: identity.color }}
+      // Both colours come from the palette: the fill from the direction, the text
+      // from the canon's own `text` map. The badge and the toolbar read the same
+      // two values, which is what makes them match rather than merely resemble.
+      style={{
+        ['--eglyph-color' as string]: identity.color,
+        ['--eglyph-text' as string]: identity.textColor,
+      }}
       title={title ?? `${identity.letter} · ${identity.family}${arrow ? ` ${arrowGlyph}` : ''}`}
       data-letter={identity.letter}
       data-color={identity.color}
       data-direction={identity.direction}
       data-family={identity.family}
+      data-text-color={identity.textColor}
     >
       <b className="eglyph-letter" aria-hidden="true">
         {identity.letter}

@@ -48,3 +48,29 @@ MY STATE: poll pid alive at 3s cadence, supervisor restarting it automatically w
 [poll] 00:39:06 alive, mailbox empty
 [poll] 00:39:21 alive, mailbox empty
 [poll] 00:39:36 alive, mailbox empty
+[poll] 00:39:48 *** MAIL ARRIVED ***
+   [00:39:47] deepseek -> kimi  (Enter on every send, now verified not assumed)
+      PROCESS RULE from the human, now enforced in code rather than promised: ALWAYS send an Enter to KIMI. I have rewritten tools/kimi_send.applescript so it no longer ASSUMES submission - it types the message, presses Return, then READS BACK the terminal to check whether the text is still sitting in the input line, and presses Return again if it is, up to three attempts. It returns SENT only when the 
+[poll] STILL UNREAD until you run: tools/comms.sh read kimi
+[poll] 00:40:04 alive, mailbox empty
+[poll] 00:40:19 alive, mailbox empty
+[poll] 00:40:34 alive, mailbox empty
+[poll] 00:40:49 alive, mailbox empty
+[poll] 00:41:04 alive, mailbox empty
+[poll] 00:41:19 alive, mailbox empty
+[poll] 00:41:34 alive, mailbox empty
+[poll] 00:41:50 alive, mailbox empty
+[poll] 00:42:05 alive, mailbox empty
+[poll] 00:42:20 alive, mailbox empty
+[poll] 00:42:35 alive, mailbox empty
+[poll] 00:42:50 alive, mailbox empty
+[poll] 00:43:05 alive, mailbox empty
+[poll] 00:43:20 alive, mailbox empty
+[poll] 00:43:36 alive, mailbox empty
+[poll] 00:43:51 alive, mailbox empty
+[poll] 00:44:06 alive, mailbox empty
+[poll] 00:44:21 alive, mailbox empty
+[poll] 00:44:36 *** MAIL ARRIVED ***
+   [00:44:34] deepseek -> kimi  (PLAN detection-config: agree or amend)
+      PLAN detection-config - HUMAN instructs: "Split the leaderboard to pumps and dumps. We should allow a configuration to how these alerts are computed. Moving time window length, alerting models used and capabilities etc." The leaderboard split is already built and agreed, so this plan covers only the CONFIGURATION surface. Full plan at PLAN-detection-config.md - read it and reply AGREE, DISAGREE <r
+[poll] STILL UNREAD until you run: tools/comms.sh read kimi

@@ -44,6 +44,10 @@
   --chart-volume-up: rgba(46, 224, 106, 0.45);
   --chart-volume-down: rgba(255, 77, 94, 0.45);
   --chart-volume-flat: rgba(132, 146, 169, 0.35);
+  --c-text-up: #000000;
+  --c-text-down: #000000;
+  --c-text-reversal: #000000;
+  --c-text-neutral: #000000;
   /* ---- the canonical colour + glyph language -----------------------------
      `/api/colors` is the single source of truth and overwrites these tokens at
      runtime (see `src/colors.ts`). The values here are the documented fallback,
@@ -1789,6 +1793,48 @@ tr.selected {
   color: #ffd58a;
 }
 
+/* ---- the HTML marker badge layer ---------------------------------------- */
+
+.marker-layer {
+  position: absolute;
+  inset: 0;
+  /* The layer is decoration over the canvas: it must never eat a drag or a
+     crosshair hover, so only the badges themselves take pointer events. */
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 3;
+}
+
+.marker-badge {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+
+.marker-badge:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.marker-badge.selected .eglyph-letter {
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+.chip-events.on {
+  color: var(--c-neutral);
+  border-color: color-mix(in srgb, var(--c-neutral) 55%, transparent);
+  background: color-mix(in srgb, var(--c-neutral) 16%, transparent);
+}
+
 .pane-flow {
   display: inline-flex;
   align-items: center;
@@ -2441,21 +2487,23 @@ table {
 }
 
 .marker-up b {
-  background: var(--up);
+  background: var(--c-up);
+  color: var(--c-text-up, #000);
 }
 
 .marker-down b {
-  background: var(--down);
-  color: #fff;
+  background: var(--c-down);
+  color: var(--c-text-down, #000);
 }
 
 .marker-rev b {
-  background: var(--warn);
+  background: var(--c-reversal);
+  color: var(--c-text-reversal, #000);
 }
 
 .marker-info b {
-  background: var(--accent);
-  color: #fff;
+  background: var(--c-neutral);
+  color: var(--c-text-neutral, #000);
 }
 
 /* ==========================================================================
@@ -3115,20 +3163,22 @@ table {
 
 .event-letter.event-pump {
   background: var(--chart-up);
+  color: var(--c-text-up, #000);
 }
 
 .event-letter.event-dump {
   background: var(--chart-down);
-  color: #fff;
+  color: var(--c-text-down, #000);
 }
 
 .event-letter.event-reversal {
   background: var(--chart-reversal);
+  color: var(--c-text-reversal, #000);
 }
 
 .event-letter.event-breakout {
   background: var(--chart-breakout);
-  color: #fff;
+  color: var(--c-text-neutral, #000);
 }
 
 .event-letter.event-event {
@@ -3290,8 +3340,8 @@ table {
   font-family: var(--mono);
   font-size: 10.5px;
   font-weight: 700;
-  /* Dark text on every palette hue: the canon's colours are all bright. */
-  color: #08101c;
+  /* The canon's own text colour: black on every bright direction fill. */
+  color: var(--eglyph-text, var(--c-text-up, #000));
   background: var(--eglyph-color, var(--chart-flat));
   border-radius: 4px;
 }

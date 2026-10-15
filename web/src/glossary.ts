@@ -200,6 +200,15 @@ export const LOCAL_INDICATORS: Readonly<Record<string, ToolEntry>> = {
     reading: 'Breakouts can arrive as batch alerts, so check the snapshot age.',
     units: 'text',
   },
+  events_only: {
+    title: 'Events only',
+    formula: 'every indicator hidden, one click',
+    meaning:
+      'A clean read of when things fired: candles, volume, event badges and the flow pane, with no overlays or indicator panes in the way.',
+    reading:
+      'The set of indicators you had is remembered, so clicking again restores exactly that set rather than a default. Turning an individual indicator back on leaves the mode and shows it.',
+    units: 'text',
+  },
   support: {
     title: 'Support',
     formula: 'a price where buying has repeatedly absorbed selling',

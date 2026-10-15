@@ -28,15 +28,26 @@ const (
 	ColorWatch    = "#78909c"
 	ColorAlert    = "#ffab00"
 	ColorCritical = "#ff1744"
+
+	// ColorOnBadge is the text colour for a filled badge.
+	//
+	// Every direction colour above is a BRIGHT fill, so the readable text on all
+	// of them is black, not white. Publishing it stops the frontend guessing per
+	// component -- and guessing is how a green box ends up with white text in the
+	// feed and black text on the chart, which reads as two different things.
+	ColorOnBadge = "#000000"
 )
 
 // Palette is the published colour language.
 type Palette struct {
 	Direction map[string]string `json:"direction"`
 	Severity  map[string]string `json:"severity"`
-	Letters   map[string]string `json:"letters"`
-	Glyphs    map[string]string `json:"glyphs"`
-	Note      string            `json:"note"`
+	// Text is the readable foreground for a filled badge of the matching
+	// direction colour. Fills are bright, so this is black for all of them.
+	Text    map[string]string `json:"text"`
+	Letters map[string]string `json:"letters"`
+	Glyphs  map[string]string `json:"glyphs"`
+	Note    string            `json:"note"`
 }
 
 // Palette returns the canonical colours and glyphs.
@@ -52,6 +63,12 @@ func PaletteFor() Palette {
 			"WATCH":    ColorWatch,
 			"ALERT":    ColorAlert,
 			"CRITICAL": ColorCritical,
+		},
+		Text: map[string]string{
+			"up":       ColorOnBadge,
+			"down":     ColorOnBadge,
+			"reversal": ColorOnBadge,
+			"neutral":  ColorOnBadge,
 		},
 		// The marker letters, which are also the legend and the feed icon text.
 		Letters: map[string]string{
@@ -72,8 +89,11 @@ func PaletteFor() Palette {
 			"BREAKOUT_SHORT": "arrowDown",
 			"BREAKOUT":       "arrowUp",
 		},
-		Note: "Rendered by the backend onto every alert, mark and flow row as `color`; " +
-			"the UI must use that value rather than mapping enums to its own constants.",
+		Note: "Rendered by the backend onto every alert, mark and flow row as `color`, " +
+			"with `text` as the readable foreground for a filled badge of that colour. " +
+			"The marker on the chart and the badge in the toolbar must use the same " +
+			"fill, the same letter and the same text colour, or they read as two " +
+			"different things.",
 	}
 }
 

@@ -32,6 +32,14 @@ export function onCanonChange(listener: () => void): () => void {
 export interface ColorCanon {
   direction: { up: string; down: string; reversal: string; neutral: string };
   severity: { WATCH: string; ALERT: string; CRITICAL: string };
+  /**
+   * The text colour to use *on* each direction fill.
+   *
+   * Published by the backend because the fills are all bright: black on every
+   * one, since white on `#00e676` would be unreadable. Read from the palette
+   * rather than hardcoded, so the badge and the toolbar cannot disagree.
+   */
+  text: { up: string; down: string; reversal: string; neutral: string };
   /** kind -> single letter (P/D/R/B). */
   letters: Record<string, string>;
   /** kind -> marker glyph. */
@@ -45,6 +53,7 @@ export interface ColorCanon {
 export const CANON_FALLBACK: ColorCanon = {
   direction: { up: '#00e676', down: '#ff1744', reversal: '#ffab00', neutral: '#40c4ff' },
   severity: { WATCH: '#78909c', ALERT: '#ffab00', CRITICAL: '#ff1744' },
+  text: { up: '#000000', down: '#000000', reversal: '#000000', neutral: '#000000' },
   letters: {
     PUMP: 'P',
     DUMP: 'D',
@@ -74,6 +83,10 @@ const TOKENS: ReadonlyArray<{ name: string; pick: (canon: ColorCanon) => string 
   { name: '--c-sev-watch', pick: (c) => c.severity.WATCH },
   { name: '--c-sev-alert', pick: (c) => c.severity.ALERT },
   { name: '--c-sev-critical', pick: (c) => c.severity.CRITICAL },
+  { name: '--c-text-up', pick: (c) => c.text.up },
+  { name: '--c-text-down', pick: (c) => c.text.down },
+  { name: '--c-text-reversal', pick: (c) => c.text.reversal },
+  { name: '--c-text-neutral', pick: (c) => c.text.neutral },
 ];
 
 /**
@@ -100,6 +113,7 @@ export function parseCanon(raw: unknown): ColorCanon | null {
   const canon: ColorCanon = {
     direction: { ...CANON_FALLBACK.direction, ...(data.direction ?? {}) },
     severity: { ...CANON_FALLBACK.severity, ...(data.severity ?? {}) },
+    text: { ...CANON_FALLBACK.text, ...(data.text ?? {}) },
     // Letters and glyphs merge *per key*, so a backend that only publishes some
     // kinds still gets a usable map for all of them.
     letters: { ...CANON_FALLBACK.letters, ...(data.letters ?? {}) },
@@ -122,6 +136,8 @@ export interface EventIdentity {
   direction: 1 | -1;
   /** The marker glyph, from the server's own map where possible. */
   glyph: 'arrowUp' | 'arrowDown' | 'circle' | 'square';
+  /** The text colour for this fill — black on every bright direction colour. */
+  textColor: string;
 }
 
 /** Normalise a kind for lookups: upper case, underscores kept. */
@@ -197,7 +213,23 @@ export function eventIdentity(opts: {
   const direction: 1 | -1 =
     wireDirection !== null ? (wireDirection < 0 ? -1 : 1) : glyph === 'arrowDown' ? -1 : 1;
 
-  return { letter: letter === '' ? '\u2022' : letter, color, family, direction, glyph };
+  return {
+    letter: letter === '' ? '\u2022' : letter,
+    color,
+    family,
+    direction,
+    glyph,
+    textColor: textFor(family, canon),
+  };
+}
+
+/** The text colour to use on a direction fill. */
+export function textFor(family: EventIdentity['family'], canon?: ColorCanon | null): string {
+  const table = canon?.text ?? CANON_FALLBACK.text;
+  if (family === 'dump') return table.down;
+  if (family === 'reversal') return table.reversal;
+  if (family === 'breakout') return table.neutral;
+  return table.up;
 }
 
 /** The severity colour, on its own axis. */

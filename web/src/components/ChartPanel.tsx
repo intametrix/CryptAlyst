@@ -46,6 +46,7 @@ import { useElementSize } from '../hooks/useElementSize';
 import { INTERVALS, type Interval, type ToolsMsg } from '../types';
 import { eventIdentity } from '../colors';
 import { EventGlyph } from './EventGlyph';
+import { MarkerLayer } from './MarkerLayer';
 import { OutlookStrip } from './OutlookStrip';
 import { SplitPane } from './Panel';
 import { presetAction, type ZoomPreset } from '../zoom';
@@ -616,6 +617,14 @@ export interface ChartPanelProps {
   canon?: ColorCanon | null;
   /** Toggle the flow pane with the other chart elements. */
   showFlow?: boolean;
+  /**
+   * "Events only": every indicator is hidden so the events can be read against
+   * bare price and the flow pane. The caller owns the toggle because it must also
+   * remember the indicator set to restore.
+   */
+  eventsOnly?: boolean;
+  /** Flip the mode; the caller remembers what to restore. */
+  onToggleEventsOnly?: () => void;
   /** The flow pane's own history state, reported up for the label and legend. */
   onFlowState?: (state: FlowHistoryState) => void;
   /** The shared selected event (a bar open time in epoch ms), or `null`. */
@@ -664,6 +673,8 @@ export function ChartPanel({
   tickerAtMs = null,
   canon = null,
   showFlow = true,
+  eventsOnly = false,
+  onToggleEventsOnly,
   onFlowState,
   selectedEvent = null,
   onSelectEvent,
@@ -808,10 +819,50 @@ export function ChartPanel({
     return keys;
   }, [chips]);
 
+  // `eventsOnly` arrives as a prop so the caller can persist it, but the chips
+  // also need to end the mode locally; the two are kept in step.
+  const [eventsOnlyLocal, setEventsOnlyLocal] = useState(eventsOnly);
+  useEffect(() => {
+    setEventsOnlyLocal(eventsOnly);
+  }, [eventsOnly]);
+  const eventsOnlyActive = eventsOnly || eventsOnlyLocal;
+
+  /**
+   * "Events only": every chip off, so the events read against bare price.
+   *
+   * The previous set is remembered in a ref and restored verbatim — a user who
+   * had EMA20 on and SMA200 off gets exactly that back, not a default set. The
+   * remembered copy is deliberately *not* written to storage while the mode is
+   * active, so a reload during events-only still restores their real preferences.
+   */
+  const chipMemo = useRef<Record<string, boolean> | null>(null);
+  const toggleEventsOnly = useCallback(() => {
+    const entering = !(eventsOnly || eventsOnlyLocal);
+    if (entering) {
+      chipMemo.current = chips;
+      setChips(Object.fromEntries(INDICATOR_DEFS.map((def) => [def.id, false])));
+    } else if (chipMemo.current !== null) {
+      // Restore exactly the set that was on, not a default.
+      setChips(chipMemo.current);
+      chipMemo.current = null;
+    }
+    setEventsOnlyLocal(entering);
+    // The caller may persist the mode; the chips stay consistent either way.
+    onToggleEventsOnly?.();
+  }, [chips, eventsOnly, eventsOnlyLocal, onToggleEventsOnly]);
+
   const toggleChip = useCallback((id: string) => {
     setChips((prev) => {
       const next = { ...prev, [id]: !(prev[id] === true) };
-      saveChipState(next);
+      // A chip pressed while in events-only mode is a normal action and ends the
+      // mode, so the toggle and the chips can never disagree about what is shown.
+      if (eventsOnlyActive) {
+        setEventsOnlyLocal(false);
+        chipMemo.current = null;
+      }
+      // While the mode is active the all-off state is a *view*, not a preference,
+      // so it is not persisted over the user's real set.
+      if (!eventsOnlyActive) saveChipState(next);
       return next;
     });
   }, []);
@@ -831,6 +882,7 @@ export function ChartPanel({
     disposedRef.current = false;
     const handles = buildChart(container, bars, tools, { interval });
     chartRef.current = handles;
+    setLayer({ chart: handles.chart, series: handles.candles });
 
     // Size to the measured box right away; the ResizeObserver effect keeps it in
     // step afterwards (including while the overlay is being dragged), and the
@@ -841,6 +893,7 @@ export function ChartPanel({
     return () => {
       disposedRef.current = true;
       chartRef.current = null;
+      setLayer(null);
       // `remove()` detaches observers and frees the canvases — without it a
       // symbol change would leak a whole chart each time.
       handles.chart.remove();
@@ -1000,6 +1053,8 @@ export function ChartPanel({
 
   /** Incremented after each payload is painted, for callers that must wait. */
   const [readySeq, setReadySeq] = useState(0);
+  /** The chart handles, exposed to the HTML marker layer. */
+  const [layer, setLayer] = useState<{ chart: IChartApi; series: ISeriesApi<'Candlestick'> } | null>(null);
 
   /** Centre the view on one event: ±60 bars, clamped to what is loaded. */
   // Hand the controls to the caller once they exist, and withdraw them on
@@ -1508,11 +1563,14 @@ function colorWithAlpha(color: string, alpha: number): string {
     const handles = chartRef.current;
     if (handles === null) return;
     for (const [key, series] of handles.lines) {
-      series.applyOptions({ visible: enabledKeys.has(key) });
+      // Events-only hides every indicator line, whatever its chip says, so the
+      // user sees bare price. The chips keep their own state and win again the
+      // moment the mode is left.
+      series.applyOptions({ visible: !eventsOnlyActive && enabledKeys.has(key) });
     }
     handles.volume.applyOptions({ visible: showVolume });
     handles.flow.applyOptions({ visible: showFlow });
-  }, [enabledKeys, showVolume, showFlow, data]);
+  }, [enabledKeys, showVolume, showFlow, data, eventsOnlyActive]);
 
   /* -- latest values in the footer ------------------------------------------- */
 
@@ -1701,6 +1759,29 @@ function colorWithAlpha(color: string, alpha: number): string {
               );
             })}
             {volumeChip}
+            {/*
+              "Events only": one click hides every indicator so the events read
+              against bare price and the flow pane. The chip set is remembered and
+              restored verbatim, and the price pane absorbs the released height
+              (the pane distribution already runs after every resize).
+            */}
+            <Tooltip
+              keys={['events_only']}
+              tools={tools}
+              fallbackTitle="Events only"
+              label="Hide every indicator — overlays, panes and their legend entries — leaving candles, volume, event badges and flow. The price pane absorbs the released height. Clicking again restores exactly the set you had, not a default."
+              value={eventsOnlyActive ? 'on' : null}
+              tone="chip"
+            >
+              <button
+                type="button"
+                className={`chip chip-toggle chip-events${eventsOnlyActive ? ' on' : ''}`}
+                aria-pressed={eventsOnlyActive}
+                onClick={toggleEventsOnly}
+              >
+                events only
+              </button>
+            </Tooltip>
           </div>
 
           <div className="chart-body">
@@ -1719,6 +1800,27 @@ function colorWithAlpha(color: string, alpha: number): string {
                 secondClassName="chart-indicator-pane"
                 first={
                   <div className="chart-host" ref={containerRef}>
+                    {/*
+                      The event badges, as HTML over the canvas.
+
+                      The library's own markers cannot carry a text colour
+                      (`SeriesMarker` has none; `textColor` is a chart-level
+                      option), so they would render white text on a bright fill and
+                      could never match the toolbar badge. This layer anchors the
+                      *same* `EventGlyph` component to each bar time instead, so the
+                      chart badge and the toolbar badge are one component.
+                    */}
+                    {layer !== null && (
+                      <MarkerLayer
+                        chart={layer.chart}
+                        series={layer.series}
+                        markers={markerList}
+                        canon={canon}
+                        selectedEvent={selectedEvent}
+                        onSelect={(timeMs) => onSelectEvent?.(timeMs)}
+                        repaintKey={readySeq}
+                      />
+                    )}
                     {/*
                       lightweight-charts gives markers no tooltip, so the crosshair
                       parks a zero-size focusable trigger here and focusing it opens
