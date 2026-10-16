@@ -79,6 +79,13 @@ interface Trade {
   hold_sec: number;
 }
 
+interface TurtleStats {
+  win_rate_pct: number;
+  expectancy_usdt: number;
+  veto_rate_pct: number;
+  watchlist_size: number;
+}
+
 interface Order {
   id: string;
   symbol: string;
@@ -107,17 +114,20 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
   const [session, setSession] = useState<TurtleState | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [stats, setStats] = useState<TurtleStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const running = session?.state === 'running';
 
   const refresh = useCallback(async () => {
     try {
-      const [s, t, o] = await Promise.all([
+      const [s, t, o, st] = await Promise.all([
         fetchJson('/api/turtle'),
         fetchJson('/api/turtle/trades'),
         fetchJson('/api/turtle/orders'),
+        fetchJson('/api/turtle/stats'),
       ]);
+      setStats(st as TurtleStats);
       setSession(s as TurtleState);
       setTrades(((t as { trades?: Trade[] }).trades ?? []).slice(0, 30));
       setOrders(((o as { orders?: Order[] }).orders ?? []).slice(0, 30));
@@ -202,6 +212,22 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                   <span className="num">realized {usd(session.realized_pnl)}</span>
                   <span className="num">unrealized {usd(session.unrealized_pnl)}</span>
                   <span className="num">drawdown {num(session.max_drawdown_pct, 3)}%</span>
+                  {stats !== null && stats.expectancy_usdt !== 0 && (
+                    <Tooltip
+                      keys={['expectancy']}
+                      tools={tools}
+                      fallbackTitle="Expectancy"
+                      label="Average PnL per closed trade — the number that decides whether the system has an edge. A system can win most trades and still lose money; expectancy is the honest summary."
+                      tone="stat"
+                    >
+                      <span className="num" tabIndex={0}>
+                        expectancy {usd(stats.expectancy_usdt)} / trade
+                      </span>
+                    </Tooltip>
+                  )}
+                  {stats !== null && stats.veto_rate_pct !== 0 && (
+                    <span className="num">veto rate {num(stats.veto_rate_pct, 0)}%</span>
+                  )}
                 </div>
                 <p className="turtle-rules">{rules}</p>
                 {session.note !== '' && <p className="turtle-note">{session.note}</p>}

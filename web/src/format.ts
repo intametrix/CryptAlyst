@@ -70,13 +70,15 @@ export function usd(v: unknown): string {
   if (a === 0) return '$0';
   for (let i = 0; i < USD_UNITS.length; i += 1) {
     const u = USD_UNITS[i];
+    if (u === undefined) continue;
     if (a >= u.scale) {
       let scaled = a / u.scale;
       let suffix = u.suffix;
       // 999_960 -> "1000.0K" would be silly; promote to "$1.0M".
-      if (Number(scaled.toFixed(1)) >= 1000 && i > 0) {
-        scaled = a / USD_UNITS[i - 1].scale;
-        suffix = USD_UNITS[i - 1].suffix;
+      const prev = i > 0 ? USD_UNITS[i - 1] : undefined;
+      if (Number(scaled.toFixed(1)) >= 1000 && prev !== undefined) {
+        scaled = a / prev.scale;
+        suffix = prev.suffix;
       }
       return `${sign}$${scaled.toFixed(1)}${suffix}`;
     }

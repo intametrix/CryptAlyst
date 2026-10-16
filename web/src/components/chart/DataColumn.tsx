@@ -34,7 +34,7 @@ export function DataColumn({ latest, overlaySeries, outlook, tools }: DataColumn
 
   const lastOf = (key: string): number | null => {
     const points = seriesMap.get(key) ?? [];
-    return points.length > 0 ? points[points.length - 1].value : null;
+    return points.length > 0 ? (points[points.length - 1]?.value ?? null) : null;
   };
 
   const indicatorRows: Row[] = [

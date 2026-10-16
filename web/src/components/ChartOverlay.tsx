@@ -219,6 +219,7 @@ export function ChartOverlay({
       }
       const first = focusables[0];
       const last = focusables[focusables.length - 1];
+      if (first === undefined || last === undefined) return;
       const active = document.activeElement;
       if (event.shiftKey && (active === first || active === panel)) {
         event.preventDefault();

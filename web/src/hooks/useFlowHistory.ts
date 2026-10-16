@@ -50,7 +50,7 @@ function parseBins(raw: unknown): FlowBin[] {
   out.sort((a, b) => a.t - b.t);
   const deduped: FlowBin[] = [];
   for (const bin of out) {
-    if (deduped.length > 0 && deduped[deduped.length - 1].t === bin.t) deduped[deduped.length - 1] = bin;
+    if (deduped.length > 0 && deduped[deduped.length - 1]?.t === bin.t) deduped[deduped.length - 1] = bin;
     else deduped.push(bin);
   }
   return deduped;

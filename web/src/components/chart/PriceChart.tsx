@@ -344,13 +344,13 @@ export function PriceChart({
       series.setData(points.map((p) => ({ time: p.time, value: p.value })));
       overlayAppliedRef.current.set(key, signature);
       if (points.length > 0) {
-        overlayTailRef.current.set(key, points[points.length - 1].value);
+        overlayTailRef.current.set(key, points[points.length - 1]?.value ?? 0);
         overlayPointsRef.current.set(key, points.slice());
       }
     }
     handles.chart.timeScale().fitContent();
     setReadySeq((n) => n + 1);
-    const last = bars.length > 0 ? bars[bars.length - 1] : null;
+    const last = bars.length > 0 ? (bars[bars.length - 1] ?? null) : null;
     liveStateRef.current = {
       lastBarTime: last === null ? null : barTime(last),
       lastOpen: last === null ? null : last.o,
@@ -516,7 +516,7 @@ export function PriceChart({
       const points = overlayPointsRef.current.get(key);
       if (points === undefined || points.length === 0) continue;
       const tail = points[points.length - 1];
-      if (tail.time === time) continue; // already on this bar
+      if (tail === undefined || tail.time === time) continue; // already on this bar
       const value = liveValue(key) ?? overlayTailRef.current.get(key);
       if (value === undefined || !Number.isFinite(value)) continue;
       if (time < tail.time) continue; // only forward

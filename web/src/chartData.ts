@@ -150,8 +150,9 @@ export function alignIndicator(key: string, values: unknown, bars: readonly Safe
   const n = Math.min(values.length, bars.length);
   for (let i = 0; i < n; i += 1) {
     const v = toNum(values[i]);
-    if (v === null) continue;
-    data.push({ time: barTime(bars[i]), value: v });
+    const bar = bars[i];
+    if (v === null || bar === undefined) continue;
+    data.push({ time: barTime(bar), value: v });
   }
   return { key, data };
 }
@@ -337,20 +338,24 @@ export function toMarkers(marks: unknown, bars: readonly SafeBar[], canon: Color
  */
 export function snapToBar(tMs: number, bars: readonly SafeBar[]): UTCTimestamp | null {
   if (bars.length === 0) return null;
-  if (tMs < bars[0].t) return null;
+  const first = bars[0];
+  if (first === undefined || tMs < first.t) return null;
   let lo = 0;
   let hi = bars.length - 1;
   let best = 0;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (bars[mid].t <= tMs) {
+    const bar = bars[mid];
+    if (bar === undefined) break;
+    if (bar.t <= tMs) {
       best = mid;
       lo = mid + 1;
     } else {
       hi = mid - 1;
     }
   }
-  return barTime(bars[best]);
+  const bestBar = bars[best];
+  return bestBar === undefined ? null : barTime(bestBar);
 }
 
 /* -------------------------------------------------------------- price format */
@@ -400,8 +405,8 @@ export interface LatestSummary {
 
 export function summarizeLatest(latest: unknown, bars: readonly SafeBar[]): LatestSummary {
   const l = (typeof latest === 'object' && latest !== null ? latest : {}) as Record<string, unknown>;
-  const last = bars.length > 0 ? bars[bars.length - 1] : null;
-  const prev = bars.length > 1 ? bars[bars.length - 2] : null;
+  const last = bars.length > 0 ? (bars[bars.length - 1] ?? null) : null;
+  const prev = bars.length > 1 ? (bars[bars.length - 2] ?? null) : null;
   let trend = typeof l.trend === 'string' ? l.trend : null;
   if (trend === null && last !== null && prev !== null) {
     trend = last.c > prev.c ? 'up' : last.c < prev.c ? 'down' : 'flat';
@@ -412,7 +417,9 @@ export function summarizeLatest(latest: unknown, bars: readonly SafeBar[]): Late
     if (prior.length > 0) {
       const sorted = prior.slice().sort((a, b) => a - b);
       const mid = Math.floor(sorted.length / 2);
-      const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+      const lower = sorted[mid - 1];
+      const upper = sorted[mid];
+      const median = sorted.length % 2 === 0 ? ((lower ?? 0) + (upper ?? 0)) / 2 : (upper ?? 0);
       if (median > 0) volumeRatio = last.q / median;
     }
   }

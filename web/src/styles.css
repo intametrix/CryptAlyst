@@ -1902,17 +1902,6 @@ tr.selected {
   border-left: 2px solid #33415f;
 }
 
-.chart-footer {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-width: 0;
-  flex: 0 0 auto;
-  padding: 7px 12px;
-  border-top: 1px solid var(--border-soft);
-  background: var(--panel-2);
-}
-
 .legend {
   display: inline-flex;
   align-items: baseline;
@@ -3707,34 +3696,6 @@ table {
   touch-action: none;
 }
 
-.signals-divider:hover,
-.signals-divider:focus-visible {
-  background: color-mix(in srgb, var(--accent) 45%, var(--border-soft));
-  outline: none;
-}
-
-.signals-dock {
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  background: var(--panel-2);
-  border-top: 1px solid var(--border);
-}
-
-.signals-head {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 0;
-  /* Zero vertical padding gave a 19px strip; 7px makes it a bar you can hit. */
-  padding: 7px 10px;
-}
-
 /* Collapsed, the dock is a slim strip rather than a panel: no panel background,
    no border, and only enough height for the toggle. It has to remain a real
    clickable target, so it is 20px rather than nothing — and the caret, label and
@@ -3747,16 +3708,6 @@ table {
      panel -- recessive, not absent. */
   background: var(--panel-3);
   border-top: 1px solid var(--border);
-}
-
-.signals-dock.collapsed .signals-toggle {
-  font-size: 10px;
-  padding: 0 5px;
-  color: var(--muted);
-}
-
-.signals-dock.collapsed .signals-count {
-  padding: 0 4px;
 }
 
 /* A real button, always present — the panel must be reopenable when collapsed. */
@@ -3778,39 +3729,6 @@ table {
   cursor: pointer;
 }
 
-.signals-toggle:hover {
-  background: var(--panel-3);
-}
-
-.signals-toggle:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.signals-count {
-  padding: 0 5px;
-  color: var(--muted-2);
-  background: #0d131e;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-}
-
-.signals-hint {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 10px;
-  color: var(--muted-2);
-}
-
-.signals-body {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-}
-
 /* ---------------------------------------------------------- outlook levels */
 
 .outlook-levels {
@@ -3819,13 +3737,6 @@ table {
   align-items: center;
   gap: 6px 12px;
   min-width: 0;
-}
-
-.outlook-levels-label {
-  font-size: 9.5px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--muted-2);
 }
 
 .level-row {
@@ -3951,6 +3862,7 @@ table {
  * label, not an icon the user has to decode.
  */
 .chart-only {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -3985,6 +3897,7 @@ table {
 }
 
 .outlook-toggle {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -4162,6 +4075,7 @@ table {
   white-space: normal;
 }
 .cp-legend-row {
+  min-width: 0;
   display: flex;
   flex-direction: row;
   align-items: baseline;
@@ -4256,6 +4170,8 @@ table {
   overflow: hidden;
 }
 .cp-columns {
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: row;
   flex: 1 1 auto;
@@ -4298,6 +4214,7 @@ table {
   color: var(--muted, #8492a9);
 }
 .cp-data-row {
+  min-width: 0;
   display: flex;
   flex-direction: row;
   justify-content: space-between;
@@ -4331,6 +4248,8 @@ table {
   color: #ff4d5e;
 }
 .cp-data-basis {
+  min-height: 0;
+  min-width: 0;
   margin: 4px 0 0;
   font-size: 11px;
   color: var(--muted, #8492a9);
@@ -4352,6 +4271,7 @@ table {
 
 /* --- chart popup events: the main page's alert card, compact --------------- */
 .cp-alert-rows {
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -4400,6 +4320,7 @@ table {
   padding-left: 10px;
 }
 .cp-ind-menu {
+  min-width: 0;
   position: relative;
   display: inline-flex;
 }
@@ -4419,6 +4340,8 @@ table {
   gap: 4px;
 }
 .cp-ind-item {
+  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -4505,6 +4428,7 @@ table {
   font-size: 11px;
 }
 .turtle-rows {
+  min-height: 0;
   list-style: none;
   margin: 0 0 8px;
   padding: 0;

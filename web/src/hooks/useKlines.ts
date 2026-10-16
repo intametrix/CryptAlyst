@@ -270,8 +270,8 @@ export function useKlines(
       setRefreshing(false);
       setAtMs(Date.now());
       const bars = body.bars;
-      newestBarT.current =
-        bars.length > 0 && typeof bars[bars.length - 1]?.t === 'number' ? bars[bars.length - 1].t : null;
+      const newestBar = bars.length > 0 ? bars[bars.length - 1] : undefined;
+      newestBarT.current = typeof newestBar?.t === 'number' ? newestBar.t : null;
     })();
 
     return () => {
