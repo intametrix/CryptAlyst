@@ -141,10 +141,13 @@ type Session struct {
 	MaxDrawdn  float64    `json:"max_drawdown_pct"`
 	// Counters make the filter's effect visible rather than silent: a vetoed
 	// entry that left no trace would look like the engine simply missed it.
-	EntriesFilled  int    `json:"entries_filled"`
-	EntriesVetoed  int    `json:"entries_vetoed"`
-	EntriesBlocked int    `json:"entries_blocked"`
-	Note           string `json:"note"`
+	// Watchlist is what the session decided to invest in at start. Exposed
+	// because "why did it not trade" is usually answered here, not in the rules.
+	Watchlist      []Scored `json:"watchlist"`
+	EntriesFilled  int      `json:"entries_filled"`
+	EntriesVetoed  int      `json:"entries_vetoed"`
+	EntriesBlocked int      `json:"entries_blocked"`
+	Note           string   `json:"note"`
 }
 
 // Alert is the subset of a pump/dump alert the engine acts on.
@@ -192,6 +195,13 @@ type Engine struct {
 
 	orderSeq int
 	now      func() time.Time
+
+	// The selected universe, decided once at session start from the prediction
+	// inputs. Empty means "no filter", which is what a test or a manual session
+	// wants and is NOT the same as having selected nothing.
+	watchlist  map[string]Scored
+	selected   []Scored
+	selectedAt time.Time
 }
 
 // New builds an idle engine with the given rules.

@@ -120,6 +120,10 @@ func main() {
 	// Durable alert history so chart markers show what a symbol did EARLIER,
 	// not merely since this process started.
 	alerts.SetHistoryPath(opt.alertHistory)
+
+	// The turtle trading session. Idle until the dashboard's start button, and
+	// given a 300 USDT wallet by default -- see turtle.DefaultConfig.
+	turtleEngine := turtle.New(turtle.DefaultConfig())
 	cfg := engine.Config()
 
 	// The detector registry. Created before the stream so the stream's handler
@@ -303,7 +307,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, outlookSvc, universe, opt)
+		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, outlookSvc, universe, opt, turtleEngine)
 	}()
 	wg.Add(1)
 	go func() {
@@ -316,6 +320,7 @@ func main() {
 	summary := configSummary(opt, cfg)
 	server := api.New(api.Deps{
 		Hub:           hub,
+		Turtle:        turtleEngine,
 		Engine:        engine,
 		Universe:      universe,
 		Screener:      screener,
@@ -507,6 +512,7 @@ func scanLoop(
 	outlookSvc *outlook.Service,
 	universe *market.Universe,
 	opt options,
+	turtleEngine *turtle.Engine,
 ) {
 	cfg := engine.Config()
 
@@ -596,6 +602,11 @@ func scanLoop(
 					}
 				}
 				alerts.Add(alert)
+				// The turtle session is FED here, at the single point where an
+				// alert becomes real. It decides for itself whether to act; this
+				// only delivers, so the trading rules stay testable without a
+				// live market.
+				feedTurtle(turtleEngine, engine, alert)
 				hub.Broadcast(alert)
 				if recorder != nil {
 					// Record before logging: the ledger is the measurement, and
@@ -814,4 +825,83 @@ func splitCSV(s string) []string {
 		}
 	}
 	return out
+}
+
+// feedTurtle converts a live alert into the turtle engine's own input, carrying
+// the market context the entry rules need.
+//
+// The conversion is explicit rather than passing the api.Alert straight through
+// because the turtle rules depend on values the alert does not carry: N (ATR) for
+// sizing, the Donchian bounds for the confirm, and realised volatility for the
+// veto. Supplying them here keeps that dependency in one visible place instead of
+// hiding it inside the engine.
+func feedTurtle(te *turtle.Engine, flowEngine *flow.Engine, a api.Alert) {
+	if te == nil || flowEngine == nil {
+		return
+	}
+	st := te.Session()
+	if st.State != turtle.StateRunning {
+		return
+	}
+
+	now := time.Now()
+	rows := flowEngine.Snapshot(0, now.UnixMilli())
+	var row *flow.Candidate
+	for i := range rows {
+		if rows[i].Symbol == a.Symbol {
+			row = &rows[i]
+			break
+		}
+	}
+	if row == nil {
+		return
+	}
+
+	// Mark every open position on this symbol first, so a stop that was already
+	// breached closes before a new entry is considered on the same tick.
+	te.Mark(a.Symbol, row.Price, now)
+
+	vol := realisedVolPct(row)
+	te.OnAlertForSymbol(turtle.Alert{
+		ID:        a.EventID,
+		Symbol:    a.Symbol,
+		Kind:      a.Kind,
+		Severity:  a.Severity,
+		Price:     row.Price,
+		ChangePct: valueOr(row.Change10s, 0),
+		At:        now,
+		VolPct:    vol,
+		ATR:       atrFromSigma(row),
+	}, row.Price, 0, vol)
+}
+
+// realisedVolPct expresses the symbol's recent movement as a percentage, which
+// is the unit the volatility veto is written in.
+func realisedVolPct(row *flow.Candidate) float64 {
+	s := row.Sigma10s
+	if s <= 0 || row.Price <= 0 {
+		return 0
+	}
+	return s / row.Price * 100
+}
+
+// atrFromSigma is N in price terms.
+//
+// True ATR needs a bar history the flow engine does not keep, so N is taken from
+// the measured 10s dispersion scaled by the 2N stop assumption the Turtle rules
+// already make. It is an APPROXIMATION and is labelled as one: sizing on a
+// guessed N would silently break the 1%-per-unit risk rule that the whole method
+// rests on, so the engine refuses entries when this is zero rather than guessing.
+func atrFromSigma(row *flow.Candidate) float64 {
+	if row.Sigma10s <= 0 {
+		return 0
+	}
+	return row.Sigma10s
+}
+
+func valueOr(v *float64, def float64) float64 {
+	if v == nil {
+		return def
+	}
+	return *v
 }

@@ -234,6 +234,7 @@ func (e *Engine) sessionLocked() Session {
 		Realized: round2(realized), Unrealized: round2(unrealized),
 		TotalPnL: round2(total), ReturnPct: round4(ret),
 		Positions: positions, PeakEquity: round2(e.peakEquity), MaxDrawdn: round4(e.maxDrawdn),
+		Watchlist:     append([]Scored(nil), e.selected...),
 		EntriesFilled: e.entriesFilled, EntriesVetoed: e.entriesVetoed,
 		EntriesBlocked: e.entriesBlocked,
 		Note:           "perfect liquidity assumed: fills at the signal price with no slippage or market impact, so this PnL is an upper bound and not an executable result",
@@ -241,7 +242,7 @@ func (e *Engine) sessionLocked() Session {
 }
 
 // Session returns the current session state.
-func (e *Engine) Snapshot() Session {
+func (e *Engine) Session() Session {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.sessionLocked()

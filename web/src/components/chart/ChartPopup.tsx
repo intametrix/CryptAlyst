@@ -11,7 +11,7 @@ import { useKlines } from '../../hooks/useKlines';
 import { useOutlook } from '../../hooks/useOutlook';
 import type { AlertMsg, Interval, ToolsMsg } from '../../types';
 import { INTERVALS } from '../../types';
-import { presetAction, type ZoomPreset } from '../../zoom';
+import { type ZoomPreset } from '../../zoom';
 import { Tooltip } from '../Tooltip';
 import { EventGlyph } from '../EventGlyph';
 import { BottomPanel } from './BottomPanel';
@@ -190,27 +190,26 @@ export function ChartPopup({
           {symbol} · {interval}
         </span>
 
-        <div className="interval-chips" role="group" aria-label="chart interval">
-          {INTERVALS.map((iv) => (
-            <Tooltip
-              key={iv}
-              tone="chip"
-              keys={['interval']}
-              tools={tools}
-              fallbackTitle={`Interval ${iv}`}
-              label={`Fetch klines at the ${iv} interval for the selected symbol.`}
-            >
-              <button
-                type="button"
-                className={`chip chip-toggle${interval === iv ? ' on' : ''}`}
-                aria-pressed={interval === iv}
-                onClick={() => onIntervalChange(iv)}
-              >
+        <Tooltip
+          tone="chip"
+          keys={['interval']}
+          tools={tools}
+          fallbackTitle="Interval"
+          label="Fetch klines at this interval for the selected symbol."
+        >
+          <select
+            className="cp-select"
+            aria-label="chart interval"
+            value={interval}
+            onChange={(event) => onIntervalChange(event.target.value as Interval)}
+          >
+            {INTERVALS.map((iv) => (
+              <option key={iv} value={iv}>
                 {iv}
-              </button>
-            </Tooltip>
-          ))}
-        </div>
+              </option>
+            ))}
+          </select>
+        </Tooltip>
 
         <div className="cp-ind-chips" role="group" aria-label="chart overlays">
           <Tooltip
@@ -349,36 +348,31 @@ export function ChartPopup({
 
         {/* Zoom presets, straight from the server's plan. */}
         <div className="cp-zoom" role="group" aria-label="zoom presets">
-          {presets.map((preset) => {
-            const action = presetAction(preset, interval);
-            const needsSwitch = action === 'switch';
-            return (
-              <Tooltip
-                key={preset.preset}
-                keys={['zoom']}
-                tools={tools}
-                fallbackTitle={`Zoom · ${preset.preset}`}
-                label={
-                  preset.mode === 'fit'
-                    ? 'Fit the whole loaded history.'
-                    : needsSwitch
-                      ? `Show the newest ${preset.preset} (${int(preset.bars ?? 0)} bars of ${preset.interval} candles). It switches the chart to ${preset.interval} candles, which loads new data.`
-                      : `Show the newest ${preset.preset} — ${int(preset.bars ?? 0)} bars already in memory, so this is a pure zoom.`
-                }
-                value={activePreset === preset.preset ? 'active' : null}
-              >
-                <button
-                  type="button"
-                  className={`chip chip-toggle${activePreset === preset.preset ? ' on' : ''}${needsSwitch ? ' chip-switch' : ''}`}
-                  aria-pressed={activePreset === preset.preset}
-                  disabled={presetPending}
-                  onClick={() => onZoomPreset(preset)}
-                >
+          <Tooltip
+            keys={['zoom']}
+            tools={tools}
+            fallbackTitle="Zoom preset"
+            label="Show the newest N bars. Presets that live on another interval switch the chart to those candles, which loads new data."
+          >
+            <select
+              className="cp-select"
+              aria-label="zoom preset"
+              value={activePreset ?? ''}
+              onChange={(event) => {
+                const preset = presets.find((p) => p.preset === event.target.value);
+                if (preset !== undefined) onZoomPreset(preset);
+              }}
+            >
+              <option value="" disabled>
+                zoom…
+              </option>
+              {presets.map((preset) => (
+                <option key={preset.preset} value={preset.preset}>
                   {preset.preset}
-                </button>
-              </Tooltip>
-            );
-          })}
+                </option>
+              ))}
+            </select>
+          </Tooltip>
           <Tooltip
             keys={['zoom']}
             tools={tools}

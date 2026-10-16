@@ -8,8 +8,8 @@ import (
 // handleDetectors lists the registered pluggable detection models, and toggles
 // them on POST.
 //
-//   GET  /api/detectors                      -> every detector + its params + counters
-//   POST /api/detectors  {"name":"...","enabled":false}
+//	GET  /api/detectors                      -> every detector + its params + counters
+//	POST /api/detectors  {"name":"...","enabled":false}
 func (s *Server) handleDetectors(w http.ResponseWriter, r *http.Request) {
 	if s.deps.Detectors == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"type": "detectors", "detectors": []any{}})

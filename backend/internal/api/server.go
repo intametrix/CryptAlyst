@@ -27,6 +27,7 @@ import (
 	"pumpdump/backend/internal/outlook"
 	"pumpdump/backend/internal/perf"
 	"pumpdump/backend/internal/screen"
+	"pumpdump/backend/internal/turtle"
 )
 
 // Alert is a detected onset or reversal, enriched for display.
@@ -166,7 +167,10 @@ type SurveyProvider interface {
 
 // Deps are the server's collaborators.
 type Deps struct {
-	Hub      *events.Hub
+	Hub *events.Hub
+	// Turtle is the alert-driven trading session. Nil disables the routes rather
+	// than panicking, so the server still runs without a wallet configured.
+	Turtle   *turtle.Engine
 	Engine   *flow.Engine
 	Universe *market.Universe
 	Screener *screen.Screener
@@ -217,6 +221,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/alerts", s.handleAlerts)
 	mux.HandleFunc("/api/alerts/history", s.handleAlertHistory)
 	mux.HandleFunc("/api/alerts/groups", s.handleAlertGroups)
+	// The turtle session: state on GET, start/stop on POST, plus its two lists.
+	mux.HandleFunc("/api/turtle", s.handleTurtle)
+	mux.HandleFunc("/api/turtle/trades", s.handleTurtleTrades)
+	mux.HandleFunc("/api/turtle/orders", s.handleTurtleOrders)
 	mux.HandleFunc("/api/perf", s.handlePerf)
 	mux.HandleFunc("/api/screen", s.handleScreen)
 	mux.HandleFunc("/api/screen/refresh", s.handleScreenRefresh)
