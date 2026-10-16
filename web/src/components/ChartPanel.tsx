@@ -358,6 +358,15 @@ function buildChart(
   label: { interval: string },
   /** Called when follow mode arms or disarms, so the panel can mirror it. */
   sinkFollow: (following: boolean) => void,
+  /**
+   * Skip the indicator panes entirely.
+   *
+   * Passed down rather than read from state inside, because the decision has to
+   * be made BEFORE `addPane()` is called: a pane that exists is floored at 30px
+   * by the library and cannot be shrunk away, so the only way to hand its height
+   * to the candles is for it never to be created.
+   */
+  chartOnly: boolean,
 ): ChartHandles {
   const chart = createChart(container, {
     /**
@@ -433,89 +442,94 @@ function buildChart(
   }
 
   // --- indicator panes ------------------------------------------------------
-  const atrPane = chart.addPane();
-  const atrLine = atrPane.addSeries(LineSeries, {
-    color: COLORS.atr,
-    lineWidth: 2,
-    priceLineVisible: false,
-    lastValueVisible: true,
-    visible: false,
-    title: seriesTitle(tools, ['atr20', 'atr'], 'atr20'),
-  });
-  lines.set('atr20', atrLine);
-  atrLine.createPriceLine({
-    price: 0,
-    color: 'rgba(251, 146, 60, 0.25)',
-    lineWidth: 1,
-    lineStyle: LineStyle.Dotted,
-    axisLabelVisible: false,
-    title: '',
-  });
+  // Skipped entirely in chart-only mode. Not hidden and not zeroed: a pane
+  // that is never created has no 30px floor to fight, which is the whole
+  // reason this works where setHeight(0) does not.
+  if (!chartOnly) {
+    const atrPane = chart.addPane();
+    const atrLine = atrPane.addSeries(LineSeries, {
+      color: COLORS.atr,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: true,
+      visible: false,
+      title: seriesTitle(tools, ['atr20', 'atr'], 'atr20'),
+    });
+    lines.set('atr20', atrLine);
+    atrLine.createPriceLine({
+      price: 0,
+      color: 'rgba(251, 146, 60, 0.25)',
+      lineWidth: 1,
+      lineStyle: LineStyle.Dotted,
+      axisLabelVisible: false,
+      title: '',
+    });
 
-  const adxPane = chart.addPane();
-  const adxLine = adxPane.addSeries(LineSeries, {
-    color: COLORS.adx,
-    lineWidth: 2,
-    priceLineVisible: false,
-    lastValueVisible: true,
-    visible: false,
-    title: seriesTitle(tools, ['adx14', 'adx'], 'adx14'),
-  });
-  const plusLine = adxPane.addSeries(LineSeries, {
-    color: COLORS.plusDi,
-    lineWidth: LINE_WIDTH,
-    priceLineVisible: false,
-    lastValueVisible: false,
-    crosshairMarkerVisible: false,
-    visible: false,
-    title: seriesTitle(tools, ['plus_di'], 'plus_di'),
-  });
-  const minusLine = adxPane.addSeries(LineSeries, {
-    color: COLORS.minusDi,
-    lineWidth: LINE_WIDTH,
-    priceLineVisible: false,
-    lastValueVisible: false,
-    crosshairMarkerVisible: false,
-    visible: false,
-    title: seriesTitle(tools, ['minus_di'], 'minus_di'),
-  });
-  lines.set('adx14', adxLine);
-  lines.set('plus_di', plusLine);
-  lines.set('minus_di', minusLine);
-  adxLine.createPriceLine({
-    price: 25,
-    color: 'rgba(56, 189, 248, 0.35)',
-    lineWidth: 1,
-    lineStyle: LineStyle.Dashed,
-    axisLabelVisible: true,
-    title: '25',
-  });
-
-  const rsiPane = chart.addPane();
-  const rsiLine = rsiPane.addSeries(LineSeries, {
-    color: COLORS.rsi,
-    lineWidth: 2,
-    priceLineVisible: false,
-    lastValueVisible: true,
-    visible: false,
-    title: seriesTitle(tools, ['rsi14', 'rsi'], 'rsi14'),
-  });
-  lines.set('rsi14', rsiLine);
-  for (const level of [30, 70] as const) {
-    rsiLine.createPriceLine({
-      price: level,
-      color: level === 70 ? 'rgba(255, 77, 94, 0.4)' : 'rgba(46, 224, 106, 0.4)',
+    const adxPane = chart.addPane();
+    const adxLine = adxPane.addSeries(LineSeries, {
+      color: COLORS.adx,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: true,
+      visible: false,
+      title: seriesTitle(tools, ['adx14', 'adx'], 'adx14'),
+    });
+    const plusLine = adxPane.addSeries(LineSeries, {
+      color: COLORS.plusDi,
+      lineWidth: LINE_WIDTH,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+      visible: false,
+      title: seriesTitle(tools, ['plus_di'], 'plus_di'),
+    });
+    const minusLine = adxPane.addSeries(LineSeries, {
+      color: COLORS.minusDi,
+      lineWidth: LINE_WIDTH,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+      visible: false,
+      title: seriesTitle(tools, ['minus_di'], 'minus_di'),
+    });
+    lines.set('adx14', adxLine);
+    lines.set('plus_di', plusLine);
+    lines.set('minus_di', minusLine);
+    adxLine.createPriceLine({
+      price: 25,
+      color: 'rgba(56, 189, 248, 0.35)',
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,
-      title: String(level),
+      title: '25',
     });
-  }
 
-  // --- the flow pane: burst multiple per 10-second bin -----------------------
-  // Log scale on purpose: bursts are heavy-tailed, so one 47x bar would flatten
-  // every other bin on a linear axis. `logarithmic` is a valid `PriceScaleMode`
-  // in the installed typings (verified in `typings.d.ts`).
+    const rsiPane = chart.addPane();
+    const rsiLine = rsiPane.addSeries(LineSeries, {
+      color: COLORS.rsi,
+      lineWidth: 2,
+      priceLineVisible: false,
+      lastValueVisible: true,
+      visible: false,
+      title: seriesTitle(tools, ['rsi14', 'rsi'], 'rsi14'),
+    });
+    lines.set('rsi14', rsiLine);
+    for (const level of [30, 70] as const) {
+      rsiLine.createPriceLine({
+        price: level,
+        color: level === 70 ? 'rgba(255, 77, 94, 0.4)' : 'rgba(46, 224, 106, 0.4)',
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: String(level),
+      });
+    }
+
+    // --- the flow pane: burst multiple per 10-second bin -----------------------
+    // Log scale on purpose: bursts are heavy-tailed, so one 47x bar would flatten
+    // every other bin on a linear axis. `logarithmic` is a valid `PriceScaleMode`
+    // in the installed typings (verified in `typings.d.ts`).
+  }
   const flowPane = chart.addPane();
   const flow = flowPane.addSeries(HistogramSeries, {
     priceScaleId: 'right',
@@ -847,6 +861,13 @@ export interface ChartPanelProps {
   /** The canonical palette; the chart draws with the server's own colours. */
   canon?: ColorCanon | null;
   /**
+   * Chart-only mode: the indicator panes are never created, so the candles take
+   * the whole body. Rebuilding is deliberate -- the library floors every pane at
+   * 30px, so a pane that exists cannot be shrunk away, and the only way to give
+   * its height to the price is for it not to exist.
+   */
+  chartOnly?: boolean;
+  /**
    * The persisted alerts that arrived with the bars.
    *
    * Reported up so the feed can open populated: a symbol's recent events are in
@@ -920,6 +941,7 @@ export function ChartPanel({
   bottom = null,
   onZoomControls,
   onEvents,
+  chartOnly = false,
 }: ChartPanelProps) {
   const chartRef = useRef<ChartHandles | null>(null);
   /**
@@ -1142,6 +1164,7 @@ export function ChartPanel({
       (following) => {
         followMirror.current = following;
       },
+      chartOnly,
     );
     chartRef.current = handles;
     setLayer({ chart: handles.chart, series: handles.candles });
@@ -1172,7 +1195,7 @@ export function ChartPanel({
     // with it. A reload is the only legitimate reason to rebuild, and `loadSeq` is
     // exactly that signal.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, loadSeq, tools]);
+  }, [symbol, loadSeq, tools, chartOnly]);
 
   /* -- container resize: the canvas follows the box, not the viewport -------- */
 

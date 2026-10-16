@@ -3922,3 +3922,33 @@ table {
 .pane-handle-price:focus-visible::after {
   background: color-mix(in srgb, var(--accent) 80%, transparent);
 }
+
+/* --------------------------------------------------------------- chart only */
+/*
+ * The chart-only checkbox, at the top of the overlay beside the close button.
+ * The whole point is that it is a plain, obvious control: a real checkbox with a
+ * label, not an icon the user has to decode.
+ */
+.chart-only {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.chart-only:hover {
+  color: var(--text);
+}
+
+.chart-only input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
