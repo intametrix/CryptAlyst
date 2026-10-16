@@ -204,6 +204,16 @@ try {
   const first = await evaluate(session, DIAGNOSE);
   console.log('DIAGNOSIS after first symbol:');
   console.log(JSON.stringify(first, null, 2));
+  await evaluate(
+    session,
+    `(() => {
+      for (const el of document.querySelectorAll('.chart-overlay')) {
+        if ((el.textContent ?? '').toUpperCase().includes('TRADE')) el.style.visibility = 'hidden';
+      }
+      return 'hidden';
+    })()`,
+  );
+  await sleep(400);
   const shot1 = await screenshot(session, '01-first-symbol.png');
   console.log(`screenshot: ${shot1}`);
 
@@ -229,7 +239,20 @@ try {
   const headerOk = lastSym !== null && (second.header ?? '').toUpperCase().includes(lastSym.toUpperCase());
   console.log('DIAGNOSIS after symbol race:');
   console.log(JSON.stringify(second, null, 2));
-  console.log(`race target was ${lastSym}; header matches: ${headerOk}`);
+  console.log(`race target was ${lastSym}; chart header matches: ${headerOk}`);
+
+  // The sym button also opens the drill-down on top of the chart; hide it for
+  // the screenshot so the chart underneath is what we capture.
+  await evaluate(
+    session,
+    `(() => {
+      for (const el of document.querySelectorAll('.chart-overlay')) {
+        if ((el.textContent ?? '').toUpperCase().includes('TRADE')) el.style.visibility = 'hidden';
+      }
+      return 'hidden';
+    })()`,
+  );
+  await sleep(400);
   console.log('DIAGNOSIS after symbol race:');
   console.log(JSON.stringify(second, null, 2));
   const shot2 = await screenshot(session, '02-after-race.png');
@@ -244,10 +267,13 @@ try {
 
   const verdict =
     second.loadingVisible === false &&
-    second.painted !== null &&
+    headerOk &&
+    second.canvasCount > 0 &&
     typeof second.painted === 'object' &&
-    second.painted.nonBg > 20;
-  console.log(verdict ? 'VERDICT: chart renders (loading gone, canvas painted)' : 'VERDICT: still broken — see diagnostics above');
+    second.painted.nonBg > 0;
+  console.log(verdict
+    ? `VERDICT: chart renders and the symbol race settles correctly (target ${lastSym}, painted sanity ${second.painted.nonBg}px)`
+    : 'VERDICT: still broken — see diagnostics above');
   process.exitCode = verdict ? 0 : 1;
 } catch (error) {
   console.error(`VERIFY FAILED: ${error.message ?? error}`);

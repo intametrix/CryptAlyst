@@ -492,18 +492,36 @@ func (s *symbolFlow) takerRatio(windowSec float64, now int64) (float64, float64)
 
 // Candidate is one symbol's current flow state. It doubles as the API row.
 type Candidate struct {
-	Symbol         string   `json:"symbol"`
-	Market         string   `json:"market"`
-	Direction      int      `json:"direction"`
-	Price          float64  `json:"last_price"`
-	FlowQuote      float64  `json:"flow_quote"`
-	BaselineQuote  float64  `json:"baseline_quote"`
-	Coverage       float64  `json:"coverage"`
-	BurstMultiple  float64  `json:"burst_multiple"`
-	BurstZ         float64  `json:"burst_z"`
-	Change10s      *float64 `json:"change_10s"`
-	Change30s      *float64 `json:"change_30s"`
-	Change60s      *float64 `json:"change_60s"`
+	Symbol        string  `json:"symbol"`
+	Market        string  `json:"market"`
+	Direction     int     `json:"direction"`
+	Price         float64 `json:"last_price"`
+	FlowQuote     float64 `json:"flow_quote"`
+	BaselineQuote float64 `json:"baseline_quote"`
+	Coverage      float64 `json:"coverage"`
+	BurstMultiple float64 `json:"burst_multiple"`
+	BurstZ        float64 `json:"burst_z"`
+	// Multi-horizon moves. The short horizons are where an ONSET is visible and a
+	// 60s figure is not: by the time 60 seconds of move has accumulated the entry
+	// is gone. 3s and 5s catch the first push, 10s is the window the gates act on,
+	// and 15s is the shortest horizon that can still distinguish a sustained move
+	// from a single aggressive print.
+	Change3s  *float64 `json:"change_3s,omitempty"`
+	Change5s  *float64 `json:"change_5s,omitempty"`
+	Change10s *float64 `json:"change_10s"`
+	Change15s *float64 `json:"change_15s,omitempty"`
+	Change30s *float64 `json:"change_30s"`
+	Change60s *float64 `json:"change_60s"`
+	// TrendSign is -1, 0 or +1: the direction the horizons agree on, weighted by
+	// how much each has actually moved.
+	TrendSign int `json:"trend_sign"`
+	// TrendAgreement is the fraction of the four short horizons sharing that
+	// sign, 0..1. This is the number that separates a genuine move from a
+	// single-horizon flicker: four horizons agreeing is a trend, one horizon
+	// moving alone is a print.
+	TrendAgreement float64 `json:"trend_agreement"`
+	// TrendLabel is a human read of the two above, for the UI and the log.
+	TrendLabel     string   `json:"trend_label"`
 	Sigma10s       float64  `json:"sigma_10s"`
 	SigmaMultiple  float64  `json:"sigma_multiple"`
 	Acceleration   *float64 `json:"acceleration"`
@@ -972,6 +990,11 @@ func (e *Engine) Snapshot(limit int, now int64) []Candidate {
 		change10, has10 := s.changeOver(e.cfg.WindowSec, now)
 		change30, has30 := s.changeOver(30, now)
 		change60, has60 := s.changeOver(60, now)
+		// The short horizons, computed from the same tick ring so they are
+		// mutually consistent by construction rather than by four separate paths.
+		change3, has3 := s.changeOver(3, now)
+		change5, has5 := s.changeOver(5, now)
+		change15, has15 := s.changeOver(15, now)
 		accel, hasAccel := s.flowAcceleration(now)
 		takerRatio, takerQuote := s.takerRatio(e.cfg.WindowSec*2, now)
 
@@ -994,6 +1017,17 @@ func (e *Engine) Snapshot(limit int, now int64) []Candidate {
 			TakerQuote:     takerQuote,
 			UpdatedMS:      s.updatedMS,
 		}
+		if has3 {
+			row.Change3s = &change3
+		}
+		if has5 {
+			row.Change5s = &change5
+		}
+		if has15 {
+			row.Change15s = &change15
+		}
+		row.TrendSign, row.TrendAgreement, row.TrendLabel = readTrend(
+			moveOr(row.Change3s), moveOr(row.Change5s), moveOr(row.Change10s), moveOr(row.Change15s))
 		if !s.baseline.ready() {
 			row.BurstMultiple = 0
 			row.BurstZ = 0
@@ -1070,4 +1104,97 @@ func (e *Engine) PruneTaker() {
 	for _, s := range e.states {
 		s.pruneTaker(cutoff)
 	}
+}
+
+// moveOr dereferences an optional move, returning 0 when absent.
+func moveOr(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+// readTrend turns four horizon moves into a direction, an agreement fraction and
+// a label.
+//
+// Why agreement matters more than magnitude: a single horizon showing a large
+// move is one aggressive print, which is exactly the thing that trips a naive
+// detector and then reverses. Four horizons pointing the same way is a move that
+// has been sustained across every timescale we watch, which is what a pump or a
+// dump actually looks like while it is happening.
+//
+// The horizons are weighted rather than counted equally, because a 3s move is
+// noisier evidence than a 15s one: the weighted agreement is the fraction of
+// total movement that shares the dominant sign.
+func readTrend(change3, change5, change10, change15 float64) (int, float64, string) {
+	moves := [4]float64{change3, change5, change10, change15}
+	// Weights rise with the horizon: 3s is the least trustworthy witness.
+	weights := [4]float64{0.15, 0.20, 0.30, 0.35}
+
+	up, down := 0.0, 0.0
+	// A deadband, so market noise around zero does not count as agreement in
+	// either direction. Without it a flat symbol reports 100% agreement on a
+	// move of zero.
+	const deadband = 0.02
+	for i, move := range moves {
+		if move > deadband {
+			up += weights[i]
+		} else if move < -deadband {
+			down += weights[i]
+		}
+	}
+
+	if up == 0 && down == 0 {
+		return 0, 0, "flat"
+	}
+	sign, agreement := 1, up
+	if down > up {
+		sign, agreement = -1, down
+	}
+
+	// Agreement is the share of TOTAL weight, not the share of active weight.
+	//
+	// Dividing by (up + down) was wrong and a test caught it: horizons inside the
+	// deadband contribute to neither side, so a single horizon moving alone got
+	// up/total = 0.15/0.15 = 1.0 and was reported as a SUSTAINED PUMP. The one
+	// case the metric exists to reject — one horizon flickering while the others
+	// sit still — was the case it scored highest. Dividing by the full weight
+	// makes a lone mover score 0.15, which is what it is.
+	const totalWeight = 1.0
+	agreement = agreement / totalWeight
+
+	label := "mixed"
+	switch {
+	case agreement > 0.85 && sign > 0:
+		label = "sustained pump"
+	case agreement > 0.85 && sign < 0:
+		label = "sustained dump"
+	case agreement > 0.6 && sign > 0:
+		label = "building up"
+	case agreement > 0.6 && sign < 0:
+		label = "building down"
+	case sign > 0:
+		label = "single-horizon up"
+	default:
+		label = "single-horizon down"
+	}
+	return sign, roundTo(agreement, 4), label
+}
+
+func roundTo(v float64, digits int) float64 {
+	factor := 1.0
+	for i := 0; i < digits; i++ {
+		factor *= 10
+	}
+	if v != v {
+		return 0
+	}
+	return float64(int64(v*factor+signOf(v)*0.5)) / factor
+}
+
+func signOf(v float64) float64 {
+	if v < 0 {
+		return -1
+	}
+	return 1
 }
