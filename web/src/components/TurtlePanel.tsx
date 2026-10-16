@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 import { clock, int, num, px, usd } from '../format';
 import { useSelection } from '../selection';
+import { ChartIcon } from './ChartIcon';
 import type { ToolsMsg } from '../types';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
@@ -274,7 +275,7 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                     return (
                       <li key={w.symbol} className={`turtle-row${fallback ? ' turtle-fallback' : ''}`}>
                         <button type="button" className="turtle-sym num" onClick={() => selection.selectSymbol(w.symbol)} title={`chart ${w.symbol}`}>
-                          {w.symbol}
+                          <ChartIcon /> {w.symbol}
                         </button>
                         <span className="num">score {num(w.score, 2)}</span>
                         <span className="turtle-reasons">
@@ -305,7 +306,7 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                         <span className={t.side_label === 'BUY' ? 'up' : 'down'}>{t.side_label}</span>
                         <span className="num" title={t.opened_at}>{clock(Date.parse(t.opened_at))}</span>
                         <button type="button" className="turtle-sym num" onClick={() => selection.selectSymbol(t.symbol)} title={`chart ${t.symbol}`}>
-                          {t.symbol}
+                          <ChartIcon /> {t.symbol}
                         </button>
                         <span className="num">{t.units.toFixed(4)}</span>
                         <span className="num" title={`last ${px(t.last_price)}`}>{px(t.entry_price)}</span>
@@ -338,7 +339,7 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                         <span className={t.side_label === 'BUY' ? 'up' : 'down'}>{t.side_label}</span>
                         <span className="num" title={t.opened_at}>{clock(Date.parse(t.opened_at))}</span>
                         <button type="button" className="turtle-sym num" onClick={() => selection.selectSymbol(t.symbol)} title={`chart ${t.symbol}`}>
-                          {t.symbol}
+                          <ChartIcon /> {t.symbol}
                         </button>
                         <span className="num">{t.units.toFixed(4)}</span>
                         <span className="num" title={`exit ${px(t.exit_price)}`}>
@@ -359,7 +360,7 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                     <li key={o.id} className={`turtle-row${o.status === 'rejected' ? ' turtle-rejected' : ''}`}>
                       <span className="num">{o.id}</span>
                       <button type="button" className="turtle-sym num" onClick={() => selection.selectSymbol(o.symbol)} title={`chart ${o.symbol}`}>
-                        {o.symbol}
+                        <ChartIcon /> {o.symbol}
                       </button>
                       <span className="num">{o.side} {o.type}</span>
                       <span className="num">{o.status}</span>
