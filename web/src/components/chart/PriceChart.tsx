@@ -48,7 +48,16 @@ const COLORS = {
   ema20: '#22d3ee',
   ema50: '#f59e0b',
   sma200: '#e879f9',
+  flow: '#4d8dfd',
+  atr: '#fbbf24',
+  adx: '#a78bfa',
+  plusDi: '#2ee06a',
+  minusDi: '#ff4d5e',
+  rsi: '#22d3ee',
 } as const;
+
+/** Sub-pane line keys, each drawn on its own pane below the candles. */
+export const PANE_KEYS = ['atr20', 'adx14', 'plus_di', 'minus_di', 'rsi14'] as const;
 
 const LINE_WIDTH = 1 as const;
 
@@ -81,6 +90,36 @@ function lineStyleFor(key: string): { color: string; lineStyle?: LineStyle; widt
   }
 }
 
+function paneIndexFor(key: string): number {
+  switch (key) {
+    case 'atr20':
+      return 2; // pane 1 is FLOW
+    case 'adx14':
+    case 'plus_di':
+    case 'minus_di':
+      return 3;
+    case 'rsi14':
+    default:
+      return 4;
+  }
+}
+
+function paneLineStyleFor(key: string): { color: string; lineStyle?: LineStyle; width: 1 | 2 } {
+  switch (key) {
+    case 'adx14':
+      return { color: COLORS.adx, width: 2 };
+    case 'plus_di':
+      return { color: COLORS.plusDi, width: LINE_WIDTH };
+    case 'minus_di':
+      return { color: COLORS.minusDi, width: LINE_WIDTH };
+    case 'rsi14':
+      return { color: COLORS.rsi, width: LINE_WIDTH };
+    case 'atr20':
+    default:
+      return { color: COLORS.atr, width: LINE_WIDTH };
+  }
+}
+
 /* ------------------------------------------------------------ chart handles */
 
 interface ChartHandles {
@@ -88,6 +127,9 @@ interface ChartHandles {
   candles: ISeriesApi<'Candlestick'>;
   volume: ISeriesApi<'Histogram'>;
   lines: Map<string, ISeriesApi<'Line'>>;
+  /** Sub-pane series: the FLOW histogram (pane 1) + the indicator lines. */
+  flow: ISeriesApi<'Histogram'>;
+  paneLines: Map<string, ISeriesApi<'Line'>>;
   markers: ISeriesMarkersPluginApi<Time>;
 }
 
@@ -165,7 +207,43 @@ function buildChart(
 
   const markers = createSeriesMarkers(candles, []);
 
-  return { chart, candles, volume, lines, markers };
+  // Sub-panes below the candles. lightweight-charts v5 has no remove-pane API,
+  // so these panes persist even when every series on them is hidden — the
+  // visibility effect below just toggles each series' `visible` flag.
+  const flow = chart.addSeries(
+    HistogramSeries,
+    {
+      color: COLORS.flow,
+      priceFormat: { type: 'volume' },
+      priceLineVisible: false,
+      lastValueVisible: false,
+      visible: false,
+    },
+    1,
+  );
+
+  const paneLines = new Map<string, ISeriesApi<'Line'>>();
+  for (const key of PANE_KEYS) {
+    const style = paneLineStyleFor(key);
+    paneLines.set(
+      key,
+      chart.addSeries(
+        LineSeries,
+        {
+          color: style.color,
+          lineWidth: style.width,
+          lineStyle: style.lineStyle ?? LineStyle.Solid,
+          priceLineVisible: false,
+          lastValueVisible: false,
+          crosshairMarkerVisible: false,
+          visible: false,
+        },
+        paneIndexFor(key),
+      ),
+    );
+  }
+
+  return { chart, candles, volume, lines, flow, paneLines, markers };
 }
 
 /* ------------------------------------------------------------------ exports */
@@ -200,11 +278,18 @@ export interface PriceChartProps {
   markerList: ChartMarker[];
   /** The aligned overlay series (donchian + EMA lines). */
   overlaySeries: AlignedSeries[];
+  /** Per-bar quote flow, aggregated from 10s bins by the popup (key 'flow'). */
+  flowSeries?: AlignedSeries;
   /** Chip visibility: volume overlay / donchian / ema. */
   showVol: boolean;
   showDon: boolean;
   showEma: boolean;
   showSma: boolean;
+  /** Sub-pane visibility: FLOW histogram / ATR / ADX / RSI. */
+  showFlow?: boolean;
+  showAtr?: boolean;
+  showAdx?: boolean;
+  showRsi?: boolean;
   /** The shared selected event (bar open time, epoch ms), or null. */
   selectedEvent?: number | null;
   onSelectEvent?: (time: number | null) => void;
@@ -227,10 +312,15 @@ export function PriceChart({
   bars,
   markerList,
   overlaySeries,
+  flowSeries = undefined,
   showVol,
   showDon,
   showEma,
   showSma,
+  showFlow = false,
+  showAtr = false,
+  showAdx = false,
+  showRsi = false,
   selectedEvent = null,
   onSelectEvent,
   onZoomControls,
@@ -348,6 +438,13 @@ export function PriceChart({
         overlayPointsRef.current.set(key, points.slice());
       }
     }
+    for (const [key, series] of handles.paneLines) {
+      const points = byKey.get(key) ?? [];
+      const signature = `${symbol}|${interval}|${points.length}|${points[0]?.time ?? 0}|${points[points.length - 1]?.time ?? 0}`;
+      if (overlayAppliedRef.current.get(key) === signature) continue;
+      series.setData(points.map((p) => ({ time: p.time, value: p.value })));
+      overlayAppliedRef.current.set(key, signature);
+    }
     handles.chart.timeScale().fitContent();
     setReadySeq((n) => n + 1);
     const last = bars.length > 0 ? (bars[bars.length - 1] ?? null) : null;
@@ -376,7 +473,32 @@ export function PriceChart({
             : false;
       series.applyOptions({ visible: on });
     }
-  }, [showVol, showDon, showEma, loadSeq]);
+  }, [showVol, showDon, showEma, showSma, loadSeq]);
+
+  /* -- sub-pane data + visibility --------------------------------------------- */
+
+  /** The flow payload signature last painted, so polls do not re-set the same. */
+  const flowAppliedRef = useRef('');
+
+  useEffect(() => {
+    const handles = chartRef.current;
+    if (handles === null) return;
+    const points = flowSeries?.data ?? [];
+    const signature = `${symbol}|${interval}|${points.length}|${points[0]?.time ?? 0}|${points[points.length - 1]?.time ?? 0}`;
+    if (flowAppliedRef.current === signature) return;
+    flowAppliedRef.current = signature;
+    handles.flow.setData(points.map((p) => ({ time: p.time, value: p.value, color: COLORS.flow })));
+  }, [flowSeries, symbol, interval, loadSeq]);
+
+  useEffect(() => {
+    const handles = chartRef.current;
+    if (handles === null) return;
+    handles.flow.applyOptions({ visible: showFlow });
+    for (const [key, series] of handles.paneLines) {
+      const on = key === 'atr20' ? showAtr : key === 'rsi14' ? showRsi : showAdx;
+      series.applyOptions({ visible: on });
+    }
+  }, [showFlow, showAtr, showAdx, showRsi, loadSeq]);
 
   /* -- zoom controls ---------------------------------------------------------- */
 

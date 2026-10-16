@@ -15,6 +15,8 @@ import { TooltipViewer } from './components/TooltipViewer';
 import { defaultIndicatorState } from './chartData';
 import { SymbolDrilldown } from './components/SymbolDrilldown';
 import { TurtlePanel } from './components/TurtlePanel';
+import { MoversPanel } from './components/MoversPanel';
+import { ModelsPanel } from './components/ModelsPanel';
 import { toggleFilter, type FeedFilter, type FilterKey } from './filters';
 import { HeatProvider, useHeatContext } from './heatContext';
 import { bumpLayoutGeneration, resetLayout, saveChipState } from './layout';
@@ -466,6 +468,10 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
         />
 
         <SurveyPanel survey={survey} onRefresh={refreshSurvey} tools={tools} onDrill={drillInto} />
+
+        <MoversPanel tools={tools} />
+
+        <ModelsPanel tools={tools} />
 
         <TurtlePanel tools={tools} />
 

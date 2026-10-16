@@ -4,9 +4,12 @@ import {
   parseBars,
   summarizeLatest,
   toMarkers,
+  type AlignedSeries,
+  type LinePoint,
 } from '../../chartData';
 import { type ColorCanon } from '../../colors';
-import { useKlines } from '../../hooks/useKlines';
+import { useFlowHistory } from '../../hooks/useFlowHistory';
+import { INTERVAL_MS, useKlines } from '../../hooks/useKlines';
 import { useOutlook } from '../../hooks/useOutlook';
 import type { AlertMsg, Interval, ToolsMsg } from '../../types';
 import { INTERVALS } from '../../types';
@@ -130,11 +133,48 @@ export function ChartPopup({
     [data, bars],
   );
 
+  /* -- FLOW: 10s bins aggregated onto bar boundaries for the sub-pane --------- */
+  const flow = useFlowHistory(symbol);
+
+  /**
+   * Per-bar quote flow: every 10s bin whose start falls inside a bar's
+   * `[t, t+interval)` window is summed into that bar. The histogram needs one
+   * point per bar time (zero-filled inside the bin range) so the pane reads
+   * continuously; bars outside the bins keep whatever the last paint had.
+   */
+  const flowSeries = useMemo<AlignedSeries>(() => {
+    const data: LinePoint[] = [];
+    const bins = flow.bins;
+    if (bins.length === 0) return { key: 'flow', data };
+    const intervalMs = INTERVAL_MS[interval] ?? 60_000;
+    // Bin start (epoch ms) -> containing bar start (epoch ms), then group sums.
+    const sums = new Map<number, number>();
+    for (const bin of bins) {
+      const barStart = Math.floor(bin.t / intervalMs) * intervalMs;
+      sums.set(barStart, (sums.get(barStart) ?? 0) + bin.flowQuote);
+    }
+    let cursor: number | undefined = undefined;
+    for (const [start, value] of sums) {
+      if (cursor === undefined) cursor = start;
+      while (cursor < start) {
+        data.push({ time: (cursor / 1000) as LinePoint['time'], value: 0 });
+        cursor += intervalMs;
+      }
+      data.push({ time: (start / 1000) as LinePoint['time'], value });
+      cursor = start + intervalMs;
+    }
+    return { key: 'flow', data };
+  }, [flow.bins, interval]);
+
   /* -- chip state: VOL / FLOW / DON / EMA / SMA + the add-indicator menu ----- */
   const [showVol, setShowVol] = useState(true);
   const [showDon, setShowDon] = useState(true);
   const [showEma, setShowEma] = useState(true);
   const [showSma, setShowSma] = useState(true);
+  const [showFlow, setShowFlow] = useState(true);
+  const [showAtr, setShowAtr] = useState(true);
+  const [showAdx, setShowAdx] = useState(true);
+  const [showRsi, setShowRsi] = useState(true);
   const [indMenuOpen, setIndMenuOpen] = useState(false);
   const indMenuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -228,10 +268,23 @@ export function ChartPopup({
               VOL
             </button>
           </Tooltip>
-          {/* FLOW is reserved for increment 3: rendered inert on purpose. */}
-          <button type="button" className="chip chip-toggle" disabled title="coming">
-            FLOW
-          </button>
+          <Tooltip
+            tone="chip"
+            keys={['volume_ratio']}
+            tools={tools}
+            fallbackTitle="Quote flow"
+            label="Per-bar quote flow from the 10s detector bins, summed onto bar boundaries — the pane below the candles."
+            value={showFlow ? 'shown' : 'hidden'}
+          >
+            <button
+              type="button"
+              className={`chip chip-toggle${showFlow ? ' on' : ''}`}
+              aria-pressed={showFlow}
+              onClick={() => setShowFlow((v) => !v)}
+            >
+              FLOW
+            </button>
+          </Tooltip>
           <Tooltip
             tone="chip"
             keys={['donchian_channel']}
@@ -284,11 +337,8 @@ export function ChartPopup({
             </button>
           </Tooltip>
           {/*
-            The "+" menu lists every other series the klines payload carries.
-            The price-pane ones are toggles above; ATR/ADX/RSI need their own
-            sub-panes, which arrive with the strip work — so they are shown
-            disabled with the reason, not as lying toggles (the .pane-hide
-            precedent). Their current values already live in the DATA column.
+            The "+" menu lists the indicator panes below the candles: ATR,
+            ADX ±DI and RSI, each a chip-style toggle drawn in its own pane.
           */}
           <div className="cp-ind-menu" ref={indMenuRef}>
             <button
@@ -303,17 +353,21 @@ export function ChartPopup({
             {indMenuOpen && (
               <div className="cp-ind-pop" role="group" aria-label="add an indicator">
                 {[
-                  { key: 'ATR 20', note: 'true range — volatility', state: 'pane' },
-                  { key: 'ADX 14 ±DI', note: 'trend strength and direction', state: 'pane' },
-                  { key: 'RSI 14', note: 'momentum oscillator', state: 'pane' },
+                  { key: 'ATR 20', note: 'true range — volatility', on: showAtr, toggle: () => setShowAtr((v) => !v) },
+                  { key: 'ADX 14 ±DI', note: 'trend strength and direction', on: showAdx, toggle: () => setShowAdx((v) => !v) },
+                  { key: 'RSI 14', note: 'momentum oscillator', on: showRsi, toggle: () => setShowRsi((v) => !v) },
                 ].map((item) => (
                   <div key={item.key} className="cp-ind-item">
-                    <button type="button" className="cp-ind-add" disabled title="sub-pane — coming">
+                    <button
+                      type="button"
+                      className={`chip chip-toggle${item.on ? ' on' : ''}`}
+                      aria-pressed={item.on}
+                      title="draws in its own pane below the candles"
+                      onClick={item.toggle}
+                    >
                       {item.key}
                     </button>
                     <span className="cp-ind-note">{item.note}</span>
-                    <span className="cp-ind-soon">draws in its own pane below the candles — arrives with the
-                      sub-pane work; current value is in the DATA column</span>
                   </div>
                 ))}
               </div>
@@ -428,10 +482,15 @@ export function ChartPopup({
           bars={bars}
           markerList={markerList}
           overlaySeries={overlaySeries}
+          flowSeries={flowSeries}
           showVol={showVol}
           showDon={showDon}
           showEma={showEma}
           showSma={showSma}
+          showFlow={showFlow}
+          showAtr={showAtr}
+          showAdx={showAdx}
+          showRsi={showRsi}
           selectedEvent={selectedEvent}
           onSelectEvent={setSelectedEvent}
           onZoomControls={onZoomControls}

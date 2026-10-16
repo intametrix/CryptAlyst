@@ -4476,3 +4476,33 @@ table {
 .turtle-sym:hover {
   text-decoration: underline;
 }
+
+/* --- movers + models panels ------------------------------------------------ */
+.movers-cols {
+  display: flex;
+  gap: 18px;
+  min-height: 0;
+}
+.movers-side {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.mover-range {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--panel-2, #1a2334);
+  border: 1px solid var(--line, #1e2636);
+  vertical-align: middle;
+}
+.mover-range-dot {
+  position: absolute;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent, #4d8dfd);
+  transform: translate(-50%, -50%);
+}
