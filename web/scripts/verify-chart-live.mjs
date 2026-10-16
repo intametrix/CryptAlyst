@@ -92,7 +92,7 @@ async function evaluate(sessionId, expression) {
 }
 
 async function screenshot(sessionId, name) {
-  const { data } = await send('Page.captureScreenshot', { format: 'png' }, sessionId);
+  const { data } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, sessionId);
   const path = join(shotDir, name);
   writeFileSync(path, Buffer.from(data, 'base64'));
   return path;
@@ -138,9 +138,18 @@ const DIAGNOSE = `(() => {
       painted = 'no-2d-context';
     }
   }
+  const popup = document.querySelector('.chart-popup');
+  const panelInfo2 = {
+    popupH: popup ? Math.round(popup.getBoundingClientRect().height) : null,
+    dividerRect: divider ? (() => { const r = divider.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height)]; })() : null,
+    bottomRect: bottom ? (() => { const r = bottom.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.height)]; })() : null,
+    bodyScrollH: document.body.scrollHeight,
+    innerH: window.innerHeight,
+  };
   return {
     url: location.href,
     header,
+    panelInfo: { ...panelInfo, ...panelInfo2 },
     loadingText: loading ? loading.textContent.trim().slice(0, 60) : null,
     loadingVisible: loading ? !!loading.offsetParent : false,
     overlayPresent: !!overlay,
@@ -192,26 +201,25 @@ try {
   await send('Page.enable', {}, session);
   await send('Network.enable', {}, session);
 
+  // Pin the chart overlay to a size that fits the headless window BEFORE the
+  // app loads: the default is 75% of the viewport, which in headless Chrome
+  // exceeds the visible window and pushes the bottom panel off-screen, and the
+  // app's layout module caches storage on first read (a write after load is
+  // ignored). The panel itself is what the screenshots must show.
+  await send(
+    'Page.addScriptToEvaluateOnNewDocument',
+    {
+      source: `try { window.localStorage.setItem('pumpdump.layout.v1', JSON.stringify({
+        boxes: { 'chart.size': { w: 1400, h: 830 }, 'chart.pos': { w: 60, h: 20 } },
+        chips: {},
+      })); } catch { /* storage unavailable: the defaults apply */ }`,
+    },
+    session,
+  );
+
   console.log(`navigating: ${appUrl}`);
   await send('Page.navigate', { url: appUrl }, session);
   await sleep(4000);
-
-  // Pin the chart overlay to a size that fits the headless window: the default
-  // is 75% of the viewport, which in headless Chrome can exceed the visible
-  // window and push the bottom panel off-screen. The panel itself is what the
-  // screenshots must show.
-  await evaluate(
-    session,
-    `(() => {
-      try {
-        window.localStorage.setItem('pumpdump.layout.v1', JSON.stringify({
-          boxes: { 'chart.size': { w: 1280, h: 780 }, 'chart.pos': { w: 60, h: 40 } },
-          chips: {},
-        }));
-        return 'pinned';
-      } catch { return 'no-storage'; }
-    })()`,
-  ).then((r) => console.log(`overlay geometry: ${r}`));
 
   // Click the first non-header flow row's SYMBOL BUTTON to open the chart.
   const clicked = await evaluate(
@@ -240,6 +248,10 @@ try {
       return 'hidden';
     })()`,
   );
+  await sleep(400);
+  // The popup is deliberately unconfined (taller than the window), so scroll
+  // to the panel before capturing it.
+  await evaluate(session, `window.scrollTo(0, document.body.scrollHeight)`);
   await sleep(400);
   const shot1 = await screenshot(session, '01-first-symbol.png');
   console.log(`screenshot: ${shot1}`);
@@ -279,6 +291,8 @@ try {
       return 'hidden';
     })()`,
   );
+  await sleep(400);
+  await evaluate(session, `window.scrollTo(0, document.body.scrollHeight)`);
   await sleep(400);
   console.log('DIAGNOSIS after symbol race:');
   console.log(JSON.stringify(second, null, 2));

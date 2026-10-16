@@ -61,8 +61,9 @@ export interface ChartOverlayProps {
  * number for a resizable panel: it leaves the dashboard visible around the edges,
  * which is what tells you the panel is a panel and not a page. A panel that opens
  * at 95% looks maximised and gives no clue that it can be dragged.
+ * 2026-10-16: human asked for the popup 25% smaller -> 0.75 * 0.75 = 0.5625.
  */
-export const OPEN_FRACTION = 0.75;
+export const OPEN_FRACTION = 0.5625;
 
 export function defaultHeightFor(viewportHeight: number, explicit?: number): number {
   const target = Math.round(viewportHeight * OPEN_FRACTION);

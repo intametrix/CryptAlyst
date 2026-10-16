@@ -1,25 +1,45 @@
-import { memo, useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { clock, int, isoUtc, multiple, num, usd } from '../../format';
 import type { ChartMarker } from '../../chartData';
 import { prettifyEnum } from '../../types';
-import type { ToolsMsg } from '../../types';
+import type { AlertMsg, ToolsMsg } from '../../types';
 import { KindBadge, SeverityBadge } from '../Badges';
 import { EventGlyph } from '../EventGlyph';
+import { AlertCard } from '../AlertCard';
 import type { ColorCanon } from '../../colors';
 import { Tooltip } from '../Tooltip';
 
-/** A compact one-line summary of an event, for the list rows. */
-function rowSummary(mark: ChartMarker): string {
-  const bits: string[] = [];
-  if (mark.score !== null) bits.push(`score ${num(mark.score, 0)}`);
-  if (mark.burstMultiple !== null) bits.push(`${multiple(mark.burstMultiple)} baseline`);
-  if (mark.flowQuote !== null) bits.push(`${usd(mark.flowQuote)} flow`);
-  return bits.join(' · ');
+/**
+ * The list renders the SAME card the main-page alert feed uses, so an event
+ * looks identical wherever it appears. A chart marker carries less than a
+ * full alert message, but every AlertMsg field is optional, so the marker's
+ * fields map across one-to-one and the card renders whatever is present.
+ */
+function markerToAlert(mark: ChartMarker, symbol: string | null): AlertMsg {
+  return {
+    type: 'alert',
+    ts_ms: mark.time * 1000,
+    symbol,
+    kind: mark.kind,
+    severity: mark.severity,
+    score: mark.score,
+    detector: mark.detector,
+    color: mark.color,
+    letter: mark.letter,
+    direction: mark.direction,
+    summary: mark.label,
+    metrics:
+      mark.flowQuote !== null || mark.burstMultiple !== null
+        ? { flow_quote: mark.flowQuote, burst_multiple: mark.burstMultiple }
+        : null,
+  };
 }
 
 export interface EventsColumnProps {
   /** Every mark for the charted symbol, newest first. */
   events: readonly ChartMarker[];
+  /** The charted symbol, stamped onto the cards the list renders. */
+  symbol: string | null;
   /** The shared selection — the same value the chart highlights. */
   selected: number | null;
   onSelect: (time: number | null) => void;
@@ -38,12 +58,20 @@ export interface EventsColumnProps {
  */
 export const EventsColumn = memo(function EventsColumn({
   events,
+  symbol,
   selected,
   onSelect,
   tools,
   emptyNote,
   canon = null,
 }: EventsColumnProps) {
+  // The cards print relative times ("42s ago"), so the column owns the same
+  // one-second clock the main feed shares with its cards.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
   const selectedMark = useMemo(
     () => (selected === null ? null : events.find((m) => m.time === selected) ?? null),
     [events, selected],
@@ -128,39 +156,39 @@ export const EventsColumn = memo(function EventsColumn({
         )}
       </div>
 
-      {/* --- the event list -------------------------------------------------- */}
+      {/* --- the event list: the main page's card, one per event ------------- */}
       <div className="events-list-wrap">
         {events.length === 0 ? (
           <p className="empty">{emptyNote ?? 'no events on this symbol yet'}</p>
         ) : (
-          <ul className="events-rows" id="cp-events-rows" ref={rowsRef}>
+          <ul className="events-rows cp-alert-rows" id="cp-events-rows" ref={rowsRef}>
             {events.map((mark) => {
               const isSelected = mark.time === selected;
               return (
                 <li key={`${mark.time}-${mark.letter}`}>
-                  <button
-                    type="button"
-                    className={`event-row${isSelected ? ' selected' : ''}`}
+                  <div
+                    className={`cp-alert-slot${isSelected ? ' selected' : ''}`}
                     data-event-time={mark.time}
+                    role="button"
+                    tabIndex={0}
                     aria-pressed={isSelected}
                     onClick={() => onSelect(isSelected ? null : mark.time)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onSelect(isSelected ? null : mark.time);
+                      }
+                    }}
                     title={`zoom to ${clock(mark.time * 1000)}`}
                   >
-                    <EventGlyph
-                      kind={mark.kind}
-                      severity={mark.severity}
-                      color={mark.color}
-                      letter={mark.letter}
-                      direction={mark.direction}
+                    <AlertCard
+                      alert={markerToAlert(mark, symbol)}
+                      flash={false}
+                      tools={tools}
+                      nowMs={nowMs}
                       canon={canon}
-                      size="sm"
                     />
-                    <span className="event-time num">{clock(mark.time * 1000)}</span>
-                    <KindBadge kind={mark.kind} color={mark.color} canon={canon} />
-                    <SeverityBadge severity={mark.severity} canon={canon} />
-                    <span className="event-score num">{mark.score === null ? '—' : num(mark.score, 0)}</span>
-                    <span className="event-summary">{rowSummary(mark)}</span>
-                  </button>
+                  </div>
                 </li>
               );
             })}

@@ -363,6 +363,7 @@ export function ChartPopup({
           <div className="cp-col-events">
             <EventsColumn
               events={chartEvents}
+              symbol={symbol}
               selected={selectedEvent}
               onSelect={setSelectedEvent}
               tools={tools}

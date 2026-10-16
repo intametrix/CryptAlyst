@@ -2191,16 +2191,18 @@ th.sorted .th-btn {
 .chart-overlay {
   /* absolute, not fixed: the panel may now be LARGER than the window, and
      content past the fold has to be reachable by scrolling. A fixed box cannot
-     be scrolled to, so an oversized panel would be stranded rather than usable. */
+     be scrolled to, so an oversized panel would be stranded rather than usable.
+     An absolutely positioned box that overflows the document extends the page's
+     scroll area by itself, so no min-width/min-height is needed to make it
+     reachable — and min-height:100% actively breaks the layout: it overrides
+     the inline height the user chose (measured: a 685px box rendered 1561px
+     tall, pushing the bottom panel below the fold). */
   position: absolute;
   top: 0;
   left: 0;
   z-index: 100;
   /* The panel fills this box; the corner grip lives outside the clip. */
   display: block;
-  /* Grow with the panel so the document scroll area covers it. */
-  min-width: 100%;
-  min-height: 100%;
   pointer-events: none;
 }
 
@@ -2313,6 +2315,7 @@ th.sorted .th-btn {
 }
 
 .overlay-body {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 0;
@@ -4097,10 +4100,14 @@ table {
 .chart-popup {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  /* Absolute, not height:100%: the parent (.overlay-body) is a flex item, and
+     a percentage height against it resolves to auto in practice — the popup
+     then grew to its content height (measured 1525px in a 685px overlay) and
+     pushed the bottom panel off-screen below the fold. inset:0 pins it. */
+  position: absolute;
+  inset: 0;
   min-width: 0;
   min-height: 0;
-  height: 100%;
 }
 
 /* --- header: one row, ~36px ---------------------------------------------- */
@@ -4341,4 +4348,22 @@ table {
     border-right: none;
     border-bottom: 1px solid var(--line, #1e2636);
   }
+}
+
+/* --- chart popup events: the main page's alert card, compact --------------- */
+.cp-alert-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 2px;
+}
+.cp-alert-slot {
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+.cp-alert-slot.selected .alert-card {
+  outline: 1px solid var(--accent, #4d8dfd);
+}
+.cp-alert-slot .alert-card {
+  margin: 0;
 }
