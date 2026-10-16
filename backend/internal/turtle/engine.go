@@ -32,6 +32,11 @@ func (e *Engine) OnAlert(a Alert) (Order, bool) {
 			Liquidity: "perfect liquidity assumed; no fill issued",
 		}
 		e.orders = append(e.orders, o)
+		e.store.Record("reject", map[string]any{
+			"symbol": o.Symbol, "side": o.Side, "reason": o.Reason,
+			"vol_pct": a.VolPct, "atr": a.ATR, "price": a.Price,
+			"kind": a.Kind, "severity": a.Severity, "alert_id": a.ID,
+		})
 		return o, false
 	}
 
@@ -101,6 +106,12 @@ func (e *Engine) OnAlert(a Alert) (Order, bool) {
 		Liquidity: "perfect liquidity assumed: filled at signal price, no slippage",
 	}
 	e.orders = append(e.orders, o)
+	e.store.Record("fill", map[string]any{
+		"order_id": o.ID, "symbol": o.Symbol, "side": o.Side,
+		"units": units, "price": a.Price, "notional": notional,
+		"n": a.ATR, "stop": stop, "alert_id": a.ID,
+		"kind": a.Kind, "severity": a.Severity, "vol_pct": a.VolPct,
+	})
 	return o, true
 }
 
@@ -148,6 +159,13 @@ func (e *Engine) closeLocked(symbol string, pos *Position, price float64, reason
 		Reason:    fmt.Sprintf("%s; realised %.2f USDT", reason, pnl),
 		CreatedAt: atOrNow(e, pos),
 		Liquidity: "perfect liquidity assumed: filled at signal price, no slippage",
+	})
+	e.store.Record("close", map[string]any{
+		"symbol": symbol, "side": pos.Side, "units": pos.Units,
+		"entry_price": pos.EntryPrice, "exit_price": price,
+		"pnl": round2(pnl), "pnl_pct": round4(pct), "reason": reason,
+		"alert_id": pos.AlertID,
+		"hold_sec": atOrNow(e, pos).Sub(pos.OpenedAt).Seconds(),
 	})
 	delete(e.positions, symbol)
 
@@ -323,4 +341,12 @@ func abs(v float64) float64 {
 		return -v
 	}
 	return v
+}
+
+func (e *Engine) realizedLocked() float64 {
+	total := 0.0
+	for _, t := range e.trades {
+		total += t.PnL
+	}
+	return total
 }

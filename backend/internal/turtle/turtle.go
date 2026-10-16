@@ -202,7 +202,80 @@ type Engine struct {
 	watchlist  map[string]Scored
 	selected   []Scored
 	selectedAt time.Time
+
+	// store is the append-only session log. Nil-safe: every Record call checks,
+	// so a session runs without persistence rather than panicking.
+	store *Store
+	// book is the book-rule configuration, editable from the settings page.
+	book BookConfig
 }
+
+// BookConfig returns the live rule set.
+func (e *Engine) BookConfig() BookConfig {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.book
+}
+
+// SetBookConfig replaces the rule set. Callers must refuse this mid-session --
+// see the API handler -- because a PnL produced under two rule sets belongs to
+// neither.
+func (e *Engine) SetBookConfig(c BookConfig) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.book = c
+}
+
+// ValidateBookConfig rejects rule sets that cannot work, with reasons rather
+// than a bare false, so a settings page can show what is wrong.
+func ValidateBookConfig(c BookConfig) []string {
+	var out []string
+	if c.NLookback < 2 {
+		out = append(out, "n_lookback must be at least 2")
+	}
+	if c.RiskPct <= 0 || c.RiskPct > 0.2 {
+		out = append(out, "risk_pct must be above 0 and at most 0.2 (20% per unit is not a risk rule)")
+	}
+	if c.StopN <= 0 {
+		out = append(out, "stop_n must be positive")
+	}
+	if c.AddStepN <= 0 {
+		out = append(out, "add_step_n must be positive")
+	}
+	if c.MaxUnitsPerMarket < 1 {
+		out = append(out, "max_units_per_market must be at least 1")
+	}
+	if c.MaxUnitsCorrelated < c.MaxUnitsPerMarket {
+		out = append(out, "max_units_correlated must be at least max_units_per_market, or the per-market cap can never bind")
+	}
+	if c.MaxUnitsPerDirection < c.MaxUnitsCorrelated {
+		out = append(out, "max_units_per_direction must be at least max_units_correlated")
+	}
+	if c.MaxUnitsTotal < c.MaxUnitsPerDirection {
+		out = append(out, "max_units_total must be at least max_units_per_direction")
+	}
+	if c.CorrelationThreshold <= 0 || c.CorrelationThreshold > 1 {
+		out = append(out, "correlation_threshold must be in (0, 1]")
+	}
+	if c.S1Entry < 2 || c.S1Exit < 1 {
+		out = append(out, "system 1 lookbacks must be at least 2 and 1")
+	}
+	if c.S2Entry <= c.S1Entry {
+		out = append(out, "s2_entry must exceed s1_entry, or the two systems are the same system")
+	}
+	return out
+}
+
+// SetStore attaches the durable session log.
+func (e *Engine) SetStore(s *Store) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.store = s
+}
+
+// StoreStats reports the attached log, so a dashboard can show recording is
+// ALIVE rather than assume it.
+func (e *Engine) StoreStats() map[string]any { return e.store.Stats() }
 
 // New builds an idle engine with the given rules.
 func New(cfg Config) *Engine {
@@ -210,6 +283,7 @@ func New(cfg Config) *Engine {
 		cfg = DefaultConfig()
 	}
 	return &Engine{
+		book:       BookDefaults(),
 		cfg:        cfg,
 		state:      StateIdle,
 		cash:       cfg.StartingEquity,
@@ -235,6 +309,9 @@ func (e *Engine) Start() Session {
 	e.trades = nil
 	e.orders = nil
 	e.entriesFilled, e.entriesVetoed, e.entriesBlocked = 0, 0, 0
+	e.store.Record("session_start", map[string]any{
+		"config": e.cfg, "starting_equity": e.cfg.StartingEquity,
+	})
 	return e.sessionLocked()
 }
 
@@ -251,5 +328,11 @@ func (e *Engine) Stop() Session {
 	now := e.now()
 	e.stoppedAt = &now
 	e.state = StateStopped
+	e.store.Record("session_stop", map[string]any{
+		"final_equity": round2(e.equityLocked()),
+		"realized":     round2(e.realizedLocked()),
+		"trades":       len(e.trades),
+		"filled":       e.entriesFilled, "vetoed": e.entriesVetoed, "blocked": e.entriesBlocked,
+	})
 	return e.sessionLocked()
 }

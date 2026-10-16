@@ -143,6 +143,41 @@ pipeline. `[!!FORCE]` replaces that luck with a rule.
 - `ANSWER NOW` — reply to this.
 - **`[!!FORCE]` — stop and do this.**
 
+## Rule 0h — ALWAYS LINT. No code is done until it is linted.
+
+**Set by the human, by direct instruction. Both agents, every change, no exceptions.**
+
+Frontend (`web/`), run before every commit:
+
+    cd web && pnpm check        # the full gate
+    cd web && pnpm exec tsc -b --force   # the minimum, if the full gate is too slow mid-edit
+
+The `check` script is the real gate and it is stronger than a linter: it typechecks
+the app AND the scripts, audits the CSS, verifies the build, captures the live page
+and runs smoke tests. **Typecheck alone is not linting** — it catches type errors and
+nothing else.
+
+Backend (Go), run before every commit:
+
+    cd backend && gofmt -l . && go vet ./... && go build ./... && go test ./...
+
+`gofmt -l` must print NOTHING. A file that needs formatting is a failed lint, not a
+style preference.
+
+**ESLint is not installed in `web/`.** Either install it and wire it into `check`, or
+treat the existing `check` suite as the lint gate — but the choice must be deliberate
+and recorded, not an accident of what happens to be in `node_modules`.
+
+**Why this is a rule and not advice.** The failures it prevents have all happened
+here: an inert button shipped in the dist because nothing checked that its handler
+still existed; a CSS rule written for `.chart-overlay` silently restyled the loading
+placeholder because nothing checked that the class already existed; a stylesheet with
+inconsistent indentation silently failed to match seven edits; and a `try`/`catch`
+omission left a chart loading forever with no error surfaced. **Not one of those is a
+type error.** A typechecker passes all five.
+
+**The rule in one line: if you did not lint it, you did not finish it.**
+
 ## Rule 1 — Plan, share, agree, THEN build
 
 **No half-work. Ever. And no building before the team has actually answered.**

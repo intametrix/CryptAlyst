@@ -21,6 +21,7 @@ func (e *Engine) SetWatchlist(sel []Scored) {
 	}
 	e.selected = append([]Scored(nil), sel...)
 	e.selectedAt = e.now()
+	e.store.Record("watchlist", map[string]any{"selected": sel, "size": len(sel)})
 }
 
 // Watchlist returns the symbols the session decided to trade, best first.

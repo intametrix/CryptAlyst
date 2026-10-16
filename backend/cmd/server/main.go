@@ -56,6 +56,7 @@ type options struct {
 	minTrades       int64
 	minFlowUSD      float64
 	cooldownSec     float64
+	turtleLog       string
 	severityMin     string
 	bootstrapTopN   int
 	screenTopN      int
@@ -124,6 +125,21 @@ func main() {
 	// The turtle trading session. Idle until the dashboard's start button, and
 	// given a 300 USDT wallet by default -- see turtle.DefaultConfig.
 	turtleEngine := turtle.New(turtle.DefaultConfig())
+
+	// The durable session log. "Never forget any data" is the human instruction,
+	// so a failure to open it is LOUD rather than silent -- a session that
+	// silently stopped recording would look identical to one with nothing to
+	// record.
+	turtleStorePath := opt.turtleLog
+	turtleStore, terr := turtle.NewStore(turtleStorePath)
+	if terr != nil {
+		log.Printf("turtle session log DISABLED (%v); session history will not be durable", terr)
+		turtleStorePath = ""
+		turtleStore, _ = turtle.NewStore("")
+	} else if turtleStorePath != "" {
+		log.Printf("turtle session log: %s", turtleStorePath)
+	}
+	turtleEngine.SetStore(turtleStore)
 	cfg := engine.Config()
 
 	// The detector registry. Created before the stream so the stream's handler
@@ -321,6 +337,7 @@ func main() {
 	server := api.New(api.Deps{
 		Hub:           hub,
 		Turtle:        turtleEngine,
+		TurtleLogPath: turtleStorePath,
 		Engine:        engine,
 		Universe:      universe,
 		Screener:      screener,
@@ -395,6 +412,8 @@ func parseFlags() options {
 		"JSONL file for durable alert history (chart markers); empty disables")
 	flag.StringVar(&o.ledgerPath, "ledger", "ledger.jsonl",
 		"JSONL prediction ledger for the offline learner; empty disables")
+	flag.StringVar(&o.turtleLog, "turtle-log", "turtle_sessions.jsonl",
+		"append-only turtle session history; never rotated, because the instruction is that no data is forgotten")
 	flag.StringVar(&o.calibrationPath, "calibration", "calibration.json",
 		"fitted probability model written by cmd/learner; absent means uncalibrated")
 	flag.DurationVar(&o.ledgerHorizon, "ledger-horizon", 15*time.Minute,

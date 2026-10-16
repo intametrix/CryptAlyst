@@ -170,12 +170,15 @@ type Deps struct {
 	Hub *events.Hub
 	// Turtle is the alert-driven trading session. Nil disables the routes rather
 	// than panicking, so the server still runs without a wallet configured.
-	Turtle   *turtle.Engine
-	Engine   *flow.Engine
-	Universe *market.Universe
-	Screener *screen.Screener
-	Alerts   *AlertBuffer
-	Survey   SurveyProvider
+	Turtle *turtle.Engine
+	// TurtleLogPath is the append-only session history served at
+	// /api/turtle/session-log.
+	TurtleLogPath string
+	Engine        *flow.Engine
+	Universe      *market.Universe
+	Screener      *screen.Screener
+	Alerts        *AlertBuffer
+	Survey        SurveyProvider
 	// Detectors is the pluggable-model registry driving detection.
 	Detectors *detect.Registry
 	// Heat scores how interesting each symbol currently is, for the UI glow.
@@ -225,6 +228,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/turtle", s.handleTurtle)
 	mux.HandleFunc("/api/turtle/trades", s.handleTurtleTrades)
 	mux.HandleFunc("/api/turtle/orders", s.handleTurtleOrders)
+	mux.HandleFunc("/api/turtle/config", s.handleTurtleConfig)
+	mux.HandleFunc("/api/turtle/session-log", s.handleTurtleSessionLog)
 	mux.HandleFunc("/api/perf", s.handlePerf)
 	mux.HandleFunc("/api/screen", s.handleScreen)
 	mux.HandleFunc("/api/screen/refresh", s.handleScreenRefresh)
