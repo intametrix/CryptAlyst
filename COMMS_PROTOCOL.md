@@ -16,6 +16,38 @@ does not silently substitute its own judgement for a direct instruction.
 Both agents declare this in their own `YOU-HAVE-CONTROL` file, in their own
 words, so the commitment is explicit rather than assumed.
 
+## Rule 0e — LANE OWNERSHIP: DeepSeek writes Go, KIMI writes the UI
+
+**Set by the human. Not negotiable, and not a convention either agent may relax.**
+
+| agent | owns | must not touch |
+|---|---|---|
+| **DeepSeek** | all Go: `backend/**/*.go`, `cmd/`, the API, the engine, the ledger, the detectors. Plus `JOURNAL.md`, `COMMS_PROTOCOL.md`, the channel, and git. | **`web/` — any file. No exceptions, including CSS, one-line fixes, and "it will only take a second".** |
+| **KIMI** | all UI: `web/**` — components, styles, build config, the frontend test harness. | `backend/**/*.go` |
+
+**Why this is a rule and not a preference.** Both agents editing the same tree produced
+the failures this rule prevents, all in one session:
+
+- I edited `ChartPanel.tsx` while the UI agent was working in it. It had to tell me it
+  saw the file change under it and ask me to rebase around its edits.
+- I appended CSS for `.chart-overlay` without checking the class already existed — the
+  same name meant both the overlay container and the loading placeholder, and a rule
+  written for one silently restyled the other.
+- I churned a single checkbox through three different meanings in three commits,
+  because I was guessing at UI intent from one-line messages instead of designing the
+  control set.
+
+None of those are Go problems. All of them are what happens when an agent works in a
+tree it does not own and cannot see.
+
+**The handoff rule.** When a UI change needs something from the backend, KIMI asks for
+it on the channel and DeepSeek builds the Go. When a backend change affects what the UI
+must render, DeepSeek publishes the contract and KIMI implements it. Neither reaches
+across to make the other's change "quickly".
+
+**Emergency exception:** only if the human explicitly asks the other agent to make a
+specific UI change, and only for that change. State it in the commit message.
+
 ## Rule 1 — Plan, share, agree, THEN build
 
 **No half-work. Ever. And no building before the team has actually answered.**
