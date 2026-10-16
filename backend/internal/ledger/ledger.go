@@ -64,6 +64,12 @@ type Config struct {
 	TargetPct      float64       // default 1.5
 	StopPct        float64       // default 1.0
 	MaxTracked     int           // default 512, oldest evicted
+	// MaxSampleJumpPct rejects a price sample deviating more than this from
+	// the previous accepted sample in one tick (default 25). Guards against
+	// garbage prints (bad ticks, symbol mixups) entering MFE/MAE. A real
+	// pump can exceed this only if it does so between two 3s samples, in
+	// which case the next sample re-anchors.
+	MaxSampleJumpPct float64
 }
 
 func (c Config) withDefaults() Config {
@@ -81,6 +87,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.MaxTracked <= 0 {
 		c.MaxTracked = DefaultMaxTracked
+	}
+	if c.MaxSampleJumpPct <= 0 {
+		c.MaxSampleJumpPct = 25
 	}
 	return c
 }
@@ -140,6 +149,29 @@ type resolutionRecord struct {
 	HorizonMS    int64   `json:"horizon_ms"`
 }
 
+// retractionRecord marks a prediction's records as contaminated. Retraction
+// is append-only: the original records stay in the file (same retention
+// guarantee as alerts); readers must exclude the id.
+type retractionRecord struct {
+	Type   string `json:"type"` // "retraction"
+	ID     string `json:"id"`
+	Reason string `json:"reason"`
+	TSMS   int64  `json:"ts_ms"`
+}
+
+// Retract appends a retraction for id. The prediction's earlier records
+// remain on disk; Report and the learner exclude retracted ids.
+func (r *JSONLRecorder) Retract(id, reason string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.write(retractionRecord{
+		Type:   "retraction",
+		ID:     id,
+		Reason: reason,
+		TSMS:   time.Now().UnixMilli(),
+	})
+}
+
 // trackedState is the in-memory tracking state of one open prediction.
 type trackedState struct {
 	pred        Prediction
@@ -150,6 +182,7 @@ type trackedState struct {
 	lastPathMFE float64 // last logged MFE, for change detection
 	lastPathMAE float64 // last logged MAE
 	mfeAtMS     int64   // when MFE first reached its max
+	lastPrice   float64 // last accepted price sample, for outlier rejection
 	resolved    bool
 	label       string
 }
@@ -196,8 +229,11 @@ func New(path string, market PriceFetcher, cfg Config) (*JSONLRecorder, error) {
 }
 
 // reload replays an existing JSONL file: predictions without a resolution
-// record become open tracked state again (MFE/MAE restart from zero — the
-// price path before the restart is already on disk for diagnostics).
+// record become open tracked state again. Running MFE/MAE are restored from
+// the file's own path records (the maxima), not reset to zero: a restart
+// must continue the running extremes, otherwise post-restart path records
+// show impossible decreases and a resolution can under-report the true
+// excursions.
 func (r *JSONLRecorder) reload(path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -209,7 +245,10 @@ func (r *JSONLRecorder) reload(path string) error {
 	sc := bufio.NewScanner(bytes.NewReader(raw))
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<20)
 	resolved := make(map[string]bool)
+	retracted := make(map[string]bool)
 	var preds []predictionRecord
+	maxMFE := make(map[string]float64)
+	maxMAE := make(map[string]float64)
 	for sc.Scan() {
 		line := sc.Bytes()
 		if len(line) == 0 {
@@ -231,14 +270,36 @@ func (r *JSONLRecorder) reload(path string) error {
 			if head.ID != "" {
 				resolved[head.ID] = true
 			}
+		case "retraction":
+			if head.ID != "" {
+				retracted[head.ID] = true
+			}
+		case "path":
+			var pr pathRecord
+			if json.Unmarshal(line, &pr) == nil && pr.ID != "" {
+				if v := pr.MFEPct / 100; v > maxMFE[pr.ID] {
+					maxMFE[pr.ID] = v
+				}
+				if v := pr.MAEPct / 100; v > maxMAE[pr.ID] {
+					maxMAE[pr.ID] = v
+				}
+			}
 		}
 	}
 	for _, pr := range preds {
-		if resolved[pr.Prediction.ID] {
+		id := pr.Prediction.ID
+		if resolved[id] || retracted[id] {
 			continue
 		}
-		r.open[pr.Prediction.ID] = &trackedState{pred: pr.Prediction}
-		r.order = append(r.order, pr.Prediction.ID)
+		r.open[id] = &trackedState{
+			pred:        pr.Prediction,
+			mfe:         maxMFE[id],
+			mae:         maxMAE[id],
+			lastPathMFE: maxMFE[id],
+			lastPathMAE: maxMAE[id],
+			lastPrice:   pr.Prediction.EntryPrice,
+		}
+		r.order = append(r.order, id)
 	}
 	return nil
 }
@@ -269,7 +330,7 @@ func (r *JSONLRecorder) Record(sig detect.Signal) {
 	}
 	r.mu.Lock()
 	if _, dup := r.open[p.ID]; !dup {
-		r.open[p.ID] = &trackedState{pred: p}
+		r.open[p.ID] = &trackedState{pred: p, lastPrice: p.EntryPrice}
 		r.order = append(r.order, p.ID)
 		for len(r.order) > r.cfg.MaxTracked {
 			delete(r.open, r.order[0])
@@ -401,6 +462,16 @@ func (r *JSONLRecorder) updateLocked(st *trackedState, id string, price float64,
 	if entry <= 0 || price <= 0 {
 		return
 	}
+	// Outlier guard: a sample deviating more than MaxSampleJumpPct from the
+	// last accepted sample is rejected, not recorded. A genuine move that
+	// large between two 3s samples re-anchors on the following sample.
+	if st.lastPrice > 0 {
+		jump := math.Abs(price/st.lastPrice - 1)
+		if jump > r.cfg.MaxSampleJumpPct/100 {
+			return
+		}
+	}
+	st.lastPrice = price
 	d := float64(st.pred.Direction)
 	if d == 0 {
 		d = 1

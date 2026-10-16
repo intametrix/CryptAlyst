@@ -178,6 +178,8 @@ export function useKlines(
    * yanks the user back to the present every few seconds.
    */
   const [loadSeq, setLoadSeq] = useState(0);
+  /** Which `symbol|interval` the current series belongs to. */
+  const loadedKey = useRef('');
   const [loading, setLoading] = useState(symbol !== null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -200,6 +202,9 @@ export function useKlines(
   useEffect(() => {
     if (symbol === null) {
       setData(null);
+      // Leaving a symbol is a load change: the chart is emptied and must re-fit
+      // when the next subject arrives.
+      loadedKey.current = '';
       setLoadSeq((n) => n + 1);
       setLoading(false);
       setRefreshing(false);
@@ -227,7 +232,14 @@ export function useKlines(
         return;
       }
       setData(body);
-      setLoadSeq((n) => n + 1);
+      // A new load is a change of *subject*, not merely a fresh response: the
+      // incremental poll returns the same series with the last bar moved, and
+      // treating that as a reload is what re-fit the viewport every ten seconds.
+      const key = `${symbol}|${interval}`;
+      if (loadedKey.current !== key) {
+        loadedKey.current = key;
+        setLoadSeq((n) => n + 1);
+      }
       setError(null);
       setLoading(false);
       setRefreshing(false);

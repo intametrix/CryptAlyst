@@ -81,3 +81,15 @@ func (s *Server) handleOutlook(w http.ResponseWriter, r *http.Request) {
 		"model":    s.deps.Outlook.ModelStatus(),
 	})
 }
+
+// moveOfCandidate returns the best available short-horizon move, preferring the
+// window the onset engine actually acts on.
+func moveOfCandidate(row flow.Candidate) (float64, bool) {
+	if row.Change10s != nil {
+		return *row.Change10s, true
+	}
+	if row.Change60s != nil {
+		return *row.Change60s, true
+	}
+	return 0, false
+}

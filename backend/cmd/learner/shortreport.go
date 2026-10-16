@@ -27,8 +27,14 @@ const shortLabelRule = "CORRECT=1, WRONG=0, DISCARD excluded (10s +/-0.1% band, 
 
 // shortLabel is one label_10s record.
 type shortLabel struct {
-	id    string
-	label string
+	id            string
+	label         string
+	band          float64 // band_pct, the locked 10s bracket
+	direction     int
+	entry         float64
+	price         float64
+	mfe, mae      float64 // recorded excursions if the record carries them
+	hasExcursions bool
 }
 
 // shortDet is the per-detector breakdown.
@@ -48,8 +54,9 @@ type shortStats struct {
 func (st *store) labels() []*shortLabel { return st.short }
 
 // computeShort joins labels to predictions and fits the 10s model. out is
-// the calibration path used when the fit ships.
-func computeShort(st *store, out string) shortStats {
+// the calibration path used when the fit ships; feePct is the per-side taker
+// fee for the v2 net expectancy line.
+func computeShort(st *store, out string, feePct float64) shortStats {
 	ls := st.labels()
 	var s shortStats
 	s.byDetector = map[string]shortDet{}
@@ -120,6 +127,41 @@ func computeShort(st *store, out string) shortStats {
 			dp = 100 * float64(d.discard) / float64(d.total)
 		}
 		fmt.Printf("  %-16s %6d %6d %8.3f %7.1f%%\n", k, d.usable, d.discard, b, dp)
+	}
+
+	// V2 (expectancy-in-R) at the 10s band. label_10s records normally carry
+	// no running extremes — only entry and label-time price — so the exact
+	// MFE/MAE distribution is not recoverable. What IS recoverable is the
+	// bracket-trade expectancy: CORRECT touched +band (+1R), WRONG touched
+	// −band (−1R), so E[R] = 2p − 1 gross. When a record does carry
+	// mfe_pct/mae_pct (newer fastsample), the real v2 block is used instead.
+	if s.usable > 0 {
+		fmt.Println("  V2 (10s, bracket=band):")
+		var exact []v2Row
+		p := s.baseRate
+		for _, l := range ls {
+			if (l.label == "CORRECT" || l.label == "WRONG") && l.hasExcursions {
+				band := l.band
+				if band <= 0 {
+					band = 0.1
+				}
+				exact = append(exact, v2Row{mfe: l.mfe, mae: l.mae, bracket: band})
+			}
+		}
+		if len(exact) >= minShortN/3 {
+			fmt.Println("    " + v2Line("usable (recorded mfe/mae)", exact, feePct))
+		} else {
+			band := 0.1
+			for _, l := range ls {
+				if l.band > 0 {
+					band = l.band
+					break
+				}
+			}
+			fmt.Printf("    bracket-trade expectancy (band-touch model, no mfe/mae in label_10s): E[R]gross=%+.3fR E[R]net=%+.3fR (p=%.3f, band=%.2f%%, fee=%.3f%%/side)\n",
+				2*p-1, 2*p-1-2*feePct/band, p, band, feePct)
+			fmt.Println("    (full v2 block needs mfe_pct/mae_pct fields in label_10s records)")
+		}
 	}
 
 	if s.usable < minShortN {

@@ -45,6 +45,20 @@ export interface ChartOverlayProps {
  * Size and position live in exactly one place (`box`) — the panel is sized and
  * positioned from it — so dragging, resizing and "reset layout" always agree.
  */
+/**
+ * How tall a chart opens.
+ *
+ * 88% of the viewport, so a deliberately-opened chart gets the screen — the
+ * clamp to `innerHeight - 16` stays as the ceiling, but the default now sits near
+ * it instead of at a fixed, much shorter height. A small window still wins, and a
+ * caller-supplied `defaultHeight` is used only when it is already taller than the
+ * viewport-relative figure (a genuinely tall ask is not reduced).
+ */
+export function defaultHeightFor(viewportHeight: number, explicit?: number): number {
+  const target = Math.round(viewportHeight * 0.88);
+  return explicit !== undefined && explicit > target ? explicit : target;
+}
+
 export function ChartOverlay({
   id,
   title,
@@ -94,7 +108,9 @@ export function ChartOverlay({
     const storedSize = readBoxSize(`${id}.size`);
     const storedPos = readBoxSize(`${id}.pos`);
     const w = storedSize !== null && storedSize.w > 0 ? storedSize.w : defaultWidth;
-    const h = storedSize !== null && storedSize.h > 0 ? storedSize.h : defaultHeight;
+    // Opening the chart deliberately should give the user the screen: the default
+    // height tracks the viewport rather than a fixed number of pixels.
+    const h = storedSize !== null && storedSize.h > 0 ? storedSize.h : defaultHeightFor(height, defaultHeight);
     return clampToViewport({
       x: storedPos !== null && storedPos.w !== 0 ? storedPos.w : Math.round((width - w) / 2),
       y: storedPos !== null && storedPos.h !== 0 ? storedPos.h : Math.round((height - h) / 3),
@@ -128,7 +144,7 @@ export function ChartOverlay({
       onLayoutReset(() => {
         const { width, height } = viewport();
         const w = defaultWidth;
-        const h = defaultHeight;
+        const h = defaultHeightFor(height, defaultHeight);
         commit({ x: Math.round((width - w) / 2), y: Math.round((height - h) / 3), w, h }, true, true);
       }),
     [commit, defaultHeight, defaultWidth, viewport],

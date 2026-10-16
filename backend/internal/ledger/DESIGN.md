@@ -138,3 +138,46 @@ in-sample Brier beats the pooled base-rate Brier `p*(1-p)` by at least 3%
 relative — a strict `<` cannot refuse honestly, since a zero-signal fit wins
 by ~1e-4 of in-sample noise. All metrics remain in-sample; the label_rule
 field in the shipped file records the 10s band rule.
+
+## Audit, outlier guard, and retractions
+
+Price samples deviating more than Config.MaxSampleJumpPct (default 25) from
+the last accepted sample are rejected, not recorded — a garbage print must
+not enter MFE/MAE. On restart, running MFE/MAE are restored from the file's
+own path-record maxima (previously they reset to zero, which produced
+impossible non-monotone path records and under-reported resolutions).
+
+Contaminated predictions are marked with {"type":"retraction","id","reason",
+"ts_ms"} records. Retraction is append-only — original records are never
+deleted, same retention guarantee as alerts — and Report, the learner, and
+the calibration fits all exclude retracted ids while counting them
+explicitly. `cmd/learner -audit` scans a ledger for impossible excursions
+(>20%), label contradictions, and duplicate resolutions, and writes a copy
+with retractions appended for DeepSeek to apply deliberately.
+
+## Label v2: expectancy-in-R (reported alongside v1, never replacing it)
+
+Label v1 (CORRECT/WRONG/EXPIRED at +1.5%/−1.0%/15min) measures big
+continuation; on onset detections it nearly always reads EXPIRED (median MFE
+~0.17%) and its hit rate is therefore near the base rate of large moves.
+That is an honest answer to a question nobody trades. Label v2 rescales the
+SAME recorded excursions into R units (1R = the v1 stop distance, default
+1.0%): MFE_R = mfe_pct/stop_pct, MAE_R = mae_pct/stop_pct, aggregated as
+medians, P(excursion ≥ 1R), and expectancy E[R] = mean(MFE_R) − mean(MAE_R)
+gross, minus a symmetric round-trip taker cost 2 × fee_pct per bracket
+(learner flag -fee_pct, default 0.1%/side) net. Hit rate asks "did the big
+thing happen"; expectancy-in-R asks "what does the excursion distribution
+pay at the bracket" — the question bracket economics actually turn on.
+
+LOCKED: v1 remains reported forever. v2 sits beside it in every section;
+changing or removing v1 numbers would break historical comparability, so
+nothing retrofits. Fitted targets are unchanged: calibrations still fit the
+v1 binary label; newly written calibration files carry "label_version": 2
+and "companion_v1": true to record that pairing.
+
+For the 10s section, label_10s records carry only entry and label-time
+price, so the exact MFE/MAE distribution is not recoverable. The learner
+reports the bracket-trade expectancy (CORRECT = +1R, WRONG = −1R by
+definition of the band touch, so E[R] = 2p − 1 gross) and uses the full v2
+block only when records carry mfe_pct/mae_pct — the fastsample writer should
+add those fields.

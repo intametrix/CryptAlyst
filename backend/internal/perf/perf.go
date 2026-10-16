@@ -40,7 +40,12 @@ type Record struct {
 	// MFE/MAE in percent, for expectancy.
 	MFEPct float64
 	MAEPct float64
-	TSMS   int64
+	// HorizonMS is the labelling horizon that produced this outcome. Outcomes
+	// from different horizons are NOT comparable -- a 90% move over 15 minutes
+	// and the same move over 90 seconds are different events -- so a statistic
+	// that pools them describes neither.
+	HorizonMS int64
+	TSMS      int64
 }
 
 // SymbolStats is a symbol's track record.
@@ -100,6 +105,9 @@ type Service struct {
 	// malformed counts unparseable ledger lines, so a truncated write cannot
 	// silently shrink the sample the statistics rest on.
 	malformed int
+	// skippedHorizon counts records excluded because they were labelled at a
+	// different horizon than the dominant one.
+	skippedHorizon int
 }
 
 // New creates a service over a ledger path.
@@ -154,6 +162,7 @@ func (s *Service) reload(nowMS int64) {
 			Label      string  `json:"label"`
 			MFEPct     float64 `json:"mfe_pct"`
 			MAEPct     float64 `json:"mae_pct"`
+			HorizonMS  int64   `json:"horizon_ms"`
 			Prediction *struct {
 				ID       string `json:"id"`
 				Symbol   string `json:"symbol"`
@@ -194,15 +203,27 @@ func (s *Service) reload(nowMS int64) {
 			rec.Correct = envelope.Label == "CORRECT"
 			rec.MFEPct = envelope.MFEPct
 			rec.MAEPct = envelope.MAEPct
+			rec.HorizonMS = envelope.HorizonMS
 			records[envelope.ID] = rec
 		}
 	}
+
+	// One horizon only. Pooling regimes would let a short-horizon run silently
+	// dilute or inflate a long-horizon statistic, and nothing downstream could
+	// tell that it had happened -- the exact failure the config-epoch rule
+	// exists to prevent, applied to the horizon instead of the gates.
+	dominant := dominantHorizon(records, order)
+	skippedHorizon := 0
 
 	bySymbol := map[string]*SymbolStats{}
 	global := &SymbolStats{Symbol: "*"}
 	for _, id := range order {
 		rec := records[id]
 		if rec.Symbol == "" {
+			continue
+		}
+		if dominant > 0 && rec.HorizonMS > 0 && rec.HorizonMS != dominant {
+			skippedHorizon++
 			continue
 		}
 		stats, ok := bySymbol[rec.Symbol]
@@ -242,13 +263,38 @@ func (s *Service) reload(nowMS int64) {
 			"(partial write or corruption); counts below are from the readable records only",
 			malformed, s.path)
 	}
+	if skippedHorizon > 0 {
+		log.Printf("perf ledger: excluded %d record(s) labelled at a different horizon "+
+			"than the dominant %dms, because outcomes from different horizons are not comparable",
+			skippedHorizon, dominant)
+	}
 
 	s.mu.Lock()
 	s.bySymbol = bySymbol
 	s.global = *global
 	s.malformed = malformed
+	s.skippedHorizon = skippedHorizon
 	s.loadedMS = nowMS
 	s.mu.Unlock()
+}
+
+// dominantHorizon returns the horizon most resolutions were labelled at, so a
+// handful of records from a different configuration cannot contaminate the set.
+func dominantHorizon(records map[string]Record, order []string) int64 {
+	counts := map[int64]int{}
+	for _, id := range order {
+		rec := records[id]
+		if rec.Resolved && rec.HorizonMS > 0 {
+			counts[rec.HorizonMS]++
+		}
+	}
+	best, bestN := int64(0), 0
+	for horizon, n := range counts {
+		if n > bestN {
+			best, bestN = horizon, n
+		}
+	}
+	return best
 }
 
 func finish(stats *SymbolStats, globalRate float64) {
@@ -286,6 +332,13 @@ func (s *Service) Symbol(symbol string) (SymbolStats, bool) {
 		return SymbolStats{Symbol: symbol, Basis: "no predictions recorded for this symbol yet"}, false
 	}
 	return *stats, true
+}
+
+// SkippedHorizon returns how many records were excluded as a different horizon.
+func (s *Service) SkippedHorizon() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.skippedHorizon
 }
 
 // Malformed returns the count of unreadable ledger lines in the last load.

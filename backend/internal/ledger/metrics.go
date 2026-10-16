@@ -36,6 +36,7 @@ type LedgerReport struct {
 	TotalPredictions int                   `json:"total_predictions"`
 	Resolved         int                   `json:"resolved"`
 	Unresolved       int                   `json:"unresolved"`
+	Retracted        int                   `json:"retracted"`
 	Overall          GroupStats            `json:"overall"`
 	BySeverity       map[string]GroupStats `json:"by_severity"`
 	ByDirection      map[string]GroupStats `json:"by_direction"`
@@ -45,7 +46,7 @@ type LedgerReport struct {
 func (r LedgerReport) String() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Ledger report: %s (since %s, generated %s)\n", r.Path, r.Since, r.Generated.Format(time.RFC3339))
-	fmt.Fprintf(&b, "  predictions=%d resolved=%d UNRESOLVED=%d\n", r.TotalPredictions, r.Resolved, r.Unresolved)
+	fmt.Fprintf(&b, "  predictions=%d resolved=%d UNRESOLVED=%d retracted=%d\n", r.TotalPredictions, r.Resolved, r.Unresolved, r.Retracted)
 	fmt.Fprintf(&b, "  overall: %s\n", r.Overall)
 	keys := func(m map[string]GroupStats) []string {
 		ks := make([]string, 0, len(m))
@@ -90,6 +91,7 @@ func Report(path string, since time.Duration) (LedgerReport, error) {
 	preds := make(map[string]Prediction)
 	var predOrder []string
 	resolutions := make(map[string]resolutionRecord)
+	retracted := make(map[string]bool)
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 1<<20), 1<<20)
 	for sc.Scan() {
@@ -119,6 +121,10 @@ func Report(path string, since time.Duration) (LedgerReport, error) {
 			if json.Unmarshal(line, &rr) == nil {
 				resolutions[rr.ID] = rr // last resolution wins
 			}
+		case "retraction":
+			if head.ID != "" {
+				retracted[head.ID] = true
+			}
 		}
 	}
 	if err := sc.Err(); err != nil {
@@ -135,6 +141,10 @@ func Report(path string, since time.Duration) (LedgerReport, error) {
 
 	var rows []resolvedRow
 	for _, id := range predOrder {
+		if retracted[id] {
+			rep.Retracted++
+			continue // excluded from every accuracy number, never deleted
+		}
 		p := preds[id]
 		if p.TSMS < cutoff {
 			continue

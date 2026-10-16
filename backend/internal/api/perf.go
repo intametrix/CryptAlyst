@@ -40,10 +40,11 @@ func (s *Server) handlePerf(w http.ResponseWriter, r *http.Request) {
 		rows = rows[:200]
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"type":      "perf",
-		"symbols":   rows,
-		"global":    s.deps.Perf.Global(),
-		"malformed": s.deps.Perf.Malformed(),
+		"type":            "perf",
+		"symbols":         rows,
+		"global":          s.deps.Perf.Global(),
+		"malformed":       s.deps.Perf.Malformed(),
+		"skipped_horizon": s.deps.Perf.SkippedHorizon(),
 		"note": "shrunk_hit_rate pulls each symbol toward the market-wide rate by a " +
 			"Beta prior, so a thin record cannot masquerade as a strong one; " +
 			"hit_rate is the raw figure for comparison",

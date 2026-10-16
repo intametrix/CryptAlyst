@@ -72,6 +72,14 @@ type Model struct {
 	Brier       float64          `json:"brier"`
 	LogLoss     float64          `json:"log_loss"`
 	Reliability []ReliabilityBin `json:"reliability"`
+
+	// Label versioning (locked): LabelVersion 2 marks the file as
+	// accompanying the v2 expectancy-in-R reporting; the fitted target is
+	// still the v1 binary label (CORRECT=1, WRONG=0, EXPIRED=0 / DISCARD
+	// excluded). CompanionV1 records that v1 labels remain reported
+	// alongside, forever — v2 never replaces v1.
+	LabelVersion int  `json:"label_version"`
+	CompanionV1  bool `json:"companion_v1"`
 }
 
 // Predict returns the model's probability for a feature map. Features
@@ -299,8 +307,13 @@ func dot(w, x []float64) float64 {
 // WriteCalibration writes the calibration file atomically (temp file in the
 // same directory + rename) so a live reader never sees a torn document.
 // An existing file at path is replaced wholesale — the new fit supersedes
-// the old one; there is no merging of coefficients.
+// the old one; there is no merging of coefficients. Newly written files are
+// stamped label_version=2, companion_v1=true (see the Model field comment).
 func WriteCalibration(path string, m Model) error {
+	if m.LabelVersion == 0 {
+		m.LabelVersion = 2
+	}
+	m.CompanionV1 = true
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err

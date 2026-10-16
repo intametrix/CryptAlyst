@@ -43,7 +43,7 @@ import { useFlowHistory, type FlowHistoryState } from '../hooks/useFlowHistory';
 import { useOutlook, type OutlookLevel } from '../hooks/useOutlook';
 import { resolvePalette } from '../palette';
 import { useElementSize } from '../hooks/useElementSize';
-import { INTERVALS, type Interval, type ToolsMsg } from '../types';
+import { INTERVALS, type AlertMsg, type Interval, type ToolsMsg } from '../types';
 import { eventIdentity } from '../colors';
 import { EventGlyph } from './EventGlyph';
 import { MarkerLayer } from './MarkerLayer';
@@ -98,7 +98,6 @@ const MARK_SAMPLES: readonly {
  * when it is applied after the resize, which is why it is done in an effect
  * rather than inside the resize call.
  */
-const PANE_INDICATOR_PX = { atr: 84, adx: 92, rsi: 84 } as const;
 /** Indicator panes shrink to these floors before the price pane gives up space. */
 /**
  * The flow pane's own height.
@@ -107,8 +106,25 @@ const PANE_INDICATOR_PX = { atr: 84, adx: 92, rsi: 84 } as const;
  * is given a readable floor rather than the sliver a pure proportional split left
  * it (measured at 24–28px, which shows nothing).
  */
-const FLOW_PANE_TARGET_PX = 148;
-const FLOW_PANE_MIN_PX = 72;
+const FLOW_PANE_TARGET_PX = 72;
+/**
+ * The smallest an indicator pane may be while staying readable.
+ *
+ * These panes were collapsing to 28–33px, which is not enough to read a line in.
+ * 44px keeps the axis label and a shape visible; the box only goes below the
+ * targets when the viewport is genuinely too short for everything.
+ */
+/**
+ * The library's own per-pane minimum.
+ *
+ * Measured, not assumed: asking for a 340px price pane in a 464px host yielded
+ * 311px with the other four panes at 30/30/30/31 — the library clamps every pane
+ * to ~30px and hands the rest to the pane it was asked to grow. That floor is
+ * *not* budgetable: any height reserved for an auxiliary beyond 30px is silently
+ * reclaimed by the price pane, so a reservation larger than this only makes the
+ * allocation unpredictable.
+ */
+const PANE_LIBRARY_MIN_PX = 30;
 /** Height the time/price axes take inside the box; the panes split the rest. */
 const AXIS_ALLOWANCE_PX = 30;
 
@@ -205,17 +221,6 @@ export interface ChartProbe {
   /** True while the viewport is following new bars at the right edge. */
   follow: () => boolean;
   /**
-   * Every programmatic visible-range change, with its caller.
-   *
-   * A viewport that moves on its own is the bug being fixed, so the only way to
-   * close it out is to name the call site responsible. Kept small and inert.
-   */
-  rangeSets: { kind: string; from: number; to: number; at: number; stack: string }[];
-  /** Every observed change to the visible logical range, with its caller. */
-  rangeChanges: { from: number; to: number; at: number; stack: string }[];
-  /** Every rollover's follow decision. */
-  shiftTrace: { at: number; follow: boolean; bars: number; from: number; to: number }[];
-  /**
    * Move the viewport, for tests that need to reproduce a user pan or zoom.
    *
    * Scrolling left is the state the bug report is about, and there is no other
@@ -308,8 +313,6 @@ function buildChart(
   label: { interval: string },
   /** Called when follow mode arms or disarms, so the panel can mirror it. */
   sinkFollow: (following: boolean) => void,
-  /** Rollover decisions are recorded here for the scroll acceptance test. */
-  traceShift: { at: number; follow: boolean; bars: number; from: number; to: number }[],
 ): ChartHandles {
   const chart = createChart(container, {
     /**
@@ -528,16 +531,6 @@ function buildChart(
     };
     followRef.current = isAtRightEdge();
     sinkFollow(isAtRightEdge());
-    scale.subscribeVisibleLogicalRangeChange((range) => {
-      if (probe.rangeChanges.length < 4000) {
-        probe.rangeChanges.push({
-          from: range?.from ?? -1,
-          to: range?.to ?? -1,
-          at: Date.now(),
-          stack: new Error('chg').stack?.split('\n').slice(2, 6).join(' | ') ?? '',
-        });
-      }
-    });
     scale.subscribeVisibleLogicalRangeChange(() => {
       const at = isAtRightEdge();
       // Only report a change, so a pan does not write to React on every frame.
@@ -552,9 +545,6 @@ function buildChart(
   const probe: ChartProbe = {
     updates: { candle: 0, volume: 0, line: 0 },
     loads,
-    rangeSets: [],
-    rangeChanges: [],
-    shiftTrace: traceShift,
     follow: () => followRef.current,
     scrollTo: (from: number, to: number) => {
       const scaleForMove = chart.timeScale();
@@ -563,10 +553,8 @@ function buildChart(
       const total = candles.data().length;
       const range = scaleForMove.getVisibleLogicalRange();
       const atEdge = range === null || total === 0 ? true : range.to >= total - 1;
-      if (atEdge !== followRef.current) {
-        followRef.current = atEdge;
-        sinkFollow(atEdge);
-      }
+      followRef.current = atEdge;
+      sinkFollow(atEdge);
     },
     painted: () => {
       const canvas = container.querySelector('canvas');
@@ -620,36 +608,22 @@ function buildChart(
     },
   };
 
-  // Count whole-series loads, which are the operations that reset the viewport.
   {
-    // Record any programmatic viewport change with the frame that made it.
-    const scaleForTrace = chart.timeScale();
-    const realSetRange = scaleForTrace.setVisibleLogicalRange.bind(scaleForTrace);
-    scaleForTrace.setVisibleLogicalRange = ((range: Parameters<typeof realSetRange>[0]) => {
-      probe.rangeSets.push({
-        kind: 'setVisibleLogicalRange',
-        from: range?.from ?? -1,
-        to: range?.to ?? -1,
-        at: Date.now(),
-        stack: new Error('range').stack?.split('\n').slice(2, 9).join(' | ') ?? '',
-      });
-      if (probe.rangeSets.length > 20) probe.rangeSets.shift();
+    const log = ((globalThis as unknown as { __vpLog?: unknown[] }).__vpLog ??= []);
+    const ts = chart.timeScale();
+    const realSetRange = ts.setVisibleLogicalRange.bind(ts);
+    ts.setVisibleLogicalRange = ((range: Parameters<typeof realSetRange>[0]) => {
+      log.push({ op: 'setRange', from: range?.from ?? -1, to: range?.to ?? -1, at: Date.now(), follow: followRef.current });
       return realSetRange(range);
-    }) as typeof scaleForTrace.setVisibleLogicalRange;
-    const realFitTrace = scaleForTrace.fitContent.bind(scaleForTrace);
-    scaleForTrace.fitContent = (() => {
-      probe.rangeSets.push({
-        kind: 'fitContent',
-        from: -1,
-        to: -1,
-        at: Date.now(),
-        stack: new Error('fit').stack?.split('\n').slice(2, 5).join(' | ') ?? '',
-      });
-      if (probe.rangeSets.length > 20) probe.rangeSets.shift();
-      return realFitTrace();
-    }) as typeof scaleForTrace.fitContent;
+    }) as typeof ts.setVisibleLogicalRange;
+    const realFit = ts.fitContent.bind(ts);
+    ts.fitContent = (() => {
+      log.push({ op: 'fit', from: -1, to: -1, at: Date.now(), follow: followRef.current });
+      return realFit();
+    }) as typeof ts.fitContent;
   }
 
+  // Count whole-series loads, which are the operations that reset the viewport.
   {
     const realSetData = candles.setData.bind(candles);
     candles.setData = ((next: Parameters<typeof realSetData>[0]) => {
@@ -763,6 +737,13 @@ export interface ChartPanelProps {
   tickerAtMs?: number | null;
   /** The canonical palette; the chart draws with the server's own colours. */
   canon?: ColorCanon | null;
+  /**
+   * The persisted alerts that arrived with the bars.
+   *
+   * Reported up so the feed can open populated: a symbol's recent events are in
+   * the same payload as its candles, so no second request is needed.
+   */
+  onPersistedAlerts?: (alerts: readonly AlertMsg[]) => void;
   /** Toggle the flow pane with the other chart elements. */
   showFlow?: boolean;
   /**
@@ -820,6 +801,7 @@ export function ChartPanel({
   tickerTick = null,
   tickerAtMs = null,
   canon = null,
+  onPersistedAlerts,
   showFlow = true,
   eventsOnly = false,
   onToggleEventsOnly,
@@ -838,18 +820,6 @@ export function ChartPanel({
    * throws "Object is disposed".
    */
   const disposedRef = useRef(false);
-  /**
-   * Whether the viewport is following new bars, read by the update path.
-   *
-   * `buildChart` owns the authoritative flag (it subscribes to range changes);
-   * this ref mirrors it so the ticker effect — which lives outside that closure —
-   * can consult it without re-creating the chart.
-   */
-  const followMirror = useRef(true);
-  /** Trace of every rollover decision, for the scroll acceptance test. */
-  const traceShift: { at: number; follow: boolean; bars: number; from: number; to: number }[] = useRef<{ at: number; follow: boolean; bars: number; from: number; to: number }[]>([]).current;
-  // The chart is rebuilt on a reload, so the mirror is re-armed with it.
-
   /** The box height the panes were last distributed for. */
   const lastDistributed = useRef<number>(-1);
   /**
@@ -1040,6 +1010,16 @@ export function ChartPanel({
 
   /* -- create / destroy the chart when the symbol (or its bar count) changes -- */
 
+  /**
+   * Whether the viewport is following new bars, read by the update path.
+   *
+   * `buildChart` owns the authoritative flag (it subscribes to range changes);
+   * this ref mirrors it so the ticker effect — which lives outside that closure —
+   * can consult it without re-creating the chart.
+   */
+  const followMirror = useRef(true);
+  // The chart is rebuilt on a reload, so the mirror is re-armed with it.
+
   useEffect(() => {
     const container = containerRef.current;
     if (container === null || symbol === null || bars.length === 0) return;
@@ -1053,7 +1033,6 @@ export function ChartPanel({
       (following) => {
         followMirror.current = following;
       },
-      traceShift,
     );
     chartRef.current = handles;
     setLayer({ chart: handles.chart, series: handles.candles });
@@ -1103,98 +1082,76 @@ export function ChartPanel({
     const indicators = (['atr', 'adx', 'rsi'] as const)
       .map((key) => ({ key, index: handles.paneIndex[key] }))
       .filter((item) => item.index > 0 && item.index < panes.length);
+    const flowIndex = handles.flowPaneIndex > 0 && handles.flowPaneIndex < panes.length ? handles.flowPaneIndex : -1;
 
-    const available = Math.max(0, boxHeight - AXIS_ALLOWANCE_PX);
     /**
-     * Every pane below the candles wants height, and in a short box their floors
-     * add up to more than the box — which squeezes the price pane to nothing and
-     * the chart renders blank (measured: 30px of canvas at a 404px overlay).
+     * How much height the panes may occupy — measured, not assumed.
      *
-     * So the auxiliaries share a *budget* rather than each taking its floor: the
-     * floors are scaled down together until they fit, and the price pane keeps a
-     * guaranteed share. Growth still lands on the candles, because the budget is
-     * a fraction of the box, not a fixed number of pixels.
+     * The library lays out the time axis itself and does not expose its height, so
+     * it is derived: the host minus the panes' own measured total.
      */
-    // Events-only: the indicator panes and the flow pane are given the minimum,
-    // so the price pane takes the whole box. A hidden *series* would leave its
-    // pane in place, which is why this is handled here rather than by the chips.
-    if (collapse) {
-      let reclaimed = 0;
-      for (const item of indicators) {
-        const now = panes[item.index].getHeight();
-        reclaimed += Math.max(0, now - 1);
-        if (now !== 1) panes[item.index].setHeight(1);
-      }
-      if (handles.flowPaneIndex > 0 && handles.flowPaneIndex < panes.length) {
-        const now = panes[handles.flowPaneIndex].getHeight();
-        reclaimed += Math.max(0, now - 1);
-        if (now !== 1) panes[handles.flowPaneIndex].setHeight(1);
-      }
-      void reclaimed;
-      const priceHeight = Math.max(80, available - 1);
-      if (panes[0].getHeight() !== priceHeight) panes[0].setHeight(priceHeight);
-      lastDistributed.current = boxHeight;
-      return;
+    let paneTotal = 0;
+    for (let i = 0; i < panes.length; i += 1) paneTotal += panes[i].getHeight();
+    const axisHeight = Math.max(0, boxHeight - paneTotal);
+    const available = Math.max(0, boxHeight - Math.max(AXIS_ALLOWANCE_PX, axisHeight));
+    if (available <= 0) return;
+
+    /**
+     * Pane heights, in three steps.
+     *
+     * Two measured facts shape this:
+     *
+     * 1. The panes must **sum to `available`**; the library re-divides them to fit
+     *    the host, so an over-reserved set is scaled back and nothing gets what it
+     *    asked for.
+     * 2. The library clamps every pane to ~30px and gives the remainder to the
+     *    pane being grown (a 340px request in a 464px host produced 311px with the
+     *    others at 30/30/30/31). A reservation above that floor is not honoured.
+     *
+     * 1. The auxiliaries take a **legible minimum** (the flow pane 72px, each
+     *    indicator 30px) — they must not be squeezed until they show nothing.
+     * 2. They are then topped up towards their preference while the price pane
+     *    keeps at least 55% of the box.
+     * 3. Everything left over is the candles', so the price pane absorbs all
+     *    growth and all the height released when indicators are hidden.
+     */
+    const targets = new Map<number, number>();
+    /**
+     * The auxiliaries' total take.
+     *
+     * A measured constraint forces this shape: the library clamps every pane to
+     * ~30px, so with the flow pane and three indicators below the candles nothing
+     * can be squeezed below **130px**. Reserving less does not give the height to
+     * the price pane — the library simply refuses — so 130px is the real budget
+     * and the candles take everything above it.
+     */
+    const auxFloor = (flowIndex === -1 ? 0 : PANE_LIBRARY_MIN_PX) + indicators.length * PANE_LIBRARY_MIN_PX;
+    const priceTarget = Math.max(Math.round(available * 0.6), available - auxFloor);
+    targets.set(0, priceTarget);
+    let rest = Math.max(0, available - priceTarget);
+
+    if (flowIndex !== -1) {
+      const want = collapse ? PANE_LIBRARY_MIN_PX : Math.min(FLOW_PANE_TARGET_PX, Math.max(PANE_LIBRARY_MIN_PX, Math.round(available * 0.16)));
+      const height = Math.max(0, Math.min(want, rest - indicators.length * PANE_LIBRARY_MIN_PX));
+      const take = Math.max(0, Math.min(Math.max(PANE_LIBRARY_MIN_PX, height), rest));
+      targets.set(flowIndex, take);
+      rest = Math.max(0, rest - take);
     }
 
-    /**
-     * Allocation.
-     *
-     * The library re-divides the panes to fit the box, so the targets must **sum
-     * to the available height** — a set that over-reserves is scaled back
-     * proportionally and the flow pane ends up at 42px no matter what it asked
-     * for (measured). So the heights are computed arithmetically first and then
-     * applied.
-     *
-     * Priority: the flow pane (the evidence layer) takes a readable share, the
-     * indicator panes share a bounded budget, and the price pane gets everything
-     * left — which is what makes the candles absorb any released height.
-     */
-    const flowIndex = handles.flowPaneIndex > 0 && handles.flowPaneIndex < panes.length ? handles.flowPaneIndex : -1;
-    const flowWant = flowIndex === -1 ? 0 : Math.max(FLOW_PANE_MIN_PX, Math.min(FLOW_PANE_TARGET_PX, Math.round(available * 0.25)));
-
-    // The price pane keeps at least this much; below it the chart is unreadable.
-    const priceFloor = Math.max(60, Math.round(available * 0.3));
-    // Indicators share whatever is left after the flow pane, capped so they can
-    // never crowd out the candles.
-    const indicatorBudget =
-      indicators.length === 0
-        ? 0
-        : Math.max(0, Math.min(Math.round(available * 0.4), available - priceFloor - flowWant));
-
-    const targets = new Map<number, number>();
-    if (flowIndex !== -1) targets.set(flowIndex, flowWant);
-
-    if (indicators.length > 0 && indicatorBudget > 0) {
-      const share = Math.floor(indicatorBudget / indicators.length);
+    if (indicators.length > 0) {
+      const share = Math.floor(rest / indicators.length);
       let allocated = 0;
       indicators.forEach((item, position) => {
         const isLast = position === indicators.length - 1;
-        // The last one takes the remainder, so the budget is used exactly and
-        // rounding cannot push the total over.
-        const height = isLast ? Math.max(12, indicatorBudget - allocated) : Math.max(12, Math.min(PANE_INDICATOR_PX[item.key], share));
+        // The last pane mops up the remainder so the set always sums to the box.
+        const height = isLast ? Math.max(0, rest - allocated) : Math.max(0, share);
         allocated += height;
         targets.set(item.index, height);
       });
+      rest = Math.max(0, rest - allocated);
     }
 
-    const auxTotal = [...targets.values()].reduce((sum, value) => sum + value, 0);
-    // The price pane is the remainder by construction, so the set always fits.
-    const priceHeight = Math.max(priceFloor, available - auxTotal);
-    targets.set(0, priceHeight);
-
-    // Shrink the auxiliaries if the price pane's floor forced the total over.
-    let overflow = auxTotal + priceHeight - available;
-    if (overflow > 0) {
-      const shrinkable = [...targets.entries()].filter(([index]) => index !== 0).sort((a, b) => b[1] - a[1]);
-      for (const [index, value] of shrinkable) {
-        if (overflow <= 0) break;
-        const room = Math.max(0, value - 12);
-        const take = Math.min(room, overflow);
-        targets.set(index, value - take);
-        overflow -= take;
-      }
-    }
+    targets.set(0, priceTarget + rest);
 
     for (const [index, height] of targets) {
       if (index < panes.length && panes[index].getHeight() !== height) panes[index].setHeight(height);
@@ -1311,6 +1268,20 @@ export function ChartPanel({
     onFlowState?.(flowHistory);
   }, [flowHistory, onFlowState]);
 
+  // Persisted alerts ride along with the bars; hand them up when they change.
+  //
+  // Keyed on a signature rather than on `data`, because the payload is replaced on
+  // every poll: re-emitting an identical array would re-render the whole
+  // dashboard every ten seconds for no new information.
+  const persistedSigRef = useRef('');
+  useEffect(() => {
+    const persisted = Array.isArray(data?.alerts) ? data.alerts : [];
+    const signature = `${persisted.length}|${persisted.map((a) => String(a?.event_id ?? a?.ts_ms ?? '')).join(',')}`;
+    if (signature === persistedSigRef.current) return;
+    persistedSigRef.current = signature;
+    onPersistedAlerts?.(persisted);
+  }, [data, onPersistedAlerts]);
+
   useEffect(() => {
     const sink = zoomSinkRef.current;
     if (sink === undefined) return;
@@ -1416,6 +1387,7 @@ export function ChartPanel({
   useEffect(() => {
     const handles = chartRef.current;
     if (handles === null) return;
+    ((globalThis as unknown as { __effectRuns?: unknown[] }).__effectRuns ??= []).push({ at: Date.now(), loadSeq, bars: bars.length });
     handles.candles.setData(toCandles(bars));
     handles.volume.setData(toVolumes(bars));
     const byKey = new Map(overlaySeries.map((s) => [s.key, s.data]));
@@ -1715,16 +1687,6 @@ function colorWithAlpha(color: string, alpha: number): string {
       // is the one moment the viewport may legitimately move — but only for a
       // reader who is already at the live edge, and only by the same sliver the
       // library would have used, so the zoom level is untouched.
-      {
-        const r = handles.chart.timeScale().getVisibleLogicalRange();
-        traceShift.push({
-          at: Date.now(),
-          follow: followMirror.current,
-          bars: handles.candles.data().length,
-          from: r?.from ?? -1,
-          to: r?.to ?? -1,
-        });
-      }
       if (followMirror.current) {
         const scale = handles.chart.timeScale();
         const range = scale.getVisibleLogicalRange();

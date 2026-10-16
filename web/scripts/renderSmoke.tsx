@@ -109,8 +109,9 @@ import { OutlookStrip } from '../src/components/OutlookStrip';
 import { parseOutlook } from '../src/hooks/useOutlook';
 import { parseCanon, CANON_FALLBACK } from '../src/colors';
 import { EventGlyph } from '../src/components/EventGlyph';
+import { AlertCard } from '../src/components/AlertCard';
 import { toMarkers } from '../src/chartData';
-import { LIVE_FLOW_SPLIT, LIVE_OUTLOOK } from './livePayloads';
+import { LIVE_FLOW_SPLIT, LIVE_OUTLOOK, LIVE_KLINES_ALERTS } from './livePayloads';
 import { TooltipViewer } from '../src/components/TooltipViewer';
 import { HeatProvider } from '../src/heatContext';
 import { HeatBorder } from '../src/components/HeatBorder';
@@ -686,6 +687,45 @@ ok('the dump badge text is the canon text colour', /data-text-color="([^"]*)"/.e
 // differ from the toolbar's.
 const pumpMarker = toMarkers([{ t: 1_800_000_000_000, kind: 'PUMP', severity: 'CRITICAL', color: '#00e676' }], smokeBars, parsedCanon)[0];
 ok('the chart marker uses the canon fill', pumpMarker.color === parsedCanon?.direction.up, pumpMarker.color);
+
+// --- persisted alerts: one request on selection must populate the feed -----
+// The klines payload carries this symbol's recent alerts, so the feed opens with
+// history instead of waiting for the next live event. The merge is exercised with
+// the live payload, and the merged rows must render as real alert cards.
+const persisted = (LIVE_KLINES_ALERTS as { event_id?: string; ts_ms?: number; kind?: string; severity?: string; color?: string; metrics?: Record<string, unknown> }[]) ?? [];
+ok('the live klines payload carries alerts', persisted.length > 0, `count=${persisted.length}`);
+ok(
+  'every persisted alert identifies itself for de-duplication',
+  persisted.every((a) => typeof a.event_id === 'string' && a.event_id !== ''),
+  `${persisted.filter((a) => !a.event_id).length} without an id`,
+);
+{
+  // The same merge the dashboard performs: live stream first, then persisted,
+  // keyed by event id, newest first.
+  const live = persisted.slice(0, 2);
+  const seen = new Set<string>();
+  const merged: typeof persisted = [];
+  for (const alert of [...live, ...persisted]) {
+    const key = String(alert.event_id ?? `${alert.symbol}|${alert.kind}|${alert.ts_ms}`);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(alert);
+  }
+  merged.sort((a, b) => (b.ts_ms ?? 0) - (a.ts_ms ?? 0));
+  ok('the merge de-duplicates by event id', merged.length === persisted.length, `${merged.length} vs ${persisted.length}`);
+  ok('the merge is newest first', (merged[0]?.ts_ms ?? 0) >= (merged[merged.length - 1]?.ts_ms ?? 0));
+}
+{
+  // And each merged row renders as a card with a canonical badge.
+  const card = renderToStaticMarkup(
+    <TooltipViewer>
+      <AlertCard alert={persisted[0] as never} flash={false} tools={null} nowMs={Date.now()} canon={parsedCanon} />
+    </TooltipViewer>,
+  );
+  ok('a persisted alert renders as an alert card', card.includes('eglyph') || card.includes('kind-'), card.slice(0, 200));
+  ok('a persisted alert carries a canonical glyph', /data-letter="[PDRB\u2022]"/.test(card), card.slice(0, 300));
+  ok('a persisted alert never renders undefined', !card.includes('>undefined<'));
+}
 
 // Tooltips are wired for keyboard and pointer.
 ok('tooltips use role=tooltip', true); // rendered on open only; the trigger wiring is asserted next

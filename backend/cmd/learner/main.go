@@ -163,12 +163,15 @@ func (p prediction) expectancy() float64 {
 // fallback (alert event_id and ledger signal ID can differ for the same
 // event).
 type store struct {
-	byID  map[string]*prediction
-	order []*prediction
-	short []*shortLabel
+	byID      map[string]*prediction
+	order     []*prediction
+	short     []*shortLabel
+	retracted map[string]bool
 }
 
-func newStore() *store { return &store{byID: map[string]*prediction{}} }
+func newStore() *store {
+	return &store{byID: map[string]*prediction{}, retracted: map[string]bool{}}
+}
 
 func (s *store) findByProximity(symbol string, ts int64) *prediction {
 	for _, p := range s.order {
@@ -260,6 +263,7 @@ func load(path string, target, stop float64) (*store, error) {
 		}
 		var head struct {
 			Type string `json:"type"`
+			ID   string `json:"id"`
 		}
 		if err := json.Unmarshal(line, &head); err != nil {
 			return nil, fmt.Errorf("line %d: unparseable: %w", lineNo, err)
@@ -290,15 +294,30 @@ func load(path string, target, stop float64) (*store, error) {
 				return nil, fmt.Errorf("line %d: %w", lineNo, err)
 			}
 			st.attachResolution(lr.ID, lr)
+		case "retraction":
+			if head.ID != "" {
+				st.retracted[head.ID] = true
+			}
 		case "label_10s":
 			var sl struct {
-				ID    string `json:"id"`
-				Label string `json:"label"`
+				ID        string  `json:"id"`
+				Label     string  `json:"label"`
+				BandPct   float64 `json:"band_pct"`
+				Direction int     `json:"direction"`
+				Entry     float64 `json:"entry"`
+				Price     float64 `json:"price"`
+				MFEPct    float64 `json:"mfe_pct"`
+				MAEPct    float64 `json:"mae_pct"`
 			}
 			if err := json.Unmarshal(line, &sl); err != nil {
 				return nil, fmt.Errorf("line %d: %w", lineNo, err)
 			}
-			st.short = append(st.short, &shortLabel{id: sl.ID, label: sl.Label})
+			st.short = append(st.short, &shortLabel{
+				id: sl.ID, label: sl.Label, band: sl.BandPct,
+				direction: sl.Direction, entry: sl.Entry, price: sl.Price,
+				mfe: sl.MFEPct, mae: sl.MAEPct,
+				hasExcursions: sl.MFEPct != 0 || sl.MAEPct != 0,
+			})
 		case "", "alert":
 			var a alertRecord
 			if err := json.Unmarshal(line, &a); err != nil {
@@ -324,6 +343,27 @@ func load(path string, target, stop float64) (*store, error) {
 	}
 	if err := sc.Err(); err != nil {
 		return nil, err
+	}
+	// Retractions may appear after the retracted records; purge them so every
+	// report path (15min, 10s, calibration) excludes contaminated ids. The
+	// records stay in the file — this is exclusion, not deletion.
+	if len(st.retracted) > 0 {
+		kept := st.order[:0]
+		for _, p := range st.order {
+			if st.retracted[p.id] {
+				delete(st.byID, p.id)
+				continue
+			}
+			kept = append(kept, p)
+		}
+		st.order = kept
+		labels := st.short[:0]
+		for _, l := range st.short {
+			if !st.retracted[l.id] {
+				labels = append(labels, l)
+			}
+		}
+		st.short = labels
 	}
 	return st, nil
 }
@@ -369,6 +409,8 @@ func main() {
 	calibrate := flag.Bool("calibrate", false, "fit logistic calibration and write -out")
 	calOut := flag.String("out", "", "calibration output path (default calibration.json, or calibration_10s.json with -short)")
 	shortMode := flag.Bool("short", false, "short-horizon (10s) report and fit from label_10s records")
+	auditMode := flag.Bool("audit", false, "scan for contaminated resolutions; write a copy with retractions to -out")
+	feePct := flag.Float64("fee_pct", 0.1, "taker fee per side, in percent, for v2 net expectancy")
 	var params paramFlags
 	flag.Var(&params, "param", "gate parameter name=min:max:step (repeatable)")
 	flag.Parse()
@@ -377,6 +419,23 @@ func main() {
 	if *ledgerPath == "" {
 		fmt.Fprintln(os.Stderr, "-ledger is required")
 		os.Exit(1)
+	}
+	if *auditMode {
+		outPath := *calOut
+		if outPath == "" {
+			outPath = "ledger_retracted.jsonl"
+		}
+		res, impossible, contra, dups, nonmono, retracted, err := runAudit(*ledgerPath, outPath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "learner: audit: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("audit: %s\n", *ledgerPath)
+		fmt.Printf("  resolutions=%d impossible=%d contradictions=%d duplicate_resolutions=%d\n",
+			res, impossible, contra, dups)
+		fmt.Printf("  non_monotone_path_records=%d (restart artifact, informational)\n", nonmono)
+		fmt.Printf("  retracted=%d -> %s\n", retracted, outPath)
+		return
 	}
 	st, err := load(*ledgerPath, *target, *stop)
 	if err != nil {
@@ -425,6 +484,7 @@ func main() {
 		}
 		fmt.Printf("direction LONG:     %s\n", accumulate(all, func(p *prediction) bool { return p.direction > 0 }))
 		fmt.Printf("direction SHORT:    %s\n", accumulate(all, func(p *prediction) bool { return p.direction < 0 }))
+		printV2_15min(all, *feePct)
 	}
 
 	out := *calOut
@@ -448,7 +508,7 @@ func main() {
 	}
 
 	if *shortMode {
-		computeShort(st, out)
+		computeShort(st, out, *feePct)
 		return
 	}
 

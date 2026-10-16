@@ -20,6 +20,9 @@ const targets = [
   { name: 'LIVE_FLOW_SPLIT', url: `${base}/api/flow?split=1&limit=25` },
   { name: 'LIVE_OUTLOOK', url: `${base}/api/outlook?symbol=DOTUSDT` },
   { name: 'LIVE_FLOW_HISTORY', url: `${base}/api/flow/history?symbol=BTCUSDT&limit=360` },
+  // A symbol with recent events, so the persisted-alerts path is exercised with
+  // a non-empty array rather than an empty one that would pass vacuously.
+  { name: 'LIVE_KLINES_ALERTS', url: `${base}/api/klines?symbol=NEARUSDT&interval=1m&limit=300`, pick: 'alerts' },
 ];
 
 const parts = [
@@ -34,7 +37,8 @@ for (const target of targets) {
     const res = await fetch(target.url, { headers: { accept: 'application/json' } });
     if (!res.ok) throw new Error(`http ${res.status}`);
     const body = await res.json();
-    parts.push(`export const ${target.name} = ${JSON.stringify(body)} as const;`, '');
+    const value = target.pick === undefined ? body : (body?.[target.pick] ?? null);
+    parts.push(`export const ${target.name} = ${JSON.stringify(value)} as const;`, '');
     captured += 1;
   } catch (error) {
     // Keep the test runnable offline: an empty object still exercises the

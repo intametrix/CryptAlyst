@@ -84,7 +84,7 @@ func TestShortPlantedSignalShips(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	out := filepath.Join(t.TempDir(), "calibration_10s.json")
-	stats := computeShort(st, out)
+	stats := computeShort(st, out, 0.1)
 
 	if stats.labels != 601 {
 		t.Fatalf("labels = %d, want 601 (600 + 1 orphan)", stats.labels)
@@ -136,7 +136,7 @@ func TestShortNoLiftRefuses(t *testing.T) {
 		t.Fatalf("load: %v", err)
 	}
 	out := filepath.Join(t.TempDir(), "calibration_10s.json")
-	stats := computeShort(st, out)
+	stats := computeShort(st, out, 0.1)
 	if stats.shipped {
 		t.Fatalf("pure-noise fit shipped: brier=%.4f base=%.4f", stats.brier, stats.baseBrier)
 	}

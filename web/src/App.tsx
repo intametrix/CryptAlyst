@@ -298,6 +298,38 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
 
   // `status.alerts` is the backend's own counter; the buffer tally is the
   // fallback before the first status frame arrives.
+  /**
+   * The alerts that arrived inside the klines payload when the charted symbol was
+   * selected.
+   *
+   * They are what makes the feed open already populated — the live stream only
+   * carries events from the moment this page connected, so without these a symbol
+   * with recent history looks untouched. Held in a ref and mirrored into state so
+   * the merge below does not depend on the payload's identity.
+   */
+  const [persistedAlerts, setPersistedAlerts] = useState<readonly AlertMsg[]>([]);
+  const handlePersistedAlerts = useCallback((next: readonly AlertMsg[]) => {
+    setPersistedAlerts(next);
+  }, []);
+
+  /** Persisted history plus the live stream, newest first, de-duplicated. */
+  const feedAlerts = useMemo<AlertMsg[]>(() => {
+    const seen = new Set<string>();
+    const out: AlertMsg[] = [];
+    for (const alert of [...alerts, ...persistedAlerts]) {
+      const key =
+        typeof alert?.event_id === 'string' && alert.event_id !== ''
+          ? alert.event_id
+          : `${String(alert?.symbol ?? '')}|${String(alert?.kind ?? '')}|${String(alert?.ts_ms ?? '')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(alert);
+    }
+    // Newest first, which is the order the feed expects.
+    out.sort((a, b) => (b?.ts_ms ?? 0) - (a?.ts_ms ?? 0));
+    return out.slice(0, MAX_ALERTS);
+  }, [alerts, persistedAlerts]);
+
   const alertCount = status?.alerts ?? alertStats.total;
 
   // Offer a symbol for adoption once the slow-cadence panels have data. The
@@ -416,7 +448,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
             secondClassName="col-flow"
             first={
               <AlertFeed
-                alerts={alerts}
+                alerts={feedAlerts}
                 flashIds={flashIds}
                 paused={paused}
                 pending={pendingAlerts}
@@ -492,6 +524,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               tickerTick={ticker.tick}
               tickerAtMs={ticker.lastAtMs}
               canon={canon}
+              onPersistedAlerts={handlePersistedAlerts}
               selectedEvent={selectedEvent}
               onSelectEvent={setSelectedEvent}
               onZoomControls={setZoomControls}

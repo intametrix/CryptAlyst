@@ -33,7 +33,7 @@ const chrome = spawn(
     '--no-default-browser-check',
     '--no-sandbox',
     '--disable-dev-shm-usage',
-    '--window-size=1440,1400',
+    `--window-size=${process.env.RT_WINDOW ?? '1440,900'}`,
     `--user-data-dir=${profile}`,
     `--remote-debugging-port=${port}`,
     'about:blank',

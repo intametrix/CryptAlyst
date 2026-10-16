@@ -481,6 +481,15 @@ export interface KlinesMsg {
   indicators?: ChartIndicatorMap | null;
   marks?: ChartMark[] | null;
   latest?: ChartLatest | null;
+  /**
+   * This symbol's persisted alerts, newest first.
+   *
+   * The backend returns them inside the klines payload so one request on
+   * selection yields both bars and events. They are consumed here rather than
+   * fetched separately, which is what lets the feed show history immediately
+   * instead of starting empty and waiting for the next live alert.
+   */
+  alerts?: AlertMsg[] | null;
 }
 
 /* ---------------------------------------------------------------- drilldown */
