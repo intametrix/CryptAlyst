@@ -254,6 +254,8 @@ export interface ChartProbe {
   };
   /** True while the viewport is following new bars at the right edge. */
   follow: () => boolean;
+  /** The time scale, so an external strip can be measured against this chart. */
+  chart: () => IChartApi;
   /**
    * Move the viewport, for tests that need to reproduce a user pan or zoom.
    *
@@ -611,6 +613,7 @@ function buildChart(
       };
     },
     follow: () => followRef.current,
+    chart: () => chart,
     scrollTo: (from: number, to: number) => {
       const scaleForMove = chart.timeScale();
       scaleForMove.setVisibleLogicalRange({ from, to });
