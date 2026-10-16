@@ -54,15 +54,30 @@ export interface ChartOverlayProps {
  * caller-supplied `defaultHeight` is used only when it is already taller than the
  * viewport-relative figure (a genuinely tall ask is not reduced).
  */
+/**
+ * How big a chart opens: 75% of the viewport on both axes.
+ *
+ * The user asked for this explicitly, and 75% is a better default than a bigger
+ * number for a resizable panel: it leaves the dashboard visible around the edges,
+ * which is what tells you the panel is a panel and not a page. A panel that opens
+ * at 95% looks maximised and gives no clue that it can be dragged.
+ */
+export const OPEN_FRACTION = 0.75;
+
 export function defaultHeightFor(viewportHeight: number, explicit?: number): number {
-  const target = Math.round(viewportHeight * 0.88);
+  const target = Math.round(viewportHeight * OPEN_FRACTION);
+  return explicit !== undefined && explicit > target ? explicit : target;
+}
+
+export function defaultWidthFor(viewportWidth: number, explicit?: number): number {
+  const target = Math.round(viewportWidth * OPEN_FRACTION);
   return explicit !== undefined && explicit > target ? explicit : target;
 }
 
 export function ChartOverlay({
   id,
   title,
-  defaultWidth = 1000,
+  defaultWidth = 0,
   defaultHeight = 640,
   minWidth = 320,
   maxWidth = 2400,
@@ -125,7 +140,7 @@ export function ChartOverlay({
     const { width, height } = viewport();
     const storedSize = readBoxSize(`${id}.size`);
     const storedPos = readBoxSize(`${id}.pos`);
-    const w = storedSize !== null && storedSize.w > 0 ? storedSize.w : defaultWidth;
+    const w = storedSize !== null && storedSize.w > 0 ? storedSize.w : defaultWidthFor(width, defaultWidth);
     // Opening the chart deliberately should give the user the screen: the default
     // height tracks the viewport rather than a fixed number of pixels.
     const h = storedSize !== null && storedSize.h > 0 ? storedSize.h : defaultHeightFor(height, defaultHeight);
@@ -161,7 +176,7 @@ export function ChartOverlay({
     () =>
       onLayoutReset(() => {
         const { width, height } = viewport();
-        const w = defaultWidth;
+        const w = defaultWidthFor(width, defaultWidth);
         const h = defaultHeightFor(height, defaultHeight);
         commit({ x: Math.round((width - w) / 2), y: Math.round((height - h) / 3), w, h }, true, true);
       }),

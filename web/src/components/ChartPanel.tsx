@@ -2500,7 +2500,7 @@ function colorWithAlpha(color: string, alpha: number): string {
                         }}
                       />
                     </Tooltip>
-                    {loading && bars.length === 0 && <p className="chart-overlay">loading {symbol} {interval}…</p>}
+                    {loading && bars.length === 0 && <p className="chart-loading">loading {symbol} {interval}…</p>}
                     {error !== null && bars.length === 0 && (
                       <div className="chart-overlay chart-error">
                         <strong>chart unavailable</strong>

@@ -4002,3 +4002,89 @@ table {
   line-height: 1;
   color: var(--accent);
 }
+
+/* ------------------------------------------------------- visible resize grips */
+/*
+ * The handles existed but had no size, no background and nothing to aim at, so
+ * the panel read as unresizable. A resize affordance has to be FINDABLE, or the
+ * feature does not exist for the user however correct the pointer logic is.
+ */
+.grip {
+  position: absolute;
+  z-index: 2;
+  background: transparent;
+}
+
+/* The right edge and the bottom edge get a visible centre bar. */
+.overlay-grip-right::after,
+.overlay-grip-left::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 46px;
+  margin: -23px 0 0 -1.5px;
+  background: var(--accent);
+  border-radius: 3px;
+  opacity: 0.45;
+}
+
+.overlay-grip-bottom::after,
+.overlay-grip-top::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 46px;
+  height: 3px;
+  margin: -1.5px 0 0 -23px;
+  background: var(--accent);
+  border-radius: 3px;
+  opacity: 0.45;
+}
+
+.grip:hover::after,
+.grip:focus-visible::after {
+  opacity: 0.95;
+}
+
+/* The corner grip is the primary affordance: three diagonal rules, the
+   conventional "drag me to resize" mark. */
+.overlay-grip-corner {
+  width: 20px;
+  height: 20px;
+}
+
+.overlay-grip-corner::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 11px;
+  height: 11px;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  border-radius: 0 0 3px 0;
+  opacity: 0.6;
+}
+
+.overlay-grip-corner:hover::after {
+  opacity: 1;
+}
+
+/* The chart's loading placeholder. It used to share the `.chart-overlay` class
+   with the overlay CONTAINER, which meant one name had two meanings and a rule
+   written for one silently restyled the other. It has its own name now. */
+.chart-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: rgba(12, 17, 27, 0.72);
+  pointer-events: none;
+}

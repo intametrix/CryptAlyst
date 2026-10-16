@@ -222,7 +222,32 @@ export function useKlines(
     const url = `/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${interval}&limit=${limit}&_r=${nonce}`;
 
     void (async () => {
-      const body = await fetchJson<KlinesMsg>(url, controller.signal);
+      /**
+       * The catch is load-bearing, and its absence was a visible bug.
+       *
+       * `await fetchJson(...)` can REJECT — an aborted controller, a network
+       * failure, a non-OK status. There was no catch, so the rejection escaped
+       * the async IIFE unhandled and every statement after it never ran,
+       * including `setLoading(false)`. The result was a chart that sat on
+       * "loading SYMBOL INTERVAL…" forever with an empty canvas and NO error
+       * anywhere: the worst kind of failure, because it looks like slowness
+       * rather than a fault, and nothing on screen or in the console says
+       * otherwise.
+       *
+       * A failed load must always end in a settled state — data, or an error.
+       */
+      let body: KlinesMsg | null = null;
+      try {
+        body = await fetchJson<KlinesMsg>(url, controller.signal);
+      } catch (cause) {
+        if (cancelled) return;
+        setLoading(false);
+        setRefreshing(false);
+        // An abort from a symbol change is expected and not worth reporting.
+        const aborted = cause instanceof DOMException && cause.name === 'AbortError';
+        setError(aborted ? null : `could not load klines for ${symbol} ${interval}`);
+        return;
+      }
       if (cancelled) return;
       if (body === null || !Array.isArray(body.bars)) {
         // Keep whatever is already drawn; a failed refresh must not blank a chart.
