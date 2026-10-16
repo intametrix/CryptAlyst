@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_ALERTS, useEventStream } from './api';
 import { AlertFeed } from './components/AlertFeed';
-import { ChartPanel } from './components/ChartPanel';
+import { ChartPopup } from './components/chart/ChartPopup';
+import type { ChartZoomControls } from './components/chart/ChartPopup';
 import { ChartOverlay } from './components/ChartOverlay';
-import { EventsPanel } from './components/EventsPanel';
-import { SignalsDock } from './components/SignalsDock';
-import type { ChartZoomControls } from './components/ChartPanel';
-import type { ChartMarker } from './chartData';
 import { SplitPane } from './components/Panel';
 import { FlowLeaderboard } from './components/FlowLeaderboard';
 import { FlowSplit } from './components/FlowSplit';
@@ -19,7 +16,7 @@ import { defaultIndicatorState } from './chartData';
 import { SymbolDrilldown } from './components/SymbolDrilldown';
 import { toggleFilter, type FeedFilter, type FilterKey } from './filters';
 import { HeatProvider, useHeatContext } from './heatContext';
-import { bumpLayoutGeneration, readLayoutFlag, resetLayout, saveChipState, saveLayoutFlag } from './layout';
+import { bumpLayoutGeneration, resetLayout, saveChipState } from './layout';
 import { SelectionProvider, readUrlState, useSelection, writeUrlState } from './selection';
 import { Tooltip } from './components/Tooltip';
 import { useTicker } from './hooks/useTicker';
@@ -70,34 +67,15 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   const [drillSeed, setDrillSeed] = useState<Partial<SymbolDetailMsg> | null>(null);
 
   /**
-   * The selected chart event — one piece of state shared by the markers on the
-   * chart and the rows in the event list, so clicking either highlights both.
+   * The selected chart event and the chart's zoom controls.
+   *
+   * Both now live with the popup itself (the event list is inside it); only
+   * the zoom controls are published up, because the preset buttons sit in the
+   * popup header while App owns the interval-switch logic they can trigger.
    */
-  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
-  /** The chart's zoom controls, published upward so the panel can drive them. */
   const [zoomControls, setZoomControls] = useState<ChartZoomControls | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [presetPending, setPresetPending] = useState(false);
-  /**
-   * Whether the signals panel below the chart is open.
-   *
-   * **Collapsed by default**: the user asked for the chart to open full size in
-   * the container, so the panel takes no height until it is asked for. The header
-   * still shows the count, so the events stay discoverable. An explicit choice is
-   * persisted, so someone who opens it keeps it open across reopens.
-   */
-  const [eventsExpanded, setEventsExpanded] = useState<boolean>(() => readLayoutFlag('events.expanded', false));
-
-  /**
-   * Show the events panel under the chart.
-   *
-   * Off by default, so the chart opens full size and the signal list is one click
-   * away rather than taking height nobody asked for. This controls the PANEL
-   * only -- the indicator panes are created either way, because a checkbox
-   * labelled "show events" that also silently restyled the chart would be doing
-   * something its label does not say.
-   */
-  const [showEvents, setShowEvents] = useState(false);
   /** The default interval a "reset" returns to. */
   const defaultInterval = useRef(selection.interval);
   /** A preset waiting for its interval to load; applied once the bars arrive. */
@@ -191,13 +169,6 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
     setActivePreset(null);
   }, [selection]);
 
-  const toggleEventsExpanded = useCallback(() => {
-    setEventsExpanded((prev) => {
-      const next = !prev;
-      saveLayoutFlag('events.expanded', next);
-      return next;
-    });
-  }, []);
   const [filter, setFilter] = useState<FeedFilter>(() => ({
     severity: initial.current.severity,
     detector: initial.current.detector,
@@ -403,18 +374,9 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   const zoomControlsRef = useRef<ChartZoomControls | null>(null);
   zoomControlsRef.current = zoomControls;
 
-  /**
-   * The charted symbol's marks, newest first.
-   *
-   * Published by the chart itself, so the list and the markers are literally the
-   * same objects and cannot disagree.
-   */
-  const [chartEvents, setChartEvents] = useState<ChartMarker[]>([]);
-
   useEffect(() => {
-    // A new symbol or interval starts from the default view with nothing
-    // selected: reopening the chart must not restore an old zoom.
-    setSelectedEvent(null);
+    // A new symbol or interval starts from the default view: reopening the
+    // chart must not restore an old zoom.
     setActivePreset(null);
     setPresetPending(false);
     pendingPreset.current = null;
@@ -516,48 +478,8 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
             id="chart"
             title={`chart — ${selection.symbol} ${selection.interval}`}
             onClose={selection.clearSymbol}
-            header={
-              <>
-              <label
-                className="chart-only"
-                title="Display the events panel under the chart. It arrives collapsed, so the chart keeps the height until you open the list."
-              >
-                <input
-                  type="checkbox"
-                  checked={showEvents}
-                  onChange={(event) => {
-                    const next = event.target.checked;
-                    setShowEvents(next);
-                    // The panel ARRIVES COLLAPSED. One control decides whether the
-                    // region exists; the panel's own caret decides how much of it
-                    // is open. Collapsing on show means the chart keeps its height
-                    // at the moment the user asks for the panel, rather than
-                    // losing it to something they have not opened yet.
-                    if (next) setEventsExpanded(false);
-                  }}
-                />
-                display EVENTS
-              </label>
-              <Tooltip
-                keys={['close']}
-                tools={tools}
-                fallbackTitle="Close chart"
-                label="Dismisses the chart and clears the selected symbol. Escape does the same, as does clicking the backdrop."
-                tone="stat"
-              >
-                <button
-                  type="button"
-                  className="overlay-close"
-                  aria-label="Close chart"
-                  onClick={selection.clearSymbol}
-                >
-                  ×
-                </button>
-              </Tooltip>
-              </>
-            }
           >
-            <ChartPanel
+            <ChartPopup
               symbol={selection.symbol}
               interval={selection.interval}
               tools={tools}
@@ -566,34 +488,14 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               tickerTick={ticker.tick}
               tickerAtMs={ticker.lastAtMs}
               canon={canon}
-              onPersistedAlerts={handlePersistedAlerts}
-              selectedEvent={selectedEvent}
-              onSelectEvent={setSelectedEvent}
+              presets={zoomPlan.presets}
+              onZoomPreset={handleZoomPreset}
+              onResetZoom={handleResetZoom}
+              activePreset={activePreset}
+              presetPending={presetPending}
               onZoomControls={setZoomControls}
-              onEvents={setChartEvents}
-              bottom={showEvents ? (
-                <SignalsDock
-                  count={chartEvents.length}
-                  open={eventsExpanded}
-                  onToggle={toggleEventsExpanded}
-                  hint={chartEvents.length === 0 ? 'no signals on this symbol yet' : 'click a signal to zoom the chart to it'}
-                >
-                  <EventsPanel
-                    events={chartEvents}
-                    selected={selectedEvent}
-                    onSelect={setSelectedEvent}
-                    presets={zoomPlan.presets}
-                    onZoomPreset={handleZoomPreset}
-                    onResetZoom={handleResetZoom}
-                    activePreset={activePreset}
-                    presetPending={presetPending}
-                    loadedInterval={selection.interval}
-                    showToggle={false}
-                    tools={tools}
-                    canon={canon}
-                  />
-                </SignalsDock>
-              ) : null}
+              onPersistedAlerts={handlePersistedAlerts}
+              onClose={selection.clearSymbol}
             />
           </ChartOverlay>
         )}

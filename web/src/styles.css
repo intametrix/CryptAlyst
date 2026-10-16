@@ -4088,3 +4088,257 @@ table {
   background: rgba(12, 17, 27, 0.72);
   pointer-events: none;
 }
+
+/* ==========================================================================
+   Chart popup v2 (src/components/chart/*) — the rebuilt pop-out.
+   Class names are cp- prefixed so the old chart's styles can never collide.
+   ========================================================================== */
+
+.chart-popup {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+/* --- header: one row, ~36px ---------------------------------------------- */
+.cp-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 2px 8px;
+  border-bottom: 1px solid var(--line, #1e2636);
+  overflow-x: auto;
+  overflow-y: visible;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+.cp-header::-webkit-scrollbar {
+  display: none;
+}
+.cp-title {
+  font-weight: 600;
+  color: var(--text, #dbe4f3);
+  flex: 0 0 auto;
+}
+.cp-ind-chips,
+.cp-zoom {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+/* The marker-legend popover anchors to the "?" button. */
+.cp-legend {
+  position: relative;
+  flex: 0 0 auto;
+}
+.cp-legend-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 260px;
+  max-width: 340px;
+  padding: 8px;
+  border: 1px solid var(--line, #1e2636);
+  border-radius: 6px;
+  background: var(--panel, #141b29);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  white-space: normal;
+}
+.cp-legend-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+}
+.cp-legend-title {
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+.cp-legend-blurb {
+  color: var(--muted, #8492a9);
+  font-size: 11.5px;
+}
+
+/* --- chart region: the subject, takes ALL growth -------------------------- */
+.cp-chart-region {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cp-chart-host {
+  flex: 1 1 0;
+}
+.cp-refreshing {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent, #4d8dfd);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* --- divider: 8px handle --------------------------------------------------- */
+.cp-divider {
+  position: relative;
+  flex: 0 0 8px;
+  min-height: 8px;
+  cursor: row-resize;
+  background: var(--line, #1e2636);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  touch-action: none;
+}
+.cp-divider:hover,
+.cp-divider:focus-visible {
+  background: rgba(77, 141, 253, 0.4);
+  outline: none;
+}
+.cp-divider-grip {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 36px;
+  height: 2px;
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+  background: var(--muted, #8492a9);
+  opacity: 0.6;
+  pointer-events: none;
+}
+.cp-divider-badge {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 1px solid var(--line, #1e2636);
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  line-height: 16px;
+  color: var(--muted, #8492a9);
+  background: var(--panel, #141b29);
+  cursor: pointer;
+}
+.cp-divider-badge:hover {
+  color: var(--text, #dbe4f3);
+  border-color: var(--accent, #4d8dfd);
+}
+
+/* --- bottom panel: events (2) + data (1) ------------------------------------ */
+.cp-bottom {
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.cp-columns {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.cp-col-events {
+  flex: 2 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--line, #1e2636);
+}
+.cp-col-data {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+.cp-events {
+  min-height: 0;
+}
+.cp-events .events-rows {
+  max-height: none;
+}
+
+/* --- data rows --------------------------------------------------------------- */
+.cp-data {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  min-height: 0;
+}
+.cp-data-heading {
+  margin: 4px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted, #8492a9);
+}
+.cp-data-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.cp-data-row:hover,
+.cp-data-row:focus-visible {
+  background: rgba(77, 141, 253, 0.08);
+  outline: none;
+}
+.cp-data-label {
+  color: var(--muted, #8492a9);
+  flex: 0 0 auto;
+}
+.cp-data-value {
+  text-align: right;
+  min-width: 0;
+}
+.cp-data-sub {
+  color: var(--muted, #8492a9);
+  font-size: 11px;
+}
+.cp-level-support .cp-data-label {
+  color: #2ee06a;
+}
+.cp-level-resistance .cp-data-label {
+  color: #ff4d5e;
+}
+.cp-data-basis {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted, #8492a9);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Under ~700px of panel the two columns stack vertically. */
+@media (max-width: 700px) {
+  .cp-columns {
+    flex-direction: column;
+  }
+  .cp-col-events {
+    border-right: none;
+    border-bottom: 1px solid var(--line, #1e2636);
+  }
+}
