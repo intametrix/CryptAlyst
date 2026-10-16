@@ -3728,7 +3728,8 @@ table {
   gap: 8px;
   min-width: 0;
   min-height: 0;
-  padding: 0 10px;
+  /* Zero vertical padding gave a 19px strip; 7px makes it a bar you can hit. */
+  padding: 7px 10px;
 }
 
 /* Collapsed, the dock is a slim strip rather than a panel: no panel background,
@@ -3737,8 +3738,12 @@ table {
    count are all still legible. */
 .signals-dock.collapsed {
   height: auto;
-  background: none;
-  border-top: 0;
+  /* These were `none` and `0`, which left a transparent, borderless hairline:
+     the panel was in the DOM and invisible on screen, so ticking "display
+     EVENTS" looked like it did nothing. A collapsed panel still has to read as a
+     panel -- recessive, not absent. */
+  background: var(--panel-3);
+  border-top: 1px solid var(--border);
 }
 
 .signals-dock.collapsed .signals-toggle {
@@ -3757,9 +3762,9 @@ table {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  padding: 2px 6px;
+  padding: 4px 8px;
   font: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
