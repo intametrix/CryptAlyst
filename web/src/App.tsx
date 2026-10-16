@@ -4,6 +4,7 @@ import { AlertFeed } from './components/AlertFeed';
 import { ChartPanel } from './components/ChartPanel';
 import { ChartOverlay } from './components/ChartOverlay';
 import { EventsPanel } from './components/EventsPanel';
+import { SignalsDock } from './components/SignalsDock';
 import type { ChartZoomControls } from './components/ChartPanel';
 import type { ChartMarker } from './chartData';
 import { SplitPane } from './components/Panel';
@@ -77,7 +78,15 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   const [zoomControls, setZoomControls] = useState<ChartZoomControls | null>(null);
   const [activePreset, setActivePreset] = useState<string | null>(null);
   const [presetPending, setPresetPending] = useState(false);
-  const [eventsExpanded, setEventsExpanded] = useState<boolean>(() => readLayoutFlag('events.expanded', true));
+  /**
+   * Whether the signals panel below the chart is open.
+   *
+   * **Collapsed by default**: the user asked for the chart to open full size in
+   * the container, so the panel takes no height until it is asked for. The header
+   * still shows the count, so the events stay discoverable. An explicit choice is
+   * persisted, so someone who opens it keeps it open across reopens.
+   */
+  const [eventsExpanded, setEventsExpanded] = useState<boolean>(() => readLayoutFlag('events.expanded', false));
   /** The default interval a "reset" returns to. */
   const defaultInterval = useRef(selection.interval);
   /** A preset waiting for its interval to load; applied once the bars arrive. */
@@ -530,21 +539,27 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               onZoomControls={setZoomControls}
               onEvents={setChartEvents}
               bottom={
-                <EventsPanel
-                  events={chartEvents}
-                  selected={selectedEvent}
-                  onSelect={setSelectedEvent}
-                  presets={zoomPlan.presets}
-                  onZoomPreset={handleZoomPreset}
-                  onResetZoom={handleResetZoom}
-                  activePreset={activePreset}
-                  presetPending={presetPending}
-                  loadedInterval={selection.interval}
-                  expanded={eventsExpanded}
-                  onToggleExpanded={toggleEventsExpanded}
-                  tools={tools}
-                  canon={canon}
-                />
+                <SignalsDock
+                  count={chartEvents.length}
+                  open={eventsExpanded}
+                  onToggle={toggleEventsExpanded}
+                  hint={chartEvents.length === 0 ? 'no signals on this symbol yet' : 'click a signal to zoom the chart to it'}
+                >
+                  <EventsPanel
+                    events={chartEvents}
+                    selected={selectedEvent}
+                    onSelect={setSelectedEvent}
+                    presets={zoomPlan.presets}
+                    onZoomPreset={handleZoomPreset}
+                    onResetZoom={handleResetZoom}
+                    activePreset={activePreset}
+                    presetPending={presetPending}
+                    loadedInterval={selection.interval}
+                    showToggle={false}
+                    tools={tools}
+                    canon={canon}
+                  />
+                </SignalsDock>
               }
             />
           </ChartOverlay>

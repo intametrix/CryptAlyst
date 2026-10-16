@@ -23,6 +23,9 @@ const targets = [
   // A symbol with recent events, so the persisted-alerts path is exercised with
   // a non-empty array rather than an empty one that would pass vacuously.
   { name: 'LIVE_KLINES_ALERTS', url: `${base}/api/klines?symbol=NEARUSDT&interval=1m&limit=300`, pick: 'alerts' },
+  // The canon itself: the ground truth every surface is asserted against, so a
+  // shared client-side mapping mistake cannot pass by agreeing with itself.
+  { name: 'LIVE_COLORS', url: `${base}/api/colors` },
 ];
 
 const parts = [

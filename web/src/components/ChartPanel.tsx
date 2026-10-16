@@ -40,6 +40,7 @@ import type { ColorCanon } from '../colors';
 import { saveChipState, getLayout } from '../layout';
 import { INTERVAL_MS, LIVE_POLL_MS, bucketStart, liveIndicator, useKlines } from '../hooks/useKlines';
 import { useFlowHistory, type FlowHistoryState } from '../hooks/useFlowHistory';
+import type { LiveBar } from '../hooks/useKlines';
 import { useOutlook, type OutlookLevel } from '../hooks/useOutlook';
 import { resolvePalette } from '../palette';
 import { useElementSize } from '../hooks/useElementSize';
@@ -125,6 +126,20 @@ const FLOW_PANE_TARGET_PX = 72;
  * allocation unpredictable.
  */
 const PANE_LIBRARY_MIN_PX = 30;
+
+/*
+ * Note on extending indicator lines into the blank space past the last bar.
+ *
+ * `rightOffset: 2` leaves a little empty space at the right edge, and the natural
+ * way to reach into it is whitespace points (a time with no value). The installed
+ * library **discards them**: a line series written with two real points followed
+ * by two whitespace points reads back with only the two real ones. Verified
+ * directly against `lightweight-charts` 5.2.1 in the browser.
+ *
+ * So a line series always ends at its last real point. The indicators therefore
+ * end on the same bar as the candle — which is what "keep the indicators drawn as
+ * the chart moves" requires — rather than floating into the empty margin.
+ */
 /** Height the time/price axes take inside the box; the panes split the rest. */
 const AXIS_ALLOWANCE_PX = 30;
 
@@ -217,6 +232,18 @@ export interface ChartProbe {
     lastMs: number | null;
     /** The interval the loaded bars belong to, from the payload. */
     interval: string;
+  };
+  /**
+   * The last drawn point of every series, real vs whitespace.
+   *
+   * The acceptance for "the indicators move with their candle" is that the last
+   * *real* point of each overlay shares the candle's last timestamp, at every
+   * moment — not merely after a refresh. Whitespace is reported separately so a
+   * padded line is not mistaken for a moved one.
+   */
+  tails: () => {
+    candle: number | null;
+    overlays: { key: string; lastReal: number | null; lastAny: number | null; pad: number }[];
   };
   /** True while the viewport is following new bars at the right edge. */
   follow: () => boolean;
@@ -545,6 +572,28 @@ function buildChart(
   const probe: ChartProbe = {
     updates: { candle: 0, volume: 0, line: 0 },
     loads,
+    tails: () => {
+      const read = (series: ISeriesApi<'Line'>): { lastReal: number | null; lastAny: number | null; pad: number } => {
+        const data = series.data() as readonly { time?: number; value?: number }[];
+        let lastReal: number | null = null;
+        let lastAny: number | null = null;
+        let pad = 0;
+        for (const point of data) {
+          const time = typeof point.time === 'number' ? point.time : null;
+          if (time === null) continue;
+          lastAny = time;
+          if (typeof point.value === 'number') lastReal = time;
+          else pad += 1;
+        }
+        return { lastReal, lastAny, pad };
+      };
+      const candleData = candles.data() as readonly { time?: number }[];
+      const lastCandle = candleData.length > 0 ? candleData[candleData.length - 1].time : null;
+      return {
+        candle: typeof lastCandle === 'number' ? lastCandle : null,
+        overlays: [...lines.entries()].map(([key, series]) => ({ key, ...read(series) })),
+      };
+    },
     follow: () => followRef.current,
     scrollTo: (from: number, to: number) => {
       const scaleForMove = chart.timeScale();
@@ -1256,6 +1305,23 @@ export function ChartPanel({
     handles.chart.timeScale().fitContent();
   }, []);
 
+  /** The payload signature each overlay series was last given. */
+  const overlayAppliedRef = useRef(new Map<string, string>());
+  /**
+   * The last known value of each overlay series.
+   *
+   * When a new candle opens, its indicator value has not been computed yet (the
+   * server sends those with the next payload), so the line is carried forward at
+   * its last reading. That keeps the tail glued to the candle — the alternative
+   * is a line that stops a bar or more behind — and the real value replaces it on
+   * the next payload.
+   */
+  /** The most recent incremental payload, for the ticker's indicator lookups. */
+  const lastLiveRef = useRef<LiveBar | null>(null);
+  const overlayTailRef = useRef(new Map<string, number>());
+  /** Each overlay's real (non-whitespace) points, for live extension. */
+  const overlayPointsRef = useRef(new Map<string, LinePoint[]>());
+
   /** Incremented after each payload is painted, for callers that must wait. */
   const [readySeq, setReadySeq] = useState(0);
   /** The chart handles, exposed to the HTML marker layer. */
@@ -1391,9 +1457,53 @@ export function ChartPanel({
     handles.candles.setData(toCandles(bars));
     handles.volume.setData(toVolumes(bars));
     const byKey = new Map(overlaySeries.map((s) => [s.key, s.data]));
+    /**
+     * Overlay and indicator lines are brought forward, not rebuilt.
+     *
+     * `setData` is correct only when the series' *identity* changes (a different
+     * symbol or interval, or a different number of bars). When the payload merely
+     * carries a newer final value — which is every refresh of the same window —
+     * the final point is moved with `update`, exactly as the candle is. Rebuilding
+     * them per payload is what let the candles run ahead of their indicators
+     * between refreshes.
+     *
+     * Each line is also extended past the last bar with whitespace points, so it
+     * stays visually glued to the right edge instead of stopping where the data
+     * stops. Whitespace carries a time and no value, so nothing is invented.
+     */
     for (const [key, series] of handles.lines) {
       const points: LinePoint[] = byKey.get(key) ?? [];
-      series.setData(points.map((p) => ({ time: p.time, value: p.value })));
+      const signature = `${symbol ?? ''}|${interval}|${points.length}|${points[0]?.time ?? 0}|${points[points.length - 1]?.time ?? 0}`;
+      const applied = overlayAppliedRef.current.get(key);
+
+      if (applied === signature) {
+        // Identical payload: nothing to do, and calling `update` with the same
+        // point would be a wasted repaint.
+        continue;
+      }
+      const structural =
+        applied === undefined ||
+        applied.split('|').slice(0, 3).join('|') !== `${symbol ?? ''}|${interval}|${points.length}`;
+
+      if (structural || points.length === 0) {
+        series.setData(points.map((p) => ({ time: p.time, value: p.value })));
+      } else {
+        // Same shape, newer tail: move only what moved.
+        const last = points[points.length - 1];
+        try {
+          series.update({ time: last.time, value: last.value });
+        } catch {
+          // A time before the series' own last is rejected by the library; the
+          // payload is out of order, so the next structural load re-bases it.
+        }
+      }
+      overlayAppliedRef.current.set(key, signature);
+
+      const tail = points.length > 0 ? points[points.length - 1] : null;
+      if (tail !== null) {
+        overlayTailRef.current.set(key, tail.value);
+        overlayPointsRef.current.set(key, points.slice());
+      }
     }
     handles.chart.timeScale().fitContent();
     // The panes are shared by size *and* by payload: the first payload usually
@@ -1584,6 +1694,44 @@ function colorWithAlpha(color: string, alpha: number): string {
     handles.flow.setData(points);
   }, [flowHistory.bins]);
 
+  /**
+   * Carry every overlay forward to a bar the payload has not covered yet.
+   *
+   * A new candle opens before the server has computed its indicator values, so the
+   * line is extended at its last reading. Without this the candles advance and the
+   * indicators stay behind — the lag the user reported. The pad is rebuilt with
+   * the extension, because appending a real point after whitespace would leave a
+   * gap in the line.
+   *
+   * Callers pass the reader for the live payload's own indicator values, so a
+   * series the live payload *does* describe gets its real value rather than the
+   * carried-forward one.
+   */
+  const extendOverlaysTo = useCallback(
+    (handles: ChartHandles, time: UTCTimestamp, liveValue: (key: string) => number | null): void => {
+      for (const [key, series] of handles.lines) {
+        const points = overlayPointsRef.current.get(key);
+        if (points === undefined || points.length === 0) continue;
+        const tail = points[points.length - 1];
+        if (tail.time === time) continue; // already on this bar
+        const value = liveValue(key) ?? overlayTailRef.current.get(key);
+        if (value === undefined || !Number.isFinite(value)) continue;
+        // Only forward: a time before the tail belongs to the payload's own path.
+        if (time < tail.time) continue;
+
+        const next = [...points, { time, value }];
+        overlayPointsRef.current.set(key, next);
+        overlayTailRef.current.set(key, value);
+        // The line now ends on the same bar as the candle. It cannot be extended
+        // past it: the installed library silently discards whitespace points
+        // (measured: four written, two retained), so a line series always stops at
+        // its last real point.
+        series.update({ time, value });
+      }
+    },
+    [interval],
+  );
+
   /* -- reconciliation: re-anchor the volume counter from the poll ------------ */
 
   // The ticker's rolling counter can drift (and the 24h window rolls), so each
@@ -1630,6 +1778,7 @@ function colorWithAlpha(color: string, alpha: number): string {
       if (!inPlace && !appends) return;
     }
 
+    lastLiveRef.current = live;
     handles.candles.update({ time, open: live.o, high: live.h, low: live.l, close: live.c });
     handles.volume.update({ time, value: live.v, color: volumeColor(live) });
 
@@ -1637,7 +1786,13 @@ function colorWithAlpha(color: string, alpha: number): string {
       const value = liveIndicator(live, key);
       if (value === null) continue; // warming up: skip, never push 0
       series.update({ time, value });
+      overlayTailRef.current.set(key, value);
     }
+    // Every overlay whose payload value has not arrived yet is carried forward to
+    // this same bar, so no line is left behind by a candle that moved. The pad is
+    // rebuilt with it, because appending a real point after the whitespace would
+    // otherwise leave a gap.
+    extendOverlaysTo(handles, time, (key) => liveIndicator(live, key));
 
     liveStateRef.current = {
       lastBarTime: time,
@@ -1645,7 +1800,7 @@ function colorWithAlpha(color: string, alpha: number): string {
       lastClose: live.c,
     };
     // No `fitContent()` here on purpose: the visible range belongs to the user.
-  }, [live]);
+  }, [live, extendOverlaysTo]);
 
   /* -- the ticker push: the primary live path (~4 Hz) ------------------------ */
 
@@ -1682,6 +1837,11 @@ function colorWithAlpha(color: string, alpha: number): string {
         close: tickerTick.price,
       });
       volumeRef.current = { barTime: bucket, counter: tickerTick.quoteVol24h, accumulated: 0, pushed: 0 };
+      // The overlays open the new bar with the candle. The ticker payload carries
+      // no indicator values, so each line is carried forward at its last reading
+      // and the next payload replaces it — which is what keeps the indicators
+      // drawn on the bar the candle is actually on.
+      extendOverlaysTo(handles, bucket as UTCTimestamp, (key) => liveIndicator(lastLiveRef.current, key));
       liveStateRef.current = { lastBarTime: bucket, lastOpen: tickerTick.price, lastClose: tickerTick.price };
       // A new bar only appears once the previous one has closed, and its arrival
       // is the one moment the viewport may legitimately move — but only for a
@@ -1732,7 +1892,7 @@ function colorWithAlpha(color: string, alpha: number): string {
         color: volumeColor({ o: open, c: tickerTick.price }),
       });
     }
-  }, [tickerTick, symbol, interval]);
+  }, [tickerTick, symbol, interval, extendOverlaysTo]);
 
   /* -- SSE price ticks into the forming candle ------------------------------- */
 

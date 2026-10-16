@@ -38,8 +38,15 @@ export interface EventsPanelProps {
   presetPending: boolean;
   /** The interval currently loaded, so a preset can say what it needs. */
   loadedInterval: string;
-  expanded: boolean;
-  onToggleExpanded: () => void;
+  /**
+   * Whether the list is rendered. The panel is always expanded when the signals
+   * dock owns the collapse: two nested collapse controls for one region would
+   * disagree about its state.
+   */
+  expanded?: boolean;
+  onToggleExpanded?: () => void;
+  /** Render the panel's own list toggle. Off when a parent dock collapses it. */
+  showToggle?: boolean;
   tools: ToolsMsg | null;
   /** The chart's own reason for a missing event, if any. */
   emptyNote?: string;
@@ -66,8 +73,9 @@ export const EventsPanel = memo(function EventsPanel({
   activePreset,
   presetPending,
   loadedInterval,
-  expanded,
+  expanded = true,
   onToggleExpanded,
+  showToggle = true,
   tools,
   emptyNote,
   canon = null,
@@ -170,6 +178,21 @@ export const EventsPanel = memo(function EventsPanel({
       {/* --- zoom presets ---------------------------------------------------- */}
       <div className="events-presets" role="group" aria-label="zoom presets">
         <span className="events-presets-label">zoom</span>
+        {/* The interval in force, stated separately from the presets. It used to
+            appear as a bare `1m` inside the preset row (the `chip-needs` hint on
+            the 1h preset), which read as a duplicated preset chip. */}
+        <Tooltip
+          keys={['interval']}
+          tools={tools}
+          fallbackTitle="Current interval"
+          label="The candle interval currently loaded. A zoom preset switches this when the window it asks for cannot be drawn at the loaded interval."
+          value={loadedInterval}
+          tone="chip"
+        >
+          <span className="events-interval" tabIndex={0}>
+            now <b>{loadedInterval}</b>
+          </span>
+        </Tooltip>
         {presets.map((preset) => {
           // The button says what it will actually do: a preset already covered by
           // the loaded interval is a pure zoom, anything else is an interval
@@ -199,11 +222,6 @@ export const EventsPanel = memo(function EventsPanel({
                 onClick={() => onZoomPreset(preset)}
               >
                 {preset.preset}
-                {needsSwitch && (
-                  <span className="chip-needs" aria-hidden="true">
-                    {preset.interval}
-                  </span>
-                )}
               </button>
             </Tooltip>
           );
@@ -227,23 +245,26 @@ export const EventsPanel = memo(function EventsPanel({
 
       {/* --- the event list -------------------------------------------------- */}
       <div className="events-list-wrap">
-        <button
-          type="button"
-          className="events-toggle"
-          aria-expanded={expanded}
-          onClick={onToggleExpanded}
-          title={expanded ? 'collapse the event list' : 'expand the event list'}
-        >
-          <span className="caret" aria-hidden="true">
-            {expanded ? '▾' : '▸'}
-          </span>
-          events <span className="num">{int(events.length)}</span>
-        </button>
+        {showToggle && (
+          <button
+            type="button"
+            className="events-toggle"
+            aria-expanded={expanded}
+            aria-controls="events-rows"
+            onClick={onToggleExpanded}
+            title={expanded ? 'collapse the event list' : 'expand the event list'}
+          >
+            <span className="caret" aria-hidden="true">
+              {expanded ? '▾' : '▸'}
+            </span>
+            events <span className="num">{int(events.length)}</span>
+          </button>
+        )}
         {expanded &&
           (events.length === 0 ? (
             <p className="empty">{emptyNote ?? 'no events on this symbol yet'}</p>
           ) : (
-            <ul className="events-rows" ref={rowsRef}>
+            <ul className="events-rows" id="events-rows" ref={rowsRef}>
               {events.map((mark) => {
                 const isSelected = mark.time === selected;
                 return (

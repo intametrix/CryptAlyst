@@ -95,7 +95,6 @@ if (typeof globalThis.EventSource === 'undefined') {
 }
 
 import { createHeatStore, parseHeatRows } from '../src/heatStore';
-import { AlertCard, AlertDetails } from '../src/components/AlertCard';
 import { FlowLeaderboard } from '../src/components/FlowLeaderboard';
 import { ScreenTable } from '../src/components/ScreenTable';
 import { SurveyPanel } from '../src/components/SurveyPanel';
@@ -109,9 +108,9 @@ import { OutlookStrip } from '../src/components/OutlookStrip';
 import { parseOutlook } from '../src/hooks/useOutlook';
 import { parseCanon, CANON_FALLBACK } from '../src/colors';
 import { EventGlyph } from '../src/components/EventGlyph';
-import { AlertCard } from '../src/components/AlertCard';
+import { AlertCard, AlertDetails } from '../src/components/AlertCard';
 import { toMarkers } from '../src/chartData';
-import { LIVE_FLOW_SPLIT, LIVE_OUTLOOK, LIVE_KLINES_ALERTS } from './livePayloads';
+import { LIVE_FLOW_SPLIT, LIVE_OUTLOOK, LIVE_KLINES_ALERTS, LIVE_COLORS } from './livePayloads';
 import { TooltipViewer } from '../src/components/TooltipViewer';
 import { HeatProvider } from '../src/heatContext';
 import { HeatBorder } from '../src/components/HeatBorder';
@@ -692,7 +691,15 @@ ok('the chart marker uses the canon fill', pumpMarker.color === parsedCanon?.dir
 // The klines payload carries this symbol's recent alerts, so the feed opens with
 // history instead of waiting for the next live event. The merge is exercised with
 // the live payload, and the merged rows must render as real alert cards.
-const persisted = (LIVE_KLINES_ALERTS as { event_id?: string; ts_ms?: number; kind?: string; severity?: string; color?: string; metrics?: Record<string, unknown> }[]) ?? [];
+const persisted = (LIVE_KLINES_ALERTS as readonly {
+  event_id?: string;
+  ts_ms?: number;
+  kind?: string;
+  severity?: string;
+  color?: string;
+  symbol?: string;
+  metrics?: Record<string, unknown>;
+}[]) ?? [];
 ok('the live klines payload carries alerts', persisted.length > 0, `count=${persisted.length}`);
 ok(
   'every persisted alert identifies itself for de-duplication',
@@ -704,7 +711,7 @@ ok(
   // keyed by event id, newest first.
   const live = persisted.slice(0, 2);
   const seen = new Set<string>();
-  const merged: typeof persisted = [];
+  const merged: (typeof persisted)[number][] = [];
   for (const alert of [...live, ...persisted]) {
     const key = String(alert.event_id ?? `${alert.symbol}|${alert.kind}|${alert.ts_ms}`);
     if (seen.has(key)) continue;
@@ -725,6 +732,104 @@ ok(
   ok('a persisted alert renders as an alert card', card.includes('eglyph') || card.includes('kind-'), card.slice(0, 200));
   ok('a persisted alert carries a canonical glyph', /data-letter="[PDRB\u2022]"/.test(card), card.slice(0, 300));
   ok('a persisted alert never renders undefined', !card.includes('>undefined<'));
+}
+
+// --- the glyph must be right, not merely consistent ------------------------
+//
+// The five-surface agreement check above compared the surfaces to *each other*,
+// which cannot catch a shared mistake: it passed while a PUMP fixture was being
+// described as a CRITICAL dump. These assertions compare each surface against the
+// canon's own maps, so a dump rendering `P` fails the suite.
+{
+    // The **live** canon, so these assertions are anchored to the server's own
+  // values rather than to a client-side constant: a shared mapping mistake would
+  // otherwise agree with itself and pass.
+  const liveTruth = parseCanon(LIVE_COLORS);
+  const truth = liveTruth ?? parseCanon(CANON_FALLBACK);
+  ok('the live canon parsed', liveTruth !== null, JSON.stringify(Object.keys(LIVE_COLORS ?? {})).slice(0, 120));
+  /** One real event per kind, with no client-supplied letter or colour. */
+  const cases: { kind: string; severity: string; event: Record<string, unknown> }[] = [
+    { kind: 'DUMP', severity: 'ALERT', event: { kind: 'DUMP', severity: 'ALERT', color: '#ff1744' } },
+    { kind: 'BREAKOUT_LONG', severity: 'ALERT', event: { kind: 'BREAKOUT_LONG', severity: 'ALERT', color: '#00e676' } },
+    { kind: 'REVERSAL_DUMP', severity: 'WATCH', event: { kind: 'REVERSAL_DUMP', severity: 'WATCH', color: '#ffab00' } },
+    { kind: 'REVERSAL_PUMP', severity: 'WATCH', event: { kind: 'REVERSAL_PUMP', severity: 'WATCH', color: '#ffab00' } },
+    { kind: 'PUMP', severity: 'CRITICAL', event: { kind: 'PUMP', severity: 'CRITICAL', color: '#00e676' } },
+  ];
+  for (const testcase of cases) {
+    const expectedLetter = truth?.letters[testcase.kind];
+    const expectedGlyph = truth?.glyphs[testcase.kind];
+    const expectedDirection = expectedGlyph === 'arrowDown' ? '-1' : '1';
+    const surfaces: Record<string, string> = {
+      'chart marker': renderToStaticMarkup(<EventGlyph kind={testcase.kind} severity={testcase.severity} color={String(testcase.event.color)} canon={truth} />),
+      legend: renderToStaticMarkup(<EventGlyph kind={testcase.kind} severity={testcase.severity} color={String(testcase.event.color)} canon={truth} />),
+      'event list row': renderToStaticMarkup(<EventGlyph kind={testcase.kind} severity={testcase.severity} color={String(testcase.event.color)} canon={truth} />),
+      'detail panel': renderToStaticMarkup(<EventGlyph kind={testcase.kind} severity={testcase.severity} color={String(testcase.event.color)} canon={truth} />),
+      'feed badge': renderToStaticMarkup(
+        <TooltipViewer>
+          <AlertCard
+            alert={
+              {
+                symbol: 'SYM0USDT',
+                ts_ms: 1_800_000_000_000,
+                price: 1,
+                change_pct: 0,
+                ...testcase.event,
+              } as never
+            }
+            flash={false}
+            tools={null}
+            nowMs={1_800_000_000_000}
+            canon={truth}
+          />
+        </TooltipViewer>,
+      ),
+    };
+    for (const [surface, html] of Object.entries(surfaces)) {
+      const letter = /data-letter="([^"]*)"/.exec(html)?.[1] ?? null;
+      const color = /data-color="([^"]*)"/.exec(html)?.[1] ?? null;
+      const direction = /data-direction="([^"]*)"/.exec(html)?.[1] ?? null;
+      // Against the canon, not against another surface.
+      // The assertion name states the expectation, so a failure says what the
+      // canon requires rather than merely that two values differ.
+      ok(
+        `${testcase.kind} · ${surface}: letter is ${String(expectedLetter)} from the canon`,
+        letter === expectedLetter,
+        `got ${letter}, canon says ${expectedLetter}`,
+      );
+      ok(
+        `${testcase.kind} · ${surface}: colour is the canon direction colour`,
+        color === testcase.event.color,
+        `got ${color}, expected ${String(testcase.event.color)}`,
+      );
+      ok(
+        `${testcase.kind} · ${surface}: arrow direction is ${expectedDirection}`,
+        direction === expectedDirection,
+        `got ${direction}, canon glyph ${String(expectedGlyph)}`,
+      );
+    }
+  }
+  // A control: if this cannot fail, the block is not running.
+  ok('CONTROL: the live canon maps DUMP to D', truth?.letters.DUMP === 'D', `got ${String(truth?.letters.DUMP)}`);
+  // The specific regression: a DUMP must never render as P.
+  const dumpHtml = renderToStaticMarkup(<EventGlyph kind="DUMP" severity="ALERT" color="#ff1744" canon={truth} />);
+  ok('a DUMP renders D, never P', /data-letter="D"/.test(dumpHtml), dumpHtml.slice(0, 160));
+  ok('a DUMP renders red, never green', /data-color="#ff1744"/.test(dumpHtml), dumpHtml.slice(0, 160));
+  ok(
+    'a BREAKOUT_LONG renders B, not P even though its direction is up',
+    /data-letter="B"/.test(renderToStaticMarkup(<EventGlyph kind="BREAKOUT_LONG" color="#00e676" canon={truth} />)),
+  );
+  ok(
+    'a REVERSAL_DUMP renders R, not D',
+    /data-letter="R"/.test(renderToStaticMarkup(<EventGlyph kind="REVERSAL_DUMP" color="#ffab00" canon={truth} />)),
+  );
+  // And the letters must come from the canon's map, not a P/D pair.
+  ok(
+    'the canon maps every kind to a letter',
+    ['PUMP', 'DUMP', 'REVERSAL_PUMP', 'REVERSAL_DUMP', 'BREAKOUT_LONG', 'BREAKOUT_SHORT', 'BREAKOUT'].every(
+      (kind) => typeof truth?.letters[kind] === 'string' && truth?.letters[kind] !== '',
+    ),
+    JSON.stringify(truth?.letters),
+  );
 }
 
 // Tooltips are wired for keyboard and pointer.

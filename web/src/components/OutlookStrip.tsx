@@ -1,5 +1,5 @@
 import { duration, num, pct, px, text } from '../format';
-import type { Outlook } from '../hooks/useOutlook';
+import type { Outlook, OutlookLevel } from '../hooks/useOutlook';
 import type { ToolsMsg } from '../types';
 import { Tooltip } from './Tooltip';
 
@@ -8,14 +8,53 @@ export interface OutlookStripProps {
   tools: ToolsMsg | null;
 }
 
+/** How many levels of each kind to state before summarising the rest. */
+const LEVELS_SHOWN = 2;
+
+/**
+ * One level, stated in full.
+ *
+ * The earlier rendering was a bare price between two letters — `S — R 0.355855` —
+ * which does not say whether that is one level or two, which side it belongs to,
+ * or what the number means. Each level now names its side, its price, how often
+ * it has been tested and how strong it is, so the line is readable without
+ * knowing the layout.
+ */
+function LevelRow({ level, tools }: { level: OutlookLevel; tools: ToolsMsg | null }) {
+  const side = level.kind === 'support' ? 'S' : 'R';
+  const strengthPct = Math.round(level.strength * 100);
+  return (
+    <Tooltip
+      keys={[level.kind]}
+      tools={tools}
+      fallbackTitle={level.kind === 'support' ? 'Support' : 'Resistance'}
+      label={
+        level.kind === 'support'
+          ? 'A price below the current level where buying has repeatedly absorbed selling. Strength and touch count are what the level is worth; the chart line is drawn more opaque the stronger it is.'
+          : 'A price above the current level where selling has repeatedly capped buying. Strength and touch count are what the level is worth.'
+      }
+      value={`${px(level.price)} · ${text(level.touches)} touches · ${strengthPct}%`}
+      tone="stat"
+    >
+      <span className={`level-row level-${level.kind}`} tabIndex={0}>
+        <b className="level-side">{side}</b>
+        <span className="level-price num">{px(level.price)}</span>
+        <span className="level-detail num">
+          {text(level.touches)}× tested · {strengthPct}% strong
+          {level.distancePct === null ? '' : ` · ${pct(level.distancePct)} away`}
+        </span>
+      </span>
+    </Tooltip>
+  );
+}
+
 /**
  * The support/resistance map, the ETA to reversal, and the short-horizon read.
  *
- * The two textual fields are displayed **verbatim**. `short_horizon.edge`
+ * The two textual fields are displayed **verbatim**: `short_horizon.edge`
  * currently reads "no measurable edge at this horizon", and that sentence is the
- * honest answer — a number would be an invention the model explicitly disclaims.
- * `basis` and `eta_basis` say where each figure comes from, and are shown
- * alongside rather than hidden in a tooltip.
+ * honest answer — a number would be an invention the model disclaims. `basis` and
+ * `eta_basis` say where each figure comes from and are shown alongside.
  */
 export function OutlookStrip({ outlook, tools }: OutlookStripProps) {
   if (outlook === null) {
@@ -29,53 +68,41 @@ export function OutlookStrip({ outlook, tools }: OutlookStripProps) {
 
   const event = outlook.event;
   const horizon = outlook.shortHorizon;
-  const strongestSupport = outlook.supports[0] ?? null;
-  const strongestResistance = outlook.resistances[0] ?? null;
+  const supports = outlook.supports.slice(0, LEVELS_SHOWN);
+  const resistances = outlook.resistances.slice(0, LEVELS_SHOWN);
+  const extraSupports = outlook.supports.length - supports.length;
+  const extraResistances = outlook.resistances.length - resistances.length;
   const forecastPoints = outlook.forecast.points.length;
 
   return (
     <div className="outlook-strip">
       <span className="outlook-label">outlook</span>
 
-      {/* Supports and resistances: the prices the user asked for, at their real
-          values, with how strong and how well-tested each one is. */}
-      <Tooltip
-        keys={['support']}
-        tools={tools}
-        fallbackTitle="Nearest support"
-        label="The strongest measured support below price. Its strength and touch count are what the level is worth; the line on the chart is drawn more opaque the stronger it is."
-        value={strongestSupport === null ? 'none measured' : px(strongestSupport.price)}
-        tone="stat"
-      >
-        <span className="outlook-chip outlook-support" tabIndex={0}>
-          <b>S</b>
-          {strongestSupport === null ? '—' : px(strongestSupport.price)}
-          {strongestSupport !== null && (
-            <span className="outlook-sub">
-              {text(strongestSupport.touches)}x · {pct(strongestSupport.distancePct)}
-            </span>
-          )}
-        </span>
-      </Tooltip>
-
-      <Tooltip
-        keys={['resistance']}
-        tools={tools}
-        fallbackTitle="Nearest resistance"
-        label="The strongest measured resistance above price. A level's touch count is the evidence behind its strength."
-        value={strongestResistance === null ? 'none measured' : px(strongestResistance.price)}
-        tone="stat"
-      >
-        <span className="outlook-chip outlook-resistance" tabIndex={0}>
-          <b>R</b>
-          {strongestResistance === null ? '—' : px(strongestResistance.price)}
-          {strongestResistance !== null && (
-            <span className="outlook-sub">
-              {text(strongestResistance.touches)}x · {pct(strongestResistance.distancePct)}
-            </span>
-          )}
-        </span>
-      </Tooltip>
+      {/* The levels, each one named. An empty side says so in words rather than
+          rendering a dash that could mean "none" or "not loaded". */}
+      <div className="outlook-levels" role="group" aria-label="support and resistance levels">
+        <span className="outlook-levels-label">levels</span>
+        {supports.length === 0 && resistances.length === 0 ? (
+          <span className="outlook-muted">
+            no support or resistance measured for this symbol in the current window
+          </span>
+        ) : (
+          <>
+            {supports.map((level) => (
+              <LevelRow key={`s-${level.price}`} level={level} tools={tools} />
+            ))}
+            {supports.length === 0 && <span className="outlook-muted">no support measured</span>}
+            {extraSupports > 0 && <span className="outlook-more num">+{text(extraSupports)} more support</span>}
+            {resistances.map((level) => (
+              <LevelRow key={`r-${level.price}`} level={level} tools={tools} />
+            ))}
+            {resistances.length === 0 && <span className="outlook-muted">no resistance measured</span>}
+            {extraResistances > 0 && (
+              <span className="outlook-more num">+{text(extraResistances)} more resistance</span>
+            )}
+          </>
+        )}
+      </div>
 
       {/* The ETA to reversal, with its range and the basis for it. */}
       {event !== null && (
@@ -123,19 +150,14 @@ export function OutlookStrip({ outlook, tools }: OutlookStripProps) {
               up {horizon.pUp === null ? '—' : num(horizon.pUp, 2)} / down{' '}
               {horizon.pDown === null ? '—' : num(horizon.pDown, 2)}
             </span>
-            {/*
-              The server's own sentence, rendered as text — not only inside a
-              tooltip. "No measurable edge at this horizon" is the honest answer
-              and must be readable at a glance; a number here would be an
-              invention the model explicitly disclaims.
-            */}
+            {/* The server's own sentence, as text rather than tooltip-only. */}
             {horizon.edge !== '' && <span className="outlook-said">{horizon.edge}</span>}
           </span>
         </Tooltip>
       )}
 
-      {/* The basis, quoted: where each figure comes from, in the server's words. */}
-      {(horizon?.basis !== '' && horizon?.basis !== undefined) || (event?.etaBasis !== '' && event?.etaBasis !== undefined) ? (
+      {(horizon?.basis !== '' && horizon?.basis !== undefined) ||
+      (event?.etaBasis !== '' && event?.etaBasis !== undefined) ? (
         <p className="outlook-basis">
           {horizon?.basis !== '' && horizon?.basis !== undefined ? <span>model: {horizon.basis}</span> : null}
           {event?.etaBasis !== '' && event?.etaBasis !== undefined ? <span>eta: {event.etaBasis}</span> : null}
