@@ -89,15 +89,15 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   const [eventsExpanded, setEventsExpanded] = useState<boolean>(() => readLayoutFlag('events.expanded', false));
 
   /**
-   * Chart-only mode.
+   * Show the events panel under the chart.
    *
-   * Driven by a checkbox at the top of the overlay because the user asked for
-   * exactly that: one control that shows the chart and nothing else. It is a
-   * REBUILD rather than a hide, because the chart library floors every pane at
-   * 30px -- a pane that exists cannot be shrunk away, so the indicator panes are
-   * never created in this mode and the candles take the whole body.
+   * Off by default, so the chart opens full size and the signal list is one click
+   * away rather than taking height nobody asked for. This controls the PANEL
+   * only -- the indicator panes are created either way, because a checkbox
+   * labelled "show events" that also silently restyled the chart would be doing
+   * something its label does not say.
    */
-  const [chartOnly, setChartOnly] = useState(false);
+  const [showEvents, setShowEvents] = useState(false);
   /** The default interval a "reset" returns to. */
   const defaultInterval = useRef(selection.interval);
   /** A preset waiting for its interval to load; applied once the bars arrive. */
@@ -520,14 +520,14 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               <>
               <label
                 className="chart-only"
-                title="Show the chart and nothing else: the signal list and the indicator panes are removed."
+                title="Show the signals list under the chart. Off gives the chart the full height."
               >
                 <input
                   type="checkbox"
-                  checked={chartOnly}
-                  onChange={(event) => setChartOnly(event.target.checked)}
+                  checked={showEvents}
+                  onChange={(event) => setShowEvents(event.target.checked)}
                 />
-                chart only
+                Show Events
               </label>
               <Tooltip
                 keys={['close']}
@@ -562,8 +562,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               onSelectEvent={setSelectedEvent}
               onZoomControls={setZoomControls}
               onEvents={setChartEvents}
-              chartOnly={chartOnly}
-              bottom={chartOnly ? null : (
+              bottom={showEvents ? (
                 <SignalsDock
                   count={chartEvents.length}
                   open={eventsExpanded}
@@ -585,7 +584,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
                     canon={canon}
                   />
                 </SignalsDock>
-              )}
+              ) : null}
             />
           </ChartOverlay>
         )}
