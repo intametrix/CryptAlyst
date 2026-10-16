@@ -2189,10 +2189,23 @@ th.sorted .th-btn {
 }
 
 .chart-overlay {
-  position: fixed;
+  /* absolute, not fixed: the panel may now be LARGER than the window, and
+     content past the fold has to be reachable by scrolling. A fixed box cannot
+     be scrolled to, so an oversized panel would be stranded rather than usable. */
+  position: absolute;
+  top: 0;
+  left: 0;
   z-index: 100;
   /* The panel fills this box; the corner grip lives outside the clip. */
   display: block;
+  /* Grow with the panel so the document scroll area covers it. */
+  min-width: 100%;
+  min-height: 100%;
+  pointer-events: none;
+}
+
+.chart-overlay > * {
+  pointer-events: auto;
 }
 
 .chart-overlay.dragging {

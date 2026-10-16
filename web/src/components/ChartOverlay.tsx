@@ -86,15 +86,33 @@ export function ChartOverlay({
     };
   }, []);
 
-  /** Keep the panel inside the viewport, with its header always reachable. */
+  /**
+   * Bound the panel, but NOT by the browser window.
+   *
+   * The panel used to be capped at `innerWidth - 16` and `innerHeight - 16`, so
+   * a chart could never be larger than the window it lived in — on a small
+   * screen that is a hard ceiling no amount of dragging could pass, and the user
+   * reported it as the popup being confined to the host dimensions.
+   *
+   * The panel now takes its limits from its own min/max only. The page scrolls to
+   * reach what extends past the window, which is why `.chart-overlay` is
+   * absolute rather than fixed: a fixed box cannot be scrolled to, so an
+   * oversized panel would be unreachable rather than merely large.
+   *
+   * One guard survives, because losing it makes the panel unrecoverable rather
+   * than merely inconvenient: enough of the header must stay reachable in both
+   * axes that it can still be grabbed and closed. Everything else is free.
+   */
   const clampToViewport = useCallback(
     (next: { x: number; y: number; w: number; h: number }) => {
-      const { width, height } = viewport();
-      const w = clamp(next.w, minWidth, Math.min(maxWidth, Math.max(minWidth, width - 16)));
-      const h = clamp(next.h, minHeight, Math.min(maxHeight, Math.max(minHeight, height - 16)));
-      const minVisible = 120; // px of the panel that must stay on screen
-      const x = clamp(next.x, minVisible - w, Math.max(minVisible, width - minVisible));
-      const y = clamp(next.y, 0, Math.max(0, height - 44));
+      const w = clamp(next.w, minWidth, maxWidth);
+      const h = clamp(next.h, minHeight, maxHeight);
+      const minVisible = 120; // px of the panel that must stay grabbable
+      // Measured against the DOCUMENT, so the reachable area grows with the panel.
+      const docWidth = Math.max(viewport().width, w + minVisible);
+      const docHeight = Math.max(viewport().height, h + 44);
+      const x = clamp(next.x, minVisible - w, Math.max(minVisible, docWidth - minVisible));
+      const y = clamp(next.y, 0, Math.max(0, docHeight - 44));
       return { x, y, w, h };
     },
     [maxHeight, maxWidth, minHeight, minWidth, viewport],
