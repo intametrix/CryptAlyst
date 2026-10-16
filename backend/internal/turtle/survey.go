@@ -597,10 +597,18 @@ func (s *Survey) Refresh() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	symbols := s.universe.Tracked()
-	if s.topN > 0 && len(symbols) > s.topN {
-		symbols = symbols[:s.topN]
-	}
+	// THE TOP N BY LIQUIDITY, not the first N in whatever order the universe
+	// happens to hold them.
+	//
+	// This used to be `Tracked()[:topN]`, and Tracked() returns symbols in
+	// INSERTION order -- the order they were subscribed in, which is roughly the
+	// order the exchange listing endpoint returned them. So the survey scanned a
+	// hundred symbols that were not the hundred that mattered, and on a day when
+	// the interesting move was in a mid-cap that arrived late in the listing, the
+	// survey would never have seen it. The count was right and the SELECTION was
+	// arbitrary, which is the harder kind of bug to notice because the number on
+	// screen says 100.
+	symbols := s.topSymbolsByLiquidity()
 	if len(symbols) == 0 {
 		return nil
 	}
@@ -835,3 +843,26 @@ func (s *Survey) Refresh() error {
 }
 
 func clamp01(v float64) float64 { return math.Max(0, math.Min(1, v)) }
+
+// topSymbolsByLiquidity returns the symbols worth surveying, most liquid first.
+//
+// Falls back to insertion order only when the universe has no volume context yet,
+// which happens in the first seconds after boot; the fallback is explicit rather
+// than silent so a survey that ran on an unranked universe is visible.
+func (s *Survey) topSymbolsByLiquidity() []string {
+	n := s.topN
+	if n <= 0 {
+		return s.universe.Tracked()
+	}
+	tops := s.universe.TopByVolume(n)
+	if len(tops) == 0 {
+		return s.universe.Tracked()
+	}
+	out := make([]string, 0, len(tops))
+	for _, c := range tops {
+		if c.Symbol != "" {
+			out = append(out, c.Symbol)
+		}
+	}
+	return out
+}

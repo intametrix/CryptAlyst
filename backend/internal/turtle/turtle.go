@@ -56,6 +56,17 @@ type Config struct {
 	// at or above which entries are vetoed as mean-reversion risk.
 	VolVetoPct float64 `json:"vol_veto_pct"`
 	// MaxConcurrent caps open positions.
+	//
+	// THIS IS NOT A BOOK RULE AND NEVER WAS. I set it to 3 when I first wrote this
+	// config and never justified the number; the human asked why, and the honest
+	// answer is that there was no reason. The book's own limit is expressed in
+	// UNITS: four per market, six per correlated group, ten per direction and
+	// twelve in total. Treating one position as roughly one unit, twelve is the
+	// number that comes from the method rather than from my convenience.
+	//
+	// It also matters for capital: a concurrency limit of three meant the account
+	// could hold at most three positions' worth of notional, so "all capital
+	// deployed" was unreachable by construction.
 	MaxConcurrent int `json:"max_concurrent"`
 }
 
@@ -69,7 +80,8 @@ func DefaultConfig() Config {
 		ExitLookback:      10,
 		MaxUnitsPerSymbol: 1,
 		VolVetoPct:        1.0,
-		MaxConcurrent:     3,
+		// The book's total unit limit. See the field comment.
+		MaxConcurrent: 12,
 	}
 }
 
@@ -202,6 +214,20 @@ type Engine struct {
 	watchlist  map[string]Scored
 	selected   []Scored
 	selectedAt time.Time
+	// rotations is the audit trail of every watchlist change mid-session, and
+	// rotationSeq numbers them so a record can be cited.
+	rotations   []RotationRecord
+	rotationSeq int
+	// equityCurve is the sampled running equity, which is what makes a PnL chart
+	// possible rather than a single number that moves.
+	equityCurve []EquityCurvePoint
+	// allocation is the portfolio's risk distribution: each symbol's share of the
+	// account's risk budget. Sizing reads it, so positions compete for one budget
+	// instead of each taking a flat 1% of the same equity.
+	allocation Allocation
+	// deploy selects risk-based (the book) or full-deployment sizing. Empty means
+	// risk-based, so an unconfigured engine behaves as the book specifies.
+	deploy DeploymentMode
 
 	// store is the append-only session log. Nil-safe: every Record call checks,
 	// so a session runs without persistence rather than panicking.

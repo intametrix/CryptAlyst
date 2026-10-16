@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -151,6 +152,7 @@ func main() {
 		modelRunner.Add(m)
 	}
 	modelRunner.Start(ctx)
+
 	cfg := engine.Config()
 
 	// The detector registry. Created before the stream so the stream's handler
@@ -188,6 +190,20 @@ func main() {
 			registry.Observe(detect.Event{Type: detect.EventTicker, Raw: data})
 			tickerPump.Observe(data)
 		case strings.HasSuffix(name, "@aggTrade"):
+			// INGESTION IS NOT A MODEL'S JOB, and this line is the fix for a bug
+			// that silently zeroed three features at once.
+			//
+			// Taker prints used to be recorded only from inside a detector model
+			// (detect/models.go called engine.IngestAggTrade). If that model was not
+			// enabled -- or not scheduled -- NO trades were recorded at all, and the
+			// money-flow sampler, the impulse read and the order-size signal all
+			// read confident zeroes with no error anywhere. The symptom looked like
+			// three broken features rather than one missing subscription.
+			//
+			// Recording happens here, unconditionally, at the point the exchange
+			// data arrives. Models observe; they do not decide whether the system
+			// remembers what it was told.
+			engine.IngestAggTrade(data)
 			registry.Observe(detect.Event{Type: detect.EventAggTrade, Raw: data})
 		}
 	}, func(connected bool, count int) {
@@ -368,6 +384,28 @@ func main() {
 		StreamUp:      stream.IsConnected,
 	})
 
+	// Watchlist rotation. Started once here, after the server exists, because the
+	// loop needs the API's own selector; it decides for itself whether a session is
+	// live rather than being tied to the start/stop button.
+	go server.StartTurtleRotation(ctx)
+
+	// MARK ON A CLOCK. Without this, a position's price only moved when a NEW ALERT
+	// fired for it, so PnL sat frozen between alerts -- and because the 2N stop is
+	// checked inside Mark, a position could pass straight through its stop and never
+	// be closed. Stop losses were luck rather than rules.
+	// NOT awaited. RunMarks returns a channel that closes only on shutdown, so
+	// `<-` here would block before the HTTP server ever started listening.
+	go turtleEngine.RunMarks(func() map[string]float64 {
+		rows := engine.Snapshot(0, time.Now().UnixMilli())
+		out := make(map[string]float64, len(rows))
+		for i := range rows {
+			if rows[i].Price > 0 {
+				out[rows[i].Symbol] = rows[i].Price
+			}
+		}
+		return out
+	}, time.Second)
+
 	httpServer := &http.Server{
 		Addr:              opt.addr,
 		Handler:           server.Routes(),
@@ -489,13 +527,46 @@ func seedBaselines(ctx context.Context, client *binance.Client, universe *market
 	log.Printf("seeded %d/%d baselines in %s", seeded, len(targets), time.Since(start).Round(time.Second))
 }
 
+// setStreamUniverse subscribes the streams the engine actually consumes.
+//
+// THE BUG THIS FIXES, and it is the root cause of three features reading zero.
+// This function subscribed ONLY ticker streams. Nothing ever called
+// AggTradeStream, so @aggTrade messages never arrived at all -- which made the
+// dispatch case for them dead code, kept the taker buffer permanently empty, and
+// left money-flow, the impulse read and the average-order-size signal all
+// reporting confident zeroes.
+//
+// The failure was invisible because every layer LOOKED correct in isolation: the
+// stream name helper existed, the dispatch case existed, the ingest function
+// existed, the ring buffer existed, and the samplers existed. The subscription was
+// the one link nobody had checked, and a subscription that is missing produces no
+// error -- only silence.
+//
+// aggTradeSTREAMS IS A SUBSET ON PURPOSE. Binance allows about 1024 streams on one
+// connection and ticker already consumes one per symbol. At 400 tracked symbols,
+// subscribing aggTrade for all of them would be 800 streams and would risk the
+// whole connection, including the ticker feed that everything else depends on. The
+// most liquid symbols are subscribed, because those are the ones with enough
+// prints for an order-size average to mean anything; a thin symbol would not clear
+// MinPrintsForOrderSize anyway.
 func setStreamUniverse(stream *binance.Stream, symbols []string) {
-	names := make([]string, 0, len(symbols))
+	names := make([]string, 0, len(symbols)*2)
 	for _, s := range symbols {
 		names = append(names, binance.TickerStream(s))
 	}
+	for i, s := range symbols {
+		if i >= aggTradeStreamLimit {
+			break
+		}
+		names = append(names, binance.AggTradeStream(s))
+	}
+	log.Printf("streams: %d ticker + %d aggTrade = %d total (limit %d)",
+		len(symbols), min(len(symbols), aggTradeStreamLimit), len(names), aggTradeStreamLimit)
 	stream.SetStreams(names)
 }
+
+// aggTradeStreamLimit bounds the trade-level subscription. See setStreamUniverse.
+const aggTradeStreamLimit = 150
 
 // universeLoop refreshes 24h context and resizes the subscription.
 func universeLoop(ctx context.Context, client *binance.Client, universe *market.Universe, engine *flow.Engine, stream *binance.Stream, every time.Duration) {
@@ -918,16 +989,31 @@ func realisedVolPct(row *flow.Candidate) float64 {
 
 // atrFromSigma is N in price terms.
 //
-// True ATR needs a bar history the flow engine does not keep, so N is taken from
-// the measured 10s dispersion scaled by the 2N stop assumption the Turtle rules
-// already make. It is an APPROXIMATION and is labelled as one: sizing on a
-// guessed N would silently break the 1%-per-unit risk rule that the whole method
-// rests on, so the engine refuses entries when this is zero rather than guessing.
+// THE BUG THIS FIXES, and it made the system untradeable. N was set to the
+// TEN-SECOND dispersion. A live position was stopped out 3.0 seconds after it
+// opened, because a 2N stop computed from ten seconds of volatility sits about
+// 0.003% away -- inside the bid-ask spread, so it is hit by noise before the trade
+// has any chance to work. The blotter showed it plainly:
+//
+//	GIGGLEUSDT  BUY 35.5900 -> 35.5890  hold_sec 2.9978  reason "2N stop"
+//
+// The book's N is a RANGE measure over a meaningful horizon. Ten seconds is not a
+// horizon, it is an instant. Dispersion grows with the square root of time, so N is
+// taken at NLookbackSeconds and the difference is roughly an order of magnitude.
+//
+// It is still an APPROXIMATION -- true ATR needs a bar history the flow engine does
+// not keep -- but it is now an approximation of the right quantity rather than of
+// the wrong one.
 func atrFromSigma(row *flow.Candidate) float64 {
 	if row.Sigma10s <= 0 {
 		return 0
 	}
-	return row.Sigma10s
+	// sigmaWindow scales as sqrt(t). NLookbackSeconds of 300 is five minutes, which
+	// on a system measuring onset at seconds is a horizon rather than an instant,
+	// while still being short enough that the stop reflects the CURRENT regime.
+	const measuredSec = 10.0
+	const horizonSec = 300.0
+	return row.Sigma10s * math.Sqrt(horizonSec/measuredSec)
 }
 
 func valueOr(v *float64, def float64) float64 {

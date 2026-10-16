@@ -78,7 +78,7 @@ func (e *Engine) OnAlert(a Alert) (Order, bool) {
 		}
 	}
 
-	units, notional, ok := e.sizeUnits(a.Price, a.ATR)
+	units, notional, ok := e.sizeUnits(a.Symbol, a.Price, a.ATR)
 	if !ok {
 		return reject("sizing failed: equity or N too small for one unit", true)
 	}
@@ -186,12 +186,32 @@ func (e *Engine) closeLocked(symbol string, pos *Position, price float64, reason
 // The trade is REFUSED rather than rounded up when one unit would risk more than
 // the cap, because on a 300 USDT account that case is common and rounding up
 // would quietly break the risk rule the whole method rests on.
-func (e *Engine) sizeUnits(price, atr float64) (units, notional float64, ok bool) {
+func (e *Engine) sizeUnits(symbol string, price, atr float64) (units, notional float64, ok bool) {
 	riskPerUnit := e.cfg.StopN * atr * 1.0 // dollars lost per unit at the stop
 	if riskPerUnit <= 0 {
 		return 0, 0, false
 	}
-	budget := e.equityLocked() * e.cfg.RiskPerUnit
+	// DEPLOYED MODE sizes by NOTIONAL, not by risk. See deploy.go for what that
+	// changes: the capital is the target and the stop distance is whatever it is,
+	// so a volatile symbol carries more percentage risk than a calm one. Selected
+	// by the human's instruction that all capital be deployed.
+	if e.deploy == DeployFull {
+		return e.deployedUnits(symbol, price)
+	}
+
+	// THE ACCOUNT'S RISK, SHARED. The equity is the whole account's, never one
+	// asset's, and the fraction of it this symbol may risk comes from the portfolio
+	// allocation rather than a flat rate per position.
+	//
+	// The flat rate is not wrong arithmetic, it is wrong ACCOUNTING: ten positions
+	// at 1% each is 10% of the account at risk, not 1%, and nothing in the flat
+	// version notices. The weight is the symbol's share of a budget bounded for the
+	// book as a whole.
+	budgetPct := e.cfg.RiskPerUnit
+	if w := e.allocation.Weight(symbol); w > 0 {
+		budgetPct = w / 100.0
+	}
+	budget := e.equityLocked() * budgetPct
 	units = budget / riskPerUnit
 	notional = units * price
 	if units <= 0 || notional <= 0 {

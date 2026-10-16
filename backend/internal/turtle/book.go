@@ -53,6 +53,31 @@ type BookConfig struct {
 	// VolVetoPct vetoes entries when realised volatility is at or above this.
 	// NOT from the book -- an addition for crypto, and the human asked for it.
 	VolVetoPct float64 `json:"vol_veto_pct"`
+	// BarIntervalSeconds is the DURATION OF ONE BAR, and it is the thing that
+	// actually makes a crypto Turtle fast.
+	//
+	// The book's lookbacks are in BARS: 20 for System 1, 55 for System 2. On daily
+	// futures that is 20 and 55 DAYS. The same bar counts on 5-minute crypto bars
+	// are 100 minutes and 4.6 hours.
+	//
+	// This field exists because I first claimed the crypto defaults were "faster"
+	// while setting identical bar counts, and a test caught it: the speed is in the
+	// interval, not the count, and a claim that cannot be measured is not a change.
+	// Recording the interval makes the wall-clock horizon computable and testable.
+	BarIntervalSeconds float64 `json:"bar_interval_seconds"`
+}
+
+// HorizonSeconds is the wall-clock lookback of a system's entry channel.
+func (c BookConfig) HorizonSeconds(system System) float64 {
+	bars := c.S1Entry
+	if system == System2 {
+		bars = c.S2Entry
+	}
+	interval := c.BarIntervalSeconds
+	if interval <= 0 {
+		interval = 86400 // the book's daily bar, if a caller never set one
+	}
+	return float64(bars) * interval
 }
 
 // BookDefaults returns the book's own numbers with crypto-appropriate additions.

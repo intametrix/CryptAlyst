@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { int, num, px, usd } from '../format';
+import { clock, int, num, px, usd } from '../format';
 import type { ToolsMsg } from '../types';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
@@ -284,13 +284,27 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                   <p className="empty">none yet</p>
                 ) : (
                   <ul className="turtle-rows">
+                    <li className="turtle-row turtle-head-row">
+                      <span>time</span>
+                      <span>ticker</span>
+                      <span>dir</span>
+                      <span>qty</span>
+                      <span>price</span>
+                      <span>pnl</span>
+                      <span>reason</span>
+                    </li>
                     {trades.map((t, i) => (
                       <li key={`${t.symbol}-${t.opened_at}-${i}`} className="turtle-row">
-                        <span className="num">{t.symbol} {t.side}</span>
+                        <span className="num" title={t.opened_at}>{clock(Date.parse(t.opened_at))}</span>
+                        <span className="num">{t.symbol}</span>
+                        <span className={t.side === 'long' ? 'up' : 'down'}>{t.side}</span>
+                        <span className="num">{int(t.units)}</span>
+                        <span className="num" title={`exit ${px(t.exit_price)}`}>
+                          {px(t.entry_price)} → {px(t.exit_price)}
+                        </span>
                         <span className={`num ${t.pnl >= 0 ? 'up' : 'down'}`}>
                           {usd(t.pnl)} ({num(t.pnl_pct, 2)}%)
                         </span>
-                        <span className="num">{int(t.hold_sec)}s</span>
                         <span className="turtle-reasons">{t.reason}</span>
                       </li>
                     ))}
