@@ -14,15 +14,24 @@ export interface SignalsDockProps {
   hint?: string;
 }
 
-const MIN_OPEN_PX = 120;
 /**
- * The chart's own floor.
+ * Floors, expressed as a FRACTION of the shared box with a small absolute
+ * minimum.
  *
- * The panel may never grow so large that the chart has less than this: the
- * requirement is a *shared* minimum, and letting the divider win meant the body
- * collapsed to 76px — a canvas with no candles in it (measured).
+ * These were fixed pixels (120 and 220). On a 500px box those two floors alone
+ * consume 340px, so 68% of the divider's travel was unreachable and the user
+ * experienced it — correctly — as "does not allow full vertical resize". The
+ * protection they provided is still needed (a divider that wins entirely leaves
+ * a canvas with no candles in it, measured at 76px), but it does not need to be
+ * a fixed number of pixels at every viewport size.
+ *
+ * Fractions keep the same guarantee proportionally and leave nearly the whole
+ * range usable, at every height.
  */
-const MIN_CHART_PX = 220;
+const MIN_OPEN_FRACTION = 0.06;
+const MIN_CHART_FRACTION = 0.16;
+const MIN_OPEN_ABS_PX = 32;
+const MIN_CHART_ABS_PX = 80;
 
 /**
  * The signals container below the chart.
@@ -40,7 +49,7 @@ export function SignalsDock({ count, open, onToggle, children, hint }: SignalsDo
   const [height, setHeight] = useState<number>(() => {
     const stored = readBoxSize('signals.dock');
     const value = stored !== null && stored.h > 0 ? stored.h : 260;
-    return Math.max(MIN_OPEN_PX, value);
+    return Math.max(MIN_OPEN_ABS_PX, value);
   });
   const dragging = useRef<{ startY: number; startH: number } | null>(null);
   /** The dock element itself, used to find the box it shares with the chart. */
@@ -65,18 +74,32 @@ export function SignalsDock({ count, open, onToggle, children, hint }: SignalsDo
    * exactly what the body gains, so the body plus the current dock height is the
    * space the two share.
    */
+  /** The dock's floor for a given shared box. */
+  const dockFloorFor = useCallback((box: number): number => {
+    return Math.max(MIN_OPEN_ABS_PX, Math.round(box * MIN_OPEN_FRACTION));
+  }, []);
+
   const ceilingFor = useCallback((): number => {
     const box = layoutBox();
     const body = box?.querySelector('.chart-body') as HTMLElement | null;
     if (body === null) return 600;
     const bodyHeight = body.getBoundingClientRect().height;
+    const shared = bodyHeight + height;
     // The body may not fall below its floor, and the dock may not fall below its
     // own; together those bound the dock's size.
-    return Math.max(MIN_OPEN_PX, Math.round(bodyHeight + height - MIN_CHART_PX));
-  }, [layoutBox, height]);
+    const chartFloor = Math.max(MIN_CHART_ABS_PX, Math.round(shared * MIN_CHART_FRACTION));
+    return Math.max(dockFloorFor(shared), Math.round(shared - chartFloor));
+  }, [layoutBox, height, dockFloorFor]);
+
   const clampHeight = useCallback(
-    (value: number): number => Math.max(MIN_OPEN_PX, Math.min(ceilingFor(), Math.round(value))),
-    [ceilingFor],
+    (value: number): number => {
+      const box = layoutBox();
+      const body = box?.querySelector('.chart-body') as HTMLElement | null;
+      const shared = body === null ? 800 : body.getBoundingClientRect().height + height;
+      const floor = dockFloorFor(shared);
+      return Math.max(floor, Math.min(ceilingFor(), Math.round(value)));
+    },
+    [ceilingFor, dockFloorFor, layoutBox, height],
   );
 
   const onPointerDown = useCallback(
