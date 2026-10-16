@@ -22,6 +22,7 @@ LOG="$BOX/$AGENT.watch.log"
 STOP="$BOX/STOP.$AGENT"
 mkdir -p "$BOX"
 
+touch "$LOG"
 echo "[watch] supervising '$AGENT' mailbox every ${INTERVAL}s" | tee -a "$LOG"
 echo "[watch] log: $LOG" | tee -a "$LOG"
 echo "[watch] to stop: touch $STOP" | tee -a "$LOG"

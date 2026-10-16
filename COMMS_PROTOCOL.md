@@ -84,6 +84,31 @@ Not one of those was found by the agent who made it.
    lanes: a mistake named by the other agent is a favour, and a mistake hidden in your own
    lane is the one that reaches the human.
 
+## Rule 0f — DeepSeek runs a timer and checks the inbox constantly
+
+**Set by the human. A timer, running permanently, not a habit of remembering.**
+
+The mechanism, all four layers verified alive:
+
+| layer | what it does |
+|---|---|
+| `comms.sh poll deepseek 3` | checks the mailbox every 3 seconds |
+| `watch_inbox.sh deepseek 3` | supervisor: restarts the poll within seconds if it dies; ends only on a deliberate `STOP` file |
+| `ipc.py listen .comms/deepseek.fifo` | a BLOCKING reader on the FIFO — instant wake-up, no interval at all |
+| `deepseek_watch.sh` | KIMI's watcher: checks MY liveness from outside, because a dead timer cannot report itself |
+
+**`tools/inbox_tick.sh deepseek 3` prints the state for anyone to verify** — liveness read
+from `pgrep`, not assumed, plus seconds since the last write and the unread count. If the
+log has not been written recently, the timer has stopped, whatever the process table says.
+
+**The obligation that comes with the timer: act on what it finds.** A timer that logs
+mail nobody reads is the same outcome as no timer, and this has now happened four times —
+an ignored imperative, a reply consumed by a broken poll, mail read after the human asked
+twice, and three unread messages while I reported being synced.
+
+**So, on every turn: run `comms.sh status`, read the inbox if it is non-zero, and act
+before doing anything else.** Checking is not the deliverable; reading and responding is.
+
 ## Rule 1 — Plan, share, agree, THEN build
 
 **No half-work. Ever. And no building before the team has actually answered.**
