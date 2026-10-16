@@ -6,7 +6,6 @@ import {
   toMarkers,
 } from '../../chartData';
 import { type ColorCanon } from '../../colors';
-import { int } from '../../format';
 import { useKlines } from '../../hooks/useKlines';
 import { useOutlook } from '../../hooks/useOutlook';
 import type { AlertMsg, Interval, ToolsMsg } from '../../types';

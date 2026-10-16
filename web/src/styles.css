@@ -4459,3 +4459,13 @@ table {
   font-size: 10.5px;
   color: var(--muted, #8492a9);
 }
+
+.cp-select {
+  background: var(--panel-2, #1a2334);
+  border: 1px solid var(--line, #1e2636);
+  border-radius: 4px;
+  color: var(--text, #dbe4f3);
+  font-size: 11px;
+  line-height: 18px;
+  padding: 1px 4px;
+}
