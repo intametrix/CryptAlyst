@@ -137,7 +137,7 @@ func (f *FlowOnset) Evaluate(now int64) []Signal {
 			// The cooldown already rate-limits this model, so the ID is unique
 			// per alert; the registry's dedup is a safety net rather than the
 			// primary mechanism here.
-			ID:         fmt.Sprintf("flow-onset|%s|%s|%d", candidate.Symbol, kind, now),
+			ID: fmt.Sprintf("flow-onset|%s|%s|%d", candidate.Symbol, kind, now),
 			Summary: fmt.Sprintf("%s %s %+.2f%%/%gs on %.1fx flow ($%s)",
 				kind, candidate.Symbol, move*100, f.cfg.WindowSec,
 				candidate.BurstMultiple, humanUSD(candidate.FlowQuote)),
@@ -295,14 +295,14 @@ func (p *PumpScreen) Batch() bool { return true }
 func (p *PumpScreen) Params() map[string]any {
 	t := p.screener.Thresholds()
 	return map[string]any{
-		"min_move_5m":         t.MinMove5m,
-		"min_move_15m":        t.MinMove15m,
-		"min_vol_ratio":       t.MinVolRatio,
-		"min_vol_z":           t.MinVolZ,
-		"min_recent_usd":      t.MinRecentUSD,
+		"min_move_5m":          t.MinMove5m,
+		"min_move_15m":         t.MinMove15m,
+		"min_vol_ratio":        t.MinVolRatio,
+		"min_vol_z":            t.MinVolZ,
+		"min_recent_usd":       t.MinRecentUSD,
 		"min_quote_volume_24h": t.MinQuoteVolume24h,
-		"reversal_prior_pct":  t.ReversalPriorPct,
-		"reversal_fast_pct":   t.ReversalFastPct,
+		"reversal_prior_pct":   t.ReversalPriorPct,
+		"reversal_fast_pct":    t.ReversalFastPct,
 	}
 }
 
@@ -337,7 +337,7 @@ func (p *PumpScreen) Evaluate(now int64) []Signal {
 			// Keyed on the snapshot timestamp: this detector republishes its
 			// whole cached result every tick, so the snapshot is the natural
 			// identity and the registry emits each row exactly once.
-			ID:         fmt.Sprintf("pump-screen|%s|%s|%d", row.Symbol, row.Kind, generatedMS),
+			ID: fmt.Sprintf("pump-screen|%s|%s|%d", row.Symbol, row.Kind, generatedMS),
 			Summary: fmt.Sprintf("%s %s %+.2f%%/5m on %.1fx volume ($%s in 5m)",
 				row.Kind, row.Symbol, ret5*100, row.VolRatio,
 				humanUSD(row.RecentQuoteVolume)),
@@ -353,18 +353,18 @@ func (p *PumpScreen) Evaluate(now int64) []Signal {
 			SnapshotMS: generatedMS,
 			Reasons:    row.Reasons,
 			Metrics: map[string]any{
-				"ret_5m":               row.Ret5m,
-				"ret_15m":              row.Ret15m,
-				"ret_60m":              row.Ret60m,
-				"vol_ratio":            row.VolRatio,
-				"vol_z":                row.VolZ,
-				"recent_quote_volume":  row.RecentQuoteVolume,
-				"quote_volume_24h":     row.QuoteVolume24h,
-				"taker_buy_ratio":      row.TakerBuyRatio,
-				"close_position":       row.ClosePosition,
-				"atr_pct":              row.ATRPct,
-				"from_24h_high":        row.From24hHigh,
-				"from_24h_low":         row.From24hLow,
+				"ret_5m":              row.Ret5m,
+				"ret_15m":             row.Ret15m,
+				"ret_60m":             row.Ret60m,
+				"vol_ratio":           row.VolRatio,
+				"vol_z":               row.VolZ,
+				"recent_quote_volume": row.RecentQuoteVolume,
+				"quote_volume_24h":    row.QuoteVolume24h,
+				"taker_buy_ratio":     row.TakerBuyRatio,
+				"close_position":      row.ClosePosition,
+				"atr_pct":             row.ATRPct,
+				"from_24h_high":       row.From24hHigh,
+				"from_24h_low":        row.From24hLow,
 			},
 		})
 	}
@@ -465,7 +465,7 @@ func (t *TurtleBreakout) Evaluate(now int64) []Signal {
 		}
 		out = append(out, Signal{
 			// Keyed on the survey snapshot, for the same reason as the screen.
-			ID:         fmt.Sprintf("turtle-breakout|%s|%d", fmt.Sprint(setup["symbol"]), snapshotMS),
+			ID: fmt.Sprintf("turtle-breakout|%s|%d", fmt.Sprint(setup["symbol"]), snapshotMS),
 			Summary: fmt.Sprintf("%s %s score %.0f (%s, ATR %.2f%%)",
 				strings.ReplaceAll(kind, "_", " "), fmt.Sprint(setup["symbol"]),
 				score, fmt.Sprint(setup["timeframe"]), atrPct*100),
@@ -481,15 +481,15 @@ func (t *TurtleBreakout) Evaluate(now int64) []Signal {
 			SnapshotMS: snapshotMS,
 			Reasons:    reasons,
 			Metrics: map[string]any{
-				"timeframe":         setup["timeframe"],
-				"atr":               setup["atr"],
-				"atr_pct":           setup["atr_pct"],
-				"adx14":             setup["adx"],
-				"rsi14":             setup["rsi"],
-				"extension_up_atr":  setup["extension_up_atr"],
-				"group":             setup["group"],
-				"accepted":          setup["accepted"],
-				"reject_reason":     setup["reject_reason"],
+				"timeframe":        setup["timeframe"],
+				"atr":              setup["atr"],
+				"atr_pct":          setup["atr_pct"],
+				"adx14":            setup["adx"],
+				"rsi14":            setup["rsi"],
+				"extension_up_atr": setup["extension_up_atr"],
+				"group":            setup["group"],
+				"accepted":         setup["accepted"],
+				"reject_reason":    setup["reject_reason"],
 			},
 		})
 	}

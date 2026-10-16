@@ -37,16 +37,16 @@ const DefaultKlineLimit = 180
 
 // Thresholds are the screen's gates.
 type Thresholds struct {
-	MinMove5m          float64 `json:"min_move_5m"`
-	MinMove15m         float64 `json:"min_move_15m"`
-	MinVolRatio        float64 `json:"min_vol_ratio"`
-	MinVolZ            float64 `json:"min_vol_z"`
-	MinRecentUSD       float64 `json:"min_recent_usd"`
-	MinQuoteVolume24h  float64 `json:"min_quote_volume_24h"`
-	ReversalPriorPct   float64 `json:"reversal_prior_pct"`
-	ReversalFastPct    float64 `json:"reversal_fast_pct"`
-	ReversalVolRatio   float64 `json:"reversal_vol_ratio"`
-	WickFadeRatio      float64 `json:"wick_fade_ratio"`
+	MinMove5m         float64 `json:"min_move_5m"`
+	MinMove15m        float64 `json:"min_move_15m"`
+	MinVolRatio       float64 `json:"min_vol_ratio"`
+	MinVolZ           float64 `json:"min_vol_z"`
+	MinRecentUSD      float64 `json:"min_recent_usd"`
+	MinQuoteVolume24h float64 `json:"min_quote_volume_24h"`
+	ReversalPriorPct  float64 `json:"reversal_prior_pct"`
+	ReversalFastPct   float64 `json:"reversal_fast_pct"`
+	ReversalVolRatio  float64 `json:"reversal_vol_ratio"`
+	WickFadeRatio     float64 `json:"wick_fade_ratio"`
 }
 
 // DefaultThresholds returns the tuned defaults.

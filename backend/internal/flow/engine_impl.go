@@ -225,6 +225,9 @@ type symbolFlow struct {
 	floorFraction float64
 
 	taker []takerPrint
+	// orderSizeBaseline tracks average print size, which is what separates one
+	// whale order from five hundred retail orders of the same total value.
+	orderSizeBaseline orderSizeBaseline
 
 	updatedMS int64
 }
@@ -449,6 +452,9 @@ func (s *symbolFlow) addTaker(ts int64, quote float64, buyerMaker bool) {
 		signed = -quote
 	}
 	s.taker = append(s.taker, takerPrint{TS: ts, Signed: signed, Quote: quote})
+	// Feed the order-size baseline from the same print, so the two measurements
+	// cannot drift apart.
+	s.orderSizeBaseline.observe(quote)
 	if len(s.taker) > 4000 {
 		s.taker = s.taker[len(s.taker)-2000:]
 	}
@@ -533,12 +539,25 @@ type Candidate struct {
 	SpreadPct      float64        `json:"spread_pct"`
 	BookDepthUSD   float64        `json:"book_depth_usd"`
 	QuoteVolume24h float64        `json:"quote_volume_24h"`
-	Trades10s      int64          `json:"trades_10s"`
-	TradesMultiple float64        `json:"trades_multiple"`
-	TakerBuyRatio  float64        `json:"taker_buy_ratio"`
-	TakerQuote     float64        `json:"taker_quote"`
-	UpdatedMS      int64          `json:"updated_ms"`
-	Reasons        []string       `json:"reasons"`
+	// The 24h standing. Already tracked on the symbol and discarded before
+	// reaching the row, which is why a "greatest increases" view needed new
+	// plumbing for data that was arriving all along.
+	PriceChangePct24h float64 `json:"price_change_pct_24h"`
+	High24h           float64 `json:"high_24h"`
+	Low24h            float64 `json:"low_24h"`
+	// Average print size against the symbol's own quiet baseline. Above 1 means
+	// larger orders than usual: accumulation, rather than the retail attention a
+	// pump attracts once it is already visible.
+	AvgOrderSize    float64  `json:"avg_order_size"`
+	OrderSizeBase   float64  `json:"order_size_baseline"`
+	OrderSizeMult   float64  `json:"order_size_multiple"`
+	OrderSizePrints int      `json:"order_size_prints"`
+	Trades10s       int64    `json:"trades_10s"`
+	TradesMultiple  float64  `json:"trades_multiple"`
+	TakerBuyRatio   float64  `json:"taker_buy_ratio"`
+	TakerQuote      float64  `json:"taker_quote"`
+	UpdatedMS       int64    `json:"updated_ms"`
+	Reasons         []string `json:"reasons"`
 }
 
 // --------------------------------------------------------------------------
@@ -978,6 +997,20 @@ func (e *Engine) evaluateLocked(s *symbolFlow, now int64) (Candidate, bool) {
 }
 
 // Snapshot returns the current flow leaderboard for the API.
+// MoneyFlow samples one symbol's order flow at several intervals and returns the
+// combined conviction read. Returns false when the symbol is not tracked, which
+// is distinct from a HOLD: "not measured" and "measured as balanced" are
+// different answers and the caller must be able to tell them apart.
+func (e *Engine) MoneyFlow(symbol string, now int64) (Conviction, bool) {
+	e.mu.Lock()
+	s, ok := e.states[symbol]
+	e.mu.Unlock()
+	if !ok || s == nil {
+		return Conviction{}, false
+	}
+	return s.SampleMoneyFlow(now), true
+}
+
 func (e *Engine) Snapshot(limit int, now int64) []Candidate {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -996,6 +1029,8 @@ func (e *Engine) Snapshot(limit int, now int64) []Candidate {
 		change60, has60 := s.changeOver(60, now)
 		// The short horizons, computed from the same tick ring so they are
 		// mutually consistent by construction rather than by four separate paths.
+		// Average print size, from the same prints the flow uses.
+		os := s.OrderSize(e.cfg.WindowSec, now)
 		change3, has3 := s.changeOver(3, now)
 		change5, has5 := s.changeOver(5, now)
 		change15, has15 := s.changeOver(15, now)
@@ -1003,23 +1038,32 @@ func (e *Engine) Snapshot(limit int, now int64) []Candidate {
 		takerRatio, takerQuote := s.takerRatio(e.cfg.WindowSec*2, now)
 
 		row := Candidate{
-			Symbol:         s.Symbol,
-			Market:         e.cfg.Market,
-			Direction:      1,
-			Price:          s.lastPric,
-			FlowQuote:      flow,
-			BaselineQuote:  s.baseline.reference(),
-			Coverage:       cov,
-			BurstMultiple:  s.baseline.multiple(flow),
-			BurstZ:         s.baseline.zscore(flow),
-			Sigma10s:       s.sigmaWindow(e.cfg.WindowSec),
-			RangePosition:  s.rangePosition(e.cfg.WindowSec, now),
-			SpreadPct:      s.spreadPct(),
-			BookDepthUSD:   s.bookDepthUSD(),
-			QuoteVolume24h: s.QuoteVolume24h,
-			TakerBuyRatio:  takerRatio,
-			TakerQuote:     takerQuote,
-			UpdatedMS:      s.updatedMS,
+			Symbol:            s.Symbol,
+			Market:            e.cfg.Market,
+			Direction:         1,
+			Price:             s.lastPric,
+			FlowQuote:         flow,
+			BaselineQuote:     s.baseline.reference(),
+			Coverage:          cov,
+			BurstMultiple:     s.baseline.multiple(flow),
+			BurstZ:            s.baseline.zscore(flow),
+			Sigma10s:          s.sigmaWindow(e.cfg.WindowSec),
+			RangePosition:     s.rangePosition(e.cfg.WindowSec, now),
+			SpreadPct:         s.spreadPct(),
+			BookDepthUSD:      s.bookDepthUSD(),
+			QuoteVolume24h:    s.QuoteVolume24h,
+			PriceChangePct24h: s.PriceChangePct24h,
+			High24h:           s.High24h,
+			Low24h:            s.Low24h,
+			// Measured from the same taker prints as the flow, so the two cannot
+			// drift apart.
+			AvgOrderSize:    os.AvgQuote,
+			OrderSizeBase:   os.Baseline,
+			OrderSizeMult:   os.Ratio,
+			OrderSizePrints: os.Prints,
+			TakerBuyRatio:   takerRatio,
+			TakerQuote:      takerQuote,
+			UpdatedMS:       s.updatedMS,
 		}
 		if has3 {
 			row.Change3s = &change3

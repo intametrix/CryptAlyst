@@ -48,6 +48,17 @@ func (s *Server) handleTurtle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleTurtleStats serves the Progress read. Expectancy is the number that
+// matters for the alpha goal: a system can win most trades and still lose money,
+// and a win rate alone hides that.
+func (s *Server) handleTurtleStats(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Turtle == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "turtle engine not configured"})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.deps.Turtle.Progress())
+}
+
 func (s *Server) handleTurtleTrades(w http.ResponseWriter, r *http.Request) {
 	if s.deps.Turtle == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "turtle engine not configured"})

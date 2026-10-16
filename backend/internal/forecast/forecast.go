@@ -50,7 +50,7 @@ type Params struct {
 // DefaultParams returns the starting values.
 func DefaultParams() Params {
 	return Params{
-		AnchorLookbackBars:    60,
+		AnchorLookbackBars: 60,
 		// 1.0% rather than 2.0%: on 1-minute bars a 2% move inside a 60-bar
 		// hour is rare enough that the line almost never draws, and a feature
 		// nobody ever sees is indistinguishable from a broken one.

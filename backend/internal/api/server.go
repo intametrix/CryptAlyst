@@ -24,6 +24,7 @@ import (
 	"pumpdump/backend/internal/flow"
 	"pumpdump/backend/internal/heat"
 	"pumpdump/backend/internal/market"
+	"pumpdump/backend/internal/models"
 	"pumpdump/backend/internal/outlook"
 	"pumpdump/backend/internal/perf"
 	"pumpdump/backend/internal/screen"
@@ -174,11 +175,13 @@ type Deps struct {
 	// TurtleLogPath is the append-only session history served at
 	// /api/turtle/session-log.
 	TurtleLogPath string
-	Engine        *flow.Engine
-	Universe      *market.Universe
-	Screener      *screen.Screener
-	Alerts        *AlertBuffer
-	Survey        SurveyProvider
+	// Models is the asynchronous detection runner. Nil disables its routes.
+	Models   *models.Runner
+	Engine   *flow.Engine
+	Universe *market.Universe
+	Screener *screen.Screener
+	Alerts   *AlertBuffer
+	Survey   SurveyProvider
 	// Detectors is the pluggable-model registry driving detection.
 	Detectors *detect.Registry
 	// Heat scores how interesting each symbol currently is, for the UI glow.
@@ -225,9 +228,15 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/alerts/history", s.handleAlertHistory)
 	mux.HandleFunc("/api/alerts/groups", s.handleAlertGroups)
 	// The turtle session: state on GET, start/stop on POST, plus its two lists.
+	mux.HandleFunc("/api/models", s.handleModels)
+	mux.HandleFunc("/api/models/signals", s.handleModelSignals)
+	mux.HandleFunc("/api/movers", s.handleMovers)
+	mux.HandleFunc("/api/moneyflow", s.handleMoneyFlow)
+	mux.HandleFunc("/api/impulse", s.handleImpulse)
 	mux.HandleFunc("/api/turtle", s.handleTurtle)
 	mux.HandleFunc("/api/turtle/trades", s.handleTurtleTrades)
 	mux.HandleFunc("/api/turtle/orders", s.handleTurtleOrders)
+	mux.HandleFunc("/api/turtle/stats", s.handleTurtleStats)
 	mux.HandleFunc("/api/turtle/config", s.handleTurtleConfig)
 	mux.HandleFunc("/api/turtle/session-log", s.handleTurtleSessionLog)
 	mux.HandleFunc("/api/perf", s.handlePerf)
@@ -763,6 +772,21 @@ func serveAsset(w http.ResponseWriter, fsys fs.FS, name string) bool {
 		log.Printf("api: static write failed for %s: %v", name, err)
 	}
 	return true
+}
+
+// queryFloat is queryInt's counterpart for a float parameter. A malformed or
+// non-positive value falls back rather than erroring, matching queryInt: a bad
+// query string should not 400 a read-only endpoint when a sane default exists.
+func queryFloat(r *http.Request, key string, fallback float64) float64 {
+	raw := r.URL.Query().Get(key)
+	if raw == "" {
+		return fallback
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	if err != nil || v <= 0 {
+		return fallback
+	}
+	return v
 }
 
 func queryInt(r *http.Request, key string, fallback int) int {

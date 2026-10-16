@@ -35,11 +35,11 @@ const (
 
 // Result is a scored candidate.
 type Result struct {
-	Score       float64
-	Severity    string
-	Components  map[string]float64
-	Reasons     []string
-	Penalty     float64
+	Score        float64
+	Severity     string
+	Components   map[string]float64
+	Reasons      []string
+	Penalty      float64
 	AggConfirmed bool
 }
 

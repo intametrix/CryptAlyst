@@ -65,15 +65,15 @@ type Signal struct {
 	// kind + the inception time of the thing detected. The Registry emits an ID
 	// at most once, which is what stops a batch detector from repeating the
 	// same breakout on every tick.
-	ID string `json:"id"`
-	Detector   string             `json:"detector"`
-	Kind       string             `json:"kind"`
-	Symbol     string             `json:"symbol"`
-	Direction  int                `json:"direction"`
-	Severity   string             `json:"severity"`
-	Score      float64            `json:"score"`
-	Price      float64            `json:"price"`
-	TSMS       int64              `json:"ts_ms"`
+	ID        string  `json:"id"`
+	Detector  string  `json:"detector"`
+	Kind      string  `json:"kind"`
+	Symbol    string  `json:"symbol"`
+	Direction int     `json:"direction"`
+	Severity  string  `json:"severity"`
+	Score     float64 `json:"score"`
+	Price     float64 `json:"price"`
+	TSMS      int64   `json:"ts_ms"`
 	// Summary is a one-line, human-readable rendering so a consumer can display
 	// a mixed feed from several models with zero special-casing.
 	Summary    string             `json:"summary"`
@@ -88,15 +88,15 @@ type Signal struct {
 
 // Descriptor describes a registered detector for the API and the UI.
 type Descriptor struct {
-	Name        string         `json:"name"`
-	Title       string         `json:"title"`
-	Description string         `json:"description"`
-	Batch       bool           `json:"batch"`
-	Enabled     bool           `json:"enabled"`
-	Params      map[string]any `json:"params"`
-	SignalCount int64          `json:"signal_count"`
-	LastSignalMS int64         `json:"last_signal_ms"`
-	LastEvalMS  int64          `json:"last_eval_ms"`
+	Name         string         `json:"name"`
+	Title        string         `json:"title"`
+	Description  string         `json:"description"`
+	Batch        bool           `json:"batch"`
+	Enabled      bool           `json:"enabled"`
+	Params       map[string]any `json:"params"`
+	SignalCount  int64          `json:"signal_count"`
+	LastSignalMS int64          `json:"last_signal_ms"`
+	LastEvalMS   int64          `json:"last_eval_ms"`
 }
 
 // Detector is a pluggable detection model.

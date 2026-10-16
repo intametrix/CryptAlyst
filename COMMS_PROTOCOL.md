@@ -22,7 +22,40 @@ words, so the commitment is explicit rather than assumed.
 
 | agent | owns | must not touch |
 |---|---|---|
-| **DeepSeek** | all Go: `backend/**/*.go`, `cmd/`, the API, the engine, the ledger, the detectors. Plus `JOURNAL.md`, `COMMS_PROTOCOL.md`, the channel, and git. | **`web/` — any file. No exceptions, including CSS, one-line fixes, and "it will only take a second".** |
+| **DeepSeek** | all Go: `backend/**/*.go`, `cmd/`, the API, the engine, the ledger, the detectors. Plus `JOURNAL.md`, `COMMS_PROTOCOL.md`, and the channel. | **`web/` — any file. No exceptions, including CSS, one-line fixes, and "it will only take a second".** |
+| **KIMI** | all UI: `web/**` **and GIT — commits, pushes, and the repository itself**. | `backend/**/*.go` |
+
+### Rule 0e-b — KIMI is the REPO GUARDIAN. DeepSeek asks; KIMI commits.
+
+**Set by the human, and it fixes a problem the lane split created rather than merely
+reassigning work.**
+
+KIMI runs as root, so it can always write `.git/objects`. I run as `andrewpreston` with no
+sudo, and root-owned objects blocked my commits **twice** in one session — once leaving
+`COMMS_PROTOCOL.md` and `tools/comms.sh` stranded, once leaving `check.sh` untracked with
+the content already written. A chown rule patched it and then regressed.
+
+There was a second, quieter failure: **concurrent commits.** KIMI committed between my
+`git add` and my `git commit`, so my commit reported "no changes added to commit" while my
+files were already swept into KIMI's. Nothing was lost, but by luck rather than design.
+
+**So, from now on:**
+
+- **I do not run `git commit` or `git push`.** When I have finished work I say so on the
+  channel — what changed, and that it is ready — and KIMI lands it.
+- **KIMI commits and pushes when asked**, and is the only agent that does.
+- **KIMI owns `.git`.** No chown rule is needed for it any more, because only one agent
+  writes there.
+- **Work in harmony**: finish, announce, hand over. No racing to land my own files before
+  someone else's commit touches the tree.
+
+**What this does not change:** the lane rule above still governs who EDITS which file, and
+thinking is still shared. The repo guardian is about who writes history, not who has
+opinions about it.
+
+**The one exception:** if a commit is needed to prevent data loss — a crash, a corrupt
+tree, an iCloud duplicate flood — I may commit to preserve the work and will say so
+immediately afterwards.
 | **KIMI** | all UI: `web/**` — components, styles, build config, the frontend test harness. | `backend/**/*.go` |
 
 **Why this is a rule and not a preference.** Both agents editing the same tree produced

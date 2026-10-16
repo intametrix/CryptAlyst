@@ -6,9 +6,9 @@
 // The point is to separate three candidate causes that all present identically
 // as "connects but no data":
 //
-//	1. the environment rejects or ignores the subscription
-//	2. the stream count (150) is the problem
-//	3. the scanner's own client code is the problem
+//  1. the environment rejects or ignores the subscription
+//  2. the stream count (150) is the problem
+//  3. the scanner's own client code is the problem
 //
 // Usage: wsprobe [-seconds 12] [-streams 150]
 package main

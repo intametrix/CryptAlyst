@@ -35,8 +35,8 @@ import (
 // Params are the tunable calibration.
 type Params struct {
 	// Live attention: flow abnormality and price velocity.
-	WeightFlow      float64 `json:"weight_flow"`
-	WeightMove      float64 `json:"weight_move"`
+	WeightFlow          float64 `json:"weight_flow"`
+	WeightMove          float64 `json:"weight_move"`
 	BurstMultipleAtFull float64 `json:"burst_multiple_at_full"`
 	MoveAtFull10s       float64 `json:"move_at_full_10s"`
 	MoveAtFull60s       float64 `json:"move_at_full_60s"`
@@ -46,14 +46,14 @@ type Params struct {
 
 	// Indicator signal: trend strength, proximity to a structural level, and
 	// range/RSI extremes.
-	ADXFloor   float64 `json:"adx_floor"`
-	ADXAtFull  float64 `json:"adx_at_full"`
-	ExtensionAtFull float64 `json:"extension_at_full"`
+	ADXFloor             float64 `json:"adx_floor"`
+	ADXAtFull            float64 `json:"adx_at_full"`
+	ExtensionAtFull      float64 `json:"extension_at_full"`
 	RangeProximityAtFull float64 `json:"range_proximity_at_full"`
 
 	// Hysteresis, so the border cannot strobe on the threshold.
-	AppearAt         float64 `json:"appear_at"`
-	DisappearBelow   float64 `json:"disappear_below"`
+	AppearAt       float64 `json:"appear_at"`
+	DisappearBelow float64 `json:"disappear_below"`
 
 	// LiveHalfLifeSec is the decay half-life of the LIVE term only.
 	LiveHalfLifeSec float64 `json:"live_half_life_sec"`

@@ -28,16 +28,16 @@ import (
 //     stays symmetric and grows regardless, because an event tells you nothing
 //     about how wrong the estimate might be.
 type Funnel struct {
-	Kind        string          `json:"kind"`
-	FromMS      int64           `json:"from_ms"`
-	Current     float64         `json:"current"`
-	HorizonSec  int             `json:"horizon_sec"`
-	Bars        int             `json:"bars"`
-	BandNote    string          `json:"band_note"`
-	SigmaPct    float64         `json:"sigma_pct_per_horizon"`
-	DriftPct    float64         `json:"drift_pct_total"`
-	Basis       string          `json:"basis"`
-	Confidence  float64         `json:"confidence"`
+	Kind       string  `json:"kind"`
+	FromMS     int64   `json:"from_ms"`
+	Current    float64 `json:"current"`
+	HorizonSec int     `json:"horizon_sec"`
+	Bars       int     `json:"bars"`
+	BandNote   string  `json:"band_note"`
+	SigmaPct   float64 `json:"sigma_pct_per_horizon"`
+	DriftPct   float64 `json:"drift_pct_total"`
+	Basis      string  `json:"basis"`
+	Confidence float64 `json:"confidence"`
 	// Levels carries one series per confidence band so the UI can shade them
 	// without recomputing anything.
 	Levels []FunnelLevel `json:"levels"`

@@ -36,6 +36,7 @@ import (
 	"pumpdump/backend/internal/heat"
 	"pumpdump/backend/internal/ledger"
 	"pumpdump/backend/internal/market"
+	"pumpdump/backend/internal/models"
 	"pumpdump/backend/internal/outlook"
 	"pumpdump/backend/internal/perf"
 	"pumpdump/backend/internal/screen"
@@ -140,6 +141,16 @@ func main() {
 		log.Printf("turtle session log: %s", turtleStorePath)
 	}
 	turtleEngine.SetStore(turtleStore)
+
+	// The asynchronous model runner. Every model gets its own goroutine, so a slow
+	// or panicking model can no longer delay or kill the pipeline that feeds the
+	// others -- which is exactly what happened when aggTrade ingestion lived inside
+	// a single model and its absence silently emptied the taker buffer.
+	modelRunner := models.NewRunner(&models.FlowSource{Engine: engine})
+	for _, m := range models.All() {
+		modelRunner.Add(m)
+	}
+	modelRunner.Start(ctx)
 	cfg := engine.Config()
 
 	// The detector registry. Created before the stream so the stream's handler
@@ -338,6 +349,7 @@ func main() {
 		Hub:           hub,
 		Turtle:        turtleEngine,
 		TurtleLogPath: turtleStorePath,
+		Models:        modelRunner,
 		Engine:        engine,
 		Universe:      universe,
 		Screener:      screener,
