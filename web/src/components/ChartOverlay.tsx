@@ -246,6 +246,7 @@ export function ChartOverlay({
       const startY = event.clientY;
       const origin = box;
       const handle = event.currentTarget;
+      ((globalThis as unknown as { __ovTrace?: unknown[] }).__ovTrace ??= []).push({ kind, down: true, y: Math.round(event.clientY) });
       const prevSelect = document.body.style.userSelect;
       const prevCursor = document.body.style.cursor;
       document.body.style.userSelect = 'none';
@@ -258,9 +259,11 @@ export function ChartOverlay({
         // The window listeners below still work without capture.
       }
 
+      const trace = ((globalThis as unknown as { __ovTrace?: unknown[] }).__ovTrace ??= []);
       const onMove = (move: PointerEvent): void => {
         const dx = move.clientX - startX;
         const dy = move.clientY - startY;
+        if (trace.length < 40) trace.push({ kind, dx: Math.round(dx), dy: Math.round(dy), originH: origin.h, nextH: Math.round(origin.h + dy), vh: window.innerHeight });
         setBox(
           clampToViewport(
             kind === 'drag'

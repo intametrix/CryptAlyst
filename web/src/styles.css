@@ -3806,3 +3806,70 @@ table {
   font-size: 10px;
   color: var(--muted-2);
 }
+
+/* ==========================================================================
+   Pane drag handles.
+
+   The library's own separator drag is inert here: the explicit `setHeight()`
+   calls the pane allocator makes replace the stretch factors that handle relies
+   on. These are HTML handles drawn over each boundary instead, driven by pointer
+   events so they cannot collide with the library's mouse handlers.
+   ========================================================================== */
+
+.pane-handles {
+  position: absolute;
+  inset: 0;
+  /* Only the thin handle bands take pointer events; the candles stay draggable. */
+  pointer-events: none;
+  /*
+   * Above the library's own layers. It appends a full-size `position: fixed`
+   * drag-background div at z-index 49 and its separator handle at 50, both inside
+   * the chart host; at a lower z-index these handles were covered and only the
+   * last one was hit-testable.
+   */
+  z-index: 60;
+}
+
+.pane-handle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 9px;
+  margin-top: -4px;
+  min-width: 0;
+  cursor: row-resize;
+  pointer-events: auto;
+  background: transparent;
+  touch-action: none;
+}
+
+.pane-handle::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 3px;
+  height: 3px;
+  background: transparent;
+  transition: background 120ms ease;
+}
+
+.pane-handle:hover::after,
+.pane-handle:focus-visible::after {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.pane-handle:focus-visible {
+  outline: none;
+}
+
+/* The price pane's own handle is the primary control, so it reads slightly
+   stronger than the indicator boundaries. */
+.pane-handle-price::after {
+  background: color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.pane-handle-price:hover::after,
+.pane-handle-price:focus-visible::after {
+  background: color-mix(in srgb, var(--accent) 80%, transparent);
+}

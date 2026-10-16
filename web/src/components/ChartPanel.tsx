@@ -37,7 +37,7 @@ import {
 } from '../chartData';
 import { clock, int, isoUtc, multiple, num, px, share, text, usd } from '../format';
 import type { ColorCanon } from '../colors';
-import { saveChipState, getLayout } from '../layout';
+import { onLayoutReset, readBoxSize, saveBoxSize, saveChipState, getLayout } from '../layout';
 import { INTERVAL_MS, LIVE_POLL_MS, bucketStart, liveIndicator, useKlines } from '../hooks/useKlines';
 import { useFlowHistory, type FlowHistoryState } from '../hooks/useFlowHistory';
 import type { LiveBar } from '../hooks/useKlines';
@@ -99,7 +99,6 @@ const MARK_SAMPLES: readonly {
  * when it is applied after the resize, which is why it is done in an effect
  * rather than inside the resize call.
  */
-/** Indicator panes shrink to these floors before the price pane gives up space. */
 /**
  * The flow pane's own height.
  *
@@ -114,7 +113,15 @@ const FLOW_PANE_TARGET_PX = 72;
  * These panes were collapsing to 28–33px, which is not enough to read a line in.
  * 44px keeps the axis label and a shape visible; the box only goes below the
  * targets when the viewport is genuinely too short for everything.
+ *
+ * It is also the yardstick for the aux **ceiling** in the allocator: each
+ * indicator may absorb growth up to twice this target, and everything beyond
+ * returns to the price pane. Measured failure that ceiling fixes: the last
+ * indicator used to mop up all remaining rest, so once a drag preference had
+ * ever pinned the price pane, every later pixel of growth — taller window,
+ * collapsed dock — went to the indicators while the candles stayed put.
  */
+const INDICATOR_TARGET_PX = 44;
 /**
  * The library's own per-pane minimum.
  *
@@ -292,6 +299,15 @@ interface ChartHandles {
   flowBaseline: IPriceLine;
   /** The support/resistance lines currently drawn, so they can be replaced. */
   levelLines: IPriceLine[];
+  /**
+   * Bring back a pane's series after its pane was removed.
+   *
+   * A pane only disappears when its last series does (`removeSeries` cascades to
+   * `cleanupIfPaneIsEmpty`), and the library floors every pane at 30px — so
+   * *removing* the series is the only way to hand a pane's height to the candles.
+   * This rebuilds them when the reader shows the pane again.
+   */
+  recreatePane: (pane: 'atr' | 'adx' | 'rsi' | 'flow') => void;
   /** The forecast projection: a dashed mid line plus its uncertainty band. */
   forecastLine: ISeriesApi<'Line'> | null;
   /** The band's two halves (upper = fill down from, lower = paint over). */
@@ -721,6 +737,47 @@ function buildChart(
     flow,
     flowPaneIndex: resolvePaneIndex(chart, 4),
     flowBaseline,
+    recreatePane: (pane) => {
+      if (pane === 'flow') {
+        const restored = chart.addPane();
+        handles.flow = restored.addSeries(HistogramSeries, {
+          priceScaleId: 'right',
+          priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+          priceLineVisible: false,
+          lastValueVisible: true,
+          base: 0,
+          title: 'flow burst',
+        });
+        handles.flowPaneIndex = resolvePaneIndex(chart, chart.panes().length - 1);
+        handles.flowBaseline = handles.flow.createPriceLine({
+          price: 1, color: '#8492a9', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '1.0x baseline',
+        });
+        return;
+      }
+      const specs: Record<'atr' | 'adx' | 'rsi', { key: string; color: string; width: number }[]> = {
+        atr: [{ key: 'atr20', color: COLORS.atr, width: 2 }],
+        adx: [
+          { key: 'adx14', color: COLORS.adx, width: 2 },
+          { key: 'plus_di', color: COLORS.plusDi, width: LINE_WIDTH },
+          { key: 'minus_di', color: COLORS.minusDi, width: LINE_WIDTH },
+        ],
+        rsi: [{ key: 'rsi14', color: COLORS.rsi, width: 2 }],
+      };
+      const paneApi = chart.addPane();
+      for (const spec of specs[pane]) {
+        const series = paneApi.addSeries(LineSeries, {
+          color: spec.color,
+          lineWidth: (pane === 'atr' || pane === 'rsi' ? 2 : spec.width) as 1 | 2,
+          priceLineVisible: false,
+          lastValueVisible: pane !== 'adx' || spec.key === 'adx14',
+          crosshairMarkerVisible: spec.key === 'atr20' || spec.key === 'adx14' || spec.key === 'rsi14',
+          visible: false,
+          title: seriesTitle(tools, [spec.key], spec.key),
+        });
+        lines.set(spec.key, series);
+      }
+      handles.paneIndex[pane] = resolvePaneIndex(chart, chart.panes().length - 1);
+    },
     levelLines: [],
     forecastLine: null,
     bandUpper: null,
@@ -1123,7 +1180,15 @@ export function ChartPanel({
    * library from splitting the new height evenly, which is what made a taller
    * container leave the candles the same size.
    */
-  const distributePaneHeights = useCallback((chart: IChartApi, boxHeight: number, collapse: boolean): void => {
+  /**
+   * The price pane height the user has asked for, or `null` for "take the
+   * remainder". Persisted, so a resize or reopen keeps the shape they chose.
+   */
+  const desiredPriceRef = useRef<number | null>(readBoxSize('chart.priceHeight')?.h ?? null);
+  /** The pane boundaries, in host pixels, for the drag handles. */
+  const [boundaries, setBoundaries] = useState<number[]>([]);
+
+  const distributePaneHeights = useCallback((chart: IChartApi, boxHeight: number, collapse: boolean, desiredPrice: number | null = null): void => {
     const handles = chartRef.current;
     const panes = chart.panes();
     if (handles === null || panes.length < 2) return;
@@ -1146,66 +1211,86 @@ export function ChartPanel({
     if (available <= 0) return;
 
     /**
-     * Pane heights, in three steps.
+     * Distribute the panes from a **desired price-pane height**.
      *
-     * Two measured facts shape this:
+     * The price pane is the one a reader wants taller, so it is allocated first
+     * and the auxiliaries divide what is left — each with the library's own 30px
+     * floor, so none of them can be driven to nothing. Without a desired height
+     * the price pane simply takes the remainder, which is the default layout.
      *
-     * 1. The panes must **sum to `available`**; the library re-divides them to fit
-     *    the host, so an over-reserved set is scaled back and nothing gets what it
-     *    asked for.
-     * 2. The library clamps every pane to ~30px and gives the remainder to the
-     *    pane being grown (a 340px request in a 464px host produced 311px with the
-     *    others at 30/30/30/31). A reservation above that floor is not honoured.
-     *
-     * 1. The auxiliaries take a **legible minimum** (the flow pane 72px, each
-     *    indicator 30px) — they must not be squeezed until they show nothing.
-     * 2. They are then topped up towards their preference while the price pane
-     *    keeps at least 55% of the box.
-     * 3. Everything left over is the candles', so the price pane absorbs all
-     *    growth and all the height released when indicators are hidden.
+     * This is also what makes the panes draggable: `series.setHeight()` is the
+     * only mechanism that reliably moves a pane here. (The library ships its own
+     * separator drag, but the explicit `setHeight` calls this allocator makes
+     * replace the stretch factors it relies on, so its handle does nothing —
+     * verified by driving `mousedown`/`mousemove` on it and reading the panes.)
      */
-    const targets = new Map<number, number>();
-    /**
-     * The auxiliaries' total take.
-     *
-     * A measured constraint forces this shape: the library clamps every pane to
-     * ~30px, so with the flow pane and three indicators below the candles nothing
-     * can be squeezed below **130px**. Reserving less does not give the height to
-     * the price pane — the library simply refuses — so 130px is the real budget
-     * and the candles take everything above it.
-     */
-    const auxFloor = (flowIndex === -1 ? 0 : PANE_LIBRARY_MIN_PX) + indicators.length * PANE_LIBRARY_MIN_PX;
-    const priceTarget = Math.max(Math.round(available * 0.6), available - auxFloor);
-    targets.set(0, priceTarget);
-    let rest = Math.max(0, available - priceTarget);
+    const collapseAll = collapse;
+    const priceFloorPx = 220;
+    const auxCount = (flowIndex === -1 ? 0 : 1) + indicators.length;
+    const auxFloorTotal = auxCount * PANE_LIBRARY_MIN_PX;
 
-    if (flowIndex !== -1) {
-      const want = collapse ? PANE_LIBRARY_MIN_PX : Math.min(FLOW_PANE_TARGET_PX, Math.max(PANE_LIBRARY_MIN_PX, Math.round(available * 0.16)));
-      const height = Math.max(0, Math.min(want, rest - indicators.length * PANE_LIBRARY_MIN_PX));
-      const take = Math.max(0, Math.min(Math.max(PANE_LIBRARY_MIN_PX, height), rest));
-      targets.set(flowIndex, take);
-      rest = Math.max(0, rest - take);
+    let priceHeight = desiredPrice;
+    if (priceHeight === null || collapseAll) {
+      // No preference: the candles take the remainder, as before.
+      priceHeight = Math.max(Math.round(available * 0.6), available - auxFloorTotal);
     }
+    // The price pane may not push the auxiliaries below their floor, and may not
+    // itself be squeezed below a usable height.
+    priceHeight = Math.max(priceFloorPx, Math.min(priceHeight, available - auxFloorTotal));
+    // A very short box can make those two bounds cross; the price pane wins.
+    if (available - auxFloorTotal < priceFloorPx) priceHeight = Math.max(60, Math.round(available * 0.5));
 
+    const targets = new Map<number, number>();
+    targets.set(0, priceHeight);
+
+    let rest = Math.max(0, available - priceHeight);
+    if (flowIndex !== -1) {
+      const want = collapseAll ? PANE_LIBRARY_MIN_PX : Math.min(FLOW_PANE_TARGET_PX, Math.round(available * 0.16));
+      // Leave each indicator at least its floor.
+      const roomForFlow = Math.max(0, rest - indicators.length * PANE_LIBRARY_MIN_PX);
+      const take = Math.max(0, Math.min(want, roomForFlow, rest));
+      targets.set(flowIndex, take);
+      rest -= take;
+    }
     if (indicators.length > 0) {
       const share = Math.floor(rest / indicators.length);
+      /**
+       * An indicator may absorb growth only up to twice its readable target.
+       *
+       * Measured failure this caps: the last indicator used to mop up *all*
+       * remaining rest, so once a drag preference had ever pinned the price
+       * pane to a pixel height, every later pixel of growth — taller window,
+       * collapsed dock — made the indicators taller while the candles stayed
+       * exactly where the pin left them. The leftover below returns to the
+       * price pane, so growth always reaches the candles first.
+       */
+      const cap = Math.max(2 * INDICATOR_TARGET_PX, PANE_LIBRARY_MIN_PX);
       let allocated = 0;
-      indicators.forEach((item, position) => {
-        const isLast = position === indicators.length - 1;
-        // The last pane mops up the remainder so the set always sums to the box.
-        const height = isLast ? Math.max(0, rest - allocated) : Math.max(0, share);
+      indicators.forEach((item) => {
+        const height = Math.max(0, Math.min(share, cap));
         allocated += height;
         targets.set(item.index, height);
       });
       rest = Math.max(0, rest - allocated);
     }
-
-    targets.set(0, priceTarget + rest);
+    // Anything unclaimed is the candles'.
+    targets.set(0, priceHeight + rest);
 
     for (const [index, height] of targets) {
       if (index < panes.length && panes[index].getHeight() !== height) panes[index].setHeight(height);
     }
     lastDistributed.current = boxHeight;
+
+    // Publish the boundaries so the drag handles sit exactly on them.
+    const offsets: number[] = [];
+    let running = 0;
+    for (let i = 0; i < panes.length - 1; i += 1) {
+      running += panes[i].getHeight();
+      offsets.push(running);
+    }
+    setBoundaries((previous) =>
+      previous.length === offsets.length && previous.every((value, i) => Math.abs(value - offsets[i]) < 1) ? previous : offsets,
+    );
   }, []);
 
   useEffect(() => {
@@ -1218,10 +1303,26 @@ export function ChartPanel({
     const frame = window.requestAnimationFrame(() => {
       if (disposedRef.current) return;
       lastDistributed.current = -1;
-      distributePaneHeights(handles.chart, box.clientHeight, eventsOnlyActive);
+      distributePaneHeights(handles.chart, box.clientHeight, eventsOnlyActive, desiredPriceRef.current);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [eventsOnlyActive, distributePaneHeights]);
+
+  // "Reset layout" restores the default pane shape: the preference is dropped and
+  // the price pane goes back to taking the remainder.
+  useEffect(
+    () =>
+      onLayoutReset(() => {
+        desiredPriceRef.current = null;
+        const handles = chartRef.current;
+        const box = containerRef.current;
+        if (handles !== null && !disposedRef.current && box !== null && box.clientHeight > 0) {
+          lastDistributed.current = -1;
+          distributePaneHeights(handles.chart, box.clientHeight, eventsOnlyRef.current, null);
+        }
+      }),
+    [distributePaneHeights],
+  );
 
   // lightweight-charts never observes its container, so this is the only thing
   // that makes it repaint mid-drag. The measurement is already rAF-throttled by
@@ -1240,7 +1341,7 @@ export function ChartPanel({
       if (disposedRef.current) return;
       // The most recent measurement always wins: a stale call cannot undo a
       // newer distribution.
-      distributePaneHeights(handles.chart, height, eventsOnlyRef.current);
+      distributePaneHeights(handles.chart, height, eventsOnlyRef.current, desiredPriceRef.current);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [size.width, size.height, distributePaneHeights]);
@@ -1510,7 +1611,7 @@ export function ChartPanel({
     // arrives after the first resize, and the chart is rebuilt for it.
     const box = containerRef.current;
     if (box !== null && box.clientHeight > 0) {
-      distributePaneHeights(handles.chart, box.clientHeight, eventsOnlyRef.current);
+      distributePaneHeights(handles.chart, box.clientHeight, eventsOnlyRef.current, desiredPriceRef.current);
     }
     // Announce that this payload is on screen, so a queued zoom preset can be
     // applied against these bars and not the previous interval's.
@@ -1531,6 +1632,63 @@ export function ChartPanel({
     // payload itself is replaced.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadSeq]);
+
+  /* -- pane drag handles ------------------------------------------------------ */
+
+  /**
+   * Resize a pane by dragging the boundary below it.
+   *
+   * The library ships its own separator drag, but the explicit `setHeight` calls
+   * this chart makes replace the stretch factors that handle relies on, so its
+   * handle is inert (verified by driving mouse events at it and reading the pane
+   * heights back). This is an HTML handle over the boundary instead, driven by
+   * pointer events, so it cannot collide with the library's own handlers.
+   *
+   * `fromPrice` says the dragged boundary is the price pane's bottom edge: moving
+   * it down *reduces* the price pane, which is the opposite of what a reader
+   * expects from "drag the handle down", so the sign is inverted there.
+   */
+  const onPaneHandleDrag = useCallback(
+    (boundaryIndex: number, deltaY: number) => {
+      const handles = chartRef.current;
+      const panes = handles?.chart.panes();
+      if (handles === null || panes === undefined) return;
+      const isPriceBoundary = boundaryIndex === 0;
+      const heights = panes.map((pane) => pane.getHeight());
+      if (heights.length < 2) return;
+
+      if (isPriceBoundary) {
+        // The price pane grows when the handle moves *up*.
+        const next = Math.round(heights[0] - deltaY);
+        const auxFloor = (heights.length - 1) * PANE_LIBRARY_MIN_PX;
+        const available = heights.reduce((sum, h) => sum + h, 0);
+        const clamped = Math.max(220, Math.min(next, available - auxFloor));
+        if (clamped === heights[0]) {
+          // Even at the bound, keep the preference so a later resize honours it.
+          desiredPriceRef.current = clamped;
+          return;
+        }
+        desiredPriceRef.current = clamped;
+        saveBoxSize('chart.priceHeight', { w: 0, h: clamped });
+        distributePaneHeights(handles.chart, (containerRef.current?.clientHeight ?? 0), eventsOnlyRef.current, clamped);
+        return;
+      }
+
+      // An indicator boundary: move the height between the two panes it divides,
+      // both staying at or above the library's floor.
+      const upper = boundaryIndex;
+      const lower = boundaryIndex + 1;
+      if (upper < 1 || lower >= heights.length) return;
+      const upperNext = heights[upper] - deltaY;
+      const lowerNext = heights[lower] + deltaY;
+      if (upperNext < PANE_LIBRARY_MIN_PX || lowerNext < PANE_LIBRARY_MIN_PX) return;
+      panes[upper].setHeight(Math.round(upperNext));
+      panes[lower].setHeight(Math.round(lowerNext));
+      // The price pane is untouched, so its preference is unchanged.
+      setBoundaries((previous) => previous.slice());
+    },
+    [distributePaneHeights],
+  );
 
   /* -- support / resistance levels ------------------------------------------- */
 
@@ -2213,6 +2371,59 @@ function colorWithAlpha(color: string, alpha: number): string {
                       *same* `EventGlyph` component to each bar time instead, so the
                       chart badge and the toolbar badge are one component.
                     */}
+                    {/*
+                      One handle per boundary between panes, sitting exactly on
+                      it. These are ours, not the library's: its own separator
+                      drag is inert once `setHeight` is used.
+                    */}
+                    <div className="pane-handles">
+                      {boundaries.map((offset, index) => (
+                        <div
+                          key={index}
+                          className={`pane-handle${index === 0 ? ' pane-handle-price' : ''}`}
+                          style={{ top: `${offset}px` }}
+                          role="separator"
+                          aria-orientation="horizontal"
+                          aria-label={index === 0 ? 'resize the price pane' : `resize indicator pane ${index}`}
+                          tabIndex={0}
+                          onPointerDown={(event) => {
+                            try {
+                              event.currentTarget.setPointerCapture(event.pointerId);
+                            } catch {
+                              // Capture can be refused; the window listeners below
+                              // still track the gesture.
+                            }
+                            // Re-anchored after every move, so each step is a relative delta
+                            // and the pane tracks the pointer one-for-one.
+                            let lastY = event.clientY;
+                            const onMove = (move: PointerEvent): void => {
+                              onPaneHandleDrag(index, move.clientY - lastY);
+                              lastY = move.clientY;
+                            };
+                            const onUp = (): void => {
+                              window.removeEventListener('pointermove', onMove);
+                              window.removeEventListener('pointerup', onUp);
+                              window.removeEventListener('pointercancel', onUp);
+                            };
+                            window.addEventListener('pointermove', onMove);
+                            window.addEventListener('pointerup', onUp);
+                            window.addEventListener('pointercancel', onUp);
+                          }}
+                          onKeyDown={(event) => {
+                            const step = event.shiftKey ? 40 : 12;
+                            if (event.key === 'ArrowUp') {
+                              event.preventDefault();
+                              onPaneHandleDrag(index, -step);
+                            } else if (event.key === 'ArrowDown') {
+                              event.preventDefault();
+                              onPaneHandleDrag(index, step);
+                            }
+                          }}
+                          title={index === 0 ? 'drag to resize the price pane' : 'drag to resize this pane'}
+                        >
+                        </div>
+                      ))}
+                    </div>
                     {layer !== null && (
                       <MarkerLayer
                         chart={layer.chart}

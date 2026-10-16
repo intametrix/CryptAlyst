@@ -21,9 +21,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+
 	"log"
 	"math"
 	"os"
+	"pumpdump/backend/internal/ledger"
 	"strings"
 	"sync"
 	"time"
@@ -282,6 +284,13 @@ func (s *Sampler) append(payload map[string]any) {
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return
+	}
+	// Stamp explicit units through the ledger's choke point, so no reader ever
+	// has to infer whether mfe_pct is a percentage of entry or a fraction.
+	// This package emitted unlabelled percent values, and an unlabelled unit is
+	// exactly what produced a x100 misreading of this same data once already.
+	if stamped, err := ledger.StampUnits(data); err == nil {
+		data = stamped
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
