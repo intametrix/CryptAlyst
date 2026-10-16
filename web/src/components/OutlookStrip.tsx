@@ -1,3 +1,4 @@
+import { useCallback, useState } from 'react';
 import { duration, num, pct, px, text } from '../format';
 import type { Outlook, OutlookLevel } from '../hooks/useOutlook';
 import type { ToolsMsg } from '../types';
@@ -57,10 +58,50 @@ function LevelRow({ level, tools }: { level: OutlookLevel; tools: ToolsMsg | nul
  * `eta_basis` say where each figure comes from and are shown alongside.
  */
 export function OutlookStrip({ outlook, tools }: OutlookStripProps) {
+  /**
+   * Collapsed state, persisted.
+   *
+   * Collapsing hides every child except the header by CSS rather than by
+   * unmounting them, so the level rows keep their identity and their tooltips and
+   * there is no second render path to keep in step with the first.
+   */
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('outlook.open') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const toggle = useCallback(() => {
+    setOpen((previous) => {
+      const next = !previous;
+      try {
+        window.localStorage.setItem('outlook.open', String(next));
+      } catch {
+        /* storage unavailable: the toggle still works for this session */
+      }
+      return next;
+    });
+  }, []);
+  const head = (
+    <button
+      type="button"
+      className="outlook-toggle"
+      aria-expanded={open}
+      aria-controls="outlook-body"
+      onClick={toggle}
+      title={open ? 'collapse the outlook panel' : 'expand the outlook panel'}
+    >
+      <span className="caret" aria-hidden="true">
+        {open ? '\u25be' : '\u25b8'}
+      </span>
+      <span className="outlook-label">outlook</span>
+    </button>
+  );
   if (outlook === null) {
     return (
-      <div className="outlook-strip outlook-empty">
-        <span className="outlook-label">outlook</span>
+      <div className={`outlook-strip outlook-empty${open ? '' : ' collapsed'}`} id="outlook-body">
+        {head}
         <span className="outlook-muted">no levels or forecast for this symbol yet</span>
       </div>
     );
@@ -75,8 +116,8 @@ export function OutlookStrip({ outlook, tools }: OutlookStripProps) {
   const forecastPoints = outlook.forecast.points.length;
 
   return (
-    <div className="outlook-strip">
-      <span className="outlook-label">outlook</span>
+    <div className={`outlook-strip${open ? '' : ' collapsed'}`} id="outlook-body">
+      {head}
 
       {/* The levels, each one named. An empty side says so in words rather than
           rendering a dash that could mean "none" or "not loaded". */}

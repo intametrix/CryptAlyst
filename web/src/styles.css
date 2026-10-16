@@ -3952,3 +3952,35 @@ table {
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+/* ------------------------------------------------------- outlook, collapsible */
+/*
+ * Collapsing hides every child except the toggle. Done in CSS rather than by
+ * unmounting so the level rows and their tooltips are not torn down and rebuilt
+ * on every toggle.
+ */
+.outlook-strip.collapsed > :not(.outlook-toggle) {
+  display: none;
+}
+
+.outlook-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.outlook-toggle:hover .outlook-label {
+  color: var(--text);
+}
+
+.outlook-toggle .caret {
+  font-size: 10px;
+  line-height: 1;
+  color: var(--accent);
+}
