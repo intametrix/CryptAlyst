@@ -109,6 +109,7 @@ export function DataColumn({ latest, overlaySeries, outlook, tools }: DataColumn
     },
   ];
 
+  const model = outlook?.model ?? null;
   const event = outlook?.event ?? null;
   const horizon = outlook?.shortHorizon ?? null;
   const levels = [...(outlook?.supports ?? []), ...(outlook?.resistances ?? [])].sort(
@@ -135,6 +136,37 @@ export function DataColumn({ latest, overlaySeries, outlook, tools }: DataColumn
           </Tooltip>
         ))}
       </div>
+
+      {model !== null && (
+        <div className="cp-data-rows cp-data-model">
+          <h3 className="cp-data-heading">model</h3>
+          <div className="cp-data-row" tabIndex={0}>
+            <span className="cp-data-label">status</span>
+            <span className="cp-data-value num">
+              {model.calibrated ? 'calibrated' : 'not calibrated'}
+              {model.sampleSize !== null ? ` · n=${model.sampleSize}` : ''}
+            </span>
+          </div>
+          {model.brier !== null && (
+            <div className="cp-data-row" tabIndex={0}>
+              <span className="cp-data-label">brier</span>
+              <span className="cp-data-value num">{model.brier.toFixed(4)}</span>
+            </div>
+          )}
+          {model.baseRate !== null && (
+            <div className="cp-data-row" tabIndex={0}>
+              <span className="cp-data-label">base rate</span>
+              <span className="cp-data-value num">{(model.baseRate * 100).toFixed(1)}%</span>
+            </div>
+          )}
+          {model.basis !== '' && (
+            <p className="cp-data-note" title={model.labelRule}>
+              {model.basis}
+              {model.labelRule !== '' ? ` — ${model.labelRule}` : ''}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="cp-data-rows cp-data-outlook">
         <h3 className="cp-data-heading">outlook</h3>

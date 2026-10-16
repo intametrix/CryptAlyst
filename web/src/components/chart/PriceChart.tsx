@@ -47,6 +47,7 @@ const COLORS = {
   donchianSlow: '#8b5cf6',
   ema20: '#22d3ee',
   ema50: '#f59e0b',
+  sma200: '#e879f9',
 } as const;
 
 const LINE_WIDTH = 1 as const;
@@ -59,6 +60,7 @@ export const OVERLAY_KEYS = [
   'donchian55_lower',
   'ema20',
   'ema50',
+  'sma200',
 ] as const;
 
 function lineStyleFor(key: string): { color: string; lineStyle?: LineStyle; width: 1 | 2 } {
@@ -71,6 +73,8 @@ function lineStyleFor(key: string): { color: string; lineStyle?: LineStyle; widt
       return { color: COLORS.donchianSlow, lineStyle: LineStyle.Dotted, width: LINE_WIDTH };
     case 'ema20':
       return { color: COLORS.ema20, width: 2 };
+    case 'sma200':
+      return { color: COLORS.sma200, width: LINE_WIDTH };
     case 'ema50':
     default:
       return { color: COLORS.ema50, width: LINE_WIDTH };
@@ -200,6 +204,7 @@ export interface PriceChartProps {
   showVol: boolean;
   showDon: boolean;
   showEma: boolean;
+  showSma: boolean;
   /** The shared selected event (bar open time, epoch ms), or null. */
   selectedEvent?: number | null;
   onSelectEvent?: (time: number | null) => void;
@@ -225,6 +230,7 @@ export function PriceChart({
   showVol,
   showDon,
   showEma,
+  showSma,
   selectedEvent = null,
   onSelectEvent,
   onZoomControls,
@@ -361,7 +367,13 @@ export function PriceChart({
     if (handles === null) return;
     handles.volume.applyOptions({ visible: showVol });
     for (const [key, series] of handles.lines) {
-      const on = key.startsWith('donchian') ? showDon : key.startsWith('ema') ? showEma : false;
+      const on = key.startsWith('donchian')
+        ? showDon
+        : key.startsWith('ema')
+          ? showEma
+          : key.startsWith('sma')
+            ? showSma
+            : false;
       series.applyOptions({ visible: on });
     }
   }, [showVol, showDon, showEma, loadSeq]);

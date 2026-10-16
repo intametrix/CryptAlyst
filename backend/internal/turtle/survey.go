@@ -792,21 +792,21 @@ func (s *Survey) Refresh() error {
 	setupJSON := make([]map[string]any, 0, len(setups))
 	for _, e := range setups {
 		setupJSON = append(setupJSON, map[string]any{
-			"symbol":            e.Symbol,
-			"timeframe":         e.Timeframe,
-			"direction":         e.Direction,
-			"score":             e.Score,
-			"close":             e.Close,
-			"atr":               e.ATR,
-			"atr_pct":           e.ATRPct,
-			"adx":               e.ADX,
-			"rsi":               e.RSI,
-			"extension_up_atr":  e.ExtensionATR,
-			"group":             e.Group,
-			"accepted":          e.Accepted,
-			"reject_reason":     e.RejectReason,
-			"reasons":           e.Reasons,
-			"plan":              e.Plan,
+			"symbol":           e.Symbol,
+			"timeframe":        e.Timeframe,
+			"direction":        e.Direction,
+			"score":            e.Score,
+			"close":            e.Close,
+			"atr":              e.ATR,
+			"atr_pct":          e.ATRPct,
+			"adx":              e.ADX,
+			"rsi":              e.RSI,
+			"extension_up_atr": e.ExtensionATR,
+			"group":            e.Group,
+			"accepted":         e.Accepted,
+			"reject_reason":    e.RejectReason,
+			"reasons":          e.Reasons,
+			"plan":             e.Plan,
 		})
 	}
 

@@ -4386,3 +4386,76 @@ table {
   vertical-align: -1px;
   opacity: 0.75;
 }
+
+/* --- header grouping + add-indicator menu + model readout ------------------ */
+.cp-header {
+  gap: 10px;
+}
+.cp-header > .cp-ind-chips {
+  border-left: 1px solid var(--line, #1e2636);
+  padding-left: 10px;
+}
+.cp-header > .cp-zoom {
+  border-left: 1px solid var(--line, #1e2636);
+  padding-left: 10px;
+}
+.cp-ind-menu {
+  position: relative;
+  display: inline-flex;
+}
+.cp-ind-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  min-width: 260px;
+  background: var(--panel-2, #1a2334);
+  border: 1px solid var(--line, #1e2636);
+  border-radius: var(--radius, 6px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cp-ind-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.cp-ind-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.cp-ind-add {
+  align-self: flex-start;
+  background: none;
+  border: 1px dashed var(--line, #1e2636);
+  border-radius: 4px;
+  color: var(--muted, #8492a9);
+  cursor: not-allowed;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 8px;
+}
+.cp-ind-note {
+  font-size: 11px;
+  color: var(--text, #dbe4f3);
+}
+.cp-ind-soon {
+  font-size: 10.5px;
+  color: var(--muted, #8492a9);
+}
+.cp-data-heading {
+  margin: 8px 0 2px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted, #8492a9);
+}
+.cp-data-note {
+  margin: 2px 0 0;
+  font-size: 10.5px;
+  color: var(--muted, #8492a9);
+}

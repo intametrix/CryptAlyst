@@ -131,10 +131,23 @@ export function ChartPopup({
     [data, bars],
   );
 
-  /* -- chip state: exactly VOL / FLOW / DON / EMA ----------------------------- */
+  /* -- chip state: VOL / FLOW / DON / EMA / SMA + the add-indicator menu ----- */
   const [showVol, setShowVol] = useState(true);
   const [showDon, setShowDon] = useState(true);
   const [showEma, setShowEma] = useState(true);
+  const [showSma, setShowSma] = useState(true);
+  const [indMenuOpen, setIndMenuOpen] = useState(false);
+  const indMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!indMenuOpen) return;
+    const onDown = (event: MouseEvent): void => {
+      if (indMenuRef.current !== null && event.target instanceof Node && !indMenuRef.current.contains(event.target)) {
+        setIndMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [indMenuOpen]);
 
   /* -- the shared event selection (markers + list) ---------------------------- */
   const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
@@ -255,6 +268,59 @@ export function ChartPopup({
               EMA
             </button>
           </Tooltip>
+          <Tooltip
+            tone="chip"
+            keys={['sma']}
+            tools={tools}
+            fallbackTitle="SMA 200"
+            label="200-bar simple moving average — the slow trend filter."
+            value={showSma ? 'shown' : 'hidden'}
+          >
+            <button
+              type="button"
+              className={`chip chip-toggle${showSma ? ' on' : ''}`}
+              aria-pressed={showSma}
+              onClick={() => setShowSma((v) => !v)}
+            >
+              SMA
+            </button>
+          </Tooltip>
+          {/*
+            The "+" menu lists every other series the klines payload carries.
+            The price-pane ones are toggles above; ATR/ADX/RSI need their own
+            sub-panes, which arrive with the strip work — so they are shown
+            disabled with the reason, not as lying toggles (the .pane-hide
+            precedent). Their current values already live in the DATA column.
+          */}
+          <div className="cp-ind-menu" ref={indMenuRef}>
+            <button
+              type="button"
+              className={`chip chip-toggle${indMenuOpen ? ' on' : ''}`}
+              aria-expanded={indMenuOpen}
+              aria-label="add indicator"
+              onClick={() => setIndMenuOpen((v) => !v)}
+            >
+              + indicator
+            </button>
+            {indMenuOpen && (
+              <div className="cp-ind-pop" role="group" aria-label="add an indicator">
+                {[
+                  { key: 'ATR 20', note: 'true range — volatility', state: 'pane' },
+                  { key: 'ADX 14 ±DI', note: 'trend strength and direction', state: 'pane' },
+                  { key: 'RSI 14', note: 'momentum oscillator', state: 'pane' },
+                ].map((item) => (
+                  <div key={item.key} className="cp-ind-item">
+                    <button type="button" className="cp-ind-add" disabled title="sub-pane — coming">
+                      {item.key}
+                    </button>
+                    <span className="cp-ind-note">{item.note}</span>
+                    <span className="cp-ind-soon">draws in its own pane below the candles — arrives with the
+                      sub-pane work; current value is in the DATA column</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* The marker legend: a "?" button opening the glyph key popover. */}
@@ -372,6 +438,7 @@ export function ChartPopup({
           showVol={showVol}
           showDon={showDon}
           showEma={showEma}
+          showSma={showSma}
           selectedEvent={selectedEvent}
           onSelectEvent={setSelectedEvent}
           onZoomControls={onZoomControls}

@@ -47,8 +47,23 @@ export interface ShortHorizon {
   basis: string;
 }
 
+/** The calibration model's own description of itself — shown verbatim. */
+export interface OutlookModel {
+  calibrated: boolean;
+  sampleSize: number | null;
+  baseRate: number | null;
+  brier: number | null;
+  logLoss: number | null;
+  /** The model's own words ("calibrated on N resolved predictions, brier X"). */
+  basis: string;
+  /** The labelling rule, including the in-sample caveat — shown verbatim. */
+  labelRule: string;
+  source: string;
+}
+
 export interface Outlook {
   symbol: string;
+  model: OutlookModel | null;
   event: OutlookEvent | null;
   shortHorizon: ShortHorizon | null;
   supports: OutlookLevel[];
@@ -88,6 +103,8 @@ export function parseOutlook(raw: unknown): Outlook | null {
   const outlook = (typeof data.outlook === 'object' && data.outlook !== null ? data.outlook : {}) as Record<string, unknown>;
   const forecastRaw = (typeof data.forecast === 'object' && data.forecast !== null ? data.forecast : {}) as Record<string, unknown>;
 
+  const modelRaw = (typeof data.model === 'object' && data.model !== null ? data.model : null) as Record<string, unknown> | null;
+
   const eventRaw = (typeof outlook.event === 'object' && outlook.event !== null ? outlook.event : null) as Record<string, unknown> | null;
   const horizonRaw = (typeof outlook.short_horizon === 'object' && outlook.short_horizon !== null ? outlook.short_horizon : null) as Record<string, unknown> | null;
 
@@ -101,6 +118,19 @@ export function parseOutlook(raw: unknown): Outlook | null {
   return {
     symbol: typeof data.symbol === 'string' ? data.symbol : '',
     atMs: Date.now(),
+    model:
+      modelRaw === null
+        ? null
+        : {
+            calibrated: modelRaw.calibrated === true,
+            sampleSize: toNum(modelRaw.sample_size),
+            baseRate: toNum(modelRaw.base_rate),
+            brier: toNum(modelRaw.brier),
+            logLoss: toNum(modelRaw.log_loss),
+            basis: typeof modelRaw.basis === 'string' ? modelRaw.basis : '',
+            labelRule: typeof modelRaw.label_rule === 'string' ? modelRaw.label_rule : '',
+            source: typeof modelRaw.source === 'string' ? modelRaw.source : '',
+          },
     event:
       eventRaw === null
         ? null

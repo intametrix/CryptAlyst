@@ -28,10 +28,10 @@ type Params struct {
 	PyramidStepATR  float64 `json:"pyramid_step_atr"`
 	PyramidMaxUnits int     `json:"pyramid_max_units"`
 
-	MaxUnitsPerMarket   int `json:"max_units_per_market"`
-	MaxUnitsCorrelated  int `json:"max_units_correlated"`
-	MaxUnitsDirection   int `json:"max_units_direction"`
-	MaxUnitsTotal       int `json:"max_units_total"`
+	MaxUnitsPerMarket  int `json:"max_units_per_market"`
+	MaxUnitsCorrelated int `json:"max_units_correlated"`
+	MaxUnitsDirection  int `json:"max_units_direction"`
+	MaxUnitsTotal      int `json:"max_units_total"`
 
 	RiskPerUnit    float64 `json:"risk_per_unit"`
 	MaxNotionalPct float64 `json:"max_notional_pct"`
@@ -44,8 +44,8 @@ type Params struct {
 	// Volume confirmation: the highest-value precision lever in the system.
 	// Naked Donchian breaks on alts are mostly stop-runs and wick hunts, and
 	// requiring the breakout bar to carry real volume removes most of them.
-	VolumeConfirmMult    float64 `json:"volume_confirm_mult"`
-	VolumeMedianWindow   int     `json:"volume_median_window"`
+	VolumeConfirmMult  float64 `json:"volume_confirm_mult"`
+	VolumeMedianWindow int     `json:"volume_median_window"`
 	// Floor applied to the DIVISOR, so a near-zero median cannot make the
 	// ratio trivially large.
 	VolumeMedianFloorUSD float64 `json:"volume_median_floor_usd"`
@@ -79,32 +79,32 @@ type Params struct {
 //     reads high during blow-off tops -- the worst possible entries.
 func DefaultParams() Params {
 	return Params{
-		EntryPeriod:          20,
-		EntryPeriodSlow:      55,
-		ExitPeriod:           10,
-		ExitPeriodSlow:       20,
-		ATRPeriod:            20,
-		StopATR:              2.0,
-		PyramidStepATR:       0.5,
-		PyramidMaxUnits:      4,
-		MaxUnitsPerMarket:    4,
-		MaxUnitsCorrelated:   2,
-		MaxUnitsDirection:    10,
-		MaxUnitsTotal:        6,
-		RiskPerUnit:          0.005,
-		MaxNotionalPct:       0.25,
-		ADXPeriod:            14,
-		ADXMin:               20,
-		MaxExtensionATR:      2.0,
+		EntryPeriod:            20,
+		EntryPeriodSlow:        55,
+		ExitPeriod:             10,
+		ExitPeriodSlow:         20,
+		ATRPeriod:              20,
+		StopATR:                2.0,
+		PyramidStepATR:         0.5,
+		PyramidMaxUnits:        4,
+		MaxUnitsPerMarket:      4,
+		MaxUnitsCorrelated:     2,
+		MaxUnitsDirection:      10,
+		MaxUnitsTotal:          6,
+		RiskPerUnit:            0.005,
+		MaxNotionalPct:         0.25,
+		ADXPeriod:              14,
+		ADXMin:                 20,
+		MaxExtensionATR:        2.0,
 		VolumeConfirmMult:      1.5,
 		VolumeMedianWindow:     20,
 		VolumeMedianFloorUSD:   20_000,
 		VolumeAbsoluteFloorUSD: 150_000,
-		MinATRPct:            0.015,
-		MaxATRPct:            0.25,
-		BTCSymbol:            "BTCUSDT",
-		BTCGatePeriod:        55,
-		BTCGateInterval:      "1d",
+		MinATRPct:              0.015,
+		MaxATRPct:              0.25,
+		BTCSymbol:              "BTCUSDT",
+		BTCGatePeriod:          55,
+		BTCGateInterval:        "1d",
 	}
 }
 
