@@ -521,20 +521,24 @@ type Candidate struct {
 	// moving alone is a print.
 	TrendAgreement float64 `json:"trend_agreement"`
 	// TrendLabel is a human read of the two above, for the UI and the log.
-	TrendLabel     string   `json:"trend_label"`
-	Sigma10s       float64  `json:"sigma_10s"`
-	SigmaMultiple  float64  `json:"sigma_multiple"`
-	Acceleration   *float64 `json:"acceleration"`
-	RangePosition  float64  `json:"range_position"`
-	SpreadPct      float64  `json:"spread_pct"`
-	BookDepthUSD   float64  `json:"book_depth_usd"`
-	QuoteVolume24h float64  `json:"quote_volume_24h"`
-	Trades10s      int64    `json:"trades_10s"`
-	TradesMultiple float64  `json:"trades_multiple"`
-	TakerBuyRatio  float64  `json:"taker_buy_ratio"`
-	TakerQuote     float64  `json:"taker_quote"`
-	UpdatedMS      int64    `json:"updated_ms"`
-	Reasons        []string `json:"reasons"`
+	TrendLabel string `json:"trend_label"`
+	// Precursor is the quiet-then-buy-surge read over 20/30/45/60s. Present only
+	// when the symbol could be assessed: a nil here means NOT MEASURABLE, which is
+	// a different statement from a low score and must never render as zero.
+	Precursor      *PrecursorRead `json:"precursor,omitempty"`
+	Sigma10s       float64        `json:"sigma_10s"`
+	SigmaMultiple  float64        `json:"sigma_multiple"`
+	Acceleration   *float64       `json:"acceleration"`
+	RangePosition  float64        `json:"range_position"`
+	SpreadPct      float64        `json:"spread_pct"`
+	BookDepthUSD   float64        `json:"book_depth_usd"`
+	QuoteVolume24h float64        `json:"quote_volume_24h"`
+	Trades10s      int64          `json:"trades_10s"`
+	TradesMultiple float64        `json:"trades_multiple"`
+	TakerBuyRatio  float64        `json:"taker_buy_ratio"`
+	TakerQuote     float64        `json:"taker_quote"`
+	UpdatedMS      int64          `json:"updated_ms"`
+	Reasons        []string       `json:"reasons"`
 }
 
 // --------------------------------------------------------------------------
@@ -1028,6 +1032,13 @@ func (e *Engine) Snapshot(limit int, now int64) []Candidate {
 		}
 		row.TrendSign, row.TrendAgreement, row.TrendLabel = readTrend(
 			moveOr(row.Change3s), moveOr(row.Change5s), moveOr(row.Change10s), moveOr(row.Change15s))
+		// The quiet-then-buy-surge precursor, over its own four horizons.
+		if s.baseline.ready() {
+			read := s.assessPrecursor(now, e.cfg.WindowSec)
+			if read.ConfidencePct != nil {
+				row.Precursor = &read
+			}
+		}
 		if !s.baseline.ready() {
 			row.BurstMultiple = 0
 			row.BurstZ = 0

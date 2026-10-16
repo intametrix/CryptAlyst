@@ -107,6 +107,15 @@ const DIAGNOSE = `(() => {
     cssH: Math.round(c.getBoundingClientRect().height),
   }));
   let painted = null;
+  const bottom = document.querySelector('.cp-bottom');
+  const divider = document.querySelector('.cp-divider');
+  const panelInfo = {
+    bottomPresent: !!bottom,
+    bottomVisible: bottom ? !!bottom.offsetParent : false,
+    bottomHeight: bottom ? Math.round(bottom.getBoundingClientRect().height) : 0,
+    dividerPresent: !!divider,
+    dividerText: divider ? divider.textContent.trim().slice(0, 30) : null,
+  };
   const big = [...document.querySelectorAll('canvas')].filter((c) => c.width > 200 && c.height > 100)
     .sort((a, b) => b.width * b.height - a.width * a.height)[0];
   if (big) {
@@ -136,6 +145,7 @@ const DIAGNOSE = `(() => {
     loadingVisible: loading ? !!loading.offsetParent : false,
     overlayPresent: !!overlay,
     canvasCount: canvases.length,
+    panel: panelInfo,
     painted,
   };
 })()`;
@@ -185,6 +195,23 @@ try {
   console.log(`navigating: ${appUrl}`);
   await send('Page.navigate', { url: appUrl }, session);
   await sleep(4000);
+
+  // Pin the chart overlay to a size that fits the headless window: the default
+  // is 75% of the viewport, which in headless Chrome can exceed the visible
+  // window and push the bottom panel off-screen. The panel itself is what the
+  // screenshots must show.
+  await evaluate(
+    session,
+    `(() => {
+      try {
+        window.localStorage.setItem('pumpdump.layout.v1', JSON.stringify({
+          boxes: { 'chart.size': { w: 1280, h: 780 }, 'chart.pos': { w: 60, h: 40 } },
+          chips: {},
+        }));
+        return 'pinned';
+      } catch { return 'no-storage'; }
+    })()`,
+  ).then((r) => console.log(`overlay geometry: ${r}`));
 
   // Click the first non-header flow row's SYMBOL BUTTON to open the chart.
   const clicked = await evaluate(

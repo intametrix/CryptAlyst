@@ -5,7 +5,7 @@ import "testing"
 func TestReadTrend(t *testing.T) {
 	cases := []struct {
 		name             string
-		c3, c5, c10, c15  float64
+		c3, c5, c10, c15 float64
 		wantSign         int
 		wantLabel        string
 	}{
