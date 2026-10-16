@@ -268,6 +268,9 @@ func load(path string, target, stop float64) (*store, error) {
 		if err := json.Unmarshal(line, &head); err != nil {
 			return nil, fmt.Errorf("line %d: unparseable: %w", lineNo, err)
 		}
+		if err := ledger.CheckUnits(head.Type, line); err != nil {
+			return nil, fmt.Errorf("line %d: %w", lineNo, err)
+		}
 		switch head.Type {
 		case "prediction":
 			var lp ledgerPrediction

@@ -49,3 +49,12 @@ __pycache__/
 # KIMI's private agent state: device id, session index, logs, model cache.
 # Agent runtime data, not project source, and it holds a device identifier.
 .kimi-home/
+
+# Agent coordination runtime state: changes every few seconds, carries no
+# source information, and buries real diffs if tracked.
+.comms/*.log
+.comms/*.polled
+.comms/*.offset
+.comms/.bridge.*
+.comms/all.jsonl
+.comms/*.inbox.jsonl

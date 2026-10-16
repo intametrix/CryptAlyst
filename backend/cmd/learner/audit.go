@@ -12,6 +12,8 @@ import (
 	"os"
 	"sort"
 	"time"
+
+	"pumpdump/backend/internal/ledger"
 )
 
 const (
@@ -60,6 +62,9 @@ func runAudit(inPath, outPath string) (resolutions, impossible, contradictions, 
 		}
 		if json.Unmarshal(line, &head) != nil {
 			continue
+		}
+		if err := ledger.CheckUnits(head.Type, line); err != nil {
+			return 0, 0, 0, 0, 0, 0, fmt.Errorf("line: %w", err)
 		}
 		switch head.Type {
 		case "resolution":
@@ -165,6 +170,7 @@ func runAudit(inPath, outPath string) (resolutions, impossible, contradictions, 
 			"reason": findings[id],
 			"ts_ms":  time.Now().UnixMilli(),
 		})
+		rec, _ = ledger.StampUnits(rec)
 		w.Write(append(rec, '\n'))
 	}
 	if err := w.Flush(); err != nil {

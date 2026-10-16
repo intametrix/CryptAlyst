@@ -181,3 +181,16 @@ reports the bracket-trade expectancy (CORRECT = +1R, WRONG = −1R by
 definition of the band touch, so E[R] = 2p − 1 gross) and uses the full v2
 block only when records carry mfe_pct/mae_pct — the fastsample writer should
 add those fields.
+
+## Explicit-units contract
+
+Every record the ledger writes (prediction, path, resolution, retraction)
+carries a "units" block: {"units":{"price":"quote_usd","pct_fields":
+"percent_of_entry","mfe_pct":"percent_of_entry","mae_pct":"percent_of_entry"}}.
+It is stamped centrally in write(), so future record types get it for free.
+Reader rule: an absent units block means the historical convention
+(percent_of_entry) and parses exactly as before; a block naming any other
+convention is a LOUD error naming the record type, field, and value — never
+a silent assumption. Unknown keys inside a known block are ignored, so
+writers can extend. fastsample's label_10s/path_1s are DeepSeek's records;
+readers tolerate units blocks on them but the ledger never writes them.

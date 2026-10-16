@@ -19,6 +19,7 @@ package outlook
 
 import (
 	"encoding/json"
+	"log"
 	"math"
 	"os"
 	"strconv"
@@ -111,7 +112,12 @@ type Outlook struct {
 // The loader is tolerant on purpose: an absent or partial file must degrade to
 // an explicitly uncalibrated heuristic, never to a fabricated probability.
 type calibration struct {
-	Version  string   `json:"version"`
+	// Version is `any` on purpose. The learner writes it as a NUMBER; this
+	// field was `string`, so json.Unmarshal failed with a type error and the
+	// WHOLE model was rejected -- 27 features, 27 weights, 345 samples, all
+	// valid, discarded over one metadata field's type. A decode that a metadata
+	// field can kill is a decode that will be killed by one.
+	Version  any      `json:"version"`
 	Features []string `json:"features"`
 	// The offline learner calls these weights; an earlier draft of this loader
 	// expected `coefficients`. Accept both rather than silently ignoring a
@@ -180,21 +186,33 @@ func (s *Service) LoadCalibration(path string) {
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
+		log.Printf("calibration: %s not loaded: %v (serving uncalibrated)", path, err)
 		return
 	}
 	var model calibration
 	if err := json.Unmarshal(raw, &model); err != nil {
+		log.Printf("calibration: %s REJECTED, cannot decode: %v (serving uncalibrated)", path, err)
 		return
 	}
 	// Reject a model that cannot actually be evaluated.
 	weights := model.weights()
-	if len(model.Features) == 0 || len(weights) != len(model.Features) {
+	if len(model.Features) == 0 {
+		log.Printf("calibration: %s REJECTED, no feature list (serving uncalibrated)", path)
+		return
+	}
+	if len(weights) != len(model.Features) {
+		log.Printf("calibration: %s REJECTED, %d features but %d weights "+
+			"(serving uncalibrated)", path, len(model.Features), len(weights))
 		return
 	}
 	// Refuse a model the learner itself would have refused to publish.
 	if model.samples() < s.params.MinResolvedForCalibration {
+		log.Printf("calibration: %s REJECTED, %d samples is below the %d minimum "+
+			"(serving uncalibrated)", path, model.samples(), s.params.MinResolvedForCalibration)
 		return
 	}
+	log.Printf("calibration: %s LOADED, %d features, n=%d, brier=%.4f",
+		path, len(model.Features), model.samples(), model.Brier)
 	s.model = &model
 	s.loaded = path
 }

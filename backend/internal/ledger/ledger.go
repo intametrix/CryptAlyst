@@ -559,6 +559,10 @@ func (r *JSONLRecorder) write(rec any) error {
 	if err != nil {
 		return err
 	}
+	b, err = stampUnits(b)
+	if err != nil {
+		return err
+	}
 	if _, err := r.w.Write(append(b, '\n')); err != nil {
 		return err
 	}
