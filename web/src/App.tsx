@@ -447,7 +447,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
             }
             second={
               <div className="flow-column">
-                <FlowLeaderboard flow={flow} tools={tools} onDrill={drillInto} />
+                <FlowLeaderboard flow={flow} tools={tools} />
                 {/* The two-panel split: the strongest bursts up and down, with an
                     empty state built from the backend's own drop counters. */}
                 <FlowSplit flow={flow} tools={tools} onDrill={drillInto} />
@@ -495,6 +495,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               presetPending={presetPending}
               onZoomControls={setZoomControls}
               onPersistedAlerts={handlePersistedAlerts}
+              onOpenDrill={() => drillInto(selection.symbol ?? '')}
               onClose={selection.clearSymbol}
             />
           </ChartOverlay>

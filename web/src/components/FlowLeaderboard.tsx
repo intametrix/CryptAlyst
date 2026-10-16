@@ -1,17 +1,16 @@
+import { ChartIcon } from './ChartIcon';
 import { memo, useMemo } from 'react';
 import { clock, int, isoUtc, multiple, num, pct, px, share, toNum, tone, usd } from '../format';
 import { visibleFlowColumns } from '../columns';
 import { useElementSize } from '../hooks/useElementSize';
 import { useSelection } from '../selection';
-import type { FlowMsg, FlowRow, ToolsMsg } from '../types';
+import type { FlowMsg, ToolsMsg } from '../types';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
 
 interface Props {
   flow: FlowMsg | null;
   tools: ToolsMsg | null;
-  /** Opens the trade drill-down for a symbol, seeded with this flow row. */
-  onDrill?: (symbol: string, seed?: { flow: FlowRow }) => void;
 }
 
 /** API.md: the leaderboard carries "top ~25" rows. */
@@ -25,7 +24,7 @@ const MAX_ROWS = 25;
  * is the selection. The column set follows the measured container width, so a
  * narrowed box degrades gracefully instead of clipping.
  */
-export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools, onDrill }: Props) {
+export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Props) {
   const selection = useSelection();
   const { ref, size } = useElementSize<HTMLDivElement>();
   const rows = Array.isArray(flow?.rows) ? flow.rows.slice(0, MAX_ROWS) : [];
@@ -95,11 +94,15 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools, onDr
                               aria-pressed={selected}
                               disabled={symbol === ''}
                               onClick={() => {
+                                // The symbol click opens the CHART and nothing
+                                // else (human ruling, 2026-10-16): the drill-down
+                                // is reachable from an icon inside the chart
+                                // popup, not fired alongside it.
                                 selection.selectSymbol(symbol);
-                                onDrill?.(symbol, { flow: r });
                               }}
-                              title={`${label} — click for the trade drill-down`}
+                              title={`${label} — click to chart`}
                             >
+                              <ChartIcon />{' '}
                               {symbol !== '' ? symbol : '—'}
                             </button>
                           );

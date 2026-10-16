@@ -227,6 +227,16 @@ case "${1:-status}" in
   wait)   shift; cmd_wait "$@" ;;
   answer-now) shift; COMMS_PRIO="ANSWER NOW" cmd_send "$@" ;;
   urgent) shift; COMMS_PRIO="urgent" cmd_send "$@" ;;
+  # [!!FORCE] -- the human's keyword. A forced message must be ACTED ON,
+  # not queued behind current work. Same transport as urgent deliberately:
+  # what makes it forceful is the keyword and the ATTENTION flag, so it
+  # cannot be lost by a rarer code path.
+  force)
+    shift
+    to="$1"; body="$2"; shift 2
+    case "$body" in "[!!FORCE]"*) ;; *) body="[!!FORCE] $body" ;; esac
+    COMMS_PRIO="urgent" cmd_send "$to" "$body" "$@" ;;
+  forced) shift; COMMS_PRIO="urgent" cmd_send "$@" ;;
   poll)   shift; cmd_poll "$@" ;;
   listen) shift; python3 "$(dirname "${BASH_SOURCE[0]}")/ipc.py" listen "$BOX/${1:?usage: listen <agent>}.fifo" ;;
   ensure-ipc) for w in deepseek kimi; do python3 "$(dirname "${BASH_SOURCE[0]}")/ipc.py" ensure "$BOX/$w.fifo"; done; echo "FIFOs ready" ;;
@@ -235,3 +245,4 @@ case "${1:-status}" in
   human)  shift; cmd_human "$@" ;;
   *) sed -n '2,25p' "$0"; exit 2 ;;
 esac
+

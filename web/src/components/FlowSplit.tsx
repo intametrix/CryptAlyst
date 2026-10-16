@@ -1,3 +1,4 @@
+import { ChartIcon } from './ChartIcon';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { multiple, num, pct, px, text, toNum, tone, usd } from '../format';
 import { useSelection } from '../selection';
@@ -54,7 +55,8 @@ export function emptyReason(split: FlowSplitMsg | null): string {
   return `nothing ${gateText} in ${windowText} — ${parts.join(', ')} of ${text(split?.symbols)} symbols dropped`;
 }
 
-function Side({ title, rows, kind, emptyText, onDrill, tools }: SideProps) {
+function Side({ title, rows, kind, emptyText, tools }: SideProps) {
+  const selection = useSelection();
   // `change_24h_pct` sits beside the 10s move on purpose: a bounce inside a
   // downtrend must not read as a pump, and the daily figure is what says so.
   return (
@@ -75,10 +77,14 @@ function Side({ title, rows, kind, emptyText, onDrill, tools }: SideProps) {
                 <button
                   type="button"
                   className="flow-split-row"
-                  onClick={() => onDrill(symbol, { flow: row })}
-                  title={`${symbol} — click for the trade drill-down`}
+                  onClick={() => {
+                    // Row click opens the CHART; the drill-down is the icon
+                    // inside the chart popup (human ruling, 2026-10-16).
+                    if (symbol !== '') selection.selectSymbol(symbol);
+                  }}
+                  title={`${symbol} — click to chart`}
                 >
-                  <span className={`flow-split-sym sym-btn${''}`}>{symbol === '' ? '—' : symbol}</span>
+                  <span className={`flow-split-sym sym-btn${''}`}><ChartIcon /> {symbol === '' ? '—' : symbol}</span>
                   <span className="flow-split-price num">{px(row.last_price)}</span>
                   <span className={`flow-split-change num ${tone(change10)}`}>{pct(change10)}</span>
                   <Tooltip

@@ -1,3 +1,4 @@
+import { ChartIcon } from './ChartIcon';
 import { memo, useMemo, useState } from 'react';
 import {
   clock,
@@ -47,7 +48,7 @@ function rowDetail(row: ScreenRow): string {
   ].join(' · ');
 }
 
-export const ScreenTable = memo(function ScreenTable({ screen, onRefresh, tools, onDrill }: Props) {
+export const ScreenTable = memo(function ScreenTable({ screen, onRefresh, tools }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const { ref, size } = useElementSize<HTMLDivElement>();
@@ -123,12 +124,13 @@ export const ScreenTable = memo(function ScreenTable({ screen, onRefresh, tools,
                 className={`sym-btn${selected ? ' selected' : ''}`}
                 aria-pressed={selected}
                 onClick={() => {
+                  // Dashboard symbol clicks open the CHART only; the
+                  // drill-down lives inside the chart popup (human ruling).
                   selection.selectSymbol(symbol);
-                  onDrill?.(symbol, { screen: row });
                 }}
-                title={`${symbol} — click for the trade drill-down`}
+                title={`${symbol} — click to chart`}
               >
-                {text(row.symbol)}
+                <ChartIcon /> {text(row.symbol)}
               </button>
             </HeatBorder>
           </td>

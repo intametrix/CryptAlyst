@@ -4367,3 +4367,22 @@ table {
 .cp-alert-slot .alert-card {
   margin: 0;
 }
+
+/* --- in-chart drill-down control ------------------------------------------- */
+.cp-drill-btn {
+  background: var(--panel-2, #1a2334);
+  border: 1px solid var(--line, #1e2636);
+  border-radius: 4px;
+  color: var(--text, #dbe4f3);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 8px;
+}
+.cp-drill-btn:hover {
+  border-color: var(--accent, #4d8dfd);
+}
+.sym-btn svg {
+  vertical-align: -1px;
+  opacity: 0.75;
+}

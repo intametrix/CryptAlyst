@@ -63,6 +63,12 @@ export interface ChartPopupProps {
   onZoomControls?: (controls: ChartZoomControls | null) => void;
   /** The persisted alerts that arrived with the bars, for the live feed. */
   onPersistedAlerts?: (alerts: readonly AlertMsg[]) => void;
+  /**
+   * Opens the trade drill-down for the charted symbol. The drill-down lives
+   * behind THIS control inside the chart — the dashboard's symbol clicks open
+   * the chart only (human ruling, 2026-10-16).
+   */
+  onOpenDrill?: (() => void) | null;
   /** Dismiss the popup. */
   onClose: () => void;
 }
@@ -89,6 +95,7 @@ export function ChartPopup({
   presetPending,
   onZoomControls,
   onPersistedAlerts,
+  onOpenDrill,
   onClose,
 }: ChartPopupProps) {
   const klines = useKlines(symbol, interval, { active: true });
@@ -322,6 +329,20 @@ export function ChartPopup({
             </span>
           )}
         </div>
+
+        {onOpenDrill !== undefined && onOpenDrill !== null && (
+          <Tooltip
+            keys={['trade']}
+            tools={tools}
+            fallbackTitle="Trade drill-down"
+            label={`Opens the trade analysis for ${symbol} — the heat, live flow, Turtle setup, screen result and alert history. Same view as the dashboard drill-down, reached from inside the chart.`}
+            tone="stat"
+          >
+            <button type="button" className="cp-drill-btn" onClick={onOpenDrill}>
+              trade ⤢
+            </button>
+          </Tooltip>
+        )}
 
         <Tooltip
           keys={['close']}

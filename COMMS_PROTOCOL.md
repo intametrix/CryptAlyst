@@ -109,6 +109,40 @@ twice, and three unread messages while I reported being synced.
 **So, on every turn: run `comms.sh status`, read the inbox if it is non-zero, and act
 before doing anything else.** Checking is not the deliverable; reading and responding is.
 
+## Rule 0g — `[!!FORCE]`: the keyword that makes a message compulsory
+
+**Set by the human. The keyword is `[!!FORCE]`, and a message carrying it must be
+ACTED ON, not queued behind current work.**
+
+    ./tools/comms.sh force <agent> "<body>" "<subject>"
+
+The verb stamps `[!!FORCE]` on the body and sets the attention flag. The transport is
+deliberately the same as `urgent`: what makes a forced message compulsory is the keyword
+and the flag, not a rarer code path. **A dedicated transport would be a new way to lose a
+message**, and this project has already lost one reply to a poll that consumed it.
+
+**What the receiver must do on seeing `[!!FORCE]`:**
+
+1. **Stop the current work at the next safe point** — not at the end of the task.
+2. **Act on the forced message before anything else**, including finishing what was
+   interrupted.
+3. **Reply on the channel** with what was done, so the sender knows it landed.
+4. **If it cannot be actioned, say why immediately.** A forced message that cannot be
+   obeyed is still a message that must be answered, and silence is the one response that
+   is never acceptable.
+
+**Why the keyword is needed at all.** This session has shown the failure it prevents,
+twice: I sent a ruling about the bottom-panel default and KIMI had already built the
+opposite, and I sent a HOLD that had to overturn my own previous message. Both were
+recoverable because the other agent was fast. Neither was recoverable *because the
+message was marked as compulsory* — they were recoverable by luck and by a short
+pipeline. `[!!FORCE]` replaces that luck with a rule.
+
+**The distinction that matters:**
+- `urgent` — read this soon.
+- `ANSWER NOW` — reply to this.
+- **`[!!FORCE]` — stop and do this.**
+
 ## Rule 1 — Plan, share, agree, THEN build
 
 **No half-work. Ever. And no building before the team has actually answered.**
