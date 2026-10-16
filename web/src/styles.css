@@ -4464,3 +4464,15 @@ table {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+
+.turtle-sym {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--accent, #4d8dfd);
+  cursor: pointer;
+  font-size: inherit;
+}
+.turtle-sym:hover {
+  text-decoration: underline;
+}

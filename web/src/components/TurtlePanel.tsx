@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 import { clock, int, num, px, usd } from '../format';
+import { useSelection } from '../selection';
 import type { ToolsMsg } from '../types';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
@@ -65,18 +66,42 @@ interface TurtleState {
   note: string;
 }
 
-interface Trade {
+/** OPEN trade — a live position; the PnL column moves on every tick. */
+interface OpenTrade {
   symbol: string;
   side: string;
+  side_label: string;
+  units: number;
+  entry_price: number;
+  last_price: number;
+  stop_price: number;
+  n: number;
+  notional: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+  distance_to_stop_pct: number;
+  risk_usd: number;
+  opened_at: string;
+  hold_sec: number;
+  alert_id: string;
+}
+
+/** SETTLED trade — closed; PnL is final and can never change. */
+interface SettledTrade {
+  symbol: string;
+  side: string;
+  side_label: string;
   units: number;
   entry_price: number;
   exit_price: number;
+  notional: number;
   pnl: number;
   pnl_pct: number;
   opened_at: string;
   closed_at: string;
-  reason: string;
   hold_sec: number;
+  reason: string;
+  alert_id: string;
 }
 
 interface TurtleStats {
@@ -106,7 +131,8 @@ async function fetchJson(url: string): Promise<unknown> {
 
 export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMsg | null }) {
   const [session, setSession] = useState<TurtleState | null>(null);
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [openTrades, setOpenTrades] = useState<OpenTrade[]>([]);
+  const [settled, setSettled] = useState<SettledTrade[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<TurtleStats | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,15 +141,17 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
 
   const refresh = useCallback(async () => {
     try {
-      const [s, t, o, st] = await Promise.all([
+      const [s, t, z, o, st] = await Promise.all([
         fetchJson('/api/turtle'),
         fetchJson('/api/turtle/trades'),
+        fetchJson('/api/turtle/settled'),
         fetchJson('/api/turtle/orders'),
         fetchJson('/api/turtle/stats'),
       ]);
       setStats(st as TurtleStats);
       setSession(s as TurtleState);
-      setTrades(((t as { trades?: Trade[] }).trades ?? []).slice(0, 30));
+      setOpenTrades(((t as { trades?: OpenTrade[] }).trades ?? []).slice(0, 30));
+      setSettled(((z as { trades?: SettledTrade[] }).trades ?? []).slice(0, 30));
       setOrders(((o as { orders?: Order[] }).orders ?? []).slice(0, 30));
       setError(null);
     } catch (e) {
@@ -156,8 +184,8 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
   // The wire sends null (not []) for several collections while idle; treat
   // every collection as possibly-null so one idle payload cannot blank the app.
   const cfg = session?.config ?? {};
-  const positions = session?.positions ?? [];
   const watchlist = session?.watchlist ?? [];
+  const selection = useSelection();
   const rules = [
     cfg.starting_equity !== undefined && cfg.starting_equity !== null ? `${usd(cfg.starting_equity)} start` : null,
     cfg.risk_per_unit !== undefined && cfg.risk_per_unit !== null ? `${num(cfg.risk_per_unit * 100, 0)}% risk/unit` : null,
@@ -239,45 +267,15 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                   <span className="num">blocked {int(session.entries_blocked)}</span>
                 </div>
 
-                <h3 className="cp-data-heading">positions ({int(positions.length)})</h3>
-                {positions.length === 0 ? (
-                  <p className="empty">flat</p>
-                ) : (
-                  <ul className="turtle-rows">
-                    <li className="turtle-row turtle-head-row">
-                      <span>time</span>
-                      <span>ticker</span>
-                      <span>dir</span>
-                      <span>qty</span>
-                      <span>price</span>
-                      <span>uPnL</span>
-                      <span>stop</span>
-                    </li>
-                    {positions.map((p) => {
-                      const dir = p.side === 'long' ? 1 : -1;
-                      const upnl = (p.last - p.entry_price) * p.units * dir;
-                      return (
-                        <li key={`${p.symbol}-${p.opened_at}`} className="turtle-row">
-                          <span className="num" title={p.opened_at}>{clock(Date.parse(p.opened_at))}</span>
-                          <span className="num">{p.symbol}</span>
-                          <span className={p.side === 'long' ? 'up' : 'down'}>{p.side}</span>
-                          <span className="num">{int(p.units)}</span>
-                          <span className="num" title={`last ${px(p.last)}`}>{px(p.entry_price)}</span>
-                          <span className={`num ${upnl >= 0 ? 'up' : 'down'}`}>{usd(upnl)}</span>
-                          <span className="num">{px(p.stop_price)}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-
                 <h3 className="cp-data-heading">watchlist ({int(watchlist.length)})</h3>
                 <ul className="turtle-rows">
                   {watchlist.slice(0, 15).map((w) => {
                     const fallback = w.reasons.some((r) => r.includes('liquidity fallback'));
                     return (
                       <li key={w.symbol} className={`turtle-row${fallback ? ' turtle-fallback' : ''}`}>
-                        <span className="num">{w.symbol}</span>
+                        <button type="button" className="turtle-sym num" onClick={() => selection.selectSymbol(w.symbol)} title={`chart ${w.symbol}`}>
+                          {w.symbol}
+                        </button>
                         <span className="num">score {num(w.score, 2)}</span>
                         <span className="turtle-reasons">
                           {fallback ? 'watched for liquidity — not a pick' : w.reasons.join(' · ')}
@@ -287,26 +285,62 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                   })}
                 </ul>
 
-                <h3 className="cp-data-heading">trades ({int(trades.length)} shown)</h3>
-                {trades.length === 0 ? (
+                <h3 className="cp-data-heading">open trades ({int(openTrades.length)})</h3>
+                {openTrades.length === 0 ? (
+                  <p className="empty">flat</p>
+                ) : (
+                  <ul className="turtle-rows">
+                    <li className="turtle-row turtle-head-row">
+                      <span>side</span>
+                      <span>time</span>
+                      <span>ticker</span>
+                      <span>qty</span>
+                      <span>price</span>
+                      <span>pnl</span>
+                      <span>to stop</span>
+                      <span>risk</span>
+                    </li>
+                    {openTrades.map((t) => (
+                      <li key={`${t.symbol}-${t.opened_at}`} className="turtle-row">
+                        <span className={t.side_label === 'BUY' ? 'up' : 'down'}>{t.side_label}</span>
+                        <span className="num" title={t.opened_at}>{clock(Date.parse(t.opened_at))}</span>
+                        <button type="button" className="turtle-sym num" onClick={() => selection.selectSymbol(t.symbol)} title={`chart ${t.symbol}`}>
+                          {t.symbol}
+                        </button>
+                        <span className="num">{t.units.toFixed(4)}</span>
+                        <span className="num" title={`last ${px(t.last_price)}`}>{px(t.entry_price)}</span>
+                        <span className={`num ${t.unrealized_pnl >= 0 ? 'up' : 'down'}`}>
+                          {usd(t.unrealized_pnl)} ({num(t.unrealized_pnl_pct, 3)}%)
+                        </span>
+                        <span className="num">{num(t.distance_to_stop_pct, 2)}%</span>
+                        <span className="num">{usd(t.risk_usd)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <h3 className="cp-data-heading">settled trades ({int(settled.length)} shown)</h3>
+                {settled.length === 0 ? (
                   <p className="empty">none yet</p>
                 ) : (
                   <ul className="turtle-rows">
                     <li className="turtle-row turtle-head-row">
+                      <span>side</span>
                       <span>time</span>
                       <span>ticker</span>
-                      <span>dir</span>
                       <span>qty</span>
                       <span>price</span>
                       <span>pnl</span>
                       <span>reason</span>
                     </li>
-                    {trades.map((t, i) => (
+                    {settled.map((t, i) => (
                       <li key={`${t.symbol}-${t.opened_at}-${i}`} className="turtle-row">
+                        <span className={t.side_label === 'BUY' ? 'up' : 'down'}>{t.side_label}</span>
                         <span className="num" title={t.opened_at}>{clock(Date.parse(t.opened_at))}</span>
-                        <span className="num">{t.symbol}</span>
-                        <span className={t.side === 'long' ? 'up' : 'down'}>{t.side}</span>
-                        <span className="num">{int(t.units)}</span>
+                        <button type="button" className="turtle-sym num" onClick={() => selection.selectSymbol(t.symbol)} title={`chart ${t.symbol}`}>
+                          {t.symbol}
+                        </button>
+                        <span className="num">{t.units.toFixed(4)}</span>
                         <span className="num" title={`exit ${px(t.exit_price)}`}>
                           {px(t.entry_price)} → {px(t.exit_price)}
                         </span>
@@ -323,7 +357,11 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                 <ul className="turtle-rows">
                   {orders.map((o) => (
                     <li key={o.id} className={`turtle-row${o.status === 'rejected' ? ' turtle-rejected' : ''}`}>
-                      <span className="num">{o.id} {o.symbol} {o.side} {o.type}</span>
+                      <span className="num">{o.id}</span>
+                      <button type="button" className="turtle-sym num" onClick={() => selection.selectSymbol(o.symbol)} title={`chart ${o.symbol}`}>
+                        {o.symbol}
+                      </button>
+                      <span className="num">{o.side} {o.type}</span>
                       <span className="num">{o.status}</span>
                       <span className="turtle-reasons">{o.reason}</span>
                     </li>
