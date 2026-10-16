@@ -4469,3 +4469,67 @@ table {
   line-height: 18px;
   padding: 1px 4px;
 }
+
+/* --- turtle trading session panel ------------------------------------------ */
+.turtle-state {
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line, #1e2636);
+  font-size: 10.5px;
+  text-transform: uppercase;
+}
+.turtle-state.running {
+  color: var(--up, #2ee06a);
+  border-color: var(--up, #2ee06a);
+}
+.turtle-stats,
+.turtle-counters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 4px 0;
+}
+.turtle-rules {
+  margin: 2px 0;
+  font-size: 11px;
+  color: var(--muted, #8492a9);
+}
+.turtle-note {
+  margin: 2px 0 6px;
+  font-size: 10.5px;
+  color: var(--warn, #f5b944);
+}
+.turtle-error {
+  color: var(--down, #ff4d5e);
+  font-size: 11px;
+}
+.turtle-rows {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.turtle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11.5px;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.turtle-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.turtle-reasons {
+  color: var(--muted, #8492a9);
+  font-size: 11px;
+}
+.turtle-fallback {
+  opacity: 0.65;
+}
+.turtle-rejected {
+  border-left: 2px solid var(--warn, #f5b944);
+}

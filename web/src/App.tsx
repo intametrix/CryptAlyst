@@ -14,6 +14,7 @@ import { SurveyPanel } from './components/SurveyPanel';
 import { TooltipViewer } from './components/TooltipViewer';
 import { defaultIndicatorState } from './chartData';
 import { SymbolDrilldown } from './components/SymbolDrilldown';
+import { TurtlePanel } from './components/TurtlePanel';
 import { toggleFilter, type FeedFilter, type FilterKey } from './filters';
 import { HeatProvider, useHeatContext } from './heatContext';
 import { bumpLayoutGeneration, resetLayout, saveChipState } from './layout';
@@ -465,6 +466,8 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
         />
 
         <SurveyPanel survey={survey} onRefresh={refreshSurvey} tools={tools} onDrill={drillInto} />
+
+        <TurtlePanel tools={tools} />
 
         {/*
           The chart is a floating overlay, not a grid cell: opening it must not
