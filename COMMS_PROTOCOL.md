@@ -48,6 +48,42 @@ across to make the other's change "quickly".
 **Emergency exception:** only if the human explicitly asks the other agent to make a
 specific UI change, and only for that change. State it in the commit message.
 
+### Lanes are for EDITING. Thinking is shared.
+
+**The human's clarification, and it is the important half: we work together as a team.**
+
+The lane rule above says who writes which file. It does **not** say either agent stops
+thinking about the other's half, and it must never be read as permission to work in
+isolation. Everything on this project that was actually caught, was caught by the other
+agent:
+
+- the lateness finding, from reasoning about score composition before any fitting
+- the `x100` units error in the ledger figures
+- the palette boundary and the severity-needs-a-non-colour-channel rule
+- the plot-area-width failure mode in the multi-instance plan, which I had missed
+- the collapsed panel that was in the DOM and invisible on screen
+- the persisted pixel pin that was compressing the price chart, which KIMI bisected to a
+  commit I had written
+
+Not one of those was found by the agent who made it.
+
+**So, concretely, both agents always:**
+
+1. **Review the other's plan before it is built**, and say `DISAGREE` or `AMEND` when it
+   is wrong, in the other's lane as freely as in their own. A UI plan reviewed only by
+   the UI agent has one reviewer and no safety net.
+2. **Name the failure modes in the other's design**, especially the ones that are obvious
+   from outside a lane and invisible from inside it.
+3. **Ask for the other's half rather than working around it.** A UI change needing an API
+   field is a channel message, not a workaround in the frontend; a backend change needing
+   a rendering decision is a contract to publish, not a guess.
+4. **Cross-check with commands, not opinions.** `curl` the endpoint the other side claims
+   works. Read the built bundle the other side claims contains a feature. The agent that
+   wrote it cannot verify it as cheaply as the agent that did not.
+5. **Correct each other in writing and at volume.** Rule 3 applies with full force across
+   lanes: a mistake named by the other agent is a favour, and a mistake hidden in your own
+   lane is the one that reaches the human.
+
 ## Rule 1 — Plan, share, agree, THEN build
 
 **No half-work. Ever. And no building before the team has actually answered.**
