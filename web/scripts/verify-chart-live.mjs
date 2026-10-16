@@ -101,6 +101,7 @@ async function screenshot(sessionId, name) {
 const DIAGNOSE = `(() => {
   const loading = document.querySelector('.chart-loading');
   const overlay = document.querySelector('.chart-overlay');
+  const header = overlay?.textContent?.trim()?.split(/\\s+/).slice(0, 5).join(' ') ?? null;
   const canvases = [...document.querySelectorAll('canvas')].map((c) => ({
     w: c.width, h: c.height, cssW: Math.round(c.getBoundingClientRect().width),
     cssH: Math.round(c.getBoundingClientRect().height),
@@ -111,27 +112,31 @@ const DIAGNOSE = `(() => {
   if (big) {
     const ctx = big.getContext('2d');
     if (ctx) {
-      const strip = ctx.getImageData(0, Math.floor(big.height / 2), Math.min(400, big.width), 1).data;
-      const first = [strip[0], strip[1], strip[2], strip[3]];
+      // Sample several strips: a single mid-strip can cross a quiet region of
+      // a legitimately drawn chart, so sum across 20%..80% height.
       let nonBg = 0;
-      for (let i = 0; i < strip.length; i += 4) {
-        if (Math.abs(strip[i] - first[0]) + Math.abs(strip[i + 1] - first[1]) + Math.abs(strip[i + 2] - first[2]) > 24) nonBg += 1;
+      let total = 0;
+      for (const frac of [0.2, 0.35, 0.5, 0.65, 0.8]) {
+        const strip = ctx.getImageData(0, Math.floor(big.height * frac), Math.min(400, big.width), 1).data;
+        const first = [strip[0], strip[1], strip[2], strip[3]];
+        total += Math.floor(strip.length / 4);
+        for (let i = 0; i < strip.length; i += 4) {
+          if (Math.abs(strip[i] - first[0]) + Math.abs(strip[i + 1] - first[1]) + Math.abs(strip[i + 2] - first[2]) > 24) nonBg += 1;
+        }
       }
-      painted = { nonBgOf: Math.floor(strip.length / 4), nonBg };
+      painted = { nonBgOf: total, nonBg };
     } else {
       painted = 'no-2d-context';
     }
   }
-  let sseState = 'n/a';
   return {
     url: location.href,
+    header,
     loadingText: loading ? loading.textContent.trim().slice(0, 60) : null,
     loadingVisible: loading ? !!loading.offsetParent : false,
     overlayPresent: !!overlay,
     canvasCount: canvases.length,
-    canvases: canvases.slice(0, 8),
     painted,
-    sseState,
   };
 })()`;
 
@@ -181,17 +186,19 @@ try {
   await send('Page.navigate', { url: appUrl }, session);
   await sleep(4000);
 
-  // Click the first non-header flow row to open the chart pop-out.
+  // Click the first non-header flow row's SYMBOL BUTTON to open the chart.
   const clicked = await evaluate(
     session,
     `(() => {
       const row = document.querySelector('.flow-row:not(.flow-head)');
-      if (!row) return 'NO_ROW';
-      row.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      return row.textContent.trim().slice(0, 40);
+      const btn = row?.querySelector('.sym-btn');
+      if (!btn) return 'NO_BUTTON';
+      const sym = btn.textContent.trim();
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      return sym;
     })()`,
   );
-  console.log(`clicked row: ${clicked}`);
+  console.log(`clicked symbol button: ${clicked}`);
   await sleep(5000);
 
   const first = await evaluate(session, DIAGNOSE);
@@ -200,21 +207,29 @@ try {
   const shot1 = await screenshot(session, '01-first-symbol.png');
   console.log(`screenshot: ${shot1}`);
 
-  // The symbol-change race: two rapid changes, then settle on the third.
+  // The symbol-change race: two rapid button clicks, then settle on the last.
   const race = await evaluate(
     session,
     `(() => {
       const rows = [...document.querySelectorAll('.flow-row:not(.flow-head)')];
-      if (rows.length < 3) return 'NOT_ENOUGH_ROWS';
-      rows[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      setTimeout(() => rows[2].dispatchEvent(new MouseEvent('click', { bubbles: true })), 120);
-      return 'raced';
+      const btns = rows.map((r) => r.querySelector('.sym-btn')).filter(Boolean);
+      if (btns.length < 3) return 'NOT_ENOUGH_ROWS';
+      const a = btns[1].textContent.trim();
+      const b = btns[2].textContent.trim();
+      btns[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      setTimeout(() => btns[2].dispatchEvent(new MouseEvent('click', { bubbles: true })), 120);
+      return a + ' then ' + b;
     })()`,
   );
   console.log(`race: ${race}`);
   await sleep(5000);
 
   const second = await evaluate(session, DIAGNOSE);
+  const lastSym = race.includes(' then ') ? race.split(' then ')[1] : null;
+  const headerOk = lastSym !== null && (second.header ?? '').toUpperCase().includes(lastSym.toUpperCase());
+  console.log('DIAGNOSIS after symbol race:');
+  console.log(JSON.stringify(second, null, 2));
+  console.log(`race target was ${lastSym}; header matches: ${headerOk}`);
   console.log('DIAGNOSIS after symbol race:');
   console.log(JSON.stringify(second, null, 2));
   const shot2 = await screenshot(session, '02-after-race.png');
