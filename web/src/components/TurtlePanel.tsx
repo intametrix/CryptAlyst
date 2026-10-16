@@ -104,12 +104,6 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
-function agoSec(iso: string): string {
-  const t = Date.parse(iso);
-  if (Number.isNaN(t)) return '—';
-  return `${int((Date.now() - t) / 1000)}s`;
-}
-
 export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMsg | null }) {
   const [session, setSession] = useState<TurtleState | null>(null);
   const [trades, setTrades] = useState<Trade[]>([]);
@@ -250,16 +244,30 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
                   <p className="empty">flat</p>
                 ) : (
                   <ul className="turtle-rows">
-                    {positions.map((p) => (
-                      <li key={`${p.symbol}-${p.opened_at}`} className="turtle-row">
-                        <span className="num">{p.symbol} {p.side}</span>
-                        <span className="num">{int(p.units)}u @{px(p.entry_price)}</span>
-                        <span className="num">stop {px(p.stop_price)}</span>
-                        <span className="num">n {num(p.n, 4)}</span>
-                        <span className="num">{usd(p.notional)}</span>
-                        <span className="num">{agoSec(p.opened_at)}</span>
-                      </li>
-                    ))}
+                    <li className="turtle-row turtle-head-row">
+                      <span>time</span>
+                      <span>ticker</span>
+                      <span>dir</span>
+                      <span>qty</span>
+                      <span>price</span>
+                      <span>uPnL</span>
+                      <span>stop</span>
+                    </li>
+                    {positions.map((p) => {
+                      const dir = p.side === 'long' ? 1 : -1;
+                      const upnl = (p.last - p.entry_price) * p.units * dir;
+                      return (
+                        <li key={`${p.symbol}-${p.opened_at}`} className="turtle-row">
+                          <span className="num" title={p.opened_at}>{clock(Date.parse(p.opened_at))}</span>
+                          <span className="num">{p.symbol}</span>
+                          <span className={p.side === 'long' ? 'up' : 'down'}>{p.side}</span>
+                          <span className="num">{int(p.units)}</span>
+                          <span className="num" title={`last ${px(p.last)}`}>{px(p.entry_price)}</span>
+                          <span className={`num ${upnl >= 0 ? 'up' : 'down'}`}>{usd(upnl)}</span>
+                          <span className="num">{px(p.stop_price)}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
 
