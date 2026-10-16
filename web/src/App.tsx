@@ -520,14 +520,23 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               <>
               <label
                 className="chart-only"
-                title="Show the signals list under the chart. Off gives the chart the full height."
+                title="Display the events panel under the chart. It arrives collapsed, so the chart keeps the height until you open the list."
               >
                 <input
                   type="checkbox"
                   checked={showEvents}
-                  onChange={(event) => setShowEvents(event.target.checked)}
+                  onChange={(event) => {
+                    const next = event.target.checked;
+                    setShowEvents(next);
+                    // The panel ARRIVES COLLAPSED. One control decides whether the
+                    // region exists; the panel's own caret decides how much of it
+                    // is open. Collapsing on show means the chart keeps its height
+                    // at the moment the user asks for the panel, rather than
+                    // losing it to something they have not opened yet.
+                    if (next) setEventsExpanded(false);
+                  }}
                 />
-                Show Events
+                display EVENTS
               </label>
               <Tooltip
                 keys={['close']}
