@@ -5,3 +5,5 @@ scalp5/state/
 scalp5/ledger/
 scalp5/*.log
 *.tmp
+dist/*.bundle
+dist/trading-platform.patch
