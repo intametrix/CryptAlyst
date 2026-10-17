@@ -1,0 +1,383 @@
+#!/usr/bin/env python3
+"""Swing trader: indicator entry, hold to +3% / -3%, close, scan again. PAPER.
+
+As specified:
+  * scan the market for an indicator buy OR sell signal
+  * enter one position
+  * HOLD it until it reaches +3% (take profit) or -3% (stop)
+  * close, then scan the market again
+
+Why this differs from the scalps attempted earlier: the target is 3% and the
+round-trip fee is 0.2%, so costs are 6.7% of the target instead of 25x the move.
+A 3% move is a normal multi-hour range on a liquid alt; a 0.85bps 5s move is not.
+
+Signals (15m bars, completed only):
+    BUY  : EMA9 crosses above EMA21 within the last 2 bars, RSI(14) > 50,
+           close above EMA50
+    SELL : the mirror image. Spot cannot short, so a SELL is simulated -- the
+           fills are honest, the venue would not be.
+
+No keys, no orders. Fills at live /api/v3/ticker/price.
+"""
+
+import argparse
+import json
+import os
+import time
+import urllib.request
+
+BASE = "https://api.binance.com"
+KL = BASE + "/api/v3/klines?interval=%s&limit=%d&symbol=%s"
+PRICE = BASE + "/api/v3/ticker/price?symbol=%s"
+TICKER = BASE + "/api/v3/ticker/24hr"
+
+STABLES = {"USDC", "FDUSD", "TUSD", "BUSD", "USD1", "USDP", "DAI", "USDE",
+           "AEUR", "EUR", "GBP", "TRY", "BRL", "ARS", "JPY", "XUSD", "USD"}
+
+
+def log(m):
+    print("%s  %s" % (time.strftime("%H:%M:%S"), m), flush=True)
+
+
+def jget(url, timeout=6.0):
+    req = urllib.request.Request(url, headers={"User-Agent": "swing3/1.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def ema_series(v, p):
+    k = 2.0 / (p + 1.0)
+    out = [v[0]]
+    for x in v[1:]:
+        out.append(x * k + out[-1] * (1.0 - k))
+    return out
+
+
+def rsi(cl, p=14):
+    if len(cl) < p + 1:
+        return 50.0
+    g = l = 0.0
+    for i in range(1, p + 1):
+        d = cl[i] - cl[i - 1]
+        g += max(d, 0.0)
+        l += max(-d, 0.0)
+    ag, al = g / p, l / p
+    for i in range(p + 1, len(cl)):
+        d = cl[i] - cl[i - 1]
+        ag = (ag * (p - 1) + max(d, 0.0)) / p
+        al = (al * (p - 1) + max(-d, 0.0)) / p
+    return 100.0 if al == 0 else 100.0 - 100.0 / (1.0 + ag / al)
+
+
+def bars(sym, interval="15m", limit=200):
+    now = int(time.time() * 1000)
+    raw = jget(KL % (interval, limit, sym))
+    done = [k for k in raw if int(k[6]) < now]
+    return {
+        "close": [float(k[4]) for k in done],
+        "high": [float(k[2]) for k in done],
+        "low": [float(k[3]) for k in done],
+    }
+
+
+def price(sym):
+    return float(jget(PRICE % sym)["price"])
+
+
+ALERTS = "http://127.0.0.1:8787/api/alerts"
+
+
+def fetch_alerts():
+    req = urllib.request.Request(ALERTS, headers={"User-Agent": "swing3/1.0"})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.loads(r.read().decode("utf-8")).get("alerts") or []
+
+
+def universe(n):
+    rows = []
+    for r in jget(TICKER):
+        s = r["symbol"]
+        if not s.endswith("USDT") or s.endswith(("UPUSDT", "DOWNUSDT")):
+            continue
+        if s[:-4] in STABLES:
+            continue
+        rows.append(r)
+    rows.sort(key=lambda r: float(r["quoteVolume"]), reverse=True)
+    return [r["symbol"] for r in rows[:n]]
+
+
+def signal(sym):
+    """Returns ('buy'|'sell', detail_dict) or (None, detail)."""
+    b = bars(sym)
+    cl = b["close"]
+    if len(cl) < 60:
+        return None, {"why": "short history"}
+    e9 = ema_series(cl, 9)
+    e21 = ema_series(cl, 21)
+    e50 = ema_series(cl, 50)
+    r = rsi(cl)
+    crossed_up = e9[-1] > e21[-1] and e9[-2] <= e21[-2]
+    crossed_dn = e9[-1] < e21[-1] and e9[-2] >= e21[-2]
+    detail = {"rsi": round(r, 1), "ema9": e9[-1], "ema21": e21[-1],
+              "close": cl[-1], "ema50": e50[-1]}
+    if crossed_up and r > 50 and cl[-1] > e50[-1]:
+        return "buy", detail
+    if crossed_dn and r < 50 and cl[-1] < e50[-1]:
+        return "sell", detail
+    return None, detail
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--seconds", type=int, default=300)
+    ap.add_argument("--count", type=int, default=40)
+    ap.add_argument("--tp-pct", type=float, default=3.0)
+    ap.add_argument("--sl-pct", type=float, default=3.0)
+    ap.add_argument("--trail-pct", type=float, default=2.0,
+                    help="give-back from the peak PnL that closes the ticker")
+    ap.add_argument("--fee", type=float, default=0.001)
+    ap.add_argument("--scan-every", type=float, default=20.0)
+    ap.add_argument("--signal", choices=("alerts", "indicators"), default="alerts",
+                    help="where the long/short decision comes from")
+    ap.add_argument("--alert-max-age", type=float, default=90.0,
+                    help="only act on alerts younger than this many seconds")
+    ap.add_argument("--min-confidence", type=float, default=0.78,
+                    help="only trade alerts whose confidence (score/100) reaches this")
+    ap.add_argument("--cooldown", type=float, default=300.0,
+                    help="per-symbol seconds before re-entering a closed name")
+    ap.add_argument("--equity", type=float, default=300.0)
+    ap.add_argument("--ledger", default="ledger/swing3.jsonl")
+    ap.add_argument("--state", default="state/swing_state.json")
+    args = ap.parse_args()
+
+    log("SWING3 -- PAPER ONLY | cap +%.1f%% | trailing %.1f%% off the peak | stop -%.1f%%"
+        % (args.tp_pct, args.trail_pct, args.sl_pct))
+    log("exit rule: PnL peak ratchets every recalc; close at +%.1f%% cap, at %.1f%% below "
+        "the peak, or at -%.1f%%" % (args.tp_pct, args.trail_pct, args.sl_pct))
+    syms = universe(args.count)
+    log("confidence floor: %.0f%% of the alert score" % (100.0 * args.min_confidence))
+    log("direction source: %s" % ("ALERTS (PUMP->long, DUMP->short)" if args.signal == "alerts"
+                                  else "INDICATORS (EMA9/21 + RSI)"))
+    log("universe %d: %s%s" % (len(syms), ", ".join(syms[:8]), " ..."))
+
+    equity = args.equity
+    start_equity = equity
+    trades = []
+    pos = None
+    next_scan = 0.0
+    started = time.time()
+    scans = 0
+    scan_hits = 0
+    last_px = {}
+    seen_alerts = set()
+    cooldown = {}
+    skipped_low_conf = 0
+
+    def dump_state(extra=None):
+        """Publish state for the panel dashboard (read-only, no orders)."""
+        payload = {
+            "ts": int(time.time() * 1000),
+            "mode": "paper",
+            "started_at": int(started * 1000),
+            "equity": round(equity, 4),
+            "start_equity": start_equity,
+            "return_pct": round(100.0 * (equity / start_equity - 1.0), 4),
+            "tp_pct": args.tp_pct,
+            "sl_pct": args.sl_pct,
+            "trail_pct": args.trail_pct,
+            "scans": scans,
+            "symbols": len(syms),
+            "universe": syms,
+            "position": None,
+            "trades": trades[-60:],
+            "wins": sum(1 for t in trades if t["net_pct"] > 0),
+            "trade_count": len(trades),
+        }
+        if pos is not None:
+            px = last_px.get(pos["symbol"], pos["entry"])
+            chg = (px / pos["entry"] - 1.0) * 100.0
+            if pos["side"] == "sell":
+                chg = -chg
+            payload["position"] = {
+                "symbol": pos["symbol"], "side": pos["side"],
+                "entry": pos["entry"], "price": px,
+                "gross_pct": round(chg, 3),
+                "net_pct": round(chg - 2.0 * args.fee * 100.0, 3),
+                "held_s": round(time.time() - pos["opened"], 1),
+                "to_tp_pct": round(args.tp_pct - chg, 3),
+                "peak_pct": round(pos.get("peak", 0.0), 3),
+                "trail_pct": args.trail_pct,
+                "to_trail_pct": round(chg - (pos.get("peak", 0.0) - args.trail_pct), 3),
+                "to_sl_pct": round(chg + args.sl_pct, 3),
+                "opened_ms": int(pos["opened"] * 1000),
+            }
+        if extra:
+            payload.update(extra)
+        os.makedirs(os.path.dirname(os.path.abspath(args.state)) or ".", exist_ok=True)
+        tmp = args.state + ".tmp"
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp, args.state)
+
+    while time.time() - started < args.seconds:
+        now = time.time()
+
+        if pos is not None:
+            try:
+                px = price(pos["symbol"])
+            except Exception:
+                time.sleep(2)
+                continue
+            last_px[pos["symbol"]] = px
+            dump_state()
+            chg = (px / pos["entry"] - 1.0) * 100.0
+            if pos["side"] == "sell":
+                chg = -chg
+            # PEAK RATCHET: every recalc can raise the base, never lower it.
+            peak = max(pos.get("peak", 0.0), chg)
+            pos["peak"] = peak
+            pnl_pct = chg - 2.0 * args.fee * 100.0
+            log("%-10s %s  %+.2f%%  peak %+.2f%%  (held %.0fs)" %
+                (pos["symbol"], pos["side"].upper(), chg, peak, now - pos["opened"]))
+            reason = None
+            if chg >= args.tp_pct:
+                reason = "cap_%.0fpct" % args.tp_pct
+            elif peak > 0 and chg <= peak - args.trail_pct:
+                reason = "trail_%.0fpct_off_peak" % args.trail_pct
+            elif chg <= -args.sl_pct:
+                reason = "stop_loss"
+            if reason:
+                equity *= (1.0 + pnl_pct / 100.0)
+                trades.append({
+                    "symbol": pos["symbol"], "side": pos["side"],
+                    "entry": pos["entry"], "exit": px,
+                    "gross_pct": round(chg, 3), "net_pct": round(pnl_pct, 3),
+                    "peak_pct": round(pos.get("peak", 0.0), 3),
+                    "reason": reason, "held_s": round(now - pos["opened"], 1),
+                    "equity_after": round(equity, 4),
+                })
+                log("*** CLOSE %-10s %-5s %+.2f%% net %+.2f%% (%s) | equity %.2f"
+                    % (pos["symbol"], pos["side"], chg, pnl_pct, reason, equity))
+                cooldown[pos["symbol"]] = time.time()
+                pos = None
+                next_scan = 0.0          # rescan the market immediately
+                dump_state()
+            time.sleep(5)
+            continue
+
+        if now < next_scan:
+            time.sleep(2)
+            continue
+
+        scans += 1
+        next_scan = now + args.scan_every
+        opened = None
+
+        if args.signal == "alerts":
+            # DIRECTION COMES FROM THE ALERT: PUMP -> long, DUMP -> short.
+            # Severity ranks the candidates; freshness keeps us from acting on
+            # a stale burst whose move is already over.
+            try:
+                alerts = fetch_alerts()
+            except Exception as exc:
+                log("alerts fetch failed: %r" % (exc,))
+                alerts = []
+            now_ms = int(time.time() * 1000)
+            rank = {"CRITICAL": 3, "ALERT": 2, "WATCH": 1}
+            cand = []
+            for a in alerts:
+                eid = a.get("event_id")
+                if not eid or eid in seen_alerts:
+                    continue
+                if a.get("kind") not in ("PUMP", "DUMP"):
+                    continue
+                ts = a.get("ts_ms") or 0
+                if now_ms - ts > args.alert_max_age * 1000:
+                    continue
+                # CONFIDENCE FLOOR: the alert's own 0-100 score decides whether
+                # this is worth risking capital on. Below the floor it is
+                # observed and discarded, not traded.
+                conf = (a.get("score") or 0.0) / 100.0
+                if conf < args.min_confidence:
+                    skipped_low_conf += 1
+                    continue
+                sym = a.get("symbol")
+                if now - cooldown.get(sym, 0) < args.cooldown:
+                    continue
+                cand.append(a)
+            cand.sort(key=lambda a: (-rank.get(a.get("severity"), 0), -(a.get("ts_ms") or 0)))
+            if cand:
+                a = cand[0]
+                for x in cand:
+                    seen_alerts.add(x.get("event_id"))
+                sym = a["symbol"]
+                side = "buy" if a["kind"] == "PUMP" else "sell"
+                try:
+                    px = price(sym)
+                except Exception:
+                    px = None
+                if px:
+                    opened = {"symbol": sym, "side": side, "entry": px,
+                              "opened": time.time(), "peak": 0.0}
+                    last_px[sym] = px
+                    log(">>> ALERT %-11s %-4s %-6s %-8s conf %.0f%% @ %.8g   %s"
+                        % (sym, side.upper(), a["kind"], a.get("severity"),
+                           100.0 * conf, px, (a.get("summary") or "")[:52]))
+            if not opened:
+                log("scan %d: %d live alerts, %d below the %.0f%% confidence floor"
+                    % (scans, len(alerts), skipped_low_conf, 100.0 * args.min_confidence))
+                skipped_low_conf = 0
+        else:
+            for sym in syms:
+                try:
+                    sig, d = signal(sym)
+                except Exception:
+                    continue
+                if not sig:
+                    continue
+                try:
+                    px = price(sym)
+                except Exception:
+                    continue
+                opened = {"symbol": sym, "side": sig, "entry": px,
+                          "opened": time.time(), "peak": 0.0}
+                last_px[sym] = px
+                log(">>> ENTER %-10s %-4s @ %.8g   rsi %.1f  ema9 %.6g / ema21 %.6g"
+                    % (sym, sig.upper(), px, d["rsi"], d["ema9"], d["ema21"]))
+                break
+            if not opened:
+                log("scan %d: no indicator cross on %d symbols" % (scans, len(syms)))
+
+        if opened:
+            pos = opened
+        dump_state()
+
+    if pos:
+        try:
+            px = price(pos["symbol"])
+        except Exception:
+            px = pos["entry"]
+        chg = (px / pos["entry"] - 1.0) * 100.0
+        if pos["side"] == "sell":
+            chg = -chg
+        log("open at end: %s %s %+.2f%% (not closed)" % (pos["symbol"], pos["side"], chg))
+
+    wins = sum(1 for t in trades if t["net_pct"] > 0)
+    log("")
+    log("=" * 80)
+    log("scans %d  trades %d  wins %d  equity %.2f -> %.2f (%+.2f%%)"
+        % (scans, len(trades), wins, start_equity, equity,
+           100.0 * (equity / start_equity - 1.0)))
+    for t in trades:
+        log("  %-10s %-4s %+6.2f%% net  %-11s held %5.0fs"
+            % (t["symbol"], t["side"], t["net_pct"], t["reason"], t["held_s"]))
+    log("=" * 80)
+
+    os.makedirs(os.path.dirname(os.path.abspath(args.ledger)) or ".", exist_ok=True)
+    with open(args.ledger, "a") as fh:
+        for t in trades:
+            fh.write(json.dumps(t) + "\n")
+
+
+if __name__ == "__main__":
+    main()

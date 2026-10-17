@@ -1,0 +1,898 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>chart lab — properties &amp; overlays</title>
+<style>
+ :root{--bg:#0b0f14;--card:#0f161f;--line:#1e2833;--fg:#e6edf6;--dim:#8494a8;--faint:#5b6b7d;
+       --up:#3fb950;--down:#f85149;--mono:ui-monospace,Menlo,monospace}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 -apple-system,BlinkMacSystemFont,var(--mono)}
+ header{display:flex;align-items:center;gap:12px;padding:10px 16px;background:#111821;border-bottom:1px solid var(--line);flex-wrap:wrap}
+ h1{margin:0;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--dim)}
+ .sym{font-size:17px;font-weight:700;color:#58a6ff}
+ .px{font-size:17px}
+ .chg{font-size:12.5px}
+ .up{color:var(--up)}.down{color:var(--down)}
+ .sp{flex:1}
+ button{background:#141d27;border:1px solid #26333f;color:#9fb0c4;border-radius:7px;padding:5px 11px;font:inherit;font-size:11.5px;cursor:pointer;transition:.15s}
+ button:hover{color:var(--fg);border-color:#3a4f66}
+ button.on{color:#dcecff;border-color:#3d6f96;background:#182a3b;box-shadow:0 0 0 1px #58a6ff22}
+ button.armed{background:#e0a72a;border-color:#e0a72a;color:#111;font-weight:600}
+ .layout{display:grid;grid-template-columns:minmax(0,1fr) 272px;gap:12px;padding:12px 16px;
+         max-width:1800px;margin:0 auto;align-items:start}
+ @media(max-width:1100px){.layout{grid-template-columns:1fr}}
+ .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+ .chartcard{height:calc(100vh - 120px);min-height:420px;display:flex;flex-direction:column}
+ svg{width:100%;height:100%;flex:1;min-height:0;display:block;touch-action:none;
+      cursor:crosshair;user-select:none}
+ .hint{font-size:10.5px;color:#4c5a6c;padding:5px 2px 0;line-height:1.6}
+ #panel{display:none;background:#101821;border:1px solid #22303d;border-radius:12px;padding:12px 14px;margin-bottom:10px}
+ #panel.open{display:block}
+ .row{display:grid;grid-template-columns:86px 1fr;gap:12px;padding:7px 0;border-bottom:1px dashed #1a2430;align-items:start}
+ .row:last-child{border:0}
+ .lab{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding-top:6px}
+ .chips{display:flex;flex-wrap:wrap;gap:6px}
+ .props h2{margin:0 0 8px;font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+ .pg{border-top:1px solid #17212c;padding:7px 0}
+ .pg:first-of-type{border-top:0}
+ .pgt{font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#4c5a6c;margin-bottom:5px}
+ .prow2{display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:1.5px 0}
+ .prow2 span{color:var(--faint)}
+ .prow2 b{color:var(--fg);font-weight:500;text-align:right}
+ .swatch{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:5px;vertical-align:middle}
+</style></head><body>
+
+<header>
+  <h1>chart lab</h1>
+  <span class="sym">SIM/USD</span>
+  <span class="px" id="px">—</span>
+  <span class="chg" id="chg">—</span>
+  <span class="sp"></span>
+  <span class="hint" id="rng">—</span>
+  <button id="btn" onclick="toggle()">⚙ control</button>
+</header>
+
+<div class="layout">
+  <div>
+    <div id="panel">
+      <div class="row"><span class="lab">timeframe</span><div class="chips" id="iv"></div></div>
+      <div class="row"><span class="lab">chart</span><div class="chips" id="ct"></div></div>
+      <div class="row"><span class="lab">overlays</span><div class="chips" id="ly"></div></div>
+      <div class="row"><span class="lab">scale</span><div class="chips" id="sc"></div></div>
+      <div class="row"><span class="lab">properties</span><div class="chips" id="pr"></div></div>
+      <div class="row"><span class="lab">view</span><div class="chips" id="vw"></div></div>
+      <div class="hint" id="sub"></div>
+    </div>
+    <div class="card chartcard">
+      <svg id="svg" viewBox="0 0 1100 470" preserveAspectRatio="none"></svg>
+      <div class="hint">drag = zoom box · drag price scale = zoom price · drag time scale = zoom time ·
+        drag a box = zoom · shift-drag = pan · alt-drag = zoom price ·
+        scroll = pan · shift+scroll or option+scroll = zoom price · pinch = zoom both ·
+        pinch = zoom (horizontal = time, vertical = price) · double-click = full zoom out<br>
+        keys: + / − zoom time · shift + / − zoom price · ← → pan · 0 reset</div>
+    </div>
+  </div>
+
+  <div class="card props">
+    <h2>properties</h2>
+    <div id="props"></div>
+  </div>
+</div>
+
+<script>
+var W=1100,H=470,PL=56,PR=72,PT=10,PB=78;
+var OV={vol:true,ema:true,vwap:false,bb:false,don:false,session:false,atr:false,rsi:true,marks:true};
+var CHART_META=[
+  {id:"candles",label:"candles"},
+  {id:"hollow",label:"hollow"},
+  {id:"bars",label:"OHLC bars"},
+  {id:"line",label:"line"},
+  {id:"area",label:"area"},
+  {id:"heikin",label:"Heikin-Ashi"}
+];
+var LAYER_META=[
+  {id:"vol",label:"volume",colour:"#8a99ad"},
+  {id:"ema",label:"EMA 20/50",colour:"#58a6ff"},
+  {id:"vwap",label:"VWAP",colour:"#e3b341"},
+  {id:"bb",label:"Bollinger",colour:"#a371f7"},
+  {id:"don",label:"Donchian",colour:"#3fb950"},
+  {id:"session",label:"session H/L",colour:"#39d353"},
+  {id:"atr",label:"ATR band",colour:"#d29922"},
+  {id:"rsi",label:"RSI",colour:"#c9a0ff"},
+  {id:"marks",label:"trade marks",colour:"#f778ba"}
+];
+var S={tf:"5m",s:0,c:null,y:null,measure:false,log:false,scaleMode:"auto",tool:"box",chart:"candles"};
+/* chart properties — each can be switched on or off */
+var P={grid:true, priceAxis:true, priceAxisRight:false, dualAxis:false, timeAxis:true,
+       lastLine:true, crosshair:true, axisDrag:true, volumePane:true, scrollPan:true,
+       tooltip:true, highlight:true};
+var PROP_META=[
+  {id:"grid",label:"grid"},
+  {id:"priceAxis",label:"price labels"},
+  {id:"priceAxisRight",label:"labels right"},
+  {id:"dualAxis",label:"dual axis %"},
+  {id:"timeAxis",label:"time labels"},
+  {id:"lastLine",label:"last line"},
+  {id:"crosshair",label:"crosshair"},
+  {id:"axisDrag",label:"axis drag zoom"},
+  {id:"volumePane",label:"volume pane"},
+  {id:"scrollPan",label:"scroll pans"},
+  {id:"tooltip",label:"candle tooltip"},
+  {id:"highlight",label:"candle highlight"}
+];
+var BARS=[],MEAS=null,BAND=null,G={mode:null,px:0,py:0,s0:0,c0:0,ay:null,ax:null,pts:new Map(),pinch:null},GEO=null;
+var CURSOR=null;
+var AX={tPrice:0,tTime:0};
+var AUX={ema20:null,ema50:null,vwap:null,rsi:null};
+
+function $(id){ return document.getElementById(id); }
+function fmt(v,d){ return (v==null||isNaN(v))?"—":Number(v).toFixed(d==null?2:d); }
+
+function makeBars(tf){
+  var n=240, step={"1m":60000,"5m":300000,"15m":900000,"1h":3600000}[tf]||300000;
+  var px=100, seed=tf.length*7919+tf.charCodeAt(0), out=[], t=Date.now()-n*step;
+  for(var i=0;i<n;i++){
+    seed=(seed*9301+49297)%233280;
+    var r=seed/233280, o=px, c=o+(r-0.48)*0.9;
+    out.push({t:t+i*step,o:o,h:Math.max(o,c)+r*0.5,l:Math.min(o,c)-r*0.5,c:c,v:800+r*2200});
+    px=c;
+  }
+  return out;
+}
+function ema(vals,p){
+  var k=2/(p+1), e=vals[0], out=[e];
+  for(var i=1;i<vals.length;i++){ e=vals[i]*k+e*(1-k); out.push(e); }
+  return out;
+}
+function boll(vals,p,m){
+  var mid=[],up=[],dn=[];
+  for(var i=0;i<vals.length;i++){
+    if(i<p-1){ mid.push(null); up.push(null); dn.push(null); continue; }
+    var w=vals.slice(i-p+1,i+1), s=0;
+    for(var j=0;j<w.length;j++) s+=w[j];
+    var mm=s/p, sd=0;
+    for(var k=0;k<w.length;k++) sd+=(w[k]-mm)*(w[k]-mm);
+    sd=Math.sqrt(sd/p);
+    mid.push(mm); up.push(mm+m*sd); dn.push(mm-m*sd);
+  }
+  return {mid:mid,up:up,dn:dn};
+}
+
+function draw(){
+  if(!BARS.length) return;
+  var _r=$("svg").getBoundingClientRect();
+  if(_r.width>0&&_r.height>0&&(Math.abs(Math.round(_r.width)-W)>2||Math.abs(Math.round(_r.height)-H)>2)){
+    fit();
+  }
+  var n=BARS.length;
+  var vc=Math.max(15,Math.min(n,S.c||n));
+  var vs=Math.max(0,Math.min(n-vc,S.s||0));
+  S.c=vc; S.s=vs;
+  var win=BARS.slice(vs,vs+vc);
+
+  var lo=Math.min.apply(null,win.map(function(b){return b.l;}));
+  var hi=Math.max.apply(null,win.map(function(b){return b.h;}));
+  var LO,HI;
+  if(S.y){
+    var ylo=Math.min(S.y.lo,S.y.hi), yhi=Math.max(S.y.lo,S.y.hi);
+    var minSpan=Math.max(1e-9,(hi-lo)*0.002), maxSpan=(hi-lo)*40;
+    if(!isFinite(ylo)||!isFinite(yhi)||yhi-ylo<=0){ S.y=null; }
+    else if(yhi-ylo<minSpan){ var mid=(ylo+yhi)/2; S.y={lo:mid-minSpan/2,hi:mid+minSpan/2}; }
+    else if(yhi-ylo>maxSpan){ var mid2=(ylo+yhi)/2; S.y={lo:mid2-maxSpan/2,hi:mid2+maxSpan/2}; }
+    if(S.y){ LO=S.y.lo; HI=S.y.hi; S.scaleMode="manual"; }
+    else { var pad0=(hi-lo)*0.08||1; LO=lo-pad0; HI=hi+pad0; S.scaleMode="auto"; }
+  }
+  if(!S.y){
+    var pad=(hi-lo)*0.08||1;
+    LO=lo-pad; HI=hi+pad; S.scaleMode="auto";
+    if(OV.atr){
+      var atr0=atrSeries(), m=0;
+      for(var q=vs;q<vs+vc;q++) if(atr0[q]>m) m=atr0[q];
+      if(m){ LO-=m; HI+=m; }
+    }
+  }
+  var y=function(v){ return PT+(H-PT-PB)*(1-(v-LO)/(HI-LO)); };
+  var x=function(i){ return PL+(W-PL-PR)*((i-vs)/Math.max(1,vc-1)); };
+  var bw=Math.max(1.5,(W-PL-PR)/vc*0.6);
+  var maxV=Math.max.apply(null,win.map(function(b){return b.v;}))||1;
+  var yv=function(v){ return H-12-((H-PT-PB)*0.16)*(v/maxV); };
+
+  var s="";
+  var TICKS=5;
+  AX.tPrice=0; AX.tTime=0;
+  for(var g=0;g<=TICKS;g++){
+    var gv=LO+(HI-LO)*g/TICKS, gy=y(gv).toFixed(1);
+    if(P.priceAxis) AX.tPrice++;
+    if(P.grid) s+='<line x1="'+PL+'" y1="'+gy+'" x2="'+(W-PR)+'" y2="'+gy+'" stroke="#18222d"/>';
+    if(P.priceAxis) s+='<text x="'+(PL-7)+'" y="'+(y(gv)+3.5).toFixed(1)+'" fill="#4a5866" font-size="10" text-anchor="end" font-family="monospace">'+fmt(gv)+'</text>';
+    if(P.dualAxis&&win.length){
+      var base0=win[0].c;
+      var pctv=((gv/base0)-1)*100;
+      var pcol=pctv>=0?"#3fb95099":"#f8514999";
+      s+='<text x="'+(W-PR+8)+'" y="'+(y(gv)+3.5).toFixed(1)+'" fill="'+pcol+'" font-size="9.5" font-family="monospace">'+
+         (pctv>=0?"+":"")+pctv.toFixed(1)+'%</text>';
+    } else if(P.priceAxisRight){
+      s+='<text x="'+(W-PR+8)+'" y="'+(y(gv)+3.5).toFixed(1)+'" fill="#3f4c5c" font-size="9.5" font-family="monospace">'+fmt(gv)+'</text>';
+    }
+  }
+
+  if(P.dualAxis){
+    s+='<text x="'+(PL-7)+'" y="'+(PT+2)+'" fill="#3f4c5c" font-size="8.5" text-anchor="end" font-family="monospace">PRICE</text>';
+    s+='<text x="'+(W-PR+8)+'" y="'+(PT+2)+'" fill="#3f4c5c" font-size="8.5" font-family="monospace">CHG %</text>';
+  }
+  if(P.timeAxis){
+    var stepT=Math.max(1,Math.floor(vc/5));
+    for(var it=vs;it<vs+vc;it+=stepT){
+      var bb=BARS[it]; if(!bb) continue;
+      var d0=new Date(bb.t);
+      var lab=("0"+d0.getHours()).slice(-2)+":"+("0"+d0.getMinutes()).slice(-2);
+      s+='<line x1="'+x(it).toFixed(1)+'" y1="'+(H-PB)+'" x2="'+x(it).toFixed(1)+'" y2="'+(H-PB+4)+'" stroke="#22303d"/>';
+      s+='<text x="'+x(it).toFixed(1)+'" y="'+(H-PB+16)+'" fill="#3f4c5c" font-size="9.5" text-anchor="middle" font-family="monospace">'+lab+'</text>';
+      AX.tTime++;
+    }
+  }
+
+  if(OV.vol&&P.volumePane) win.forEach(function(b,k){
+    var i=vs+k, up=b.c>=b.o;
+    s+='<rect x="'+(x(i)-bw/2).toFixed(1)+'" y="'+yv(b.v).toFixed(1)+'" width="'+bw.toFixed(1)+
+       '" height="'+Math.max(0.5,H-12-yv(b.v)).toFixed(1)+'" fill="'+(up?"#2ea043":"#da3633")+'" opacity=".25"/>';
+  });
+
+  var SER = (S.chart==="heikin") ? heikin(BARS).slice(vs,vs+vc) : win;
+  if(S.chart==="line"||S.chart==="area"){
+    var lp="", lst=false;
+    for(var li=0;li<SER.length;li++){
+      lp+=(lst?"L":"M")+x(vs+li).toFixed(1)+","+y(SER[li].c).toFixed(1)+" "; lst=true;
+    }
+    if(S.chart==="area"&&lp){
+      s+='<linearGradient id="ag" x1="0" y1="0" x2="0" y2="1">'+
+         '<stop offset="0%" stop-color="#58a6ff" stop-opacity=".35"/>'+
+         '<stop offset="100%" stop-color="#58a6ff" stop-opacity="0"/></linearGradient>';
+      s+='<path d="'+lp+'L'+x(vs+SER.length-1).toFixed(1)+','+(H-PB)+' L'+x(vs).toFixed(1)+','+(H-PB)+' Z" fill="url(#ag)"/>';
+    }
+    s+='<path d="'+lp+'" fill="none" stroke="#58a6ff" stroke-width="1.6"/>';
+  } else {
+    SER.forEach(function(b,k){
+      var i=vs+k, up=b.c>=b.o, col=up?"#3fb950":"#f85149";
+      if(S.chart==="bars"){
+        s+='<line x1="'+x(i).toFixed(1)+'" y1="'+y(b.h).toFixed(1)+'" x2="'+x(i).toFixed(1)+'" y2="'+y(b.l).toFixed(1)+'" stroke="'+col+'"/>';
+        s+='<line x1="'+(x(i)-bw/2).toFixed(1)+'" y1="'+y(b.o).toFixed(1)+'" x2="'+x(i).toFixed(1)+'" y2="'+y(b.o).toFixed(1)+'" stroke="'+col+'"/>';
+        s+='<line x1="'+x(i).toFixed(1)+'" y1="'+y(b.c).toFixed(1)+'" x2="'+(x(i)+bw/2).toFixed(1)+'" y2="'+y(b.c).toFixed(1)+'" stroke="'+col+'"/>';
+        return;
+      }
+      s+='<line x1="'+x(i).toFixed(1)+'" y1="'+y(b.h).toFixed(1)+'" x2="'+x(i).toFixed(1)+'" y2="'+y(b.l).toFixed(1)+'" stroke="'+col+'"/>';
+      var y1=y(Math.max(b.o,b.c)), y2=y(Math.min(b.o,b.c));
+      var hgt=Math.max(1,y2-y1);
+      if(S.chart==="hollow"){
+        s+='<rect x="'+(x(i)-bw/2).toFixed(1)+'" y="'+y1.toFixed(1)+'" width="'+bw.toFixed(1)+
+           '" height="'+hgt.toFixed(1)+'" fill="#0f161f" stroke="'+col+'" stroke-width="1"/>';
+      } else {
+        s+='<rect x="'+(x(i)-bw/2).toFixed(1)+'" y="'+y1.toFixed(1)+'" width="'+bw.toFixed(1)+
+           '" height="'+hgt.toFixed(1)+'" fill="'+col+'" opacity=".9"/>';
+      }
+    });
+  }
+
+  function path(arr,col,w,dash){
+    if(!arr) return "";
+    var p="", st=false;
+    for(var i=Math.max(0,vs-1);i<vs+vc&&i<arr.length;i++){
+      var v=arr[i];
+      if(v==null||!isFinite(v)){ st=false; continue; }
+      p+=(st?"L":"M")+x(i).toFixed(1)+","+y(v).toFixed(1)+" "; st=true;
+    }
+    if(!p) return "";
+    return '<path d="'+p+'" fill="none" stroke="'+col+'" stroke-width="'+w+'" opacity=".9"'+(dash?' stroke-dasharray="'+dash+'"':"")+'/>';
+  }
+
+  var closes=BARS.map(function(b){return b.c;});
+  AUX.ema20=ema(closes,20); AUX.ema50=ema(closes,50); AUX.rsi=rsiSeries();
+  if(OV.ema) s+=path(AUX.ema20,"#58a6ff",1.4)+path(AUX.ema50,"#d29922",1.4);
+
+  if(OV.vwap){
+    var pv=0,vv=0,cum=BARS.map(function(b){var tp=(b.h+b.l+b.c)/3; pv+=tp*b.v; vv+=b.v; return pv/vv;});
+    AUX.vwap=cum;
+    s+=path(cum,"#e3b341",1.5);
+  }
+  if(OV.bb){
+    var bb=boll(closes,20,2);
+    s+=path(bb.mid,"#8a99ad",1)+path(bb.up,"#a371f7",1.1,"2 3")+path(bb.dn,"#a371f7",1.1,"2 3");
+  }
+  if(OV.don){
+    var up=[],dn=[];
+    for(var i2=0;i2<BARS.length;i2++){
+      if(i2<19){ up.push(null); dn.push(null); continue; }
+      var w2=BARS.slice(i2-19,i2+1);
+      up.push(Math.max.apply(null,w2.map(function(b){return b.h;})));
+      dn.push(Math.min.apply(null,w2.map(function(b){return b.l;})));
+    }
+    s+=path(up,"#3fb950",1.1,"4 3")+path(dn,"#f85149",1.1,"4 3");
+  }
+  if(OV.session){
+    var SH=Math.max.apply(null,BARS.map(function(b){return b.h;}));
+    var SL=Math.min.apply(null,BARS.map(function(b){return b.l;}));
+    s+='<line x1="'+PL+'" y1="'+y(SH).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+y(SH).toFixed(1)+'" stroke="#39d353" stroke-dasharray="8 5" opacity=".55"/>';
+    s+='<line x1="'+PL+'" y1="'+y(SL).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+y(SL).toFixed(1)+'" stroke="#f85149" stroke-dasharray="8 5" opacity=".55"/>';
+  }
+  if(OV.atr){
+    var atr=atrSeries(), upA="", dnA="", stA=false;
+    for(var i3=Math.max(0,vs-1);i3<vs+vc&&i3<BARS.length;i3++){
+      var a=atr[i3];
+      if(!isFinite(a)||a<=0){ stA=false; continue; }
+      upA+=(stA?"L":"M")+x(i3).toFixed(1)+","+y(BARS[i3].c+a).toFixed(1)+" ";
+      dnA+=(stA?"L":"M")+x(i3).toFixed(1)+","+y(BARS[i3].c-a).toFixed(1)+" ";
+      stA=true;
+    }
+    if(upA){
+      s+='<path d="'+upA+'" fill="none" stroke="#d29922" opacity=".55"/>';
+      s+='<path d="'+dnA+'" fill="none" stroke="#d29922" opacity=".55"/>';
+    }
+  }
+  if(OV.rsi){
+    var rsi=rsiSeries(), top=H-PB-46, bot=H-PB-6;
+    var ry=function(v){ return bot-((bot-top)*(Math.max(0,Math.min(100,v))/100)); };
+    s+='<line x1="'+PL+'" y1="'+ry(70).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+ry(70).toFixed(1)+'" stroke="#f8514966" stroke-dasharray="3 3"/>';
+    s+='<line x1="'+PL+'" y1="'+ry(30).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+ry(30).toFixed(1)+'" stroke="#3fb95066" stroke-dasharray="3 3"/>';
+    var rp="", rs=false;
+    for(var i4=Math.max(0,vs-1);i4<vs+vc&&i4<rsi.length;i4++){
+      var rv=rsi[i4];
+      if(rv==null||!isFinite(rv)){ rs=false; continue; }
+      rp+=(rs?"L":"M")+x(i4).toFixed(1)+","+ry(rv).toFixed(1)+" "; rs=true;
+    }
+    if(rp) s+='<path d="'+rp+'" fill="none" stroke="#c9a0ff" stroke-width="1.3" opacity=".9"/>';
+  }
+  if(OV.marks){
+    var mks=[
+      {i:Math.floor(vc*0.30), side:"buy",  tag:"BUY",  price:null},
+      {i:Math.floor(vc*0.58), side:"sell", tag:"SELL", price:null},
+      {i:Math.floor(vc*0.78), side:"buy",  tag:"EXIT", price:null}
+    ];
+    mks.forEach(function(m){
+      var b=win[m.i]; if(!b) return;
+      var i=vs+m.i, up=m.side==="buy";
+      var col=up?"#3fb950":"#f85149";
+      var yy=up?b.l:b.h;
+      var py=y(yy), px=x(i);
+      var dir=up?1:-1;              // triangle points away from the candle
+      var tipY=py+dir*8, baseY=py+dir*22, half=9;
+
+      // connector
+      s+='<line x1="'+px.toFixed(1)+'" y1="'+py.toFixed(1)+'" x2="'+px.toFixed(1)+'" y2="'+tipY.toFixed(1)+
+         '" stroke="'+col+'" stroke-width="1.4" opacity=".7"/>';
+      // big triangle with outline + glow
+      s+='<path d="M'+px.toFixed(1)+','+tipY.toFixed(1)+' L'+(px-half).toFixed(1)+','+baseY.toFixed(1)+
+         ' L'+(px+half).toFixed(1)+','+baseY.toFixed(1)+' Z" fill="'+col+'" stroke="#0b0f14" stroke-width="1.5"/>';
+      // label pill
+      var lw=m.tag.length*7.6+14, ly=up?baseY+4:baseY-22;
+      s+='<rect x="'+(px-lw/2).toFixed(1)+'" y="'+ly.toFixed(1)+'" width="'+lw.toFixed(1)+'" height="18" rx="5"'+
+         ' fill="'+col+'" stroke="#0b0f14" stroke-width="1"/>';
+      s+='<text x="'+px.toFixed(1)+'" y="'+(ly+13).toFixed(1)+'" fill="#06110a" font-size="10.5" font-weight="700"'+
+         ' text-anchor="middle" font-family="monospace" letter-spacing=".5">'+m.tag+'</text>';
+      // price tag
+      s+='<text x="'+(px+half+6).toFixed(1)+'" y="'+(tipY+(up?12:-6)).toFixed(1)+'" fill="'+col+'"'+
+         ' font-size="10" font-weight="600" font-family="monospace">'+fmt(b.c)+'</text>';
+    });
+  }
+
+  var last=BARS[BARS.length-1];
+  if(P.lastLine)
+  s+='<line x1="'+PL+'" y1="'+y(last.c).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+y(last.c).toFixed(1)+'" stroke="#58a6ff" stroke-dasharray="5 4" opacity=".6"/>';
+  s+='<rect x="'+(W-PR+3)+'" y="'+(y(last.c)-9).toFixed(1)+'" width="64" height="18" rx="4" fill="#17293a" stroke="#2f4a66"/>';
+  s+='<text x="'+(W-PR+35)+'" y="'+(y(last.c)+4).toFixed(1)+'" fill="#9ecbff" font-size="10" text-anchor="middle" font-family="monospace">'+fmt(last.c)+'</text>';
+
+  if(MEAS){
+    var a2=Math.min(MEAS.i0,MEAS.i1), b2=Math.max(MEAS.i0,MEAS.i1);
+    var x0=x(Math.max(vs,Math.min(vs+vc-1,a2))), x1=x(Math.max(vs,Math.min(vs+vc-1,b2)));
+    var p0=y(MEAS.p0), p1=y(MEAS.p1);
+    var dp=MEAS.p1-MEAS.p0, dpp=100*(MEAS.p1/MEAS.p0-1), bars=Math.abs(b2-a2);
+    var col=dp>=0?"#3fb950":"#f85149";
+    s+='<rect x="'+Math.min(x0,x1).toFixed(1)+'" y="'+Math.min(p0,p1).toFixed(1)+'" width="'+Math.abs(x1-x0).toFixed(1)+
+       '" height="'+Math.abs(p1-p0).toFixed(1)+'" fill="'+col+'1f" stroke="'+col+'" stroke-dasharray="4 3"/>';
+    var bx=Math.min(x0,x1)+8, by=Math.min(p0,p1)+8;
+    s+='<rect x="'+bx.toFixed(1)+'" y="'+by.toFixed(1)+'" width="152" height="48" rx="7" fill="#0a1219f2" stroke="'+col+'88"/>';
+    s+='<text x="'+(bx+12).toFixed(1)+'" y="'+(by+20).toFixed(1)+'" fill="'+col+'" font-size="12" font-family="monospace">'+
+       (dp>=0?"+":"")+dpp.toFixed(2)+'%</text>';
+    s+='<text x="'+(bx+12).toFixed(1)+'" y="'+(by+36).toFixed(1)+'" fill="#8494a8" font-size="10" font-family="monospace">'+bars+' bars</text>';
+  }
+
+  // re-draw the axis bands on top so they can never be occluded
+  if(P.timeAxis){
+    s+='<line x1="'+PL+'" y1="'+(H-PB)+'" x2="'+(W-PR)+'" y2="'+(H-PB)+'" stroke="#243140"/>';
+    var stepB=Math.max(1,Math.floor(vc/5));
+    for(var ib=vs;ib<vs+vc;ib+=stepB){
+      var bb2=BARS[ib]; if(!bb2) continue;
+      var d1=new Date(bb2.t);
+      var lb=("0"+d1.getHours()).slice(-2)+":"+("0"+d1.getMinutes()).slice(-2);
+      s+='<text x="'+x(ib).toFixed(1)+'" y="'+(H-PB+16)+'" fill="#5b6b7d" font-size="9.5" text-anchor="middle" font-family="monospace">'+lb+'</text>';
+    }
+  }
+  if(P.priceAxis){
+    s+='<line x1="'+PL+'" y1="'+PT+'" x2="'+PL+'" y2="'+(H-PB)+'" stroke="#243140"/>';
+    for(var gp=0;gp<=4;gp++){
+      var gvp=LO+(HI-LO)*gp/4;
+      s+='<text x="'+(PL-7)+'" y="'+(y(gvp)+3.5).toFixed(1)+'" fill="#5b6b7d" font-size="10" text-anchor="end" font-family="monospace">'+fmt(gvp)+'</text>';
+    }
+  }
+  s+='<g id="xh" opacity="0"></g>';
+  $("svg").innerHTML=s;
+
+  GEO={vs:vs,vc:vc,LO:LO,HI:HI,x:x,y:y,lo:lo,hi:hi,n:n};
+  $("px").textContent=fmt(last.c);
+  var chg=100*(last.c/BARS[0].o-1);
+  $("chg").textContent=(chg>=0?"+":"")+chg.toFixed(2)+"%";
+  $("chg").className="chg "+(chg>=0?"up":"down");
+  $("rng").textContent=S.tf+" · "+vc+"/"+n+" bars";
+  props();
+}
+
+function heikin(src){
+  var out=[], prevO=src[0].o, prevC=src[0].c;
+  for(var i=0;i<src.length;i++){
+    var b=src[i];
+    var c=(b.o+b.h+b.l+b.c)/4;
+    var o=(i===0)?(b.o+b.c)/2:(prevO+prevC)/2;
+    var h=Math.max(b.h,o,c), l=Math.min(b.l,o,c);
+    out.push({t:b.t,o:o,h:h,l:l,c:c,v:b.v});
+    prevO=o; prevC=c;
+  }
+  return out;
+}
+
+function atrSeries(){
+  var out=[], prev=0;
+  for(var i=0;i<BARS.length;i++){
+    if(i===0){ out.push(0); continue; }
+    var b=BARS[i], p=BARS[i-1];
+    var tr=Math.max(b.h-b.l, Math.abs(b.h-p.c), Math.abs(b.l-p.c));
+    prev=(i===1)?tr:(prev*13+tr)/14;
+    out.push(prev);
+  }
+  return out;
+}
+function rsiSeries(){
+  var out=[], g=0, l=0;
+  for(var i=0;i<BARS.length;i++){
+    if(i===0){ out.push(null); continue; }
+    var d=BARS[i].c-BARS[i-1].c;
+    g=(g*13+Math.max(d,0))/14; l=(l*13+Math.max(-d,0))/14;
+    out.push(l===0?100:100-100/(1+g/l));
+  }
+  return out;
+}
+
+function props(){
+  if(!GEO||!$("props")) return;
+  var on=LAYER_META.filter(function(m){return OV[m.id];});
+  var last=BARS[BARS.length-1];
+  function row(k,v){ return '<div class="prow2"><span>'+k+'</span><b>'+v+'</b></div>'; }
+  var html="";
+  html+='<div class="pg"><div class="pgt">instrument</div>'+
+        row("symbol","SIM/USD")+row("timeframe",S.tf)+
+        row("last close",fmt(last.c))+
+        row("last volume",fmt(last.v,0))+
+        row("bars total",BARS.length)+'</div>';
+  html+='<div class="pg"><div class="pgt">series</div>'+
+        row("chart type",S.chart)+
+        row("bars drawn",GEO.vc)+'</div>';
+  html+='<div class="pg"><div class="pgt">viewport</div>'+
+        row("bars visible",GEO.vc)+
+        row("window start",GEO.vs)+
+        row("price low",fmt(GEO.lo))+
+        row("price high",fmt(GEO.hi))+
+        row("scale",S.scaleMode)+
+        row("price span",fmt(GEO.HI-GEO.LO,3))+
+        row("time span",GEO.vc+" bars")+
+        row("axis",P.dualAxis?"dual (price · % )":(P.priceAxisRight?"price both sides":"price left"))+
+        row("price ticks",AX.tPrice)+
+        row("time ticks",AX.tTime)+
+        row("log scale",S.log?"on":"off")+'</div>';
+  html+='<div class="pg"><div class="pgt">overlays · '+on.length+'/'+LAYER_META.length+'</div>'+
+        on.map(function(m){
+          return '<div class="prow2"><span><i class="swatch" style="background:'+m.colour+'"></i>'+m.label+'</span><b>on</b></div>';
+        }).join("")+'</div>';
+  html+='<div class="pg"><div class="pgt">chart properties</div>'+
+        PROP_META.map(function(m){
+          return '<div class="prow2"><span>'+m.label+'</span><b style="color:'+(P[m.id]?"#3fb950":"#4c5a6c")+'">'+(P[m.id]?"on":"off")+'</b></div>';
+        }).join("")+'</div>';
+  html+='<div class="pg"><div class="pgt">tools</div>'+
+        row("measure",MEAS?"drawn":"off")+
+        row("drag tool",S.tool==="box"?"zoom box":"pan")+
+        row("measure mode",S.measure?"armed":"idle")+
+        row("cursor",CURSOR?fmt(CURSOR):"—")+'</div>';
+  $("props").innerHTML=html;
+}
+
+function pt(ev){
+  var r=$("svg").getBoundingClientRect();
+  return {x:(ev.clientX-r.left)/r.width*W, y:(ev.clientY-r.top)/r.height*H};
+}
+function region(ev){
+  if(!P.axisDrag) return "plot";
+  var p=pt(ev);
+  if(p.x>W-PR-8||p.x<PL+4) return "axisY";
+  if(p.y>H-PB-6) return "axisX";
+  return "plot";
+}
+function zoomX(px,count){
+  var n=BARS.length, nc=Math.max(15,Math.min(n,Math.round(count)));
+  var f=Math.max(0,Math.min(1,(px-PL)/(W-PL-PR)));
+  var a=(S.s||0)+f*((S.c||n)-1);
+  S.c=nc; S.s=Math.max(0,Math.min(n-nc,a-f*(nc-1)));
+  draw();
+}
+function zoomY(py,factor){
+  if(!GEO) return;
+  var f=Math.max(0,Math.min(1,(py-PT)/(H-PT-PB)));
+  var at=GEO.HI-(GEO.HI-GEO.LO)*f;
+  var span=(GEO.HI-GEO.LO)*factor;
+  S.y={lo:at-span*(1-f), hi:at+span*f};
+  draw();
+}
+function reset(){ S.s=0; S.c=null; S.y=null; MEAS=null; draw(); }
+
+function cross(ev){
+  var g=document.getElementById("xh"); if(!g||!GEO) return;
+  if(!P.crosshair){ g.setAttribute("opacity","0"); CURSOR=null; return; }
+  var p=pt(ev);
+  if(p.x<PL||p.x>W-PR||p.y<PT||p.y>H-PB){
+    g.setAttribute("opacity","0"); CURSOR=null; return;
+  }
+  var i=Math.max(GEO.vs,Math.min(GEO.vs+GEO.vc-1,GEO.vs+Math.round((p.x-PL)/(W-PL-PR)*(GEO.vc-1))));
+  var b=BARS[i]; if(!b) return;
+  var price=GEO.LO+(GEO.HI-GEO.LO)*(1-(p.y-PT)/(H-PT-PB));
+  CURSOR=price;
+  g.setAttribute("opacity","1");
+  var hl="";
+  if(P.highlight){
+    var bwp=Math.max(2,(W-PL-PR)/Math.max(1,GEO.vc)*0.6);
+    var cx=x(i), top=y(b.h), bot=y(b.l);
+    var bodyTop=y(Math.max(b.o,b.c)), bodyBot=y(Math.min(b.o,b.c));
+    // column band
+    hl+='<rect x="'+(cx-bwp/2-3).toFixed(1)+'" y="'+PT+'" width="'+(bwp+6).toFixed(1)+
+        '" height="'+(H-PB-PT)+'" fill="#58a6ff12"/>';
+    // outline around the whole candle
+    hl+='<rect x="'+(cx-bwp/2-1).toFixed(1)+'" y="'+(top-1).toFixed(1)+'" width="'+(bwp+2).toFixed(1)+
+        '" height="'+Math.max(2,bot-top+2).toFixed(1)+'" fill="none" stroke="#9ecbff" stroke-width="1" opacity=".55"/>';
+    // solid outline on the body
+    hl+='<rect x="'+(cx-bwp/2).toFixed(1)+'" y="'+bodyTop.toFixed(1)+'" width="'+bwp.toFixed(1)+
+        '" height="'+Math.max(1,bodyBot-bodyTop).toFixed(1)+'" fill="none" stroke="#e6edf6" stroke-width="1.2" opacity=".9"/>';
+  }
+  g.innerHTML=hl+'<line x1="'+p.x.toFixed(1)+'" y1="'+PT+'" x2="'+p.x.toFixed(1)+'" y2="'+(H-PB)+'" stroke="#41566b" stroke-dasharray="3 3"/>'+
+    '<line x1="'+PL+'" y1="'+p.y.toFixed(1)+'" x2="'+(W-PR)+'" y2="'+p.y.toFixed(1)+'" stroke="#41566b" stroke-dasharray="3 3"/>'+
+    '<rect x="'+(W-PR+3)+'" y="'+(p.y-9).toFixed(1)+'" width="64" height="18" rx="4" fill="#17293a" stroke="#2f4a66"/>'+
+    '<text x="'+(W-PR+35)+'" y="'+(p.y+4).toFixed(1)+'" fill="#9ecbff" font-size="10" text-anchor="middle" font-family="monospace">'+fmt(price)+'</text>'+
+    '<rect x="'+(p.x>W/2?PL+6:W-PR-184).toFixed(1)+'" y="'+(PT+6)+'" width="178" height="46" rx="7" fill="#0a1219f0" stroke="#24313e"/>'+
+    '<text x="'+(p.x>W/2?PL+16:W-PR-174).toFixed(1)+'" y="'+(PT+22).toFixed(1)+'" fill="#e6edf6" font-size="10" font-family="monospace">O '+fmt(b.o)+'  H '+fmt(b.h)+'</text>'+
+    '<text x="'+(p.x>W/2?PL+16:W-PR-174).toFixed(1)+'" y="'+(PT+38).toFixed(1)+'" fill="#e6edf6" font-size="10" font-family="monospace">L '+fmt(b.l)+'  C '+fmt(b.c)+'</text>'+
+    (P.dualAxis&&BARS[GEO.vs]
+      ? '<text x="'+(p.x>W/2?PL+16:W-PR-174).toFixed(1)+'" y="'+(PT+52).toFixed(1)+'" fill="#8494a8" font-size="9.5" font-family="monospace">'+
+        ((b.c/BARS[GEO.vs].c-1)*100>=0?"+":"")+(((b.c/BARS[GEO.vs].c)-1)*100).toFixed(2)+'% vs window open</text>'
+      : "");
+  if(P.tooltip){
+    var prev=BARS[i-1]||b;
+    var dchg=prev.c?((b.c/prev.c)-1)*100:0;
+    var dt=new Date(b.t);
+    var when=dt.toLocaleDateString(undefined,{month:"short",day:"2-digit"})+" "+
+             dt.toLocaleTimeString(undefined,{hour:"2-digit",minute:"2-digit",hour12:false});
+    var rows=[["O",fmt(b.o)],["H",fmt(b.h)],["L",fmt(b.l)],["C",fmt(b.c)],
+              ["chg",(dchg>=0?"+":"")+dchg.toFixed(2)+"%"],
+              ["vol",fmt(b.v,0)]];
+    if(OV.ema&&AUX.ema20) rows.push(["ema20",fmt(AUX.ema20[i])]);
+    if(OV.vwap&&AUX.vwap) rows.push(["vwap",fmt(AUX.vwap[i])]);
+    if(OV.rsi&&AUX.rsi&&AUX.rsi[i]!=null) rows.push(["rsi",AUX.rsi[i].toFixed(0)]);
+    var tw=150, th=16+rows.length*13;
+    var tx=p.x+16, ty=p.y+16;
+    if(tx+tw>W-PR) tx=p.x-tw-16;
+    if(ty+th>H-PB) ty=H-PB-th-6;
+    if(ty<PT) ty=PT+4;
+    var tip='<g opacity=".98"><rect x="'+tx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw+'" height="'+th+
+            '" rx="7" fill="#0a1219f5" stroke="#2a3a4a"/>'+
+            '<text x="'+(tx+9).toFixed(1)+'" y="'+(ty+14).toFixed(1)+'" fill="#8494a8" font-size="9.5" font-family="monospace">'+when+'</text>';
+    rows.forEach(function(r,ri){
+      var yy=ty+27+ri*13;
+      var col=(r[0]==="chg")?(dchg>=0?"#3fb950":"#f85149"):"#e6edf6";
+      tip+='<text x="'+(tx+9).toFixed(1)+'" y="'+yy.toFixed(1)+'" fill="#5b6b7d" font-size="9.5" font-family="monospace">'+r[0]+'</text>'+
+           '<text x="'+(tx+tw-9).toFixed(1)+'" y="'+yy.toFixed(1)+'" fill="'+col+'" font-size="9.5" text-anchor="end" font-family="monospace">'+r[1]+'</text>';
+    });
+    tip+='</g>';
+    g.innerHTML+=tip;
+  }
+  if($("props")) props();
+}
+
+function bandStart(ev){
+  var svg=$("svg"), g=svg.querySelector("#sel");
+  if(!g){ g=document.createElementNS("http://www.w3.org/2000/svg","g"); g.id="sel"; svg.appendChild(g); }
+  var p=pt(ev);
+  BAND={x0:p.x,y0:p.y,x1:p.x,y1:p.y};
+  g.setAttribute("opacity","1");
+  g.innerHTML='<rect id="sr" x="'+p.x+'" y="'+p.y+'" width="0" height="0" fill="#58a6ff1f" stroke="#58a6ff" stroke-dasharray="3 3"/>';
+}
+function bandMove(ev){
+  var g=document.querySelector("#sel"); if(!g||!BAND) return;
+  var p=pt(ev); BAND.x1=p.x; BAND.y1=p.y;
+  var r=g.querySelector("#sr"); if(!r) return;
+  r.setAttribute("x",Math.min(BAND.x0,BAND.x1).toFixed(1));
+  r.setAttribute("y",Math.min(BAND.y0,BAND.y1).toFixed(1));
+  r.setAttribute("width",Math.abs(BAND.x1-BAND.x0).toFixed(1));
+  r.setAttribute("height",Math.abs(BAND.y1-BAND.y0).toFixed(1));
+}
+function bandClear(){
+  var g=document.querySelector("#sel");
+  if(g){ g.innerHTML=""; g.setAttribute("opacity","0"); }
+  BAND=null;
+}
+function bandEnd(){
+  if(!BAND||!GEO){ bandClear(); return; }
+  var b=BAND, w=Math.abs(b.x1-b.x0), h=Math.abs(b.y1-b.y0);
+  var p0=GEO.LO+(GEO.HI-GEO.LO)*(1-(b.y0-PT)/(H-PT-PB));
+  var p1=GEO.LO+(GEO.HI-GEO.LO)*(1-(b.y1-PT)/(H-PT-PB));
+  var i0=Math.round(GEO.vs+(b.x0-PL)/(W-PL-PR)*(GEO.vc-1));
+  var i1=Math.round(GEO.vs+(b.x1-PL)/(W-PL-PR)*(GEO.vc-1));
+  bandClear();
+  if(w<8&&h<8) return;
+  if(S.measure){ MEAS={i0:i0,i1:i1,p0:p0,p1:p1}; draw(); return; }
+  if(h>=8) S.y={lo:Math.min(p0,p1),hi:Math.max(p0,p1)};
+  if(w>=8){
+    var nc=Math.max(15,Math.min(BARS.length,Math.abs(i1-i0)+1));
+    S.c=nc; S.s=Math.max(0,Math.min(BARS.length-nc,Math.min(i0,i1)));
+  }
+  draw();
+}
+
+function wire(){
+  var svg=$("svg");
+  svg.addEventListener("pointerdown",function(e){
+    var reg=region(e);
+    svg.setPointerCapture(e.pointerId);
+    if(e.isPrimary){
+      Array.from(G.pts.keys()).forEach(function(id){ if(id!==e.pointerId) G.pts.delete(id); });
+      G.pinch=null;
+    }
+    G.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(G.pts.size===2){
+      var pp=Array.from(G.pts.values());
+      G.mode="pinch";
+      bandClear();
+      G.pinch={
+        dx:Math.abs(pp[0].x-pp[1].x), dy:Math.abs(pp[0].y-pp[1].y),
+        cx:(pp[0].x+pp[1].x)/2, cy:(pp[0].y+pp[1].y)/2,
+        c0:S.c||BARS.length, lo:S.y?S.y.lo:(GEO?GEO.LO:0), hi:S.y?S.y.hi:(GEO?GEO.HI:1)
+      };
+      return;
+    }
+    G.px=e.clientX; G.py=e.clientY; G.s0=S.s; G.c0=S.c||BARS.length;
+    if(reg==="axisY"){
+      G.mode="axisY";
+      var lo=S.y?S.y.lo:(GEO?GEO.LO:0), hi=S.y?S.y.hi:(GEO?GEO.HI:1);
+      G.ay={cy:(lo+hi)/2,span:(hi-lo)};
+      svg.style.cursor="ns-resize"; return;
+    }
+    if(reg==="axisX"){ G.mode="axisX"; G.ax={c0:S.c||BARS.length}; svg.style.cursor="ew-resize"; return; }
+    if(e.altKey){
+      G.mode="axisY";
+      var lo2=S.y?S.y.lo:(GEO?GEO.LO:0), hi2=S.y?S.y.hi:(GEO?GEO.HI:1);
+      G.ay={cy:(lo2+hi2)/2,span:(hi2-lo2)};
+      svg.style.cursor="ns-resize"; return;
+    }
+    var wantBox = (S.tool==="box") || e.shiftKey;
+    G.mode = wantBox ? "select" : "pan";
+    if(G.mode==="select") bandStart(e);
+  });
+  svg.addEventListener("pointermove",function(e){
+    if(G.pts.has(e.pointerId)) G.pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(G.mode==="pinch"&&G.pinch&&G.pts.size>=2){
+      var pp=Array.from(G.pts.values());
+      var dx=Math.abs(pp[0].x-pp[1].x), dy=Math.abs(pp[0].y-pp[1].y);
+      var cx=(pp[0].x+pp[1].x)/2, cy=(pp[0].y+pp[1].y)/2;
+      var fx=G.pinch.dx>4?G.pinch.dx/Math.max(4,dx):1;
+      var fy=G.pinch.dy>4?G.pinch.dy/Math.max(4,dy):1;
+      var horiz=fx!==1, vert=fy!==1;
+      if(horiz&&vert){
+        // diagonal pinch: pick the dominant axis so it does not fight itself
+        if(Math.abs(Math.log(fx))>=Math.abs(Math.log(fy))) vert=false; else horiz=false;
+      }
+      if(horiz){
+        var r0=svg.getBoundingClientRect();
+        var vx=(cx-r0.left)/r0.width*W;
+        var nc=Math.max(15,Math.min(BARS.length,(G.c0)*fx));
+        var f=Math.max(0,Math.min(1,(vx-PL)/(W-PL-PR)));
+        var a=(S.s||0)+f*((S.c||BARS.length)-1);
+        S.c=Math.round(nc);
+        S.s=Math.max(0,Math.min(BARS.length-S.c,a-f*(S.c-1)));
+      }
+      if(vert){
+        var r1=svg.getBoundingClientRect();
+        var vy=(cy-r1.top)/r1.height*H;
+        var cy0=G.pinch.cy;
+        var pm=f=>0;
+        var span=(G.pinch.hi-G.pinch.lo);
+        var midp=(G.pinch.lo+G.pinch.hi)/2;
+        var nspan=Math.max(span*0.02,Math.min(span*50,span*fy));
+        S.y={lo:midp-nspan/2, hi:midp+nspan/2};
+      }
+      draw();
+      return;
+    }
+    if(!G.mode){
+      cross(e);
+      var r=region(e);
+      svg.style.cursor=r==="axisY"?"ns-resize":(r==="axisX"?"ew-resize":"crosshair");
+      return;
+    }
+    if(G.mode==="axisY"&&G.ay){
+      var f=Math.exp((e.clientY-G.py)*0.006);
+      var span=Math.max(G.ay.span*0.02,Math.min(G.ay.span*50,G.ay.span*f));
+      S.y={lo:G.ay.cy-span/2,hi:G.ay.cy+span/2};
+      draw(); return;
+    }
+    if(G.mode==="axisX"&&G.ax){
+      var g=Math.exp(-(e.clientX-G.px)*0.006);
+      zoomX((PL+W-PR)/2,G.ax.c0*g); return;
+    }
+    if(G.mode==="select"){ bandMove(e); return; }
+    if(G.mode==="pan"){
+      var dx=e.clientX-G.px, per=W-PL-PR, nc=S.c||BARS.length;
+      var ns=Math.max(0,Math.min(BARS.length-nc,G.s0+Math.round(-dx/per*nc)));
+      if(ns!==S.s){ S.s=ns; draw(); }
+    }
+  });
+  function end(e){
+    if(e&&e.pointerId!=null) G.pts.delete(e.pointerId);
+    // finish whatever gesture was running BEFORE clearing the mode
+    var was=G.mode;
+    if(was==="select") bandEnd();
+    if(was==="axisY"||was==="axisX") $("svg").style.cursor="crosshair";
+    if(G.pts.size<2) G.pinch=null;
+    if(G.pts.size===0){ G.mode=null; G.ay=null; G.ax=null; }
+  }
+  svg.addEventListener("pointerup",end);
+  svg.addEventListener("pointercancel",end);
+  svg.addEventListener("pointerleave",function(e){
+    if((G.mode==="axisY"||G.mode==="axisX")){ end(e); }
+    if(G.mode==="select" && (e.buttons===0)){ end(e); }
+    var g=document.getElementById("xh"); if(g) g.setAttribute("opacity","0");
+    CURSOR=null;
+  });
+  window.addEventListener("pointerup",function(e){ if(G.pts.size) end(e); });
+  window.addEventListener("blur",function(){ G.pts.clear(); G.mode=null; G.pinch=null; });
+  svg.addEventListener("wheel",function(e){
+    e.preventDefault();
+    var p=pt(e);
+    var r=svg.getBoundingClientRect();
+    var vx=(e.clientX-r.left)/r.width*W;
+
+    // trackpad pinch arrives as ctrl+wheel -> zoom BOTH axes together
+    if(e.ctrlKey||e.metaKey){
+      var f=Math.exp(e.deltaY*0.012);
+      var nc=Math.max(15,Math.min(BARS.length,(S.c||BARS.length)*f));
+      var frac=Math.max(0,Math.min(1,(vx-PL)/(W-PL-PR)));
+      var a=(S.s||0)+frac*((S.c||BARS.length)-1);
+      S.c=Math.round(nc);
+      S.s=Math.max(0,Math.min(BARS.length-S.c,a-frac*(S.c-1)));
+      zoomY(p.y,f);
+      return;
+    }
+    // shift or option + scroll -> price only (the trackpad-friendly vertical route)
+    if(e.shiftKey||e.altKey){ zoomY(p.y,e.deltaY>0?1.1:0.91); return; }
+
+    var vc0=S.c||BARS.length;
+    // plain scroll -> PAN (no zoom): horizontal moves time, vertical moves price
+    if(P.scrollPan){
+      var moved=false;
+
+      // --- horizontal: shift the bar window ---
+      var perBar=(W-PL-PR)/Math.max(1,vc0-1);
+      var bars=Math.round((e.deltaX||0)/perBar);
+      if(bars!==0){
+        var ns=Math.max(0,Math.min(BARS.length-vc0,(S.s||0)+bars));
+        if(ns!==S.s){ S.s=ns; moved=true; }
+      }
+
+      // --- vertical: slide the price range ---
+      if(e.deltaY){
+        var span=(GEO?GEO.HI-GEO.LO:1)||1;
+        var plotH=Math.max(40,H-PT-PB);
+        var shift=-span*(e.deltaY/plotH);     // reversed: drag down lowers the range
+        var baseLo=S.y?S.y.lo:(GEO?GEO.LO:0);
+        var baseHi=S.y?S.y.hi:(GEO?GEO.HI:1);
+        S.y={lo:baseLo+shift, hi:baseHi+shift};
+        moved=true;
+      }
+
+      if(moved) draw();
+      return;
+    }
+    zoomX(vx,vc0*(e.deltaY>0?1.12:0.89));
+  },{passive:false});
+  svg.addEventListener("dblclick",function(e){ e.preventDefault(); reset(); });
+  document.addEventListener("keydown",function(e){
+    if(e.key==="Escape"){ MEAS=null; closePanel(); draw(); return; }
+    if(BARS.length<2||!GEO) return;
+    var cx=(PL+W-PR)/2, cy=(PT+H-PB)/2, n=S.c||BARS.length;
+    if(e.key==="+"||e.key==="="){
+      e.preventDefault();
+      if(e.shiftKey) zoomY(cy,0.9); else zoomX(cx,n*0.8);
+    } else if(e.key==="-"||e.key==="_"){
+      e.preventDefault();
+      if(e.shiftKey) zoomY(cy,1.1); else zoomX(cx,n*1.25);
+    } else if(e.key==="ArrowLeft"){
+      e.preventDefault(); S.s=Math.max(0,(S.s||0)-Math.round(n*0.2)); draw();
+    } else if(e.key==="ArrowRight"){
+      e.preventDefault(); S.s=Math.min(BARS.length-n,(S.s||0)+Math.round(n*0.2)); draw();
+    } else if(e.key==="0"){
+      e.preventDefault(); reset();
+    }
+  });
+}
+
+function chips(){
+  $("iv").innerHTML=["1m","5m","15m","1h"].map(function(t){
+    return '<button class="'+(t===S.tf?"on":"")+'" onclick="setTf(\''+t+'\')">'+t+'</button>';
+  }).join("");
+  $("ct").innerHTML=CHART_META.map(function(m){
+    return '<button class="'+(S.chart===m.id?"on":"")+'" onclick="setChart(\''+m.id+'\')">'+m.label+'</button>';
+  }).join("");
+  $("ly").innerHTML=LAYER_META.map(function(m){
+    return '<button class="'+(OV[m.id]?"on":"")+'" onclick="toggleLayer(\''+m.id+'\')">'+m.label+'</button>';
+  }).join("");
+  $("sc").innerHTML=
+    '<button class="'+(S.log?"":"on")+'" onclick="setLog(false)">linear</button>'+
+    '<button class="'+(S.log?"on":"")+'" onclick="setLog(true)">log</button>'+
+    '<button class="'+(S.y?"":"on")+'" onclick="S.y=null;chips();draw()">auto price</button>'+
+    '<button class="'+(S.y?"on":"")+'" onclick="lockPrice()">manual price</button>';
+  $("pr").innerHTML=PROP_META.map(function(m){
+    return '<button class="'+(P[m.id]?"on":"")+'" onclick="toggleProp(\''+m.id+'\')">'+m.label+'</button>';
+  }).join("");
+  $("vw").innerHTML=
+    '<button class="'+(S.tool==="pan"?"on":"")+'" onclick="setTool(\'pan\')">pan</button>'+
+    '<button class="'+(S.tool==="box"?"on":"")+'" onclick="setTool(\'box\')">zoom box</button>'+
+    '<button class="'+(S.measure?"armed":"")+'" onclick="toggleMeasure()">measure'+(S.measure?" ✕":"")+'</button>'+
+    '<button onclick="zoomX((PL+W-PR)/2,(S.c||BARS.length)*0.7)">zoom in</button>'+
+    '<button onclick="zoomX((PL+W-PR)/2,(S.c||BARS.length)*1.4)">zoom out</button>'+
+    '<button onclick="reset()">reset all</button>';
+  $("sub").textContent=S.tf+" · "+LAYER_META.filter(function(m){return OV[m.id];}).length+"/"+LAYER_META.length+
+    " overlays · "+PROP_META.filter(function(m){return P[m.id];}).length+"/"+PROP_META.length+
+    " properties"+(S.measure?" · measure armed":"")+(S.log?" · log scale":"");
+}
+function setChart(c){ S.chart=c; chips(); draw(); }
+function setTool(t){ S.tool=t; chips(); }
+function toggleProp(k){ P[k]=!P[k]; chips(); draw(); }
+function setTf(tf){ S.tf=tf; BARS=makeBars(tf); S.c=null; S.s=0; S.y=null; MEAS=null; chips(); draw(); }
+function toggleLayer(id){ OV[id]=!OV[id]; chips(); draw(); }
+function toggleMeasure(){ S.measure=!S.measure; MEAS=null; chips(); draw(); }
+function setLog(on){ S.log=on; chips(); draw(); }
+function lockPrice(){ if(GEO) S.y={lo:GEO.LO,hi:GEO.HI}; chips(); draw(); }
+function toggle(){
+  var p=$("panel");
+  p.classList.toggle("open");
+  $("btn").textContent=p.classList.contains("open")?"✕ close":"⚙ control";
+  if(p.classList.contains("open")) chips();
+}
+function closePanel(){ $("panel").classList.remove("open"); $("btn").textContent="⚙ control"; }
+
+function fit(){
+  var svg=$("svg");
+  var r=svg.getBoundingClientRect();
+  var w=Math.max(420,Math.round(r.width));
+  var h=Math.max(240,Math.round(r.height));
+  // axis bands keep a constant pixel size as the chart grows
+  PB=Math.round(Math.min(110,Math.max(52,h*0.16)));
+  PR=Math.round(Math.min(110,Math.max(56,w*0.065)));
+  PL=Math.round(Math.min(90,Math.max(46,w*0.05)));
+  // keep a usable plot area; the axis bands must never eat the whole canvas
+  if(W-PL-PR<220){ PR=Math.max(50,Math.min(PR,W-PL-220)); }
+  if(H-PT-PB<140){ PB=Math.max(44,Math.min(PB,H-PT-140)); }
+  if(Math.abs(w-W)>2||Math.abs(h-H)>2){
+    W=w; H=h;
+    svg.setAttribute("viewBox","0 0 "+W+" "+H);
+  }
+  return {w:w,h:h};
+}
+function refit(){ fit(); draw(); props(); }
+
+BARS=makeBars(S.tf);
+wire(); chips(); fit(); draw();
+window.addEventListener("resize",function(){ refit(); });
+if(window.ResizeObserver){
+  new ResizeObserver(function(){ refit(); }).observe($("svg").parentElement);
+}
+</script></body></html>

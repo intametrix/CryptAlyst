@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+scalp5/state/
+scalp5/ledger/
+scalp5/*.log
+*.tmp
