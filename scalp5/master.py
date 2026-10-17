@@ -1179,7 +1179,7 @@ function qbar(label,v,total,colour){
     <span class="skbar"><i style="width:${w.toFixed(0)}%;background:${colour}"></i></span>
     <span class="skval">${v}</span><span class="skmeta">${total?Math.round(100*v/total):0}%</span></div>`;
 }
-function scatter(ts){
+function scatter(ts, eng){
   if(ts.length<2) return '<div class="empty">need more trades</div>';
   const W=360,H=210,L=44,B=26,T=10,R=10;
   const peaks=ts.map(t=>Math.max(0.02,t.peak_pct||0));
@@ -1201,8 +1201,9 @@ function scatter(ts){
     const c=k==="LEAKED"?"#d29922":k==="BAD_ENTRY"?"#f85149":k==="FEE"?"#58a6ff":"#3fb950";
     const r=Math.max(3,Math.min(9,Math.sqrt((t.notional||1000)/900)));
     g+=`<circle cx="${X(Math.max(0.02,t.peak_pct||0)).toFixed(1)}" cy="${Y(t.net_pct||0).toFixed(1)}"
-          r="${r.toFixed(1)}" fill="${c}" opacity=".72" stroke="${c}">
-          <title>${esc(t.symbol)} · peak ${pctOr(t.peak_pct)} · net ${pctOr(t.net_pct)} · ${esc(t.reason||"")}</title></circle>`;
+          r="${r.toFixed(1)}" fill="${c}" opacity=".72" stroke="${c}"
+          style="cursor:pointer" onclick="openChart('${esc(t.symbol)}','${esc(eng||"")}')">
+          <title>${esc(t.symbol)} · peak ${pctOr(t.peak_pct)} · net ${pctOr(t.net_pct)} · ${esc(t.reason||"")} — click for the chart</title></circle>`;
   });
   g+=`<text x="${L}" y="${H-8}" fill="#4c5a6c" font-size="9">MFE →</text>
       <text x="4" y="${T+8}" fill="#4c5a6c" font-size="9">net</text>
@@ -1265,7 +1266,7 @@ function reviewCard(e){
       <div class="sbox"><b>${Math.round(sc.held)}s</b><span>hold</span></div>
     </div>
     <div class="rcols">
-      <div class="ccol"><div class="ctitle">MFE vs captured — where it leaks</div>${scatter(ts)}</div>
+      <div class="ccol"><div class="ctitle">MFE vs captured — where it leaks</div>${scatter(ts,e.key)}</div>
       <div class="ccol"><div class="ctitle">decision quadrant</div>
         ${qbar("earned",q.earned,ts.length,"#3fb950")}
         ${qbar("leaked",q.leaked,ts.length,"#d29922")}
@@ -1280,7 +1281,7 @@ function reviewCard(e){
     <div class="ctitle" style="margin-top:14px">worst 10 — real path, entry ● → exit ●</div>
     <div class="wgrid">${worst.map(t=>`
       <div class="dna">
-        <div class="dhead"><span class="tick" data-sym="${esc(t.symbol)}">${esc(t.symbol)}</span>
+        <div class="dhead"><span class="tick" data-sym="${esc(t.symbol)}" data-eng="${esc(e.key)}">${esc(t.symbol)}</span>
           <span class="side ${t.side==='buy'?'buy':'sell'}">${esc((t.side||'?').toUpperCase())}</span>
           <span class="mk">${esc(t.reason||"")}</span>
           <span class="${(t.net_pct||0)>0?'up':'down'}" style="margin-left:auto;font-family:var(--mono)">
