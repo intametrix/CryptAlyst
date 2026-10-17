@@ -356,6 +356,24 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   #review.on{display:block}
   #control{display:none}
   #control.on{display:block}
+  #lb{display:none}
+  #lb.on{display:block}
+  .lbtable{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  .lbtable th{text-align:right;color:#59677a;font-size:9px;letter-spacing:.1em;
+              text-transform:uppercase;padding:0 10px 8px;white-space:nowrap;font-weight:600}
+  .lbtable th:nth-child(2){text-align:left}
+  .lbtable td{text-align:right;padding:10px;border-top:1px solid #171f29;white-space:nowrap}
+  .lbtable td:nth-child(2){text-align:left}
+  .lbtable tr.top1 td{background:#132a1c}
+  .lbtable tr.top2 td{background:#16232b}
+  .lbtable tr.top3 td{background:#231d16}
+  .lbbar{height:6px;border-radius:3px;background:#18202b;overflow:hidden;min-width:90px}
+  .lbbar i{display:block;height:100%;border-radius:3px}
+  .rank{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;
+        border-radius:6px;background:#131c26;color:#8494a8;font-size:11px}
+  .rank.gold{background:#3d3410;color:#f0c44b}
+  .rank.silver{background:#2b3238;color:#c8d3dd}
+  .rank.bronze{background:#3a2a1c;color:#d79a63}
   .cscope{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
   .cpanel{background:#0f1721;border:1px solid #1d2836;border-radius:14px;padding:4px 18px 16px;
           margin-top:14px}
@@ -587,8 +605,10 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
     <button class="tab2" id="tab-why" onclick="showTab('why')">Why</button>
     <button class="tab2" id="tab-review" onclick="showTab('review')">Review</button>
     <button class="tab2" id="tab-control" onclick="showTab('control')">Control</button>
+    <button class="tab2" id="tab-lb" onclick="showTab('lb')">Leaderboard</button>
   </div>
   <span class="pill ok" id="live">—</span>
+  <span class="pill" id="hz" title="service health">health —</span>
   <span class="pill" id="models">—</span>
   <span class="spacer"></span>
   <span class="pill" id="clock">—</span>
@@ -655,6 +675,12 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
                    border-radius:12px;display:block;background:#0b0f14"></iframe>
   </div>
 
+  <div id="lb">
+    <div class="mhead"><span class="sym">Leaderboard</span>
+      <span class="mk">ranked by return on equity</span>
+      <span style="flex:1"></span><span class="mk" id="lbn"></span></div>
+    <div id="lbbody"></div>
+  </div>
   <div id="control">
     <div class="mhead"><span class="sym">Control</span>
       <span class="mk">one panel · every property · every model</span>
@@ -749,16 +775,21 @@ async function applyEngineSettings(key){
   }catch(err){ if(st) st.textContent="failed"; }
 }
 function showTab(which){
-  ["dash","market","why","review","control"].forEach(function(k){
-    var el=$(k); if(el) el.classList.toggle(k==="dash"?"off":"on", k===which);
-  });
-  ["dash","market","why","review","control"].forEach(function(k){
-    var b=$("tab-"+k); if(b) b.classList.toggle("on", k===which);
+  ["dash","market","why","review","control","lb"].forEach(function(k){
+    var el=$(k); if(!el) return;
+    if(k==="dash"){
+      el.classList.toggle("off", which!=="dash");   // dash hides with .off
+    } else {
+      el.classList.toggle("on", which===k);         // others show with .on
+    }
+    var b=$("tab-"+k); if(b) b.classList.toggle("on", which===k);
   });
   try{ if(which==="why") renderWhy(); }catch(e){ tabErr("why",e); }
   try{ if(which==="review") renderReview(); }catch(e){ tabErr("review",e); }
   try{ if(which==="control") renderControl(); }catch(e){ tabErr("control",e); }
+  try{ if(which==="lb") renderLeaderboard(); }catch(e){ tabErr("lb",e); }
 }
+
 
 /* ============ market chart ============ */
 const MIV=["1m","5m","15m","1h","4h","1d"];
@@ -1145,6 +1176,80 @@ function updateCross(ev){
 }
 
 
+
+
+/* ================= LEADERBOARD ================= */
+var HIST={};          // engine -> [equity samples]
+function histPush(es){
+  es.forEach(function(e){
+    if(!e||e.equity==null) return;
+    var h=HIST[e.key]||(HIST[e.key]=[]);
+    h.push(e.equity);
+    if(h.length>90) h.shift();
+  });
+}
+function spark(h, w, hh){
+  if(!h||h.length<2) return '<span class="mk">—</span>';
+  var lo=Math.min.apply(null,h), hi=Math.max.apply(null,h);
+  var rng=(hi-lo)||1;
+  var pts=h.map(function(v,i){
+    var x=(i/(h.length-1))*w;
+    var y=hh-2-((v-lo)/rng)*(hh-4);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(' ');
+  var up=h[h.length-1]>=h[0];
+  return '<svg width="'+w+'" height="'+hh+'" style="display:block">'+
+    '<polyline points="'+pts+'" fill="none" stroke="'+(up?'#3fb950':'#f85149')+
+    '" stroke-width="1.4"/></svg>';
+}
+function lbRow(e, rank, best, worst){
+  var pos=e.positions||[], tr=e.trades||[];
+  var wins=tr.filter(function(t){ return (t.net_pct||0)>0; }).length;
+  var wr=tr.length?Math.round(100*wins/tr.length):null;
+  var avg=tr.length?(tr.reduce(function(a,t){ return a+(t.net_pct||0); },0)/tr.length):null;
+  var ret=e.return_pct||0;
+  var span=Math.max(1,Math.abs(best)+Math.abs(worst));
+  var pctW=Math.min(100,Math.abs(ret)/span*100);
+  var medal = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
+  var h=HIST[e.key]||[];
+  return '<tr class="'+(rank<=3?('top'+rank):'')+'">'+
+    '<td><span class="rank '+medal+'">'+rank+'</span></td>'+
+    '<td style="color:'+e.colour+';font-weight:700">'+esc(e.key)+
+      '<div class="mk" style="font-weight:400">'+esc(e.label||'')+'</div></td>'+
+    '<td>$'+money(e.equity)+'</td>'+
+    '<td class="'+(ret>=0?'up':'down')+'"><b>'+(ret>=0?'+':'')+ret.toFixed(2)+'%</b>'+
+      '<div class="lbbar" style="margin-top:4px"><i style="width:'+pctW.toFixed(0)+'%;background:'+
+      (ret>=0?'#3fb950':'#f85149')+'"></i></div></td>'+
+    '<td class="'+((e.realised||0)>=0?'up':'down')+'">'+((e.realised||0)>=0?'+':'')+money(e.realised)+'</td>'+
+    '<td class="'+((e.unrealised||0)>=0?'up':'down')+'">'+((e.unrealised||0)>=0?'+':'')+money(e.unrealised)+'</td>'+
+    '<td>'+tr.length+'</td>'+
+    '<td>'+(wr==null?'—':wr+'%')+'</td>'+
+    '<td class="'+(avg!=null&&avg>=0?'up':'down')+'">'+(avg==null?'—':(avg>=0?'+':'')+avg.toFixed(3)+'%')+'</td>'+
+    '<td>'+pos.length+'</td>'+
+    '<td>'+spark(h,90,20)+'</td></tr>';
+}
+function renderLeaderboard(){
+  var es=(LAST||[]).filter(function(e){ return e.equity!=null; });
+  histPush(es);
+  es.sort(function(a,b){ return (b.return_pct||0)-(a.return_pct||0); });
+  var best=Math.max.apply(null, es.map(function(e){ return Math.abs(e.return_pct||0); }).concat([1]));
+  var worst=-best;
+  var box=$("lbbody"), note=$("lbn");
+  if(!box) return;
+  if(!es.length){ box.innerHTML='<div class="panel"><div class="empty">no engines reporting</div></div>'; return; }
+  var tot=es.reduce(function(a,e){ return a+e.equity; },0);
+  var base=es.length*2000;
+  if(note) note.textContent={
+    value:es.length+" engines · combined $"+money(tot)+" ("+((100*(tot/base-1))>=0?'+':'')+
+          (100*(tot/base-1)).toFixed(2)+"%)"
+  }.value;
+  box.innerHTML='<table class="lbtable"><thead><tr>'+
+    '<th>#</th><th>engine</th><th>equity</th><th>return</th><th>realised</th>'+
+    '<th>unrealised</th><th>closed</th><th>win</th><th>avg net</th><th>open</th>'+
+    '<th>equity curve</th></tr></thead><tbody>'+
+    es.map(function(e,i){ return lbRow(e,i+1,best,worst); }).join('')+
+    '</tbody></table>';
+}
 
 /* ================= MODEL REVIEW ================= */
 let PATHS={};
@@ -1580,6 +1685,20 @@ window.addEventListener("error", function(e){
   if(b){ b.style.display="block"; b.textContent="JS error: "+(e.message||"")+" @ line "+(e.lineno||"?"); }
 });
 
+async function health(){
+  var el=$("hz"); if(!el) return;
+  try{
+    var r=await fetch("/healthz",{cache:"no-store"});
+    var d=await r.json();
+    var c=d.checks||{};
+    var bad=Object.keys(c).filter(function(k){ return !c[k].ok; });
+    el.textContent = bad.length ? ("health \u2717 "+bad.join(",")) : "health \u2713";
+    el.className = "pill " + (bad.length ? "bad" : "ok");
+  }catch(e){
+    el.textContent="health \u2717"; el.className="pill bad";
+  }
+}
+
 async function tick(){
   let d;
   try{ d=await (await fetch("/api/all",{cache:"no-store"})).json(); }
@@ -1612,6 +1731,7 @@ async function tick(){
   ].map(([k,v])=>`<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
 
   LAST=es;
+  try{ histPush(es); }catch(e){}
   const groups=[
     ["Core engines", ["turtle","swing"]],
     ["Model ensembles", ["multimodels","statsmodels","swing_turtle"]],
@@ -1880,6 +2000,7 @@ setInterval(labelTickers, 2000);
 restoreSide();
 loadTickers(); setInterval(loadTickers,60000);
 tick(); setInterval(tick,2000);
+health(); setInterval(health,5000);
 </script></body></html>"""
 
 
@@ -2190,6 +2311,12 @@ class H(BaseHTTPRequestHandler):
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)}),
                                   "application/json")
+        if p in ("/lab", "/lab/"):
+            try:
+                with open(os.path.join(HERE, "chart_simple.html"), "rb") as fh:
+                    return self._send(200, fh.read(), "text/html")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)}), "application/json")
         if p in ("/chart", "/chart/"):
             try:
                 with open(os.path.join(HERE, "chart_real.html"), "rb") as fh:
@@ -2208,6 +2335,28 @@ class H(BaseHTTPRequestHandler):
                                   "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)}), "application/json")
+        if p in ("/healthz", "/api/health"):
+            out = {"app": "ok", "checks": {}}
+            def probe(name, url):
+                try:
+                    t0 = time.time()
+                    d = jget(url, timeout=6.0)
+                    out["checks"][name] = {"ok": True, "ms": int((time.time() - t0) * 1000),
+                                           "detail": d}
+                except Exception as exc:
+                    out["checks"][name] = {"ok": False, "error": str(exc)[:120]}
+            probe("backend", "http://127.0.0.1:8787/api/health")
+            probe("klines", "http://127.0.0.1:8787/api/klines?symbol=BTCUSDT&interval=5m&limit=2")
+            try:
+                a = jget("http://127.0.0.1:8799/api/all", timeout=10.0)
+                live = sum(1 for e in a.get("engines", []) if e.get("equity") is not None)
+                out["checks"]["engines"] = {"ok": live > 0, "detail": {"live": live,
+                                             "total": len(a.get("engines", []))}}
+            except Exception as exc:
+                out["checks"]["engines"] = {"ok": False, "error": str(exc)[:120]}
+            ok = all(c.get("ok") for c in out["checks"].values())
+            out["ok"] = ok
+            return self._send(200 if ok else 503, json.dumps(out), "application/json")
         if p == "/api/all":
             try:
                 return self._send(200, json.dumps(collect()), "application/json")
