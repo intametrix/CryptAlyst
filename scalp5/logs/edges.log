@@ -1,0 +1,28 @@
+09:56:53  CRYPTO EDGES — paper only
+09:56:53    funding_fade      tp 1.0 sl 1.2 hold 1800s risk 0.8%
+09:56:53    session_breakout  tp 1.2 sl 0.9 hold 1200s risk 1.0%
+09:56:53    vwap_reversion    tp 0.7 sl 1.0 hold 900s risk 0.8%
+09:56:53    btc_regime        tp 1.5 sl 1.0 hold 2400s risk 1.0%
+09:56:53    flow_divergence   tp 0.9 sl 1.1 hold 900s risk 0.8%
+09:56:55  flow_divergence   SELL BTCUSDT     price up, taker buy 40% — absorption
+09:56:55  vwap_reversion    BUY  ETHUSDT     -3.5 ATR below VWAP 2446.5324
+09:56:56  vwap_reversion    BUY  ZECUSDT     -2.5 ATR below VWAP 1182.5649
+09:56:56  flow_divergence   BUY  NEARUSDT    price down, taker buy 58% — absorption
+09:56:57  vwap_reversion    BUY  XRPUSDT     -5.2 ATR below VWAP 1.3193
+09:56:57  btc_regime        SELL XRPUSDT     BTC regime down, XRPUSDT below EMA20+VWAP
+09:56:57  vwap_reversion    BUY  BNBUSDT     -5.1 ATR below VWAP 725.8868
+09:56:58  flow_divergence   BUY  HYPEUSDT    price down, taker buy 64% — absorption
+09:56:58  vwap_reversion    BUY  SUIUSDT     -5.1 ATR below VWAP 1.0270
+09:56:58  btc_regime        SELL SUIUSDT     BTC regime down, SUIUSDT below EMA20+VWAP
+09:56:59  vwap_reversion    BUY  SNDKBUSDT   -11.3 ATR below VWAP 1325.7794
+09:56:59  btc_regime        SELL SNDKBUSDT   BTC regime down, SNDKBUSDT below EMA20+VWAP
+09:56:59  flow_divergence   BUY  SNDKBUSDT   price down, taker buy 72% — absorption
+09:56:59  flow_divergence   BUY  RLUSDUSDT   price down, taker buy 84% — absorption
+09:57:00  btc_regime        SELL SPCXBUSDT   BTC regime down, SPCXBUSDT below EMA20+VWAP
+09:57:00  btc_regime        SELL INJUSDT     BTC regime down, INJUSDT below EMA20+VWAP
+09:57:01  btc_regime        SELL STRKUSDT    BTC regime down, STRKUSDT below EMA20+VWAP
+09:57:02  flow_divergence   BUY  TAOUSDT     price down, taker buy 57% — absorption
+09:57:08  funding_fade      SELL EPICUSDT    funding +0.1063%/8h — longs crowded
+09:57:09  funding_fade      BUY  GTCUSDT     funding -0.9651%/8h — shorts crowded
+09:57:09  funding_fade      BUY  BLURUSDT    funding -0.1956%/8h — shorts crowded
+09:57:09  funding_fade      BUY  RSRUSDT     funding -0.1840%/8h — shorts crowded

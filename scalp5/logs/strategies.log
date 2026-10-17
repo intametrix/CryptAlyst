@@ -1,0 +1,36 @@
+09:56:53  CRYPTO STRATEGIES — paper only, fed by the platform signal stream
+09:56:53    flow_follow      tp 1.2 sl 1.0 hold 900s risk 1.0%
+09:56:53    range_fade       tp 0.8 sl 1.2 hold 600s risk 0.8%
+09:56:53    model_stack      tp 1.5 sl 1.0 hold 1200s risk 1.0%
+09:56:53    sweep_reversal   tp 0.7 sl 1.0 hold 300s risk 0.6%
+09:56:53    momentum_stack   tp 1.5 sl 1.0 hold 900s risk 1.0%
+09:56:57  flow_follow      SELL DOTUSDT      taker buy 0% on 13.0x flow
+09:56:57  range_fade       BUY  DOTUSDT      fade bottom of range 0% on 13.0x
+09:56:59  flow_follow      SELL ADAUSDT      taker buy 0% on 4.8x flow
+09:56:59  flow_follow      SELL ETCUSDT      taker buy 0% on 25.0x flow
+09:56:59  range_fade       BUY  ETCUSDT      fade bottom of range 0% on 25.0x
+09:56:59  sweep_reversal   BUY  ETCUSDT      CRITICAL dump z=17.5 — fading the sweep
+09:57:07  flow_follow      SELL BCHUSDT      taker buy 0% on 5.0x flow
+09:57:07  flow_follow      BUY  MARSCOINUSDT taker buy 99% on 9.9x flow
+09:57:07  range_fade       BUY  BCHUSDT      fade bottom of range 0% on 5.0x
+09:57:07  range_fade       SELL MARSCOINUSDT fade top of range 100% on 9.9x
+09:57:07  model_stack      BUY  MARSCOINUSDT 2 model net +2
+09:57:07  sweep_reversal   SELL MARSCOINUSDT CRITICAL pump z=8.1 — fading the sweep
+09:57:07  momentum_stack   BUY  MARSCOINUSDT alert+models(+2)+range 100%+flow 99%
+09:57:25  flow_follow      SELL AXLUSDT      taker buy 0% on 7.5x flow
+09:57:25  model_stack      BUY  DOTUSDT      2 model net +2
+09:57:38  range_fade       SELL PENDLEUSDT   fade top of range 100% on 37.0x
+09:57:38  model_stack      BUY  PENDLEUSDT   2 model net +2
+09:57:38  sweep_reversal   SELL PENDLEUSDT   CRITICAL pump z=19.5 — fading the sweep
+09:57:38  momentum_stack   BUY  PENDLEUSDT   alert+models(+2)+range 100%+flow 100%
+09:57:53  range_fade       SELL WUSDT        fade top of range 100% on 7.9x
+09:57:53  model_stack      BUY  WUSDT        2 model net +2
+09:57:53  momentum_stack   BUY  WUSDT        alert+models(+2)+range 100%+flow 97%
+09:58:00  model_stack      SELL NILUSDT      2 model net -2
+09:58:08  model_stack      BUY  TRUMPUSDT    2 model net +2
+09:58:08  sweep_reversal   SELL TRUMPUSDT    CRITICAL pump z=54.8 — fading the sweep
+09:58:08  momentum_stack   BUY  TRUMPUSDT    alert+models(+2)+range 100%+flow 94%
+09:58:23  momentum_stack   SELL CAKEUSDT     alert+models(-2)+range 0%+flow 23%
+09:58:25  momentum_stack   SELL BLURUSDT     alert+models(-2)+range 0%+flow 8%
+09:58:37  sweep_reversal   BUY  RSRUSDT      CRITICAL dump z=9.5 — fading the sweep
+09:58:44  sweep_reversal   SELL MOVRUSDT     CRITICAL pump z=72.5 — fading the sweep

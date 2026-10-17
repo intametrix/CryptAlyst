@@ -84,6 +84,14 @@ start_all() {
   else
     echo "  timeframes  skipped (set WITH_TIMEFRAMES=1 to enable)"
   fi
+  pgrep -f "crypto_strategies.py" >/dev/null || \
+    nohup python3 -u crypto_strategies.py --seconds 86400 > "$LOGS/strategies.log" 2>&1 &
+  pgrep -f "darwin.py" >/dev/null || \
+    nohup python3 -u darwin.py --every 600 > "$LOGS/darwin.log" 2>&1 &
+  pgrep -f "sentinel.py" >/dev/null || \
+    nohup python3 -u sentinel.py --every 120 --trial 600 > "$LOGS/sentinel.log" 2>&1 &
+  pgrep -f "optimizer.py" >/dev/null || \
+    nohup python3 -u optimizer.py --every 300 > "$LOGS/optimizer.log" 2>&1 &
   sleep 1
   pgrep -f "master.py --port" >/dev/null || \
     nohup python3 -u master.py --port $MASTER_PORT > "$LOGS/master.log" 2>&1 &
@@ -102,6 +110,10 @@ stop_all() {
   pkill -f "multi_models.py" 2>/dev/null && echo "  multimodels stopped"
   pkill -f "stats_models.py" 2>/dev/null && echo "  statsmodels stopped"
   pkill -f "turtle_multi.py" 2>/dev/null && echo "  turtle     stopped"
+  pkill -f "darwin.py"       2>/dev/null && echo "  darwin     stopped"
+  pkill -f "crypto_strategies.py" 2>/dev/null && echo "  strategies stopped"
+  pkill -f "sentinel.py"     2>/dev/null && echo "  sentinel   stopped"
+  pkill -f "optimizer.py"    2>/dev/null && echo "  optimiser  stopped"
   pkill -f "master.py --port" 2>/dev/null && echo "  master     stopped"
   pkill -f "http.server $LAB_PORT" 2>/dev/null && echo "  chart lab  stopped"
   if [ "${1:-}" = "all" ]; then

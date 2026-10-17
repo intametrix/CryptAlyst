@@ -46,6 +46,18 @@ EDITABLE = ("risk_pct", "max_open_risk_pct", "max_positions", "tp_pct", "sl_pct"
             "scan_every", "conviction_cap", "vol_mult", "tolerance", "min_stop_frac")
 
 
+
+def TRADING_ENABLED():
+    """False when the sentinel has quarantined this model ('enabled': 0)."""
+    try:
+        import json as _j, os as _o
+        p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "state", "control_turtle.json")
+        with open(p) as fh:
+            return bool(int(_j.load(fh).get("enabled", 1)))
+    except Exception:
+        return True
+
+
 def settings_snapshot(args):
     return {k: getattr(args, k) for k in EDITABLE if hasattr(args, k)}
 
@@ -154,7 +166,7 @@ def run_engine(cfg, syms, args, shared_prices):
                 scans += 1
                 next_scan = time.time() + cfg["scan"]
                 free = args.max_positions - len(positions)
-                if free > 0:
+                if free > 0 and TRADING_ENABLED():
                     cand = []
                     for s in syms:
                         if s in positions:

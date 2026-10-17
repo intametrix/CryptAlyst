@@ -1,0 +1,3 @@
+09:56:53  SENTINEL — park failures, test fixes, promote winners
+09:56:53  fail: avg<-0.25% or wr<18% or dd>=6% (>=8 closes) | pass: avg>-0.05% and wr>=25%
+09:56:53  cycle failed: URLError(ConnectionRefusedError(61, 'Connection refused'))

@@ -11,6 +11,17 @@
  .symin{background:#141d27;border:1px solid #26333f;color:#e6edf6;border-radius:7px;
         padding:5px 9px;font:inherit;font-size:12px;width:112px}
  .symin:focus{outline:none;border-color:#3d6f96}
+ .symwrap{position:relative}
+ .symlist{position:absolute;left:0;top:34px;z-index:60;width:280px;max-height:320px;overflow:auto;
+          background:#0d151e;border:1px solid #26333f;border-radius:10px;display:none;
+          box-shadow:0 24px 50px -24px #000}
+ .symlist.open{display:block}
+ .symrow{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
+         padding:7px 10px;font-family:var(--mono);font-size:12px;color:#9fb0c4;cursor:pointer}
+ .symrow:hover,.symrow.sel{background:#16232f;color:#e6edf6}
+ .symrow .px2{color:#5b6b7d;font-size:11px}
+ .symrow .ch2{font-size:10.5px}
+ .symempty{padding:10px;color:#4c5a6c;font-size:11px}
  .prow2 b.up{color:var(--up)} .prow2 b.down{color:var(--down)}
  #livedot{color:#3fb950}
  .scope{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;
@@ -49,8 +60,12 @@
 
 <header>
   <h1>chart lab</h1>
-  <input id="sym" class="symin" value="BTCUSDT"
-         onkeydown="if(event.key==='Enter'){ setSym(this.value.trim().toUpperCase()); }">
+  <div class="symwrap">
+    <input id="sym" class="symin" value="BTCUSDT" autocomplete="off" spellcheck="false"
+           oninput="symFilter()" onfocus="symFilter()"
+           onkeydown="symKey(event)">
+    <div id="symlist" class="symlist"></div>
+  </div>
   <span class="sym" id="symlabel">BTCUSDT</span>
   <span id="enginescope" class="scope" style="display:none" onclick="clearEngine()"></span>
   <span class="px" id="px">—</span>
@@ -1061,6 +1076,67 @@ function clearEngine(){
   ENGINE=null; engineScope();
   loadFills(function(){ draw(); });
 }
+var UNIVERSE=[], UNIVERSE_AT=0, SYMIDX=-1, SYMHITS=[];
+function loadUniverse(cb){
+  if(UNIVERSE.length && Date.now()-UNIVERSE_AT < 60000){ if(cb)cb(); return; }
+  fetch("/api/universe800",{cache:"no-store"}).then(function(r){return r.json();})
+    .then(function(d){ UNIVERSE=d.tickers||[]; UNIVERSE_AT=Date.now(); if(cb)cb(); })
+    .catch(function(){ if(cb)cb(); });
+}
+function symListEl(){ return $("symlist"); }
+function closeSymList(){ var el=symListEl(); if(el){ el.classList.remove("open"); } SYMIDX=-1; }
+function symFilter(){
+  var q=($("sym").value||"").trim().toUpperCase();
+  loadUniverse(function(){
+    SYMHITS = UNIVERSE.filter(function(t){ return t.s.indexOf(q)>=0; }).slice(0,14);
+    var el=symListEl(); if(!el) return;
+    if(!q && SYMHITS.length){
+      el.innerHTML='<div class="symempty">top '+SYMHITS.length+' of '+UNIVERSE.length+
+        ' by liquidity — type to search</div>'+'';
+    }
+    if(!SYMHITS.length){
+      el.innerHTML='<div class="symempty">no match for “'+esc(q)+'”</div>';
+    } else {
+      el.innerHTML=SYMHITS.map(function(t,i){
+        var chg=(t.c==null?0:t.c);
+        return '<div class="symrow" data-i="'+i+'" onclick="pickSym('+i+')">'+
+          '<span>'+esc(t.s)+'</span>'+
+          '<span class="px2">'+(t.price==null?'':Number(t.price).toPrecision(7))+'</span>'+
+          '<span class="ch2 '+(chg>=0?'up':'down')+'">'+(chg>=0?'+':'')+Number(chg).toFixed(1)+'%</span></div>';
+      }).join("");
+    }
+    el.classList.add("open");
+    SYMIDX=-1;
+  });
+}
+function pickSym(i){
+  var t=SYMHITS[i]; if(!t) return;
+  $("sym").value=t.s;
+  closeSymList();
+  setSym(t.s);
+}
+function symKey(ev){
+  var el=symListEl();
+  var open = el && el.classList.contains("open");
+  if(ev.key==="ArrowDown"||ev.key==="ArrowUp"){
+    if(!open){ symFilter(); return; }
+    ev.preventDefault();
+    SYMIDX += (ev.key==="ArrowDown"?1:-1);
+    if(SYMIDX<0) SYMIDX=SYMHITS.length-1;
+    if(SYMIDX>=SYMHITS.length) SYMIDX=0;
+    Array.prototype.forEach.call(el.querySelectorAll(".symrow"), function(r,i){
+      r.classList.toggle("sel", i===SYMIDX);
+    });
+    return;
+  }
+  if(ev.key==="Enter"){
+    ev.preventDefault();
+    if(open && SYMIDX>=0){ pickSym(SYMIDX); }
+    else { closeSymList(); setSym(($("sym").value||"").trim().toUpperCase()); }
+    return;
+  }
+  if(ev.key==="Escape"){ closeSymList(); }
+}
 function setSym(v){
   if(!v) return;
   SYM=v; $("symlabel").textContent=v; FILLS=[];
@@ -1105,6 +1181,10 @@ function refit(){ fit(); draw(); props(); }
 ($("sym")||{}).value=SYM;
 $("symlabel").textContent=SYM;
 engineScope();
+document.addEventListener("click", function(ev){
+  var w=document.querySelector(".symwrap");
+  if(w && !w.contains(ev.target)) closeSymList();
+});
 wire(); chips(); fit();
 loadBars(S.tf, function(){
   loadSignals(function(){ loadFills(function(){ draw(); }); });

@@ -1,13 +1,6 @@
-09:28:14  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
-09:28:14  exits: +1.0% scrape | -1.0% stop | 600s clock | $20 book lock
-09:28:15  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
-09:28:45  >>> BUY  HYPEUSDT     @ 80.23       votes +3 [rsi,macd,bbands]
-09:28:45  >>> SELL UNIUSDT      @ 7.281       votes -3 [rsi,macd,bbands]
-09:29:16  >>> BUY  ZECUSDT      @ 1168.07     votes +3 [rsi,macd,bbands]
-09:30:47  >>> BUY  BTCUSDT      @ 81716.88    votes +4 [rsi,macd,donchian,bbands]
-09:30:47  >>> BUY  SOLUSDT      @ 105.12      votes +3 [macd,donchian,bbands]
-09:31:48  >>> BUY  ETHUSDT      @ 2437.5      votes +4 [rsi,macd,donchian,bbands]
-09:31:48  >>> BUY  DOGEUSDT     @ 0.08077     votes +4 [rsi,macd,donchian,bbands]
-09:31:48  >>> BUY  NEARUSDT     @ 5.108       votes +3 [rsi,macd,bbands]
-09:32:49  >>> BUY  TRXUSDT      @ 0.3358      votes +4 [rsi,macd,donchian,bbands]
-09:32:49  >>> BUY  AVAXUSDT     @ 10.03       votes +3 [rsi,macd,bbands]
+09:56:53  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
+09:56:53  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+09:56:54  universe 23: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+09:57:55  >>> SELL XRPUSDT      @ 1.3081      votes -3 [ma,macd,bbands]
+09:57:55  >>> SELL SOXLBUSDT    @ 94.28       votes -3 [ma,macd,bbands]
+09:57:55  >>> SELL INJUSDT      @ 8.826       votes -3 [rsi,macd,bbands]

@@ -1,13 +1,4 @@
-09:28:14  STATS MODELS -- PAPER ONLY | 5 fitted models | need 2 agreeing
-09:28:14  OLS slope/R2 · z-score · online logistic (SGD) · autocorrelation · squeeze breakout
-09:28:15  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
-09:28:45  >>> BUY  ZECUSDT      @ 1168.02     votes +2 [logistic,autocorr]
-09:28:45  >>> BUY  HYPEUSDT     @ 80.23       votes +2 [ols_trend,logistic]
-09:28:45  >>> BUY  ETHUSDT      @ 2433.92     votes +2 [ols_trend,logistic]
-09:28:45  >>> SELL RLUSDUSDT    @ 1.0014      votes -2 [ols_trend,logistic]
-09:29:15  >>> SELL BNBUSDT      @ 721.74      votes -2 [ols_trend,logistic]
-09:30:16  >>> SELL TIAUSDT      @ 0.7294      votes -2 [ols_trend,autocorr]
-09:30:16  >>> SELL TAOUSDT      @ 275         votes -2 [ols_trend,logistic]
-09:30:16  >>> SELL SNDKBUSDT    @ 1300.13     votes -2 [ols_trend,logistic]
-09:31:16  >>> BUY  SOLUSDT      @ 105.25      votes +2 [logistic,squeeze_break]
-09:31:16  >>> BUY  DOGEUSDT     @ 0.08078     votes +2 [ols_trend,autocorr]
+09:56:53  STATS MODELS -- PAPER ONLY | 5 fitted models | need 3 agreeing
+09:56:53  OLS slope/R2 · z-score · online logistic (SGD) · autocorrelation · squeeze breakout
+09:56:54  universe 23: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+09:57:55  >>> SELL TAOUSDT      @ 275         votes -3 [ols_trend,logistic,autocorr]

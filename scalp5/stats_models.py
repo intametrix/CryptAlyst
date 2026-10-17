@@ -65,6 +65,17 @@ def apply_settings(args, c, extra=None):
             pass
     return changed
 
+def TRADING_ENABLED():
+    """False when the sentinel has quarantined this model ('enabled': 0)."""
+    try:
+        import json as _j, os as _o
+        p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "state", "control_stats.json")
+        with open(p) as fh:
+            return bool(int(_j.load(fh).get("enabled", 1)))
+    except Exception:
+        return True
+
+
 def log(m):
     print("%s  %s" % (time.strftime("%H:%M:%S"), m), flush=True)
 
@@ -524,7 +535,7 @@ def main():
         if time.time() >= next_scan:
             scans += 1
             next_scan = time.time() + args.scan_every
-            free = args.max_positions - len(positions)
+            free = (args.max_positions - len(positions)) if TRADING_ENABLED() else 0
             with _lock:
                 ready = list(_sig["ready"])
             for _, net, s, votes in ready:

@@ -39,6 +39,18 @@ EDITABLE = ("risk_pct", "max_open_risk_pct", "max_positions", "tp_pct", "sl_pct"
             "scan_every", "conviction_cap", "vol_mult", "tolerance", "min_stop_frac")
 
 
+
+def TRADING_ENABLED():
+    """False when the sentinel has quarantined this model ('enabled': 0)."""
+    try:
+        import json as _j, os as _o
+        p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)), "state", "control.json")
+        with open(p) as fh:
+            return bool(int(_j.load(fh).get("enabled", 1)))
+    except Exception:
+        return True
+
+
 def settings_snapshot(args):
     return {k: getattr(args, k) for k in EDITABLE if hasattr(args, k)}
 
@@ -580,6 +592,9 @@ def main():
                     kind = a.get("kind")
                     if kind in ("PUMP", "DUMP") and a.get("symbol"):
                         watch.add(a["symbol"])      # watchlist grows, never blocked
+                    if not TRADING_ENABLED():
+                        FUNNEL["disabled"] = FUNNEL.get("disabled", 0) + 1
+                        continue
                     if not eid or eid in seen_alerts or kind not in ("PUMP", "DUMP"):
                         FUNNEL["dup"] += 1
                         continue

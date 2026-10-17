@@ -36,6 +36,35 @@ SOURCES = [
 _META = {"at": 0.0, "rows": {}}
 
 
+UNI800 = {"ts": 0, "rows": []}
+
+
+def universe800(limit=800):
+    """Top N by 24h liquidity across spot AND futures (futures has far more pairs)."""
+    if UNI800["rows"] and (time.time() - UNI800["ts"]) < 120:
+        return UNI800["rows"]
+    seen = {}
+    for base in ("https://api.binance.com/api/v3/ticker/24hr",
+                 "https://fapi.binance.com/fapi/v1/ticker/24hr"):
+        try:
+            for r in jget(base, timeout=12.0):
+                sym = r.get("symbol") or ""
+                if not sym.endswith("USDT"):
+                    continue
+                qv = float(r.get("quoteVolume") or 0)
+                px = float(r.get("lastPrice") or 0)
+                chg = float(r.get("priceChangePercent") or 0)
+                prev = seen.get(sym)
+                if not prev or qv > prev["v"]:
+                    seen[sym] = {"s": sym, "v": qv, "price": px, "c": chg,
+                                 "vol": None, "qvol": qv, "mcap": None}
+        except Exception:
+            continue
+    rows = sorted(seen.values(), key=lambda x: -(x["v"] or 0))[:limit]
+    UNI800["ts"], UNI800["rows"] = time.time(), rows
+    return rows
+
+
 def market_meta():
     """price · volatility · liquidity · volume · market cap for every pair.
 
@@ -211,6 +240,35 @@ def collect():
     except Exception:
         pass
 
+    # ---- crypto strategies (each writes state/strategy_<name>.json)
+    try:
+        for fn in sorted(os.listdir(os.path.join(HERE, "state"))):
+            if not ((fn.startswith("strategy_") or fn.startswith("edge_"))
+                    and fn.endswith(".json")):
+                continue
+            fp = os.path.join(HERE, "state", fn)
+            if (time.time() - os.path.getmtime(fp)) > 300:
+                continue
+            with open(fp) as fh:
+                d = json.load(fh)
+            engines.append({
+                "key": d.get("engine"), "label": d.get("basis", "crypto strategy"),
+                "colour": "#39d353", "alive": True,
+                "equity": d.get("equity"), "return_pct": d.get("return_pct"),
+                "realised": d.get("realised"), "unrealised": d.get("unrealised"),
+                "closed": d.get("trade_count"), "wins": d.get("wins"),
+                "win_rate": None, "scans": d.get("opened"),
+                "settings": d.get("settings") or {}, "funnel": {},
+                "positions": d.get("positions") or [],
+                "trades": d.get("trades") or [],
+                "recent": (d.get("trades") or [])[-5:],
+                "max_pos": d.get("max_positions"), "risk_usd": d.get("open_risk_usd"),
+                "tp": d.get("tp_pct"), "sl": d.get("sl_pct"),
+                "basis": d.get("basis"), "start_equity": d.get("start_equity"),
+            })
+    except Exception:
+        pass
+
     # ---- model aggregate (not an engine, but the signal source)
     models = None
     try:
@@ -358,7 +416,11 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   #control.on{display:block}
   #lb{display:none}
   #lb.on{display:block}
+  #opt{display:none}
+  #opt.on{display:block}
   .lbtable{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
+  .lbtable th.sortable{cursor:pointer;user-select:none}
+  .lbtable th.sortable:hover{color:#c9d6e4}
   .lbtable th{text-align:right;color:#59677a;font-size:9px;letter-spacing:.1em;
               text-transform:uppercase;padding:0 10px 8px;white-space:nowrap;font-weight:600}
   .lbtable th:nth-child(2){text-align:left}
@@ -606,6 +668,7 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
     <button class="tab2" id="tab-review" onclick="showTab('review')">Review</button>
     <button class="tab2" id="tab-control" onclick="showTab('control')">Control</button>
     <button class="tab2" id="tab-lb" onclick="showTab('lb')">Leaderboard</button>
+    <button class="tab2" id="tab-opt" onclick="showTab('opt')">Optimiser</button>
   </div>
   <span class="pill ok" id="live">—</span>
   <span class="pill" id="hz" title="service health">health —</span>
@@ -675,9 +738,15 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
                    border-radius:12px;display:block;background:#0b0f14"></iframe>
   </div>
 
+  <div id="opt">
+    <div class="mhead"><span class="sym">Optimiser</span>
+      <span class="mk">measures outcomes, adjusts bounded parameters</span>
+      <span style="flex:1"></span><span class="mk" id="optn"></span></div>
+    <div id="optbody"></div>
+  </div>
   <div id="lb">
     <div class="mhead"><span class="sym">Leaderboard</span>
-      <span class="mk">ranked by return on equity</span>
+      <span class="mk">ranked by realised P&amp;L</span>
       <span style="flex:1"></span><span class="mk" id="lbn"></span></div>
     <div id="lbbody"></div>
   </div>
@@ -747,7 +816,11 @@ function renderControl(){
     if(!keys.length) return "";
     return '<div class="panel" style="margin-top:12px">'+
       '<div class="rchead"><span style="color:'+e.colour+'">'+esc(e.key)+'</span>'+
-      '<span class="mk">'+keys.length+' rules</span></div>'+
+      '<span class="mk">'+keys.length+' rules</span>'+
+      '<label style="margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;color:#8494a8;cursor:pointer">'+
+        '<input type="checkbox" '+(st.enabled===0?'':'checked')+
+        ' onchange="setTrading(\''+esc(e.key)+'\',this.checked)" style="width:14px;height:14px;accent-color:#3fb950">'+
+        'trading</label></div>'+
       '<div class="setpage" style="margin-top:8px"><div class="sgroup"><div class="sfields">'+
       keys.map(function(k){
         return '<label class="sf"><span>'+esc(k.replace(/_/g," "))+'</span>'+
@@ -757,6 +830,17 @@ function renderControl(){
       '<button class="applybtn" onclick="applyEngineSettings(\''+esc(e.key)+'\')">apply</button>'+
       '<span class="mk" id="cstat-'+esc(e.key)+'"></span></div></div></div>';
   }).join("") || '<div class="panel"><div class="empty">no engines reporting settings</div></div>';
+}
+async function setTrading(key, on){
+  try{
+    var r=await fetch("/api/engine-control?engine="+encodeURIComponent(key),
+      {method:"POST",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({enabled: on?1:0})});
+    var d=await r.json();
+    var st=$("cstat-"+key);
+    if(st) st.textContent = r.ok ? (on?"▶ trading enabled":"⏸ entries paused") : ("rejected: "+(d.error||r.status));
+    tick();
+  }catch(e){}
 }
 async function applyEngineSettings(key){
   var e=(LAST||[]).find(function(x){ return x.key===key; });
@@ -775,7 +859,7 @@ async function applyEngineSettings(key){
   }catch(err){ if(st) st.textContent="failed"; }
 }
 function showTab(which){
-  ["dash","market","why","review","control","lb"].forEach(function(k){
+  ["dash","market","why","review","control","lb","opt"].forEach(function(k){
     var el=$(k); if(!el) return;
     if(k==="dash"){
       el.classList.toggle("off", which!=="dash");   // dash hides with .off
@@ -788,6 +872,7 @@ function showTab(which){
   try{ if(which==="review") renderReview(); }catch(e){ tabErr("review",e); }
   try{ if(which==="control") renderControl(); }catch(e){ tabErr("control",e); }
   try{ if(which==="lb") renderLeaderboard(); }catch(e){ tabErr("lb",e); }
+  try{ if(which==="opt") renderOptimiser(); }catch(e){ tabErr("opt",e); }
 }
 
 
@@ -1178,8 +1263,74 @@ function updateCross(ev){
 
 
 
+
+async function renderOptimiser(){
+  var box=$("optbody"), note=$("optn");
+  if(!box) return;
+  box.innerHTML='<div class="panel"><div class="empty">reading optimiser…</div></div>';
+  var sent=null;
+  try{ sent=await (await fetch("/api/sentinel",{cache:"no-store"})).json(); }catch(e){}
+  var d;
+  try{ d=await (await fetch("/api/optimizer",{cache:"no-store"})).json(); }
+  catch(e){ box.innerHTML='<div class="panel"><div class="empty">optimiser not running</div></div>'; return; }
+  var cycles=d.cycles||[];
+  if(!cycles.length){ box.innerHTML='<div class="panel"><div class="empty">no cycles yet — first run within 5 min</div></div>'; return; }
+  var last=cycles[cycles.length-1];
+  var prev=cycles.length>1?cycles[cycles.length-2]:null;
+  if(note) note.textContent=cycles.length+" cycles · last "+
+    new Date(last.ts).toLocaleTimeString(undefined,{hour12:false})+
+    " · "+last.applied+" changes";
+
+  var html='';
+  if(sent && sent.models){
+    html+='<div class="panel" style="margin-bottom:12px"><div class="ctitle">sentinel — trading gate</div>'+
+      Object.keys(sent.models).map(function(k){
+        var s2=sent.models[k];
+        var col=s2.status==="live"?"#3fb950":s2.status==="testing"?"#d29922":"#f85149";
+        return '<div class="prow2"><span>'+esc(k)+'</span>'+
+          '<b style="color:'+col+'">'+esc(s2.status)+(s2.status==="testing"?(" · trial "+(s2.candidate+1)):"")+
+          (s2.reason?' <span class="mk">'+esc(s2.reason)+'</span>':'')+'</b></div>';
+      }).join("")+'</div>';
+  }
+  (last.engines||[]).forEach(function(r){
+    var m=r.metrics||{};
+    var ch=r.changes||[];
+    html+='<div class="rcard">'+
+      '<div class="rchead"><span>'+esc(r.engine)+'</span>'+
+      '<span class="mk">'+(m.n||0)+' closes scored</span>'+
+      '<span class="'+((r.return_pct||0)>=0?'up':'down')+'" style="margin-left:auto;font-family:var(--mono)">'+
+      ((r.return_pct>=0?"+":"")+Number(r.return_pct||0).toFixed(2)+'%')+'</span></div>'+
+      '<div class="score">'+
+        '<div class="sbox"><b>'+(r.drawdown_pct==null?"—":r.drawdown_pct.toFixed(1)+"%")+'</b>'+
+          '<span>drawdown</span></div>'+
+        '<div class="sbox"><b style="color:'+
+          (r.brake==="none"?"#3fb950":r.brake==="no-growth"?"#d29922":"#f85149")+'">'+
+          esc(r.brake||"—")+'</b><span>brake</span></div>'+
+        '<div class="sbox"><b>'+(m.wr==null?"—":m.wr.toFixed(0)+"%")+'</b><span>hit rate</span></div>'+
+        '<div class="sbox"><b>'+(m.avg==null?"—":(m.avg>=0?"+":"")+m.avg.toFixed(3)+"%")+'</b><span>avg net</span></div>'+
+        '<div class="sbox"><b>'+(m.fee==null?"—":(100*m.fee).toFixed(0)+"%")+'</b><span>fee share</span></div>'+
+        '<div class="sbox"><b>'+(m.leaked==null?"—":m.leaked.toFixed(0)+"%")+'</b><span>leaked</span></div>'+
+        '<div class="sbox"><b>'+(m.timeout==null?"—":m.timeout.toFixed(0)+"%")+'</b><span>timeouts</span></div>'+
+        '<div class="sbox"><b>'+(m.per_hour==null?"—":m.per_hour.toFixed(0))+'</b><span>closes/hr</span></div>'+
+      '</div>'+
+      (ch.length
+        ? '<div class="ctitle">adjustments</div>'+ch.map(function(c){
+            return '<div class="prow2"><span>'+esc(c.key)+' → '+esc(String(c.to))+'</span><b class="mk">'+esc(c.why)+'</b></div>';
+          }).join("")
+        : '<div class="hint">within tolerance — no change</div>')+
+      '</div>';
+  });
+  box.innerHTML=html;
+}
+
 /* ================= LEADERBOARD ================= */
 var HIST={};          // engine -> [equity samples]
+var LBSORT={key:"realised", dir:-1};   // default: best realised P&L first
+function lbSort(k){
+  if(LBSORT.key===k){ LBSORT.dir*=-1; }
+  else { LBSORT.key=k; LBSORT.dir=(k==="engine"||k==="key")?1:-1; }
+  renderLeaderboard();
+}
 function histPush(es){
   es.forEach(function(e){
     if(!e||e.equity==null) return;
@@ -1231,7 +1382,21 @@ function lbRow(e, rank, best, worst){
 function renderLeaderboard(){
   var es=(LAST||[]).filter(function(e){ return e.equity!=null; });
   histPush(es);
-  es.sort(function(a,b){ return (b.return_pct||0)-(a.return_pct||0); });
+  var S=LBSORT, d=S.dir;
+  var val=function(e){
+    var tr=e.trades||[];
+    if(S.key==="key") return e.key;
+    if(S.key==="win") return tr.length?100*tr.filter(function(t){return (t.net_pct||0)>0;}).length/tr.length:-1;
+    if(S.key==="avgnet") return tr.length?tr.reduce(function(a,t){return a+(t.net_pct||0);},0)/tr.length:-999;
+    if(S.key==="open") return (e.positions||[]).length;
+    if(S.key==="closed") return tr.length;
+    return e[S.key]==null?-999:e[S.key];
+  };
+  es.sort(function(a,b){
+    var x=val(a), y=val(b);
+    if(typeof x==="string") return d*x.localeCompare(y);
+    return d*(x-y);
+  });
   var best=Math.max.apply(null, es.map(function(e){ return Math.abs(e.return_pct||0); }).concat([1]));
   var worst=-best;
   var box=$("lbbody"), note=$("lbn");
@@ -1243,9 +1408,13 @@ function renderLeaderboard(){
     value:es.length+" engines · combined $"+money(tot)+" ("+((100*(tot/base-1))>=0?'+':'')+
           (100*(tot/base-1)).toFixed(2)+"%)"
   }.value;
+  var arrow=function(k){ return LBSORT.key===k ? (LBSORT.dir<0?" \u25bc":" \u25b2") : ""; };
+  var th=function(k,label){ return '<th class="sortable" onclick="lbSort(\''+k+'\')">'+
+    label+arrow(k)+'</th>'; };
   box.innerHTML='<table class="lbtable"><thead><tr>'+
-    '<th>#</th><th>engine</th><th>equity</th><th>return</th><th>realised</th>'+
-    '<th>unrealised</th><th>closed</th><th>win</th><th>avg net</th><th>open</th>'+
+    '<th>#</th>'+th("key","engine")+th("realised","realised")+th("equity","equity")+
+    th("return","return")+th("unrealised","unrealised")+th("closed","closed")+
+    th("win","win")+th("avgnet","avg net")+th("open","open")+
     '<th>equity curve</th></tr></thead><tbody>'+
     es.map(function(e,i){ return lbRow(e,i+1,best,worst); }).join('')+
     '</tbody></table>';
@@ -2220,7 +2389,7 @@ class H(BaseHTTPRequestHandler):
                               ("lock_usd", 0, 100000), ("max_hold", 0, 86400),
                               ("scan_every", 0.5, 600), ("conviction_cap", 0.5, 5),
                               ("vol_mult", 0, 10), ("tolerance", 0, 0.05),
-                              ("min_stop_frac", 0.0005, 0.05)):
+                              ("min_stop_frac", 0.0005, 0.05), ("enabled", 0, 1)):
                 if k in body and body[k] is not None:
                     try:
                         v = float(body[k])
@@ -2323,6 +2492,13 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, fh.read(), "text/html")
             except Exception as exc:
                 return self._send(500, json.dumps({"error": str(exc)}), "application/json")
+        if p in ("/api/universe800", "/api/tickers800"):
+            try:
+                rows = universe800(800)
+                return self._send(200, json.dumps({"count": len(rows), "tickers": rows}),
+                                  "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)}), "application/json")
         if p == "/api/tickers":
             try:
                 meta = market_meta()
@@ -2357,6 +2533,18 @@ class H(BaseHTTPRequestHandler):
             ok = all(c.get("ok") for c in out["checks"].values())
             out["ok"] = ok
             return self._send(200 if ok else 503, json.dumps(out), "application/json")
+        if p == "/api/sentinel":
+            try:
+                with open(os.path.join(HERE, "state", "sentinel.json")) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception:
+                return self._send(200, json.dumps({"models": {}, "events": []}), "application/json")
+        if p == "/api/optimizer":
+            try:
+                with open(os.path.join(HERE, "state", "optimizer.json")) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception:
+                return self._send(200, json.dumps({"cycles": []}), "application/json")
         if p == "/api/all":
             try:
                 return self._send(200, json.dumps(collect()), "application/json")
