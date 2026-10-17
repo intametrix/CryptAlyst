@@ -1,3 +1,142 @@
 09:56:53  OPTIMISER — measures outcomes, adjusts bounded parameters
 09:56:53  bounds: risk_pct 0.05..3.0, tp_pct 0.4..3.0, sl_pct 0.4..3.0, max_hold 120.0..3600.0, scan_every 2.0..120.0, min_confidence_pct 0.0..85.0, trail_ratio 0.05..0.8, min_agree 1.0..5.0
 09:56:53  cannot read dashboard: URLError(ConnectionRefusedError(61, 'Connection refused'))
+10:01:53  cycle: 14 engines scored, 0 parameter changes
+10:06:53  sweep_reversal 1 change(s) -> control_sweep_reversal.json
+10:06:53     max_hold             clock exits 86%: hold 300->210
+10:06:53  cycle: 14 engines scored, 1 parameter changes
+10:11:53  range_fade   1 change(s) -> control_range_fade.json
+10:11:53     max_hold             clock exits 100%: hold 600->420
+10:11:53  sweep_reversal 1 change(s) -> control_sweep_reversal.json
+10:11:53     max_hold             clock exits 92%: hold 300->210
+10:11:53  cycle: 14 engines scored, 2 parameter changes
+10:16:53  flow_divergence 1 change(s) -> control_flow_divergence.json
+10:16:53     max_hold             clock exits 100%: hold 900->630
+10:16:53  vwap_reversion 1 change(s) -> control_vwap_reversion.json
+10:16:53     max_hold             clock exits 100%: hold 900->630
+10:16:53  flow_follow  1 change(s) -> control_flow_follow.json
+10:16:53     max_hold             clock exits 100%: hold 900->630
+10:16:53  momentum_stack 1 change(s) -> control_momentum_stack.json
+10:16:53     max_hold             clock exits 100%: hold 900->630
+10:16:53  range_fade   1 change(s) -> control_range_fade.json
+10:16:53     max_hold             clock exits 86%: hold 600->420
+10:16:53  sweep_reversal 1 change(s) -> control_sweep_reversal.json
+10:16:53     max_hold             clock exits 90%: hold 300->210
+10:16:53  cycle: 14 engines scored, 6 parameter changes
+10:21:53  multimodels  1 change(s) -> control_multi.json
+10:21:53     risk_pct             healthy (wr 33%, avg 0.018): risk 1.000->1.200
+10:21:53  sweep_reversal 1 change(s) -> control_sweep_reversal.json
+10:21:53     max_hold             clock exits 90%: hold 300->210
+10:21:53  cycle: 16 engines scored, 2 parameter changes
+10:26:53  multimodels  1 change(s) -> control_multi.json
+10:26:53     risk_pct             healthy (wr 33%, avg 0.018): risk 1.200->1.440
+10:26:53  sweep_reversal 1 change(s) -> control_sweep_reversal.json
+10:26:53     max_hold             clock exits 90%: hold 300->210
+10:26:53  cycle: 16 engines scored, 2 parameter changes
+10:31:53  multimodels  1 change(s) -> control_multi.json
+10:31:53     risk_pct             healthy (wr 33%, avg 0.018): risk 1.440->1.728
+10:31:53  range_fade   1 change(s) -> control_range_fade.json
+10:31:53     max_hold             clock exits 100%: hold 600->420
+10:31:53  cycle: 14 engines scored, 2 parameter changes
+10:36:54  multimodels  1 change(s) -> control_multi.json
+10:36:54     risk_pct             healthy (wr 33%, avg 0.018): risk 1.728->2.074
+10:36:54  flow_divergence 1 change(s) -> control_flow_divergence.json
+10:36:54     max_hold             clock exits 100%: hold 900->630
+10:36:54  vwap_reversion 1 change(s) -> control_vwap_reversion.json
+10:36:54     max_hold             clock exits 100%: hold 900->630
+10:36:54  flow_follow  1 change(s) -> control_flow_follow.json
+10:36:54     max_hold             clock exits 83%: hold 900->630
+10:36:54  momentum_stack 1 change(s) -> control_momentum_stack.json
+10:36:54     max_hold             clock exits 83%: hold 900->630
+10:36:54  range_fade   1 change(s) -> control_range_fade.json
+10:36:54     max_hold             clock exits 100%: hold 600->420
+10:36:54  cycle: 14 engines scored, 6 parameter changes
+10:41:54  swing        1 change(s) -> control.json
+10:41:54     risk_pct             BRAKE drawdown 6.3%: risk 0.750->0.375
+10:41:54  multimodels  1 change(s) -> control_multi.json
+10:41:54     risk_pct             healthy (wr 33%, avg 0.018): risk 2.074->2.488
+10:41:54  flow_divergence 1 change(s) -> control_flow_divergence.json
+10:41:54     max_hold             clock exits 100%: hold 900->630
+10:41:54  vwap_reversion 1 change(s) -> control_vwap_reversion.json
+10:41:54     max_hold             clock exits 100%: hold 900->630
+10:41:54  flow_follow  1 change(s) -> control_flow_follow.json
+10:41:54     max_hold             clock exits 86%: hold 900->630
+10:41:54  momentum_stack 1 change(s) -> control_momentum_stack.json
+10:41:54     max_hold             clock exits 86%: hold 900->630
+10:41:54  range_fade   1 change(s) -> control_range_fade.json
+10:41:54     max_hold             clock exits 100%: hold 600->420
+10:41:54  cycle: 14 engines scored, 7 parameter changes
+10:46:54  swing        1 change(s) -> control.json
+10:46:54     risk_pct             BRAKE drawdown 6.2%: risk 0.500->0.250
+10:46:54  multimodels  1 change(s) -> control_multi.json
+10:46:54     risk_pct             healthy (wr 33%, avg 0.018): risk 1.000->1.200
+10:46:54  flow_divergence 1 change(s) -> control_flow_divergence.json
+10:46:54     max_hold             clock exits 100%: hold 900->630
+10:46:54  vwap_reversion 1 change(s) -> control_vwap_reversion.json
+10:46:54     max_hold             clock exits 100%: hold 900->630
+10:46:54  flow_follow  1 change(s) -> control_flow_follow.json
+10:46:54     max_hold             clock exits 86%: hold 900->630
+10:46:54  momentum_stack 1 change(s) -> control_momentum_stack.json
+10:46:54     max_hold             clock exits 67%: hold 900->630
+10:46:54  range_fade   1 change(s) -> control_range_fade.json
+10:46:54     max_hold             clock exits 100%: hold 600->420
+10:46:54  cycle: 18 engines scored, 7 parameter changes
+10:51:54  multimodels  1 change(s) -> control_multi.json
+10:51:54     risk_pct             healthy (wr 33%, avg 0.018): risk 1.200->1.440
+10:51:54  flow_divergence 1 change(s) -> control_flow_divergence.json
+10:51:54     max_hold             clock exits 100%: hold 900->630
+10:51:54  vwap_reversion 1 change(s) -> control_vwap_reversion.json
+10:51:54     max_hold             clock exits 100%: hold 900->630
+10:51:54  flow_follow  1 change(s) -> control_flow_follow.json
+10:51:54     max_hold             clock exits 92%: hold 900->630
+10:51:54  momentum_stack 1 change(s) -> control_momentum_stack.json
+10:51:54     max_hold             clock exits 67%: hold 900->630
+10:51:54  range_fade   1 change(s) -> control_range_fade.json
+10:51:54     max_hold             clock exits 100%: hold 600->420
+10:51:54  cycle: 23 engines scored, 6 parameter changes
+10:56:54  multimodels  1 change(s) -> control_multi.json
+10:56:54     risk_pct             healthy (wr 33%, avg 0.018): risk 1.440->1.728
+10:56:54  flow_divergence 1 change(s) -> control_flow_divergence.json
+10:56:54     max_hold             clock exits 100%: hold 900->630
+10:56:54  vwap_reversion 1 change(s) -> control_vwap_reversion.json
+10:56:54     max_hold             clock exits 100%: hold 900->630
+10:56:54  flow_follow  1 change(s) -> control_flow_follow.json
+10:56:54     max_hold             clock exits 92%: hold 900->630
+10:56:54  momentum_stack 1 change(s) -> control_momentum_stack.json
+10:56:54     max_hold             clock exits 67%: hold 900->630
+10:56:54  range_fade   1 change(s) -> control_range_fade.json
+10:56:54     max_hold             clock exits 100%: hold 600->420
+10:56:54  cycle: 23 engines scored, 6 parameter changes
+11:01:54  multimodels  1 change(s) -> control_multi.json
+11:01:54     risk_pct             healthy (wr 29%, avg -0.012): risk 1.728->2.074
+11:01:54  flow_divergence 1 change(s) -> control_flow_divergence.json
+11:01:54     max_hold             clock exits 67%: hold 900->630
+11:01:54  vwap_reversion 1 change(s) -> control_vwap_reversion.json
+11:01:54     max_hold             clock exits 67%: hold 900->630
+11:01:54  flow_follow  1 change(s) -> control_flow_follow.json
+11:01:54     max_hold             clock exits 61%: hold 900->630
+11:01:54  range_fade   1 change(s) -> control_range_fade.json
+11:01:54     max_hold             clock exits 67%: hold 600->420
+11:01:54  sweep_reversal 1 change(s) -> control_sweep_reversal.json
+11:01:54     max_hold             clock exits 69%: hold 300->210
+11:01:54  cycle: 20 engines scored, 6 parameter changes
+11:06:54  multimodels  1 change(s) -> control_multi.json
+11:06:54     risk_pct             healthy (wr 38%, avg 0.006): risk 2.074->2.488
+11:06:54  statsmodels  1 change(s) -> control_stats.json
+11:06:54     risk_pct             healthy (wr 80%, avg 0.087): risk 1.000->1.200
+11:06:54  flow_divergence 1 change(s) -> control_flow_divergence.json
+11:06:54     max_hold             clock exits 67%: hold 900->630
+11:06:54  vwap_reversion 1 change(s) -> control_vwap_reversion.json
+11:06:54     max_hold             clock exits 67%: hold 900->630
+11:06:54  flow_follow  1 change(s) -> control_flow_follow.json
+11:06:54     max_hold             clock exits 61%: hold 900->630
+11:06:54  range_fade   1 change(s) -> control_range_fade.json
+11:06:54     max_hold             clock exits 67%: hold 600->420
+11:06:54  sweep_reversal 1 change(s) -> control_sweep_reversal.json
+11:06:54     max_hold             clock exits 69%: hold 300->210
+11:06:54  cycle: 21 engines scored, 7 parameter changes
+11:11:54  multimodels  1 change(s) -> control_multi.json
+11:11:54     risk_pct             healthy (wr 38%, avg 0.006): risk 2.488->2.986
+11:11:54  statsmodels  1 change(s) -> control_stats.json
+11:11:54     risk_pct             healthy (wr 80%, avg 0.087): risk 1.200->1.440
+11:11:54  cycle: 12 engines scored, 2 parameter changes

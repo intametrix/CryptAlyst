@@ -113,11 +113,11 @@ LINEAGE = os.path.join(STATE, "lineage.json")
 BASE_FN = {}   # name -> callable
 
 STRATEGIES = [
-    ("flow_follow", flow_follow, {"tp": 1.2, "sl": 1.0, "hold": 900, "risk": 1.0}),
-    ("range_fade", range_fade, {"tp": 0.8, "sl": 1.2, "hold": 600, "risk": 0.8}),
-    ("model_stack", model_stack, {"tp": 1.5, "sl": 1.0, "hold": 1200, "risk": 1.0}),
-    ("sweep_reversal", sweep_reversal, {"tp": 0.7, "sl": 1.0, "hold": 300, "risk": 0.6}),
-    ("momentum_stack", momentum_stack, {"tp": 1.5, "sl": 1.0, "hold": 900, "risk": 1.0}),
+    ("flow_follow", flow_follow, {"tp": 1.2, "sl": 1.0, "hold": 900, "risk": 0.65}),
+    ("range_fade", range_fade, {"tp": 0.8, "sl": 1.2, "hold": 600, "risk": 0.65}),
+    ("model_stack", model_stack, {"tp": 1.5, "sl": 1.0, "hold": 1200, "risk": 0.65}),
+    ("sweep_reversal", sweep_reversal, {"tp": 0.7, "sl": 1.0, "hold": 300, "risk": 0.65}),
+    ("momentum_stack", momentum_stack, {"tp": 1.5, "sl": 1.0, "hold": 900, "risk": 0.65}),
 ]
 
 FEE = 0.001
@@ -296,7 +296,7 @@ def seed_lineage():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=int, default=86400)
-    ap.add_argument("--tick", type=float, default=2.0)
+    ap.add_argument("--tick", type=float, default=0.5)
     ap.add_argument("--max-positions", type=int, default=6)
     args = ap.parse_args()
 
@@ -357,7 +357,7 @@ def main():
         for b in books.values():
             b.dump()
 
-        time.sleep(max(0.5, args.tick))
+        time.sleep(max(0.2, args.tick))
 
     log("")
     for name, b in books.items():

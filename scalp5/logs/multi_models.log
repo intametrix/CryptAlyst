@@ -1,0 +1,134 @@
+11:19:15  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
+11:19:15  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+11:19:17  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+11:19:48  >>> SELL XRPUSDT      @ 1.3061      votes -4 [rsi,macd,donchian,bbands]
+11:19:48  >>> SELL FILUSDT      @ 1.1395      votes -3 [rsi,macd,donchian]
+11:20:18  >>> SELL DOGEUSDT     @ 0.08034     votes -4 [rsi,macd,donchian,bbands]
+11:21:16  LOCK: unrealised $24.27 >= $20
+11:21:16  <<< lock_usd FILUSDT     sell  +0.026% net  -0.174% eq 1774.23
+11:21:16  LOCKED IN 1, 2 still open
+11:21:40  FORCED rescan
+11:21:42  FORCED rescan
+11:21:44  FORCED rescan
+11:21:50  LOCK: unrealised $29.86 >= $20
+11:21:50  <<< lock_usd XRPUSDT     sell  +0.023% net  -0.177% eq 1544.09
+11:21:50  LOCKED IN 1, 1 still open
+11:21:51  FORCED rescan
+11:21:51  >>> SELL FILUSDT      @ 1.1395      votes -3 [rsi,macd,bbands]
+11:21:51  FORCED rescan
+11:21:58  FORCED rescan
+11:22:21  LOCK: unrealised $113.07 >= $20
+11:22:21  <<< lock_usd DOGEUSDT    sell  +0.012% net  -0.188% eq 1300.27
+11:22:21  <<< lock_usd FILUSDT     sell  +0.097% net  -0.103% eq 1196.42
+11:22:21  LOCKED IN 2, 0 still open
+11:22:28  >>> SELL DOGEUSDT     @ 0.08033     votes -4 [rsi,macd,donchian,bbands]
+11:22:28  >>> SELL XRPUSDT      @ 1.306       votes -3 [rsi,macd,bbands]
+11:22:28  >>> SELL FILUSDT      @ 1.1375      votes -3 [rsi,macd,bbands]
+11:23:58  >>> BUY  ZECUSDT      @ 1177.17     votes +3 [rsi,macd,bbands]
+11:23:58  >>> BUY  AVAXUSDT     @ 10.081      votes +3 [rsi,macd,bbands]
+11:25:29  >>> SELL WLDUSDT      @ 0.5185      votes -4 [rsi,macd,donchian,bbands]
+11:25:29  >>> SELL SUIUSDT      @ 1.0049      votes -4 [rsi,macd,donchian,bbands]
+11:27:00  >>> SELL ENAUSDT      @ 0.197       votes -3 [rsi,macd,bbands]
+11:27:30  >>> SELL TAOUSDT      @ 274.9       votes -3 [ma,macd,bbands]
+11:28:31  >>> SELL BNBUSDT      @ 721.81      votes -3 [rsi,macd,bbands]
+12:00:55  LOCK: unrealised $20.26 >= $20
+12:00:55  <<< lock_usd DOGEUSDT    sell  +0.124% net  -0.076% eq 1137.70
+12:00:55  <<< lock_usd XRPUSDT     sell  +0.107% net  -0.093% eq 1065.53
+12:00:55  <<< lock_usd FILUSDT     sell  +0.009% net  -0.191% eq 916.83
+12:00:55  <<< lock_usd WLDUSDT     sell  +0.116% net  -0.084% eq 851.29
+12:00:55  <<< lock_usd SUIUSDT     sell  +0.368% net  +0.168% eq 982.09
+12:00:55  <<< lock_usd TAOUSDT     sell  +0.109% net  -0.091% eq 911.42
+12:00:55  <<< lock_usd BNBUSDT     sell  +0.040% net  -0.160% eq 787.13
+12:00:55  LOCKED IN 7, 3 still open
+12:01:21  >>> SELL SOLUSDT      @ 104.73      votes -5 [ma,rsi,macd,donchian,bbands]
+12:01:21  >>> SELL BTCUSDT      @ 81579.92    votes -5 [ma,rsi,macd,donchian,bbands]
+12:01:21  >>> SELL XRPUSDT      @ 1.3047      votes -4 [rsi,macd,donchian,bbands]
+12:01:21  >>> SELL TIAUSDT      @ 0.6978      votes -4 [rsi,macd,donchian,bbands]
+12:01:21  >>> SELL SUIUSDT      @ 1.0017      votes -4 [rsi,macd,donchian,bbands]
+12:01:21  >>> SELL HYPEUSDT     @ 79.97       votes -3 [macd,donchian,bbands]
+12:01:21  >>> SELL DOGEUSDT     @ 0.08024     votes -3 [rsi,macd,donchian]
+12:02:28  SETTINGS APPLIED -> min_agree=4, risk_pct=1.0
+12:05:13  LOCK: unrealised $51.57 >= $20
+12:05:13  <<< lock_usd ZECUSDT     buy   +0.009% net  -0.191% eq 638.86
+12:05:13  <<< lock_usd SOLUSDT     sell  +0.010% net  -0.190% eq 541.42
+12:05:13  <<< lock_usd XRPUSDT     sell  +0.031% net  -0.169% eq 454.78
+12:05:13  <<< lock_usd TIAUSDT     sell  +1.447% net  +1.247% eq 1092.99
+12:05:13  <<< lock_usd SUIUSDT     sell  +0.190% net  -0.010% eq 1087.71
+12:05:13  <<< lock_usd HYPEUSDT    sell  +0.013% net  -0.187% eq 991.78
+12:05:13  <<< lock_usd DOGEUSDT    sell  +0.025% net  -0.175% eq 902.21
+12:05:13  LOCKED IN 7, 3 still open
+12:05:25  >>> SELL TIAUSDT      @ 0.6891      votes -4 [rsi,macd,donchian,bbands]
+12:07:56  >>> SELL BNBUSDT      @ 721.17      votes -4 [rsi,macd,donchian,bbands]
+12:08:57  >>> SELL DOGEUSDT     @ 0.08017     votes -4 [rsi,macd,donchian,bbands]
+12:11:58  >>> SELL FILUSDT      @ 1.1346      votes -4 [rsi,macd,donchian,bbands]
+12:12:28  SETTINGS APPLIED -> min_agree=3, risk_pct=0.75, tp_pct=1.2
+12:12:59  >>> SELL TAOUSDT      @ 274         votes -4 [rsi,macd,donchian,bbands]
+12:12:59  >>> SELL HYPEUSDT     @ 79.85       votes -4 [rsi,macd,donchian,bbands]
+12:12:59  >>> BUY  TRXUSDT      @ 0.336       votes +3 [rsi,macd,bbands]
+12:17:44  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
+12:17:44  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+12:17:45  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+12:17:46  SETTINGS APPLIED -> min_agree=3, risk_pct=0.75, tp_pct=1.2
+12:18:16  >>> BUY  TRXUSDT      @ 0.3361      votes +3 [rsi,macd,bbands]
+12:18:16  >>> SELL HYPEUSDT     @ 79.83       votes -3 [rsi,macd,bbands]
+12:18:16  >>> SELL FILUSDT      @ 1.1321      votes -3 [rsi,macd,bbands]
+12:18:16  >>> SELL BNBUSDT      @ 721.02      votes -3 [rsi,macd,bbands]
+12:21:47  >>> BUY  ZECUSDT      @ 1179.48     votes +3 [rsi,macd,bbands]
+12:22:28  SETTINGS APPLIED -> min_agree=2, risk_pct=0.5, tp_pct=1.2, scan_every=45.0
+12:22:48  >>> BUY  RLUSDUSDT    @ 1.0014      votes +2 [ma,macd]
+12:22:48  >>> SELL TIAUSDT      @ 0.6867      votes -2 [rsi,macd]
+12:24:00  <<< scrape   TIAUSDT     sell  +1.718% net  +1.518% eq 2015.18
+12:24:19  >>> SELL AVAXUSDT     @ 9.979       votes -3 [rsi,macd,bbands]
+12:24:19  >>> SELL TIAUSDT      @ 0.6729      votes -2 [rsi,macd]
+12:25:04  >>> SELL WLDUSDT      @ 0.5161      votes -3 [rsi,macd,bbands]
+12:25:04  >>> SELL SUIUSDT      @ 0.9995      votes -3 [rsi,macd,bbands]
+12:26:29  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
+12:26:29  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+12:26:30  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+12:26:30  SETTINGS APPLIED -> min_agree=2, risk_pct=0.5, tp_pct=1.2, scan_every=45.0
+12:27:15  >>> BUY  RLUSDUSDT    @ 1.0015      votes +3 [rsi,macd,bbands]
+12:27:15  >>> SELL WLDUSDT      @ 0.5167      votes -3 [rsi,macd,bbands]
+12:27:15  >>> SELL TIAUSDT      @ 0.6744      votes -3 [rsi,macd,bbands]
+12:27:15  >>> SELL SNDKBUSDT    @ 1299.92     votes -2 [ma,macd]
+12:27:15  >>> SELL HYPEUSDT     @ 79.81       votes -2 [rsi,bbands]
+12:27:15  >>> SELL AVAXUSDT     @ 9.983       votes -2 [rsi,bbands]
+Traceback (most recent call last):
+  File "/Users/users1/Documents/deepseek-harness/default-workspace/scalp5/multi_models.py", line 542, in <module>
+    main()
+  File "/Users/users1/Documents/deepseek-harness/default-workspace/scalp5/multi_models.py", line 524, in main
+    dump()
+  File "/Users/users1/Documents/deepseek-harness/default-workspace/scalp5/multi_models.py", line 394, in dump
+    os.replace(tmp, args.state)
+FileNotFoundError: [Errno 2] No such file or directory: 'state/multi_models.json.tmp' -> 'state/multi_models.json'
+12:32:28  SETTINGS APPLIED -> min_agree=2, risk_pct=0.5, tp_pct=1.2, scan_every=45.0
+12:36:44  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
+12:36:44  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+12:36:45  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+12:36:46  SETTINGS APPLIED -> min_agree=2, risk_pct=0.5, tp_pct=1.2, scan_every=45.0
+12:40:50  SETTINGS APPLIED -> risk_pct=0.8
+12:41:00  FORCED rescan
+12:41:00  >>> BUY  ETHUSDT      @ 2439.37     votes +3 [rsi,macd,bbands]
+12:41:18  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
+12:41:18  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+12:41:19  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+12:41:19  SETTINGS APPLIED -> risk_pct=0.8
+12:41:50  >>> BUY  ETHUSDT      @ 2439.81     votes +3 [rsi,macd,bbands]
+12:42:13  SETTINGS APPLIED -> risk_pct=0.8, max_positions=30
+12:42:20  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
+12:42:20  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+12:42:21  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+12:42:21  SETTINGS APPLIED -> risk_pct=0.8, max_positions=30
+12:42:51  >>> BUY  ZECUSDT      @ 1182.3      votes +3 [rsi,macd,bbands]
+12:42:51  >>> BUY  UNIUSDT      @ 7.345       votes +3 [macd,donchian,bbands]
+12:42:51  >>> BUY  ETHUSDT      @ 2439.94     votes +3 [rsi,macd,bbands]
+12:44:09  SETTINGS APPLIED -> risk_pct=1.3, max_positions=30
+12:44:27  SETTINGS APPLIED -> risk_pct=1.3, tp_pct=2.0, max_positions=30
+12:47:03  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
+12:47:03  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+12:47:04  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+12:47:05  SETTINGS APPLIED -> risk_pct=1.3, tp_pct=2.0, max_positions=30
+12:48:06  >>> BUY  ETHUSDT      @ 2439.61     votes +3 [rsi,macd,bbands]
+12:48:36  >>> BUY  SOXLBUSDT    @ 94.69       votes +3 [macd,donchian,bbands]
+12:49:06  >>> BUY  SNDKBUSDT    @ 1301.97     votes +3 [macd,donchian,bbands]
+12:51:10  SETTINGS APPLIED -> risk_pct=5.0
+12:52:08  >>> BUY  ZECUSDT      @ 1182        votes +3 [rsi,macd,bbands]

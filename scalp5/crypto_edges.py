@@ -189,7 +189,7 @@ def btc_regime():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seconds", type=int, default=86400)
-    ap.add_argument("--tick", type=float, default=15.0)
+    ap.add_argument("--tick", type=float, default=5.0)
     args = ap.parse_args()
 
     log("CRYPTO EDGES — paper only")
@@ -296,7 +296,7 @@ def main():
 
         for b in books.values():
             b.dump()
-        time.sleep(max(3.0, args.tick))
+        time.sleep(max(1.0, args.tick))
 
     for name, b in books.items():
         log("%-17s equity %.2f (%+.2f%%) opened %d closed %d" % (

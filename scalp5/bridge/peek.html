@@ -1,0 +1,274 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bridge · broker peek</title>
+<style>
+:root{--bg:#0a0e13;--line:#1c2836;--dim:#5f7186;--text:#c9d6e3;
+--dsh:#58a6ff;--kimi:#e3b341;--sys:#3fb950;--bad:#f85149}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#12202e 0%,var(--bg) 55%);
+color:var(--text);font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;display:flex;flex-direction:column}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:12px 18px;
+border-bottom:1px solid var(--line);background:rgba(10,14,19,.85);backdrop-filter:blur(12px);position:sticky;top:0;z-index:10}
+.brand{font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:#8fa3b8;font-weight:700}
+.brand b{color:var(--sys)}
+.pill{border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:11px;color:#8fa3b8;
+display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.pill.ok{border-color:#1f5f3a;color:var(--sys)}.pill.bad{border-color:#6b2b2b;color:var(--bad)}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 8px currentColor}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}.dot.live{animation:pulse 2s infinite}
+.spacer{flex:1}
+input[type=search],select{background:#0d141c;border:1px solid var(--line);color:var(--text);
+border-radius:8px;padding:6px 10px;font:inherit;font-size:12px;outline:none}
+input:focus,select:focus{border-color:#2f4d6b;box-shadow:0 0 0 3px #12293d}
+button{background:#12202e;border:1px solid var(--line);color:var(--text);border-radius:8px;
+padding:6px 12px;font:inherit;font-size:12px;cursor:pointer}
+button:hover{border-color:#3d6a94}
+main{flex:1;overflow:auto;padding:16px 18px 90px}
+.msg{border:1px solid var(--line);border-left:3px solid #2a3a4a;border-radius:10px;
+margin-bottom:9px;background:linear-gradient(180deg,#101821,#0d141c);
+display:grid;grid-template-columns:112px 1fr;overflow:hidden}
+.stamp{padding:10px 10px 10px 12px;border-right:1px solid var(--line);background:#0c1219;
+font-size:11px;color:#5f7186;display:flex;flex-direction:column;gap:2px}
+.stamp b{font-size:15px;color:#9fb4c9;font-weight:700;letter-spacing:.02em}
+.stamp .d{color:#4d5d70;font-size:10px;text-transform:uppercase;letter-spacing:.08em}
+.stamp .ago{color:#42505f;font-size:10px;margin-top:2px}
+.inner{padding:10px 13px;min-width:0}
+.msg:hover{border-color:#2b3d51}
+.msg.dsh{border-left-color:var(--dsh)}.msg.kimi{border-left-color:var(--kimi)}
+.msg.broker{border-left-color:var(--sys);opacity:.75}
+.head{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--dim);margin-bottom:8px}
+.who{font-size:18px;font-weight:800;letter-spacing:.02em;line-height:1;color:var(--text)}
+.who.dsh{color:var(--dsh)}.who.kimi{color:var(--kimi)}.who.broker{color:var(--sys)}
+.arrow{font-size:17px;color:#3d556d;font-weight:700}
+.to-who{font-size:18px;font-weight:800;letter-spacing:.02em;line-height:1;color:#9fb4c9}
+.to-who.kimi{color:var(--kimi)}.to-who.dsh{color:var(--dsh)}
+.topic{border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:10px;color:#8095ab}
+.body{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:none;overflow:visible}
+@keyframes fresh{
+  0%{border-color:#3fb950;box-shadow:0 0 0 1px #3fb950,0 0 22px -2px #3fb95088;background:#0f2318}
+  55%{border-color:#3fb950;box-shadow:0 0 0 1px #3fb95055,0 0 14px -4px #3fb95044;background:#0e1a14}
+  100%{border-color:#1c2836;box-shadow:none;background:linear-gradient(180deg,#101821,#0d141c)}
+}
+.msg.fresh{animation:fresh 2s ease-out forwards}
+#newbar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:none;border-color:#2f5d3f;color:var(--sys)}
+.empty{color:var(--dim);text-align:center;padding:60px 0}
+</style></head><body>
+<header>
+  <span class="brand">bridge <b>peek</b></span>
+  <span class="pill" id="st"><i class="dot live"></i>connecting</span>
+  <span class="pill" id="cn">0 messages</span>
+  <span class="pill" id="rt">—</span>
+  <span id="agents" style="display:flex;gap:6px"></span>
+  <span class="spacer"></span>
+  <input type="search" id="q" placeholder="search  /" autocomplete="off">
+  <select id="f">
+    <option value="all">all senders</option>
+    <option value="dsh">from dsh</option>
+    <option value="kimi">from kimi</option>
+    <option value="broker">from broker</option>
+  </select>
+  <select id="to">
+    <option value="all">to anyone</option>
+    <option value="dsh">to dsh</option>
+    <option value="kimi">to kimi</option>
+  </select>
+  <select id="topic">
+    <option value="">all topics</option>
+  </select>
+  <select id="sort">
+    <option value="desc" selected>newest first</option>
+    <option value="asc">oldest first</option>
+  </select>
+  <button id="pause">⏸</button>
+  <button id="clear" title="hide everything before now">clear</button>
+</header>
+<main id="list"><div class="empty">waiting for messages…</div></main>
+<div id="compose" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:16px;
+width:min(760px,92vw);background:#101821;border:1px solid #2f4d6b;border-radius:12px;padding:10px 12px;
+box-shadow:0 20px 50px -20px #000;z-index:30">
+  <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:#8fa3b8;margin-bottom:6px">
+    <span>to <b id="cto" style="color:#58a6ff"></b></span>
+    <span class="spacer" style="flex:1"></span>
+    <span>enter sends · esc closes</span>
+  </div>
+  <textarea id="cbody" rows="2" placeholder="message…" style="width:100%;background:#0d141c;
+    border:1px solid #1c2836;border-radius:8px;color:#c9d6e3;font:inherit;padding:8px;outline:none"></textarea>
+  <div style="display:flex;gap:8px;margin-top:8px">
+    <button id="csend" style="border-color:#2f5d3f;color:#3fb950">send</button>
+    <button id="cclose">cancel</button>
+    <span id="cstat" style="font-size:11px;color:#5f7186;align-self:center"></span>
+  </div>
+</div>
+<button id="newbar">↓ jump to latest</button>
+<script>
+var PAUSED=false,LAST=-1,AUTO=true,ALL=[];
+var list=document.getElementById('list');
+function esc(s){return String(s==null?'':s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+function rel(ts){var s=(Date.now()-ts)/1000;
+  if(s<60) return Math.round(s)+'s ago';
+  if(s<3600) return Math.round(s/60)+'m ago';
+  if(s<86400) return Math.round(s/3600)+'h ago';
+  return Math.round(s/86400)+'d ago';}
+function hhmm(ts){var d=new Date(ts);return d.toTimeString().slice(0,8);}
+function render(){
+  var q=(document.getElementById('q').value||'').toLowerCase();
+  var f=document.getElementById('f').value;
+  var t=document.getElementById('to').value;
+  var tp=document.getElementById('topic').value;
+  var sort=document.getElementById('sort').value;
+  var ms=ALL.filter(function(m){
+    if(f!=='all'&&m.from!==f) return false;
+    if(t!=='all' && m.to!==t && m.to!=='all') return false;
+    if(tp && m.topic!==tp) return false;
+    if(q&&(m.body+' '+m.from+' '+m.to+' '+m.topic).toLowerCase().indexOf(q)<0) return false;
+    return true;});
+  ms=ms.slice().sort(function(a,b){return sort==='desc'?(b.id-a.id):(a.id-b.id);});
+  document.getElementById('cn').textContent=ms.length+' of '+ALL.length+' shown';
+  if(!ms.length){list.innerHTML='<div class="empty">no messages match</div>';return;}
+  var sortDir=document.getElementById('sort').value;
+  var atTop=list.scrollTop<60;
+  var out='';
+  for(var i=0;i<ms.length;i++){
+    var m=ms[i];
+    var c=(m.from==='dsh')?'dsh':((m.from==='kimi')?'kimi':'broker');
+    var dt=new Date(m.ts);
+    var date=dt.toLocaleDateString([], {day:'2-digit',month:'short'});
+    var time=dt.toTimeString().slice(0,8);
+    out+='<div class="msg '+c+'"><div class="stamp"><b>'+time+'</b>'+
+      '<span class="d">'+date+'</span><span class="ago">'+rel(m.ts)+'</span></div>'+
+      '<div class="inner"><div class="head">'+
+      '<span class="who '+c+'">'+m.from+'</span>'+
+      '<span class="arrow">→</span>'+
+      '<span class="to-who '+(m.to||'')+'">'+m.to+'</span>'+
+      '<span class="topic">'+esc(m.topic)+'</span>'+
+      '<span>#'+m.id+'</span>'+
+      '</div>'+
+      '<div class="body">'+esc(m.body)+'</div></div></div>';
+  }
+  list.innerHTML=out;
+  if(AUTO){
+    list.scrollTop = sortDir==='desc' ? 0 : list.scrollHeight;
+    var nodes=list.querySelectorAll('.msg');
+    if(nodes.length){
+      var target = sortDir==='desc' ? nodes[0] : nodes[nodes.length-1];
+      target.classList.add('fresh');
+      setTimeout(function(){target.classList.remove('fresh');},2000);
+    }
+  }
+}
+async function tick(){
+  if(PAUSED) return;
+  var st=document.getElementById('st');
+  try{
+    var r=await fetch('/api/peek',{cache:'no-store'});
+    var d=await r.json();
+    st.className='pill '+(d.ok?'ok':'bad');
+    st.innerHTML='<i class="dot '+(d.ok?'live':'')+'"></i>'+(d.ok?'broker ok':'broker down');
+    ALL=d.messages||[];
+    document.getElementById('cn').textContent=ALL.length+' messages';
+    if(ALL.length){document.getElementById('rt').textContent=rel(ALL[ALL.length-1].ts);}
+    var reg={};
+    try{var ar=await fetch('/api/agents',{cache:'no-store'});var aj=await ar.json();reg=aj.agents||{};}catch(e){}
+    var pres={},seen={};
+    for(var i=0;i<ALL.length;i++){
+      var m=ALL[i];
+      if(m.topic!=='presence'){
+        // anyone who spoke recently counts as connected, even without /hello
+        if(m.from!=='broker') seen[m.from]=Math.max(seen[m.from]||0,m.ts);
+        continue;
+      }
+      var j=m.body.match(/just joined\s+(\S+)/i);
+      if(j){pres[j[1]]=1;continue;}
+      var l=m.body.match(/^(\S+)\s+left/i);
+      if(l){pres[l[1]]=0;}
+    }
+    var now=Date.now();
+    for(var sk in seen){ if(now-seen[sk] < 120000 && pres[sk]===undefined) pres[sk]=2; }
+    var ks=Object.keys(pres),html='';
+    for(var k=0;k<ks.length;k++){
+      var on=pres[ks[k]]!==0;
+      var lbl=pres[ks[k]]===2?'·':'';
+      html+='<span class="pill '+(on?'ok':'bad')+'" title="'+(pres[ks[k]]===2?'active in last 2 min':'presence')+
+        '"><i class="dot '+(on?'live':'')+'"></i>'+ks[k]+lbl+'</span>';
+    }
+    var names={};for(var p1 in pres){names[p1]=1;}for(var p2 in reg){names[p2]=1;}
+    var out='';var nk=Object.keys(names);
+    for(var z=0;z<nk.length;z++){
+      var nm=nk[z];var on=pres[nm]!==0;
+      var ip=reg[nm]?reg[nm].ip:"127.0.0.1";   // broker is loopback-only, so every client is local
+      var inferred=!reg[nm];
+      out+='<span class="pill '+(on?'ok':'bad')+'" style="cursor:pointer" onclick="compose(\''+nm+'\')" title="click to message '+
+        nm+(ip?(' · ip '+ip):'')+'"><i class="dot '+(on?'live':'')+'"></i>'+nm+
+        ' <b style="color:'+(inferred?'#6b7c90':'#8fa3b8')+';font-weight:400'+
+        (inferred?';text-decoration:underline dotted':'')+'" title="'+
+        (inferred?'inferred: broker binds loopback only':'registered by the agent')+'">'+ip+'</b></span>';
+    }
+    document.getElementById('agents').innerHTML=out||'<span class="pill">no agents</span>';
+    var sel=document.getElementById('topic');
+    var topics={};for(var ti=0;ti<ALL.length;ti++){topics[ALL[ti].topic]=1;}
+    var want=Object.keys(topics).sort();
+    var have=[];for(var oi=0;oi<sel.options.length;oi++){have.push(sel.options[oi].value);}
+    if(want.join('|')!==have.slice(1).join('|')){
+      var keep=sel.value;
+      sel.innerHTML='<option value="">all topics</option>'+want.map(function(x){
+        return '<option value="'+x+'">'+x+'</option>';}).join('');
+      sel.value=keep;
+    }
+    if(ALL.length!==LAST){LAST=ALL.length;render();}
+  }catch(e){
+    st.className='pill bad';
+    st.innerHTML='<i class="dot"></i>broker unreachable';
+  }
+}
+document.getElementById('q').oninput=render;
+document.getElementById('f').onchange=render;
+document.getElementById('to').onchange=render;
+document.getElementById('topic').onchange=render;
+document.getElementById('sort').onchange=render;
+document.getElementById('pause').onclick=function(){
+  PAUSED=!PAUSED;this.textContent=PAUSED?'▶':'⏸';};
+document.getElementById('newbar').onclick=function(){
+  AUTO=true;var sd=document.getElementById('sort').value;
+  list.scrollTop = sd==='desc' ? 0 : list.scrollHeight;
+  this.style.display='none';};
+list.onscroll=function(){
+  var sortDir=document.getElementById('sort').value;
+  var atEdge = sortDir==='desc' ? (list.scrollTop<60)
+                                : (list.scrollHeight-list.scrollTop-list.clientHeight<60);
+  AUTO=atEdge;                            // respect the user's position
+  document.getElementById('newbar').style.display=atEdge?'none':'block';};
+document.addEventListener('keydown',function(e){
+  if(e.key==='/'&&document.activeElement.tagName!=='INPUT'){e.preventDefault();document.getElementById('q').focus();}
+  if(e.key===' '&&document.activeElement.tagName!=='INPUT'){e.preventDefault();document.getElementById('pause').click();}});
+var TARGET='all';
+function compose(name){
+  TARGET=name;
+  document.getElementById('cto').textContent=name;
+  document.getElementById('compose').style.display='block';
+  document.getElementById('cstat').textContent='';
+  var t=document.getElementById('cbody');t.value='';t.focus();
+}
+function closeCompose(){document.getElementById('compose').style.display='none';}
+async function sendCompose(){
+  var v=document.getElementById('cbody').value.trim();if(!v)return;
+  var st=document.getElementById('cstat');st.textContent='sending…';
+  try{
+    var r=await fetch('/api/say',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({from:'dsh',to:TARGET,topic:'general',body:v})});
+    var d=await r.json();
+    if(d.ok){st.textContent='sent #'+d.id;document.getElementById('cbody').value='';setTimeout(closeCompose,700);}
+    else{st.textContent='failed: '+(d.error||'?');}
+  }catch(e){st.textContent='failed';}
+}
+document.getElementById('clear').onclick=async function(){
+  if(!confirm('Clear the history view? Messages stay on the broker; the view starts from now.')) return;
+  await fetch('/api/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
+  LAST=-1;ALL=[];render();tick();
+};
+document.getElementById('csend').onclick=sendCompose;
+document.getElementById('cclose').onclick=closeCompose;
+document.getElementById('cbody').addEventListener('keydown',function(e){
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendCompose();}
+  if(e.key==='Escape')closeCompose();});
+tick();setInterval(tick,500);
+</script></body></html>

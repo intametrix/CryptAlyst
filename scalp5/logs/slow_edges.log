@@ -1,0 +1,118 @@
+11:19:15  SLOW EDGES — few setups, large targets, hours-to-days holds
+11:19:15    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+11:19:15    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+11:19:15    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+11:19:15    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+11:19:15    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+11:19:15    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+11:19:15    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+11:19:15    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+11:19:48  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 0, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+11:20:55  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 0, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+11:21:49  rs_leader    BUY  AUSDT      ratio at 5d high while BTC -1.22%
+11:22:03  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:17:44  SLOW EDGES — few setups, large targets, hours-to-days holds
+12:17:44    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+12:17:44    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+12:17:44    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+12:17:44    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+12:17:44    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+12:17:44    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+12:17:44    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+12:17:44    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+12:18:13  rs_leader    BUY  TRXUSDT    ratio at 5d high while BTC -1.36%
+12:18:16  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:19:23  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:20:24  rs_leader    BUY  ERAUSDT    ratio at 5d high while BTC -1.34%
+12:20:34  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 2, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:21:26  rs_leader    BUY  KMNOUSDT   ratio at 5d high while BTC -1.31%
+12:21:40  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:22:37  rs_leader    BUY  MINAUSDT   ratio at 5d high while BTC -1.32%
+12:22:51  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:24:02  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:24:51  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:25:51  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:26:29  SLOW EDGES — few setups, large targets, hours-to-days holds
+12:26:29    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+12:26:29    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+12:26:29    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+12:26:29    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+12:26:29    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+12:26:29    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+12:26:29    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+12:26:29    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+12:26:57  rs_leader    BUY  TRXUSDT    ratio at 5d high while BTC -1.34%
+12:27:00  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:28:09  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:29:06  rs_leader    BUY  ERAUSDT    ratio at 5d high while BTC -1.32%
+12:29:18  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 2, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:30:13  rs_leader    BUY  KMNOUSDT   ratio at 5d high while BTC -1.31%
+12:30:28  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:31:22  rs_leader    BUY  MINAUSDT   ratio at 5d high while BTC -1.30%
+12:31:36  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:32:46  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:33:34  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:34:35  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:35:35  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:36:36  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 4, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:36:44  SLOW EDGES — few setups, large targets, hours-to-days holds
+12:36:44    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+12:36:44    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+12:36:44    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+12:36:44    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+12:36:44    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+12:36:44    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+12:36:44    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+12:36:44    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+12:37:11  rs_leader    BUY  TRXUSDT    ratio at 5d high while BTC -1.30%
+12:37:16  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:38:24  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:39:20  rs_leader    BUY  ERAUSDT    ratio at 5d high while BTC -1.31%
+12:39:32  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 2, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:40:28  rs_leader    BUY  KMNOUSDT   ratio at 5d high while BTC -1.31%
+12:40:43  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:41:18  SLOW EDGES — few setups, large targets, hours-to-days holds
+12:41:18    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+12:41:18    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+12:41:18    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+12:41:18    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+12:41:18    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+12:41:18    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+12:41:18    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+12:41:18    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+12:41:46  rs_leader    BUY  TRXUSDT    ratio at 5d high while BTC -1.30%
+12:41:50  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:42:20  SLOW EDGES — few setups, large targets, hours-to-days holds
+12:42:20    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+12:42:20    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+12:42:20    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+12:42:20    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+12:42:20    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+12:42:20    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+12:42:20    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+12:42:20    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+12:42:52  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 0, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:43:27  rs_leader    BUY  TRXUSDT    ratio at 5d high while BTC -1.30%
+12:43:59  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:44:55  rs_leader    BUY  ERAUSDT    ratio at 5d high while BTC -1.31%
+12:45:10  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 2, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:45:59  rs_leader    BUY  KMNOUSDT   ratio at 5d high while BTC -1.31%
+12:46:16  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:47:03  SLOW EDGES — few setups, large targets, hours-to-days holds
+12:47:03    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+12:47:03    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+12:47:03    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+12:47:03    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+12:47:03    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+12:47:03    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+12:47:03    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+12:47:03    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+12:47:31  rs_leader    BUY  TRXUSDT    ratio at 5d high while BTC -1.29%
+12:47:35  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:48:44  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:49:53  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:50:24  rs_leader    BUY  ASTERUSDT  ratio at 5d high while BTC -1.30%
+12:50:45  rs_leader    BUY  KMNOUSDT   ratio at 5d high while BTC -1.29%
+12:51:02  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:51:48  squeeze1h    BUY  VELODROMEUSDT squeeze break
+12:52:10  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0

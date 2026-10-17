@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import time
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -37,6 +38,102 @@ _META = {"at": 0.0, "rows": {}}
 
 
 UNI800 = {"ts": 0, "rows": []}
+TICK = {"ts": 0, "p": {}}
+
+
+TRADING_STATE = {"on": False}
+PROCS = {}
+
+
+def _spawn(name, argv):
+    import subprocess
+    logf = open(os.path.join(HERE, "logs", name + ".log"), "ab")
+    PROCS[name] = subprocess.Popen(argv, cwd=HERE, stdout=logf, stderr=logf,
+                                   start_new_session=True)
+
+
+def trading_start():
+    if TRADING_STATE["on"]:
+        return TRADING_STATE
+    py = sys.executable or "python3"
+    engines = {
+        "multi_models": [py, "-u", "multi_models.py", "--seconds", "86400", "--universe", "300",
+                         "--min-volume", "20000000", "--interval", "5m", "--min-agree", "3",
+                         "--tp-pct", "1.5", "--sl-pct", "1.0", "--max-hold", "3600",
+                         "--scan-every", "2", "--max-positions", "10", "--risk-pct", "0.65"],
+        "stats_models": [py, "-u", "stats_models.py", "--seconds", "86400", "--universe", "300",
+                         "--min-volume", "20000000", "--interval", "5m", "--min-agree", "3",
+                         "--tp-pct", "1.5", "--sl-pct", "1.0", "--max-hold", "3600",
+                         "--scan-every", "2", "--max-positions", "10", "--risk-pct", "0.65"],
+        "slow_edges": [py, "-u", "slow_edges.py", "--seconds", "86400", "--universe", "150"],
+        "sympathy_lag": [py, "-u", "sympathy_lag.py", "--seconds", "86400"],
+        "crypto_strategies": [py, "-u", "crypto_strategies.py", "--seconds", "86400"],
+    }
+    for name, argv in engines.items():
+        try:
+            _spawn(name, argv)
+        except Exception:
+            pass
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8787/api/turtle?action=start",
+                                     data=b"{}", headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=6).read()
+    except Exception:
+        pass
+    TRADING_STATE["on"] = True
+    return TRADING_STATE
+
+
+def trading_stop():
+    TRADING_STATE["on"] = False
+    for name, pr in list(PROCS.items()):
+        try:
+            pr.terminate()
+        except Exception:
+            pass
+    PROCS.clear()
+    import subprocess
+    for pat in ("multi_models.py", "stats_models.py", "slow_edges.py",
+                "sympathy_lag.py", "crypto_strategies.py"):
+        subprocess.run(["pkill", "-f", pat], check=False)
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8787/api/turtle?action=stop",
+                                     data=b"{}", headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=6).read()
+    except Exception:
+        pass
+    return TRADING_STATE
+
+
+def trading_loop_state():
+    """Report what is actually alive, not what we asked for."""
+    import subprocess
+    alive = {}
+    for name, pat in (("multi_models", "multi_models.py"), ("stats_models", "stats_models.py"),
+                      ("slow_edges", "slow_edges.py"), ("sympathy_lag", "sympathy_lag.py"),
+                      ("crypto_strategies", "crypto_strategies.py")):
+        r = subprocess.run(["pgrep", "-f", pat], capture_output=True)
+        alive[name] = r.returncode == 0
+    TRADING_STATE["alive"] = alive
+    return TRADING_STATE
+
+
+def ticker_loop():
+    """Poll every symbol's last price once a second and keep it in memory."""
+    import threading
+    def run():
+        while True:
+            try:
+                d = jget("https://api.binance.com/api/v3/ticker/price", timeout=8.0)
+                if isinstance(d, list):
+                    TICK["p"] = {r["symbol"]: float(r["price"]) for r in d}
+                    TICK["ts"] = time.time()
+            except Exception:
+                pass
+            time.sleep(1.0)
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return t
 
 
 def universe800(limit=800):
@@ -243,11 +340,11 @@ def collect():
     # ---- crypto strategies (each writes state/strategy_<name>.json)
     try:
         for fn in sorted(os.listdir(os.path.join(HERE, "state"))):
-            if not ((fn.startswith("strategy_") or fn.startswith("edge_"))
+            if not ((fn.startswith("strategy_") or fn.startswith("edge_") or fn.startswith("slow_") or fn.startswith("alpha_"))
                     and fn.endswith(".json")):
                 continue
             fp = os.path.join(HERE, "state", fn)
-            if (time.time() - os.path.getmtime(fp)) > 300:
+            if (time.time() - os.path.getmtime(fp)) > 600:
                 continue
             with open(fp) as fh:
                 d = json.load(fh)
@@ -418,6 +515,21 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   #lb.on{display:block}
   #opt{display:none}
   #opt.on{display:block}
+  #models{display:none}
+  #models.on{display:block}
+  #tape{display:none}
+  #tape.on{display:block}
+  .podium{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .pod{background:#101821;border:1px solid #1d2836;border-radius:12px;padding:14px 16px;
+       cursor:pointer;transition:transform .15s,border-color .15s;position:relative;overflow:hidden}
+  .pod:hover{transform:translateY(-2px);border-color:#3d5a78}
+  .pod.p1{border-color:#4a3d12;background:linear-gradient(160deg,#1a1710,#101821)}
+  .pod.p2{border-color:#2b3540;background:linear-gradient(160deg,#161b21,#101821)}
+  .pod.p3{border-color:#3a2a1c;background:linear-gradient(160deg,#1b1512,#101821)}
+  .pmed{font-size:18px;line-height:1}
+  .pname{font-family:var(--mono);font-size:13px;font-weight:700;margin-top:6px}
+  .pret{font-family:var(--mono);font-size:22px;font-weight:700;margin-top:6px;letter-spacing:-.02em}
+  .psub{font-size:11px;color:#7c8b9d;font-family:var(--mono);margin-top:3px}
   .lbtable{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px}
   .lbtable th.sortable{cursor:pointer;user-select:none}
   .lbtable th.sortable:hover{color:#c9d6e4}
@@ -669,9 +781,13 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
     <button class="tab2" id="tab-control" onclick="showTab('control')">Control</button>
     <button class="tab2" id="tab-lb" onclick="showTab('lb')">Leaderboard</button>
     <button class="tab2" id="tab-opt" onclick="showTab('opt')">Optimiser</button>
+    <button class="tab2" id="tab-models" onclick="showTab('models')">Models</button>
+    <button class="tab2" id="tab-tape" onclick="showTab('tape')">Tape</button>
   </div>
   <span class="pill ok" id="live">—</span>
   <span class="pill" id="hz" title="service health">health —</span>
+  <span class="pill" id="beat" title="platform heartbeat">beat —</span>
+  <button id="tradebtn" class="tbtn" onclick="toggleTrading()">▶ start trading</button>
   <span class="pill" id="models">—</span>
   <span class="spacer"></span>
   <span class="pill" id="clock">—</span>
@@ -738,6 +854,27 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
                    border-radius:12px;display:block;background:#0b0f14"></iframe>
   </div>
 
+  <div id="tape">
+    <div class="mhead"><span class="sym">Fill tape</span>
+      <span class="mk">every entry and exit, newest first</span>
+      <span style="flex:1"></span>
+      <select id="tfilt" onchange="renderTape()" style="background:#0d141c;color:#c9d6e3;border:1px solid #1c2836;border-radius:6px;padding:4px 8px;font:inherit;font-size:11px">
+        <option value="all">all engines</option>
+      </select>
+      <select id="tkind" onchange="renderTape()" style="background:#0d141c;color:#c9d6e3;border:1px solid #1c2836;border-radius:6px;padding:4px 8px;font:inherit;font-size:11px">
+        <option value="all">entries+exits</option>
+        <option value="open">entries only</option>
+        <option value="close">exits only</option>
+      </select>
+      <span class="mk" id="tapenf"></span></div>
+    <div id="tapebody"></div>
+  </div>
+  <div id="models">
+    <div class="mhead"><span class="sym">All models</span>
+      <span class="mk">every constituent model, not just the books</span>
+      <span style="flex:1"></span><span class="mk" id="mn"></span></div>
+    <div id="modelsbody"></div>
+  </div>
   <div id="opt">
     <div class="mhead"><span class="sym">Optimiser</span>
       <span class="mk">measures outcomes, adjusts bounded parameters</span>
@@ -859,7 +996,7 @@ async function applyEngineSettings(key){
   }catch(err){ if(st) st.textContent="failed"; }
 }
 function showTab(which){
-  ["dash","market","why","review","control","lb","opt"].forEach(function(k){
+  ["dash","market","why","review","control","lb","opt","models","tape"].forEach(function(k){
     var el=$(k); if(!el) return;
     if(k==="dash"){
       el.classList.toggle("off", which!=="dash");   // dash hides with .off
@@ -873,6 +1010,8 @@ function showTab(which){
   try{ if(which==="control") renderControl(); }catch(e){ tabErr("control",e); }
   try{ if(which==="lb") renderLeaderboard(); }catch(e){ tabErr("lb",e); }
   try{ if(which==="opt") renderOptimiser(); }catch(e){ tabErr("opt",e); }
+  try{ if(which==="models") renderModels(); }catch(e){ tabErr("models",e); }
+  try{ if(which==="tape") renderTape(); }catch(e){ tabErr("tape",e); }
 }
 
 
@@ -1287,7 +1426,8 @@ async function renderOptimiser(){
       Object.keys(sent.models).map(function(k){
         var s2=sent.models[k];
         var col=s2.status==="live"?"#3fb950":s2.status==="testing"?"#d29922":"#f85149";
-        return '<div class="prow2"><span>'+esc(k)+'</span>'+
+        return '<div class="prow2" style="cursor:pointer" onclick="drillEngine(\''+esc(k)+'\')">'+
+          '<span>'+esc(k)+'</span>'+
           '<b style="color:'+col+'">'+esc(s2.status)+(s2.status==="testing"?(" · trial "+(s2.candidate+1)):"")+
           (s2.reason?' <span class="mk">'+esc(s2.reason)+'</span>':'')+'</b></div>';
       }).join("")+'</div>';
@@ -1296,7 +1436,9 @@ async function renderOptimiser(){
     var m=r.metrics||{};
     var ch=r.changes||[];
     html+='<div class="rcard">'+
-      '<div class="rchead"><span>'+esc(r.engine)+'</span>'+
+      '<div class="rchead"><span style="cursor:pointer;text-decoration:underline dotted" '+
+      'onclick="drillEngine(\''+esc(r.engine)+'\')" title="open '+esc(r.engine)+'">'+
+      esc(r.engine)+'</span>'+
       '<span class="mk">'+(m.n||0)+' closes scored</span>'+
       '<span class="'+((r.return_pct||0)>=0?'up':'down')+'" style="margin-left:auto;font-family:var(--mono)">'+
       ((r.return_pct>=0?"+":"")+Number(r.return_pct||0).toFixed(2)+'%')+'</span></div>'+
@@ -1321,6 +1463,39 @@ async function renderOptimiser(){
       '</div>';
   });
   box.innerHTML=html;
+}
+
+
+async function renderModels(){
+  var box=$("modelsbody"), note=$("mn");
+  if(!box) return;
+  box.innerHTML='<div class="panel"><div class="empty">reading models…</div></div>';
+  var d;
+  try{ d=await (await fetch("/api/models/all",{cache:"no-store"})).json(); }
+  catch(e){ box.innerHTML='<div class="panel"><div class="empty">model registry unavailable</div></div>'; return; }
+  var ms=d.models||[];
+  if(note) note.textContent=ms.length+" models across "+new Set(ms.map(function(m){return m.family;})).size+" families";
+  var maxV=Math.max.apply(null, ms.map(function(m){return m.votes||0;}).concat([1]));
+  var fams={};
+  ms.forEach(function(m){ (fams[m.family]=fams[m.family]||[]).push(m); });
+  box.innerHTML=Object.keys(fams).map(function(f){
+    return '<div class="panel" style="margin-bottom:12px">'+
+      '<div class="ctitle">'+esc(f)+' models</div>'+
+      '<table class="wide" style="width:100%"><tbody>'+
+      fams[f].map(function(m){
+        var w=Math.round(100*(m.votes||0)/maxV);
+        var col=m.family==="signal"?"#39d353":m.family==="statistical"?"#f778ba":"#58a6ff";
+        var split=(m.kind==="signal")
+          ? '<span class="up">'+m.buy+' buy</span> / <span class="down">'+m.sell+' sell</span>'
+          : '<span class="mk">votes</span>';
+        return '<tr class="sigrow" style="cursor:pointer" onclick="drillEngine(\''+esc(m.parent)+'\')">'+
+          '<td style="color:'+col+';font-family:var(--mono);width:170px">'+esc(m.name)+'</td>'+
+          '<td style="width:45%"><div class="lbbar"><i style="width:'+w+'%;background:'+col+'"></i></div></td>'+
+          '<td style="text-align:right;font-family:var(--mono);width:70px">'+(m.votes||0)+'</td>'+
+          '<td style="text-align:right;width:150px">'+split+'</td>'+
+          '<td style="text-align:right;color:#5b6b7d;font-size:11px">'+esc(m.parent)+'</td></tr>';
+      }).join("")+'</tbody></table></div>';
+  }).join("");
 }
 
 /* ================= LEADERBOARD ================= */
@@ -1363,7 +1538,8 @@ function lbRow(e, rank, best, worst){
   var pctW=Math.min(100,Math.abs(ret)/span*100);
   var medal = rank===1?'gold':rank===2?'silver':rank===3?'bronze':'';
   var h=HIST[e.key]||[];
-  return '<tr class="'+(rank<=3?('top'+rank):'')+'">'+
+  return '<tr class="'+(rank<=3?('top'+rank):'')+'" style="cursor:pointer" '+
+    'onclick="drillEngine(\''+esc(e.key)+'\')" title="open '+esc(e.key)+'">'+
     '<td><span class="rank '+medal+'">'+rank+'</span></td>'+
     '<td style="color:'+e.colour+';font-weight:700">'+esc(e.key)+
       '<div class="mk" style="font-weight:400">'+esc(e.label||'')+'</div></td>'+
@@ -1378,6 +1554,23 @@ function lbRow(e, rank, best, worst){
     '<td class="'+(avg!=null&&avg>=0?'up':'down')+'">'+(avg==null?'—':(avg>=0?'+':'')+avg.toFixed(3)+'%')+'</td>'+
     '<td>'+pos.length+'</td>'+
     '<td>'+spark(h,90,20)+'</td></tr>';
+}
+function podium(es){
+  var top=es.slice(0,3);
+  var medal=["\u{1F947}","\u{1F948}","\u{1F949}"];
+  return '<div class="podium">'+top.map(function(e,i){
+    var ret=e.return_pct||0;
+    var col=ret>=0?"#3fb950":"#f85149";
+    return '<div class="pod p'+(i+1)+'" onclick="drillEngine(\''+esc(e.key)+'\')">'+
+      '<div class="pmed">'+medal[i]+'</div>'+
+      '<div class="pname" style="color:'+e.colour+'">'+esc(e.key)+'</div>'+
+      '<div class="pret" style="color:'+col+'">'+(ret>=0?"+":"")+ret.toFixed(2)+'%</div>'+
+      '<div class="psub">equity $'+money(e.equity)+'</div>'+
+      '<div class="psub">realised <b style="color:'+col+'">'+
+        ((e.realised||0)>=0?"+":"")+'$'+money(e.realised)+'</b></div>'+
+      '<div class="psub">'+(e.closed||0)+' closed · '+((e.positions||[]).length)+' open</div>'+
+      '</div>';
+  }).join("")+'</div>';
 }
 function renderLeaderboard(){
   var es=(LAST||[]).filter(function(e){ return e.equity!=null; });
@@ -1411,7 +1604,7 @@ function renderLeaderboard(){
   var arrow=function(k){ return LBSORT.key===k ? (LBSORT.dir<0?" \u25bc":" \u25b2") : ""; };
   var th=function(k,label){ return '<th class="sortable" onclick="lbSort(\''+k+'\')">'+
     label+arrow(k)+'</th>'; };
-  box.innerHTML='<table class="lbtable"><thead><tr>'+
+  box.innerHTML=podium(es)+'<table class="lbtable"><thead><tr>'+
     '<th>#</th>'+th("key","engine")+th("realised","realised")+th("equity","equity")+
     th("return","return")+th("unrealised","unrealised")+th("closed","closed")+
     th("win","win")+th("avgnet","avg net")+th("open","open")+
@@ -1562,7 +1755,7 @@ function reviewCard(e){
     <div class="ctitle" style="margin-top:14px">worst 10 — real path, entry ● → exit ●</div>
     <div class="wgrid">${worst.map(t=>`
       <div class="dna">
-        <div class="dhead"><span class="tick" data-sym="${esc(t.symbol)}" data-eng="${esc(e.key)}">${esc(t.symbol)}</span>
+        <div class="dhead"><span class="tick" data-drill-sym=${esc(t.symbol)} data-sym="${esc(t.symbol)}" data-eng="${esc(e.key)}">${esc(t.symbol)}</span>
           <span class="side ${t.side==='buy'?'buy':'sell'}">${esc((t.side||'?').toUpperCase())}</span>
           <span class="mk">${esc(t.reason||"")}</span>
           <span class="${(t.net_pct||0)>0?'up':'down'}" style="margin-left:auto;font-family:var(--mono)">
@@ -1722,7 +1915,7 @@ function dnaCards(trades, sym){
   return mine.map(t=>`
     <div class="dna">
       <div class="dhead">
-        <span class="tick" data-sym="${esc(t.symbol)}">${esc(t.symbol)}</span>
+        <span class="tick" data-drill-sym=${esc(t.symbol)} data-sym="${esc(t.symbol)}">${esc(t.symbol)}</span>
         <span class="side ${t.side==='buy'?'buy':'sell'}">${esc((t.side||'?').toUpperCase())}</span>
         <span style="color:${t.colour};font-size:10.5px">${esc(t.engine)}</span>
         <span class="${ (t.net_pct||0)>0?'up':'down'}" style="margin-left:auto;font-family:var(--mono)">
@@ -1820,7 +2013,7 @@ function renderTickerList(){
     }).join(""):"";
     const v=vol.get(sym);
     return `<div class="mrow ${sym===cur?'on':''}" onclick="selectTicker('${esc(sym)}')">
-      <span class="tick" data-sym="${esc(sym)}">${esc(sym)}</span>
+      <span class="tick" data-drill-sym=${esc(sym)} data-sym="${esc(sym)}">${esc(sym)}</span>
       <span class="dots">${dots||`<span class="n">${v?("$"+(v/1e6).toFixed(0)+"M"):""}</span>`}</span>
       <span class="n">${m?m.fills:""}</span></div>`;
   }).join("") + (syms.length>shown.length
@@ -1866,6 +2059,85 @@ async function health(){
   }catch(e){
     el.textContent="health \u2717"; el.className="pill bad";
   }
+}
+
+async function toggleTrading(){
+  var b=$("tradebtn"); if(!b) return;
+  var on=/start/.test(b.textContent);
+  b.disabled=true; b.textContent=on?"starting…":"stopping…";
+  try{
+    await fetch("/api/trading?action="+(on?"start":"stop"),{method:"POST"});
+  }catch(e){}
+  setTimeout(function(){ b.disabled=false; refreshTrading(); }, on?2500:1200);
+}
+async function refreshTrading(){
+  var b=$("tradebtn"); if(!b) return;
+  try{
+    var d=await (await fetch("/api/trading",{cache:"no-store"})).json();
+    var alive=d.alive||{};
+    var n=Object.keys(alive).filter(function(k){return alive[k];}).length;
+    b.textContent=(n>0?"⏸ stop trading":"▶ start trading")+(n?" · "+n+" running":"");
+    b.className="tbtn "+(n>0?"on":"");
+  }catch(e){ b.textContent="▶ start trading"; }
+}
+var TAPEDATA=[];
+async function renderTape(){
+  var box=$("tapebody"); if(!box) return;
+  try{ TAPEDATA=(await (await fetch("/api/tape",{cache:"no-store"})).json()).fills||[]; }catch(e){ TAPEDATA=[]; }
+  var f=$("tfilt"), k=$("tkind");
+  var eng=f?f.value:"all", kind=k?k.value:"all";
+  if(f && f.options.length<=1){
+    var srcs={};TAPEDATA.forEach(function(x){srcs[x.src]=1;});
+    Object.keys(srcs).sort().forEach(function(s2){
+      var o=document.createElement("option");o.value=s2;o.textContent=s2;f.appendChild(o);});
+  }
+  var rows=TAPEDATA.slice().reverse().filter(function(x){
+    if(eng!=="all"&&x.src!==eng)return false;
+    if(kind!=="all"&&x.kind!==kind)return false;
+    return true;});
+  if($("tapenf")) $("tapenf").textContent=rows.length+" fills";
+  box.innerHTML=rows.length?'<table class="wide" style="width:100%"><thead><tr>'+
+    '<th>time</th><th>engine</th><th>side</th><th>symbol</th><th>type</th>'+
+    '<th style="text-align:left">reason</th></tr></thead><tbody>'+
+    rows.slice(0,300).map(function(x){
+      var c=x.kind==="open"?(x.side==="BUY"?"#3fb950":"#f85149"):"#58a6ff";
+      return '<tr class="sigrow" style="cursor:pointer" onclick="drillChart(\''+x.sym+'\',null)">'+
+        '<td style="color:#5f7186">'+x.t+'</td>'+
+        '<td style="color:#8095ab">'+x.src+'</td>'+
+        '<td style="color:'+c+';font-weight:700">'+x.side+'</td>'+
+        '<td style="font-weight:600">'+x.sym+'</td>'+
+        '<td>'+(x.kind==="open"?'entry':'exit')+'</td>'+
+        '<td style="text-align:left;color:#7c8b9d">'+esc(x.why)+'</td></tr>';
+    }).join("")+'</tbody></table>':'<div class="empty">no fills match</div>';
+}
+async function tape(){
+  var el=$("tapestrip"); if(!el) return;
+  try{
+    var d=await (await fetch("/api/tape",{cache:"no-store"})).json();
+    var f=(d.fills||[]).slice().reverse().slice(0,60);
+    document.getElementById("tapen").textContent=f.length?"last "+f[0].t:"—";
+    el.innerHTML=f.map(function(x){
+      var col=x.kind==="open"?(x.side==="BUY"?"#3fb950":"#f85149"):"#58a6ff";
+      return '<div style="display:grid;grid-template-columns:64px 78px 58px 92px 1fr;gap:8px;'+
+        'padding:3px 0;border-bottom:1px solid #131c26">'+
+        '<span style="color:#5f7186">'+x.t+'</span>'+
+        '<span style="color:#8095ab">'+x.src+'</span>'+
+        '<span style="color:'+col+';font-weight:700">'+x.side+'</span>'+
+        '<span>'+x.sym+'</span>'+
+        '<span style="color:#7c8b9d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+          (x.kind==="close"?"● closed · ":"")+esc(x.why)+'</span></div>';
+    }).join("")||'<div class="hint">no fills yet</div>';
+  }catch(e){}
+}
+async function beat(){
+  var el=$("beat"); if(!el) return;
+  try{
+    var d=await (await fetch("/api/heartbeat",{cache:"no-store"})).json();
+    var age=Math.round((Date.now()-(d.ts||0))/1000);
+    el.textContent="beat "+(age<3?"\u25cf":age+"s")+" \u00b7 "+d.books+" books \u00b7 "+
+      (d.realised>=0?"+":"")+Number(d.realised||0).toFixed(2);
+    el.className="pill "+(age<15?"ok":"bad");
+  }catch(e){ el.textContent="beat \u2014"; el.className="pill bad"; }
 }
 
 async function tick(){
@@ -1931,7 +2203,7 @@ async function tick(){
       </div>
       <div class="body">
       ${pos.length?`<table><thead><tr><th>ticker</th><th>side</th><th>P&L</th><th>held</th></tr></thead>
-        <tbody>${pos.map(p=>`<tr><td class="tick" data-sym="${esc(p.symbol)}" data-eng="${esc(e.key)}">${esc(p.symbol)}</td>
+        <tbody>${pos.map(p=>`<tr><td class="tick" data-drill-sym=${esc(p.symbol)} data-sym="${esc(p.symbol)}" data-eng="${esc(e.key)}">${esc(p.symbol)}</td>
           <td><span class="side ${p.side==='buy'?'buy':'sell'}">${esc((p.side||'?').toUpperCase())}</span></td>
           <td class="${cls(p.gross_pct)}">${pct(p.gross_pct)}</td>
           <td>${Math.round(p.held_s||0)}s</td></tr>`).join("")}</tbody></table>`
@@ -1969,7 +2241,7 @@ async function tick(){
           return `<tr class="sigrow" data-sym="${esc(r.symbol)}"
                       onclick="zoomToSignal('${esc(r.symbol)}')"
                       title="open ${esc(r.symbol)} chart at its last signal">
-          <td class="tick" data-sym="${esc(r.symbol)}">${esc(r.symbol)}</td>
+          <td class="tick" data-drill-sym=${esc(r.symbol)} data-sym="${esc(r.symbol)}">${esc(r.symbol)}</td>
           <td class="${r.net>0?'up':r.net<0?'down':'flat'}">${esc(r.decision)}</td>
           <td>${(r.net>=0?"+":"")+Number(r.net).toFixed(2)}</td>
           <td>${r.agreement}/${r.models_heard}</td>
@@ -2024,6 +2296,14 @@ function gauge(p, sl, tp){
   const pos=p>=0;
   return `<div class="gauge"><i style="left:${Math.min(50,pct)}%;width:${Math.abs(pct-50)}%;
           background:${pos?'#3fb950':'#f85149'};opacity:.85"></i></div>`;
+}
+function drillEngine(key){
+  try{ closeChartModal(); }catch(e){}
+  openDetail(key);
+}
+function drillChart(sym, eng){
+  try{ closeModal(); }catch(e){}
+  openChart(sym, eng||null);
 }
 function openDetail(key){
   const e=(LAST||[]).find(x=>x.key===key);
@@ -2096,7 +2376,7 @@ function openDetail(key){
           <th>P&amp;L</th><th>peak</th><th>stop/trail</th><th>notional</th>
           <th>risk $</th><th>held</th><th>conf</th><th style="text-align:left">why it is open</th>
         </tr></thead><tbody>${pos.map(p=>`<tr>
-          <td class="tick" data-sym="${esc(p.symbol)}" data-eng="${esc(e.key)}">${esc(p.symbol)}</td>
+          <td class="tick" data-drill-sym=${esc(p.symbol)} data-sym="${esc(p.symbol)}" data-eng="${esc(e.key)}">${esc(p.symbol)}</td>
           <td><span class="side ${p.side==='buy'?'buy':'sell'}">${esc((p.side||'?').toUpperCase())}</span></td>
           <td>${p.entry==null?"—":Number(p.entry).toPrecision(8)}</td>
           <td>${p.price==null?"—":Number(p.price).toPrecision(8)}</td>
@@ -2117,7 +2397,7 @@ function openDetail(key){
           <th>gross</th><th>net</th><th>peak</th><th>P&amp;L $</th>
           <th>notional</th><th>reason</th><th>held</th>
         </tr></thead><tbody>${trades.slice(0,40).map(t=>`<tr>
-          <td class="tick" data-sym="${esc(t.symbol)}" data-eng="${esc(e.key)}">${esc(t.symbol)}</td>
+          <td class="tick" data-drill-sym=${esc(t.symbol)} data-sym="${esc(t.symbol)}" data-eng="${esc(e.key)}">${esc(t.symbol)}</td>
           <td><span class="side ${t.side==='buy'?'buy':'sell'}">${esc((t.side||'?').toUpperCase())}</span></td>
           <td>${t.entry==null?"—":Number(t.entry).toPrecision(8)}</td>
           <td>${t.exit==null?"—":Number(t.exit).toPrecision(8)}</td>
@@ -2151,6 +2431,12 @@ document.addEventListener("keydown",e=>{
 
 // every ticker anywhere opens the chart, in one place
 document.addEventListener("click", function(ev){
+  var t=ev.target.closest ? ev.target.closest("[data-drill-sym]") : null;
+  if(t){
+    ev.preventDefault(); ev.stopPropagation();
+    drillChart(t.getAttribute("data-drill-sym"), t.getAttribute("data-drill-eng")||null);
+    return;
+  }
   const el=ev.target.closest(".tick");
   if(!el) return;
   ev.preventDefault();
@@ -2170,6 +2456,10 @@ restoreSide();
 loadTickers(); setInterval(loadTickers,60000);
 tick(); setInterval(tick,2000);
 health(); setInterval(health,5000);
+beat(); setInterval(beat,5000);
+refreshTrading(); setInterval(refreshTrading,4000);
+tape(); setInterval(tape,1500);
+renderTape(); setInterval(function(){ if(document.getElementById("tape").classList.contains("on")) renderTape(); },1500);
 </script></body></html>"""
 
 
@@ -2209,6 +2499,22 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        import urllib.parse
+        u = urllib.parse.urlparse(self.path)
+        if u.path == "/api/trading":
+            act = urllib.parse.parse_qs(u.query).get("action", [""])[0]
+            if act == "start":
+                trading_start()
+            elif act == "stop":
+                trading_stop()
+            time.sleep(0.4)
+            body = json.dumps(trading_loop_state()).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         from urllib.parse import parse_qs, urlparse
         if self.path.split("?")[0] == "/api/control-all":
             try:
@@ -2492,6 +2798,70 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, fh.read(), "text/html")
             except Exception as exc:
                 return self._send(500, json.dumps({"error": str(exc)}), "application/json")
+        if p == "/api/models/all":
+            out = []
+            for fn, fam in (("multi_models.json", "adaptive"),
+                            ("stats_models.json", "statistical")):
+                try:
+                    with open(os.path.join(HERE, "state", fn)) as fh:
+                        d = json.load(fh)
+                    for m in d.get("models") or []:
+                        out.append({"name": m.get("name"), "family": fam,
+                                    "parent": d.get("engine") or fam,
+                                    "votes": m.get("voting"), "kind": "ta"})
+                except Exception:
+                    pass
+            try:
+                sig = jget("http://127.0.0.1:8787/api/models/signals?limit=600",
+                           timeout=8.0).get("signals") or []
+                counts, dirs = {}, {}
+                for x in sig:
+                    n = x.get("model")
+                    counts[n] = counts.get(n, 0) + 1
+                    dirs.setdefault(n, {"buy": 0, "sell": 0})
+                    dd = (x.get("direction") or "").upper()
+                    dirs[n]["buy" if ("BUY" in dd or "PUMP" in dd) else "sell"] += 1
+                for n, c in sorted(counts.items(), key=lambda kv: -kv[1]):
+                    out.append({"name": n, "family": "signal", "parent": "backend",
+                                "votes": c, "kind": "signal",
+                                "buy": dirs[n]["buy"], "sell": dirs[n]["sell"]})
+            except Exception:
+                pass
+            return self._send(200, json.dumps({"count": len(out), "models": out}),
+                              "application/json")
+        if p == "/api/trading":
+            q = urllib.parse.urlparse(self.path)
+            act = urllib.parse.parse_qs(q.query).get("action", [""])[0]
+            if self.command == "POST":
+                if act == "start":
+                    st = trading_start()
+                elif act == "stop":
+                    st = trading_stop()
+                else:
+                    st = trading_loop_state()
+                time.sleep(0.4)
+                return self._send(200, json.dumps(trading_loop_state()), "application/json")
+            return self._send(200, json.dumps(trading_loop_state()), "application/json")
+        if p == "/api/tape":
+            try:
+                with open(os.path.join(HERE, "state", "tape.json")) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception:
+                return self._send(200, json.dumps({"fills": []}), "application/json")
+        if p == "/api/heartbeat":
+            try:
+                with open(os.path.join(HERE, "state", "heartbeat.json")) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception:
+                return self._send(200, json.dumps({"books": 0, "rows": []}), "application/json")
+        if p == "/api/tick":
+            q = urllib.parse.urlparse(self.path).query
+            qs = urllib.parse.parse_qs(q).get("syms", [""])[0]
+            px = TICK["p"]
+            if qs:
+                px = {k: px[k] for k in qs.split(",") if k in px}
+            return self._send(200, json.dumps({"ts": TICK["ts"], "age_ms": int(
+                (time.time() - TICK["ts"]) * 1000), "p": px}), "application/json")
         if p in ("/api/universe800", "/api/tickers800"):
             try:
                 rows = universe800(800)
@@ -2562,6 +2932,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8799)
     args = ap.parse_args()
+    ticker_loop()
     httpd = ThreadingHTTPServer(("127.0.0.1", args.port), H)
     print("MASTER dashboard: http://127.0.0.1:%d" % args.port, flush=True)
     try:

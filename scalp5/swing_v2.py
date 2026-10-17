@@ -744,7 +744,7 @@ def main():
                                               "alert": a["kind"],
                                               "conf": round(conf, 4),
                                               "min_conf": args.min_confidence,
-                                              "model_gate": mv or "absent",
+                                              "model_gate": (mv if "mv" in vars() else None) or "absent",
                                               "liquidity": a.get("metrics", {}).get("quote_volume_24h"),
                                               "liq_floor": args.min_liquidity,
                                               "tech": bool(args.tech_confirm),

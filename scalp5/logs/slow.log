@@ -1,0 +1,23 @@
+12:52:43  SLOW EDGES — few setups, large targets, hours-to-days holds
+12:52:43    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+12:52:43    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+12:52:43    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+12:52:43    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+12:52:43    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+12:52:43    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+12:52:43    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+12:52:43    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+12:53:11  rs_leader    BUY  TRXUSDT    ratio at 5d high while BTC -1.29%
+12:53:15  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:53:57  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:54:31  rs_leader    BUY  ERAUSDT    ratio at 5d high while BTC -1.28%
+12:54:47  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 2, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:55:27  rs_leader    BUY  KMNOUSDT   ratio at 5d high while BTC -1.28%
+12:55:45  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:56:29  squeeze1h    BUY  VELODROMEUSDT squeeze break
+12:56:50  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:58:00  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:58:52  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+12:59:40  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+13:00:34  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+13:01:22  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0

@@ -71,6 +71,7 @@
   <span class="px" id="px">—</span>
   <span class="chg" id="chg">—</span>
   <span class="sp"></span>
+  <button id="pbtn" class="tbtn" onclick="toggleProps()" title="chart properties">⚙</button>
   <span class="hint" id="rng">—</span>
   <span class="hint" id="livedot">●</span>
   <button id="btn" onclick="toggle()">⚙ control</button>
@@ -187,7 +188,7 @@ function loadSignals(cb){
     .catch(function(){ SIGNALS={alerts:[],models:[]}; if(cb)cb(); });
 }
 var ENGDATA=[];
-var LIVE=true, LIVE_MS=2500, LAST_TS=0, TICKS=0;
+var LIVE=true, LIVE_MS=1000, LAST_TS=0, TICKS=0, LIVE_TIMER=null, TICK_TIMER=null, TICK_N=0;
 function pollLive(){
   if(!LIVE) return;
   fetch("/api/klines?symbol="+encodeURIComponent(SYM)+"&interval="+S.tf+"&limit=300",{cache:"no-store"})
@@ -212,7 +213,25 @@ function pollLive(){
     })
     .catch(function(){});
 }
-function setLive(on){ LIVE=on; chips(); }
+function setLive(on){
+  LIVE=on;
+  if(on){
+    startLive();
+    startTick();
+  } else {
+    if(LIVE_TIMER){ clearInterval(LIVE_TIMER); LIVE_TIMER=null; }
+    if(TICK_TIMER){ clearInterval(TICK_TIMER); TICK_TIMER=null; }
+  }
+  chips(); props();
+}
+var PROPS_OPEN=false;
+function toggleProps(){
+  PROPS_OPEN=!PROPS_OPEN;
+  var p=$("props"), b=$("pbtn");
+  if(p) p.style.display = PROPS_OPEN ? "" : "none";
+  if(b) b.classList.toggle("on", PROPS_OPEN);
+  props();
+}
 function loadFills(cb){
   fetch("/api/all",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
     var out=[];
@@ -676,7 +695,13 @@ function props(){
   html+='<div class="pg"><div class="pgt">series</div>'+
         row("chart type",S.chart)+
         row("bars drawn",GEO.vc)+
-        row("live",LIVE?("every "+Math.round(LIVE_MS/1000)+"s · tick "+TICKS):"paused")+
+        row("live",LIVE?("bars "+(LIVE_MS/1000).toFixed(2)+"s · price 0.25s · "+
+             TICK_N+" ticks"):"paused")+
+        '<div class="prow"><span>refresh</span><div class="chips">'+
+          [250,500,1000,2000,5000].map(function(ms){
+            return '<button class="'+(LIVE_MS===ms?"on":"")+'" onclick="setLiveMs('+ms+')">'+
+                   (ms<1000?ms+"ms":(ms/1000)+"s")+'</button>';
+          }).join("")+'</div></div>'+
         row("engine scope",ENGINE||"all models")+
         row("fills on symbol",FILLS.length)+
         row("alerts",SIGNALS.alerts.length)+
@@ -850,7 +875,10 @@ function bandEnd(){
 
 function wire(){
   var svg=$("svg");
-  svg.addEventListener("pointerdown",function(e){
+  svg.addEventListener("dblclick", function(ev){
+  if(ev.target.tagName==="svg") toggleProps();
+});
+svg.addEventListener("pointerdown",function(e){
     var reg=region(e);
     svg.setPointerCapture(e.pointerId);
     if(e.isPrimary){
@@ -1189,7 +1217,33 @@ wire(); chips(); fit();
 loadBars(S.tf, function(){
   loadSignals(function(){ loadFills(function(){ draw(); }); });
 });
-setInterval(pollLive, LIVE_MS);
+function startTick(){
+  if(TICK_TIMER) clearInterval(TICK_TIMER);
+  TICK_TIMER=setInterval(function(){
+    if(!LIVE || !BARS.length) return;
+    fetch("/api/tick?syms="+encodeURIComponent(SYM),{cache:"no-store"})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var px=d.p && d.p[SYM];
+        if(!px) return;
+        var b=BARS[BARS.length-1];
+        if(px===b.c) return;
+        b.c=px; b.h=Math.max(b.h,px); b.l=Math.min(b.l,px);
+        TICK_N++;
+        draw();
+      }).catch(function(){});
+  }, 250);
+}
+function startLive(){
+  if(LIVE_TIMER) clearInterval(LIVE_TIMER);
+  LIVE_TIMER=setInterval(pollLive, LIVE_MS);
+}
+function setLiveMs(ms){
+  LIVE_MS=Math.max(250, ms|0);
+  startLive();
+  chips(); props();
+}
+startLive();
 setInterval(function(){ loadSignals(function(){ loadFills(function(){ draw(); }); }); }, 15000);
 window.addEventListener("resize",function(){ refit(); });
 if(window.ResizeObserver){

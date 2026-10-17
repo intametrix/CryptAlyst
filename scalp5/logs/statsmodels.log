@@ -1,4 +1,14 @@
-09:56:53  STATS MODELS -- PAPER ONLY | 5 fitted models | need 3 agreeing
-09:56:53  OLS slope/R2 · z-score · online logistic (SGD) · autocorrelation · squeeze breakout
-09:56:54  universe 23: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
-09:57:55  >>> SELL TAOUSDT      @ 275         votes -3 [ols_trend,logistic,autocorr]
+12:52:43  STATS MODELS -- PAPER ONLY | 5 fitted models | need 3 agreeing
+12:52:43  OLS slope/R2 · z-score · online logistic (SGD) · autocorrelation · squeeze breakout
+12:52:44  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
+12:52:45  SETTINGS APPLIED -> risk_pct=5.0
+12:55:09  >>> BUY  UNIUSDT      @ 7.333       votes +3 [ols_trend,logistic,autocorr]
+12:55:33  >>> SELL TIAUSDT      @ 0.6696      votes -3 [ols_trend,logistic,autocorr]
+12:57:18  >>> SELL ENAUSDT      @ 0.1971      votes -3 [ols_trend,logistic,autocorr]
+12:57:45  <<< lock_usd UNIUSDT     buy   +0.109% net  -0.091% eq 1994.55
+12:57:45  <<< lock_usd TIAUSDT     sell  +0.134% net  -0.066% eq 1990.61
+12:57:45  <<< lock_usd ENAUSDT     sell  +0.101% net  -0.099% eq 1984.70
+12:58:11  >>> BUY  UNIUSDT      @ 7.335       votes +3 [ols_trend,logistic,autocorr]
+12:58:50  >>> SELL ENAUSDT      @ 0.1971      votes -3 [ols_trend,logistic,autocorr]
+13:00:10  >>> SELL STRKUSDT     @ 0.0715      votes -3 [ols_trend,logistic,autocorr]
+13:01:05  >>> BUY  SPCXBUSDT    @ 145.97      votes +3 [ols_trend,logistic,squeeze_break]
