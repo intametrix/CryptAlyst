@@ -755,9 +755,9 @@ function showTab(which){
   ["dash","market","why","review","control"].forEach(function(k){
     var b=$("tab-"+k); if(b) b.classList.toggle("on", k===which);
   });
-  if(which==="why") renderWhy();
-  if(which==="review") renderReview();
-  if(which==="control") renderControl();
+  try{ if(which==="why") renderWhy(); }catch(e){ tabErr("why",e); }
+  try{ if(which==="review") renderReview(); }catch(e){ tabErr("review",e); }
+  try{ if(which==="control") renderControl(); }catch(e){ tabErr("control",e); }
 }
 
 /* ============ market chart ============ */
@@ -775,15 +775,22 @@ function openChart(sym, engine){
   var m=$("chartmodal");
   if(m) m.classList.add("open");
 }
+function tabErr(tab, e){
+  var b=$("err");
+  if(b){ b.style.display="block"; b.textContent=tab+" tab error: "+(e&&e.message||e); }
+  var host=$(tab==="why"?"wbody":tab==="review"?"rbody":"cbody");
+  if(host) host.innerHTML='<div class="panel"><div class="empty">'+tab+' failed to render: '+
+    esc(String(e&&e.message||e))+'</div></div>';
+}
 function closeChartModal(){
   var m=$("chartmodal"); if(m) m.classList.remove("open");
 }
-function restoreSide(){} function restoreIv(){} function restoreOv(){} function restoreEngine(){}
-function refreshCtlBtn(){} function ctlSummary(){ return ""; }
-function toggleSide(){} function resetView(){} function resetY(){} function zoomStep(){}
+function restoreSide(){ } function restoreIv(){} function restoreOv(){} function restoreEngine(){}
+function refreshCtlBtn(){ } function ctlSummary(){ return ''; }
+function toggleSide(){ /* handled inside the chart page */ } function resetView(){} function resetY(){} function zoomStep(){}
 function toggleMeasure(){} function renderEngines(){} function renderMivs(){}
-function renderOverlays(){} function renderTickerList(){} function setDefaultIv(){}
-function toggleChartCtl(){} function chartGestures(){} function drawMarket(){}
+function renderOverlays(){} function renderTickerList(){ /* the ticker list lives in the chart page now */ } function setDefaultIv(){}
+function toggleChartCtl(){ } function chartGestures(){ } function drawMarket(){ }
 function allLayers(){} function setLayerScope(){}
 
 
@@ -1460,7 +1467,7 @@ function dnaCards(trades, sym){
 }
 
 async function renderWhy(){
-  const sym=($("msym")?.value||"BTCUSDT").toUpperCase();
+  const sym=(window.SELECTED_SYM||"BTCUSDT").toUpperCase();
   $("wsym").textContent=sym;
   const trades=tradesAll();
   let sig=null;
@@ -1565,22 +1572,7 @@ function restoreSide(){
   }
 }
 function clearContext(){ M.context=null; drawMarket(); }
-function selectTicker(sym){
-  $("msym").value=sym;
-  $("mtitle").textContent=sym;
-  { const cp=$("mctx");
-    if(cp){
-      if(M.context){
-        const en=(LAST||[]).find(x=>x.key===M.context);
-        cp.style.display="inline-flex";
-        cp.innerHTML="context: <b>"+esc(M.context)+"</b> \u00d7";
-        if(en){ cp.style.borderColor=en.colour; cp.style.color=en.colour; }
-      } else cp.style.display="none";
-    }
-  }
-  renderTickerList();
-  drawMarket();
-}
+function selectTicker(sym){ if(sym) openChart(sym, null); }
 
 
 window.addEventListener("error", function(e){
