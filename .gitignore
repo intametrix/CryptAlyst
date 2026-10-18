@@ -9,3 +9,13 @@ dist/*.bundle
 dist/trading-platform.patch
 scalp5/logs/
 scalp5/*.jsonl
+
+# build artefacts: rebuild with `go build` in each directory
+scalp5/forecast/forecast
+scalp5/eventbus/eventbus
+scalp5/marketpipe/marketpipe
+scalp5/tad/tad
+*.bak.html
+scalp5/bridge/cleared_at
+scalp5/turtle_sessions.jsonl
+binance-turtle/ledger/
