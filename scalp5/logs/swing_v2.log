@@ -1,0 +1,33 @@
+08:00:06  SWING v2 -- PAPER ONLY | 12 positions | NO CAP (winners run) | trail 20% of peak | stop -2%
+08:00:06  risk ceiling: total open risk capped at 30% of equity
+08:00:06  rebalance: ON - weakest holding rotates out for a better alert
+08:00:06  downside: close after 4 consecutive negative ticks, then rescan
+08:00:06  cycle close: off
+08:00:06  per-trade lock: close each trade at +0.00% (fee is 0.20% round trip)
+08:00:06  profit lock: bank all winners when unrealised >= 1.0% of equity (cooldown 60s)
+08:00:06  dead weight: close if still < -0.3% after 600s
+08:00:06  sizing: 1.00% equity risk per trade at the 2% stop, x conviction (cap 2.0x)
+08:00:06  async alerts: scanner thread every 0.5s | position tick 0.5s
+08:00:06  trail: give back 20% of peak PnL once peak >= 0.5% (80/20), cap +0%, stop -2%
+08:00:06  basis: CONFIDENCE | floor 60% | alerts every 1.0s | max age 90s | cooldown 120s
+08:00:07  watchlist seeded: 184 liquid USDT pairs (>= $1M 24h volume)
+08:00:07  WARNING: no calibration at /tmp/pumpdump-run/calibration.json -- falling back to raw scores
+08:00:08  >>> OPEN  BTCUSDT     BUY  PUMP   conf  87% (pcal   0.0%) @ 81734.46    notional 2899.05 risk 57.98
+08:00:09  scan 2: no eligible alert (1 open)
+08:00:11  scan 3: no eligible alert (1 open)
+08:00:12  scan 4: no eligible alert (1 open)
+08:00:13  scan 5: no eligible alert (1 open)
+08:00:15  scan 6: no eligible alert (1 open)
+08:00:16  scan 7: no eligible alert (1 open)
+08:00:19  scan 8: no eligible alert (1 open)
+08:00:20  scan 9: no eligible alert (1 open)
+08:00:21  scan 10: no eligible alert (1 open)
+08:00:22  scan 11: no eligible alert (1 open)
+08:00:24  scan 12: no eligible alert (1 open)
+08:00:25  scan 13: no eligible alert (1 open)
+08:00:26  scan 14: no eligible alert (1 open)
+08:00:27  >>> OPEN  TRXUSDT     SELL DUMP   conf 100% (pcal   0.0%) @ 0.3334      notional 3317.67 risk 66.35
+08:00:28  scan 16: no eligible alert (2 open)
+08:00:30  scan 17: no eligible alert (2 open)
+08:00:31  scan 18: no eligible alert (2 open)
+08:00:32  scan 19: no eligible alert (2 open)

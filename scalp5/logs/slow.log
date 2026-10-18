@@ -1,23 +1,158 @@
-12:52:43  SLOW EDGES — few setups, large targets, hours-to-days holds
-12:52:43    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
-12:52:43    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
-12:52:43    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
-12:52:43    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
-12:52:43    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
-12:52:43    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
-12:52:43    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
-12:52:43    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
-12:53:11  rs_leader    BUY  TRXUSDT    ratio at 5d high while BTC -1.29%
-12:53:15  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-12:53:57  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 1, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-12:54:31  rs_leader    BUY  ERAUSDT    ratio at 5d high while BTC -1.28%
-12:54:47  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 2, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-12:55:27  rs_leader    BUY  KMNOUSDT   ratio at 5d high while BTC -1.28%
-12:55:45  scan: 150 symbols, donchian4h open 0, squeeze1h open 0, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-12:56:29  squeeze1h    BUY  VELODROMEUSDT squeeze break
-12:56:50  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-12:58:00  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-12:58:52  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-12:59:40  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-13:00:34  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
-13:01:22  scan: 150 symbols, donchian4h open 0, squeeze1h open 1, pump_flag open 0, climax_fade open 0, rs_leader open 3, vol_drift open 0, btc_beta_lag open 0, capitulation open 0
+06:41:56  SLOW EDGES — few setups, large targets, hours-to-days holds
+06:41:56    donchian4h   4h   tp 2.5% sl 2.0% hold 43200s
+06:41:56    squeeze1h    1h   tp 1.5% sl 0.8% hold 86400s
+06:41:56    pump_flag    15m  tp 1.0% sl 0.6% hold 14400s
+06:41:56    climax_fade  15m  tp 0.8% sl 0.6% hold 43200s
+06:41:56    rs_leader    4h   tp 1.5% sl 1.2% hold 172800s
+06:41:56    vol_drift    4h   tp 2.5% sl 0.8% hold 432000s
+06:41:56    btc_beta_lag 1h   tp 1.0% sl 0.8% hold 10800s
+06:41:56    capitulation 15m  tp 1.2% sl 0.8% hold 21600s
+06:41:56  ACTIVE: donchian4h, squeeze1h, pump_flag, climax_fade, rs_leader, vol_drift, btc_beta_lag, capitulation
+06:42:12  donchian4h   BUY  QUSDT      idle fill +61.5%
+06:42:12  squeeze1h    BUY  QUSDT      idle fill +61.5%
+06:42:12  pump_flag    BUY  QUSDT      idle fill +61.5%
+06:42:12  climax_fade  BUY  QUSDT      idle fill +61.5%
+06:42:12  rs_leader    BUY  QUSDT      idle fill +61.5%
+06:42:12  vol_drift    BUY  QUSDT      idle fill +61.5%
+06:42:12  btc_beta_lag BUY  QUSDT      idle fill +61.5%
+06:42:12  capitulation BUY  QUSDT      idle fill +61.5%
+06:42:12  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 1, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:42:19  squeeze1h    BUY  SANDUSDT   squeeze break
+06:42:20  rs_leader    BUY  SANDUSDT   ratio at 5d high while BTC -1.84%
+06:42:28  rs_leader    BUY  GTCUSDT    ratio at 5d high while BTC -1.86%
+06:42:33  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 3, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:42:58  rs_leader    BUY  ERAUSDT    ratio at 5d high while BTC -1.87%
+06:42:59  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:43:24  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:43:44  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:44:04  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:44:23  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:44:43  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:45:05  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:45:24  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:45:44  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:46:03  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:46:23  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:46:42  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:47:01  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:47:22  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:47:43  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:48:02  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:48:22  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:48:42  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:49:01  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:49:21  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:49:41  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:50:00  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:50:20  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:50:40  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:51:00  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:51:19  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:51:40  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:52:01  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:52:21  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:52:41  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:53:01  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:53:20  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:53:39  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:53:59  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:54:19  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:54:39  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:55:00  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:55:19  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:55:38  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:55:58  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:56:26  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:56:47  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:57:07  scan: 60 symbols, donchian4h open 1, squeeze1h open 2, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:57:24  rs_leader    BUY  SANDUSDT   ratio at 5d high while BTC -1.87%
+06:57:31  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:57:56  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:58:25  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:58:51  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:59:11  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:59:31  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+06:59:50  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:00:14  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:00:33  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:00:53  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:01:13  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:01:32  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:01:52  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:02:12  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:02:31  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:02:52  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:03:11  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:03:30  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:03:50  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:04:10  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:04:29  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:04:49  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:05:11  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:05:31  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:05:51  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:06:11  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:06:31  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:06:51  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:07:11  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:07:32  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:07:55  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:08:16  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:08:35  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:08:54  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:09:14  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:09:34  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:09:54  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:10:15  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:10:35  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:10:56  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:11:18  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:11:38  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:11:57  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:12:17  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:12:33  rs_leader    BUY  SANDUSDT   ratio at 5d high while BTC -1.88%
+07:12:40  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 4, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:13:02  rs_leader    BUY  AVAUSDT    ratio at 5d high while BTC -1.88%
+07:13:06  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:13:34  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:13:59  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:14:19  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:14:38  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:14:57  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:15:18  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:15:37  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:15:57  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:16:16  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:16:35  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:16:54  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:17:14  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:17:33  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:17:53  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:18:12  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:18:32  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:18:52  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:19:11  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:19:31  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:19:50  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:20:11  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:20:30  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:20:50  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:21:09  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:21:28  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:21:48  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:22:07  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:22:26  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:22:45  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:23:05  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:23:24  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:23:43  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:24:04  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:24:23  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:24:43  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:25:03  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:25:22  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:25:41  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:26:01  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:26:21  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:26:40  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1
+07:27:01  scan: 60 symbols, donchian4h open 1, squeeze1h open 1, pump_flag open 1, climax_fade open 1, rs_leader open 5, vol_drift open 1, btc_beta_lag open 1, capitulation open 1

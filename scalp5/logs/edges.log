@@ -1,53 +1,72 @@
-10:17:08  CRYPTO EDGES — paper only
-10:17:08    funding_fade      tp 1.0 sl 1.2 hold 1800s risk 0.8%
-10:17:08    session_breakout  tp 1.2 sl 0.9 hold 1200s risk 1.0%
-10:17:08    vwap_reversion    tp 0.7 sl 1.0 hold 900s risk 0.8%
-10:17:08    btc_regime        tp 1.5 sl 1.0 hold 2400s risk 1.0%
-10:17:08    flow_divergence   tp 0.9 sl 1.1 hold 900s risk 0.8%
-10:17:09  vwap_reversion    BUY  ETHUSDT     -3.2 ATR below VWAP 2446.2510
-10:17:09  flow_divergence   SELL SOLUSDT     price up, taker buy 42% — absorption
-10:17:10  vwap_reversion    BUY  ZECUSDT     -2.4 ATR below VWAP 1180.4381
-10:17:10  flow_divergence   SELL ZECUSDT     price up, taker buy 41% — absorption
-10:17:10  vwap_reversion    BUY  XRPUSDT     -4.5 ATR below VWAP 1.3191
-10:17:11  vwap_reversion    BUY  BNBUSDT     -4.8 ATR below VWAP 725.7632
-10:17:11  flow_divergence   SELL DOGEUSDT    price up, taker buy 39% — absorption
-10:17:11  btc_regime        SELL WLDUSDT     BTC regime down, WLDUSDT below EMA20+VWAP
-10:17:12  vwap_reversion    BUY  SUIUSDT     -5.2 ATR below VWAP 1.0267
-10:17:12  btc_regime        SELL SUIUSDT     BTC regime down, SUIUSDT below EMA20+VWAP
-10:17:13  vwap_reversion    BUY  SNDKBUSDT   -11.3 ATR below VWAP 1323.8290
-10:17:13  btc_regime        SELL SNDKBUSDT   BTC regime down, SNDKBUSDT below EMA20+VWAP
-10:17:13  btc_regime        SELL SPCXBUSDT   BTC regime down, SPCXBUSDT below EMA20+VWAP
-10:17:14  flow_divergence   BUY  RLUSDUSDT   price down, taker buy 100% — absorption
-10:17:14  btc_regime        SELL INJUSDT     BTC regime down, INJUSDT below EMA20+VWAP
-10:17:14  flow_divergence   SELL INJUSDT     price up, taker buy 10% — absorption
-10:17:15  btc_regime        SELL ENAUSDT     BTC regime down, ENAUSDT below EMA20+VWAP
-10:17:15  flow_divergence   SELL SOXLBUSDT   price up, taker buy 23% — absorption
-10:17:22  funding_fade      SELL EPICUSDT    funding +0.0998%/8h — longs crowded
-10:17:23  funding_fade      BUY  GTCUSDT     funding -1.0912%/8h — shorts crowded
-10:17:23  funding_fade      BUY  RSRUSDT     funding -0.2118%/8h — shorts crowded
-10:17:23  funding_fade      BUY  BLURUSDT    funding -0.1875%/8h — shorts crowded
-10:32:25  vwap_reversion    BUY  ETHUSDT     -4.1 ATR below VWAP 2446.0615
-10:32:25  vwap_reversion    BUY  ZECUSDT     -2.3 ATR below VWAP 1180.0015
-10:32:26  vwap_reversion    BUY  XRPUSDT     -5.0 ATR below VWAP 1.3189
-10:32:26  flow_divergence   BUY  XRPUSDT     price down, taker buy 65% — absorption
-10:32:26  vwap_reversion    BUY  BNBUSDT     -5.1 ATR below VWAP 725.6909
-10:32:27  flow_divergence   BUY  DOGEUSDT    price down, taker buy 83% — absorption
-10:32:27  vwap_reversion    BUY  SUIUSDT     -5.3 ATR below VWAP 1.0264
-10:32:27  flow_divergence   BUY  SUIUSDT     price down, taker buy 83% — absorption
-10:32:28  vwap_reversion    BUY  SNDKBUSDT   -11.4 ATR below VWAP 1323.4198
-10:32:29  flow_divergence   SELL INJUSDT     price up, taker buy 26% — absorption
-10:32:31  flow_divergence   SELL TRXUSDT     price up, taker buy 20% — absorption
-10:32:32  flow_divergence   BUY  FILUSDT     price down, taker buy 56% — absorption
-10:34:16  funding_fade      BUY  ZILUSDT     funding -0.0931%/8h — shorts crowded
-10:47:41  vwap_reversion    BUY  ETHUSDT     -3.9 ATR below VWAP 2445.5072
-10:47:42  vwap_reversion    BUY  XRPUSDT     -6.1 ATR below VWAP 1.3186
-10:47:42  vwap_reversion    BUY  BNBUSDT     -5.3 ATR below VWAP 725.5595
-10:47:43  flow_divergence   SELL WLDUSDT     price up, taker buy 37% — absorption
-10:47:44  flow_divergence   SELL TIAUSDT     price up, taker buy 44% — absorption
-10:47:44  vwap_reversion    BUY  SUIUSDT     -5.5 ATR below VWAP 1.0260
-10:47:45  vwap_reversion    BUY  SNDKBUSDT   -11.1 ATR below VWAP 1323.0679
-10:47:45  vwap_reversion    BUY  SPCXBUSDT   -6.9 ATR below VWAP 146.7562
-10:47:46  flow_divergence   SELL INJUSDT     price up, taker buy 5% — absorption
-10:47:47  flow_divergence   SELL AVAXUSDT    price up, taker buy 21% — absorption
-10:47:48  flow_divergence   SELL TAOUSDT     price up, taker buy 29% — absorption
-10:47:52  flow_divergence   BUY  PEPEUSDT    price down, taker buy 66% — absorption
+06:41:56  CRYPTO EDGES — paper only
+06:41:56    funding_fade      tp 1.0 sl 1.2 hold 1800s risk 0.8%
+06:41:56    session_breakout  tp 1.2 sl 0.9 hold 1200s risk 1.0%
+06:41:56    vwap_reversion    tp 0.7 sl 1.0 hold 900s risk 0.8%
+06:41:56    btc_regime        tp 1.5 sl 1.0 hold 2400s risk 1.0%
+06:41:56    flow_divergence   tp 0.9 sl 1.1 hold 900s risk 0.8%
+06:41:57  vwap_reversion    SELL BTCUSDT     2.1 ATR above VWAP 81550.5692
+06:41:57  btc_regime        BUY  BTCUSDT     BTC regime up, BTCUSDT above EMA20+VWAP
+06:41:57  btc_regime        BUY  ETHUSDT     BTC regime up, ETHUSDT above EMA20+VWAP
+06:41:57  btc_regime        BUY  SOLUSDT     BTC regime up, SOLUSDT above EMA20+VWAP
+06:41:58  btc_regime        BUY  NEARUSDT    BTC regime up, NEARUSDT above EMA20+VWAP
+06:41:59  btc_regime        BUY  HYPEUSDT    BTC regime up, HYPEUSDT above EMA20+VWAP
+06:41:59  flow_divergence   BUY  HYPEUSDT    price down, taker buy 67% — absorption
+06:41:59  vwap_reversion    BUY  WLDUSDT     -3.5 ATR below VWAP 0.5022
+06:42:00  vwap_reversion    SELL SNDKBUSDT   2.2 ATR above VWAP 1259.0578
+06:42:00  btc_regime        BUY  SNDKBUSDT   BTC regime up, SNDKBUSDT above EMA20+VWAP
+06:42:00  flow_divergence   SELL SNDKBUSDT   price up, taker buy 36% — absorption
+06:42:00  vwap_reversion    BUY  TIAUSDT     -9.5 ATR below VWAP 0.6879
+06:42:00  vwap_reversion    SELL SANDUSDT    3.0 ATR above VWAP 0.0612
+06:42:01  vwap_reversion    BUY  TRXUSDT     -5.8 ATR below VWAP 0.3352
+06:42:02  flow_divergence   SELL SOXLBUSDT   price up, taker buy 9% — absorption
+06:42:04  flow_divergence   BUY  UUSDT       price down, taker buy 72% — absorption
+06:42:05  flow_divergence   BUY  ADAUSDT     price down, taker buy 59% — absorption
+06:42:06  flow_divergence   SELL SPCXBUSDT   price up, taker buy 45% — absorption
+06:42:10  funding_fade      BUY  GTCUSDT     funding -1.2519%/8h — shorts crowded
+06:42:11  funding_fade      BUY  SANDUSDT    funding -1.0882%/8h — shorts crowded
+06:44:04  vwap_reversion    SELL SANDUSDT    2.7 ATR above VWAP 0.0612
+06:46:29  vwap_reversion    SELL SANDUSDT    2.3 ATR above VWAP 0.0612
+06:46:39  funding_fade      BUY  SANDUSDT    funding -1.1085%/8h — shorts crowded
+06:49:24  funding_fade      BUY  ERAUSDT     funding -0.1708%/8h — shorts crowded
+06:57:13  flow_divergence   BUY  HYPEUSDT    price down, taker buy 62% — absorption
+06:57:14  vwap_reversion    BUY  WLDUSDT     -3.4 ATR below VWAP 0.5020
+06:57:14  vwap_reversion    SELL SNDKBUSDT   2.8 ATR above VWAP 1259.1155
+06:57:15  vwap_reversion    BUY  TIAUSDT     -9.4 ATR below VWAP 0.6864
+06:57:15  vwap_reversion    BUY  TRXUSDT     -6.4 ATR below VWAP 0.3352
+06:57:16  flow_divergence   BUY  UNIUSDT     price down, taker buy 62% — absorption
+06:57:16  vwap_reversion    BUY  STRKUSDT    -7.2 ATR below VWAP 0.0671
+06:57:17  flow_divergence   SELL SOXLBUSDT   price up, taker buy 37% — absorption
+06:57:19  flow_divergence   SELL MUBUSDT     price up, taker buy 33% — absorption
+06:57:21  flow_divergence   SELL GTCUSDT     price up, taker buy 38% — absorption
+06:57:22  flow_divergence   SELL APTUSDT     price up, taker buy 21% — absorption
+07:01:46  vwap_reversion    SELL SANDUSDT    2.5 ATR above VWAP 0.0613
+07:03:17  flow_divergence   BUY  FETUSDT     price down, taker buy 60% — absorption
+07:03:19  funding_fade      BUY  GTCUSDT     funding -1.2049%/8h — shorts crowded
+07:11:32  funding_fade      BUY  SANDUSDT    funding -1.1995%/8h — shorts crowded
+07:12:03  vwap_reversion    SELL SANDUSDT    3.0 ATR above VWAP 0.0613
+07:12:22  flow_divergence   BUY  HYPEUSDT    price down, taker buy 86% — absorption
+07:12:22  vwap_reversion    BUY  WLDUSDT     -3.5 ATR below VWAP 0.5016
+07:12:23  vwap_reversion    SELL SNDKBUSDT   2.7 ATR above VWAP 1259.3328
+07:12:24  vwap_reversion    BUY  TRXUSDT     -6.3 ATR below VWAP 0.3352
+07:12:24  vwap_reversion    BUY  TIAUSDT     -8.9 ATR below VWAP 0.6848
+07:12:24  flow_divergence   BUY  SOXLBUSDT   price down, taker buy 64% — absorption
+07:12:25  vwap_reversion    BUY  STRKUSDT    -7.0 ATR below VWAP 0.0671
+07:12:26  flow_divergence   BUY  TAOUSDT     price down, taker buy 63% — absorption
+07:12:27  flow_divergence   SELL MUBUSDT     price up, taker buy 33% — absorption
+07:12:33  funding_fade      BUY  GTCUSDT     funding -1.1812%/8h — shorts crowded
+07:12:42  flow_divergence   BUY  SUIUSDT     price down, taker buy 60% — absorption
+07:17:58  funding_fade      BUY  GTCUSDT     funding -1.1724%/8h — shorts crowded
+07:18:38  funding_fade      BUY  GTCUSDT     funding -1.1724%/8h — shorts crowded
+07:18:45  flow_divergence   SELL SOLUSDT     price up, taker buy 44% — absorption
+07:19:38  funding_fade      BUY  ERAUSDT     funding -0.2278%/8h — shorts crowded
+07:20:59  funding_fade      BUY  GTCUSDT     funding -1.1666%/8h — shorts crowded
+07:22:06  btc_regime        BUY  BTCUSDT     BTC regime up, BTCUSDT above EMA20+VWAP
+07:22:06  btc_regime        BUY  ETHUSDT     BTC regime up, ETHUSDT above EMA20+VWAP
+07:22:08  btc_regime        BUY  BNBUSDT     BTC regime up, BNBUSDT above EMA20+VWAP
+07:22:09  btc_regime        BUY  SNDKBUSDT   BTC regime up, SNDKBUSDT above EMA20+VWAP
+07:22:10  btc_regime        BUY  SANDUSDT    BTC regime up, SANDUSDT above EMA20+VWAP
+07:22:11  btc_regime        BUY  SOXLBUSDT   BTC regime up, SOXLBUSDT above EMA20+VWAP
+07:23:20  funding_fade      BUY  RSRUSDT     funding -0.1426%/8h — shorts crowded
+07:23:50  vwap_reversion    SELL SANDUSDT    2.6 ATR above VWAP 0.0613
+07:24:29  btc_regime        BUY  SANDUSDT    BTC regime up, SANDUSDT above EMA20+VWAP
+07:24:39  funding_fade      BUY  SANDUSDT    funding -1.2492%/8h — shorts crowded

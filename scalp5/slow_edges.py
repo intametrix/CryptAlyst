@@ -22,6 +22,7 @@ import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state")
+MASTER = "http://127.0.0.1:8799"
 BACKEND = "http://127.0.0.1:8787"
 SPOT = "https://api.binance.com"
 FEE = 0.001
@@ -80,7 +81,7 @@ def keltner(bs, n=20, k=1.5):
 class Book:
     def __init__(self, name, cfg):
         self.name, self.cfg = name, cfg
-        self.equity = 2000.0
+        self.equity = BUDGET
         self.positions, self.trades = {}, []
         self.opened = 0
 
@@ -114,7 +115,12 @@ class Book:
                                     "exit_ms": int(time.time() * 1000), "why": p["why"]})
                 self.positions.pop(sym, None)
 
+    active = True
+    last_open = 0.0
+
     def open(self, sym, side, px, why):
+        if not self.active:
+            return
         notional = min(self.equity * (self.cfg["risk"] / 100) / (self.cfg["sl"] / 100),
                        self.equity * 3)
         self.positions[sym] = {"side": side, "entry": px, "opened": time.time(),
@@ -122,6 +128,8 @@ class Book:
         self.opened += 1
 
     def dump(self):
+        if not self.active:
+            return
         pos = [{"symbol": s, "side": p["side"], "entry": p["entry"], "price": p["entry"],
                 "gross_pct": round(p.get("mark", 0), 3),
                 "net_pct": round(p.get("mark", 0) - 0.2, 3),
@@ -132,9 +140,9 @@ class Book:
                for s, p in self.positions.items()]
         payload = {
             "ts": int(time.time() * 1000), "mode": "paper", "engine": self.name,
-            "state": "running", "equity": round(self.equity, 4), "start_equity": 2000.0,
-            "return_pct": round(100 * (self.equity / 2000 - 1), 4),
-            "realised": round(self.equity - 2000, 4),
+            "state": "running", "equity": round(self.equity, 4), "start_equity": BUDGET,
+            "return_pct": round(100 * (self.equity / BUDGET - 1), 4),
+            "realised": round(self.equity - BUDGET, 4),
             "unrealised": round(sum(p["notional"] * p.get("mark", 0) / 100
                                     for p in self.positions.values()), 4),
             "tp_pct": self.cfg["tp"], "sl_pct": self.cfg["sl"],
@@ -161,7 +169,7 @@ class Book:
 def climax_fade_signal(sym, b15, alerts):
     """DUMP with extreme burst, then a 15m close back above the 50% retrace."""
     a = next((x for x in alerts if x.get("symbol") == sym and x.get("kind") == "DUMP"
-              and ((x.get("metrics") or {}).get("burst_z") or 0) > 20), None)
+              and ((x.get("metrics") or {}).get("burst_z") or 0) > 8), None)
     if not a or not a.get("ts_ms"):
         return None
     post = [b for b in b15 if b["t"] >= a["ts_ms"] - 900000]
@@ -169,9 +177,9 @@ def climax_fade_signal(sym, b15, alerts):
         return None
     leg_low = min(b["l"] for b in post)
     leg_high = post[0]["o"]
-    retr50 = leg_low + 0.5 * (leg_high - leg_low)
+    retr50 = leg_low + 0.35 * (leg_high - leg_low)
     if post[-1]["c"] > retr50:
-        return ("buy", "climax fade: closed above 50%% retr %.6g after z>20 dump" % retr50)
+        return ("buy", "climax fade: closed above 35%% retr %.6g after z>20 dump" % retr50)
     return None
 
 
@@ -198,12 +206,12 @@ def vol_drift_signal(sym, b4):
         widths.append(2 * sd / m if m else 0)
     if not widths:
         return None
-    if widths[-1] > min(widths) * 1.35:
+    if widths[-1] > min(widths) * 2.2:
         return None
     chg3d = (b4[-1]["c"] / b4[-19]["c"] - 1) * 100
     hi10 = max(b["h"] for b in b4[-11:-1])
     volmed = sorted(b["v"] for b in b4[-21:-1])[10]
-    if chg3d > 0.2 and b4[-1]["c"] > hi10 and b4[-1]["v"] < volmed:
+    if chg3d > -0.1 and b4[-1]["c"] > hi10 and b4[-1]["v"] < volmed:
         return ("buy", "quiet drift: BB width at low, +%.1f%% in 3d on light volume" % chg3d)
     return None
 
@@ -211,7 +219,7 @@ def vol_drift_signal(sym, b4):
 def capitulation_signal(sym, b15, alerts):
     """KIMI id 64: thin-book capitulation overshoots; buy the first bounce."""
     a = next((x for x in alerts if x.get("symbol") == sym and x.get("kind") == "DUMP"
-              and ((x.get("metrics") or {}).get("burst_z") or 0) > 15), None)
+              and ((x.get("metrics") or {}).get("burst_z") or 0) > 7), None)
     if not a or not a.get("ts_ms"):
         return None
     post = [b for b in b15 if b["t"] >= a["ts_ms"] - 900000]
@@ -219,11 +227,14 @@ def capitulation_signal(sym, b15, alerts):
         return None
     leg_low = min(b["l"] for b in post)
     leg_hi = post[0]["o"]
-    if post[-1]["c"] <= leg_low + 0.35 * (leg_hi - leg_low):
+    if post[-1]["c"] <= leg_low + 0.18 * (leg_hi - leg_low):
         return None
     if post[-1]["c"] <= post[-1]["o"]:
         return None
     return ("buy", "capitulation bounce off %.6g (z>15 dump, reclaimed 35%%)" % leg_low)
+
+
+BUDGET = 3000.0
 
 
 def main():
@@ -231,6 +242,7 @@ def main():
     ap.add_argument("--seconds", type=int, default=86400)
     ap.add_argument("--tick", type=float, default=5.0)
     ap.add_argument("--universe", type=int, default=60)
+    ap.add_argument("--only", default="", help="comma separated book names")
     args = ap.parse_args()
 
     log("SLOW EDGES — few setups, large targets, hours-to-days holds")
@@ -238,14 +250,18 @@ def main():
         log("  %-12s %-4s tp %.1f%% sl %.1f%% hold %ds" % (
             k, v["interval"], v["tp"], v["sl"], v["hold"]))
 
+    only = [x.strip() for x in (args.only or "").split(",") if x.strip()]
     books = {k: Book(k, v) for k, v in CONFIGS.items()}
+    for k, b in books.items():
+        b.active = (not only or k in only)
+    log("ACTIVE: " + ", ".join(k for k, b in books.items() if b.active))
     started = time.time()
     last_scan = 0.0
     scanned = set()
     btc_cache = {}
     bars_cache = {}
     BAR_TTL = 900.0
-    FETCH_CAP = 25
+    FETCH_CAP = 10
 
     while time.time() - started < args.seconds:
         now = time.time()
@@ -257,9 +273,11 @@ def main():
             continue
         last_scan = now
         scanned.clear()
+        for _b in books.values():
+            _b.dump()          # publish immediately so the books show up at once
 
         try:
-            uni = jget(BACKEND + "/api/universe800", timeout=12).get("tickers") or []
+            uni = jget(MASTER + "/api/universe800", timeout=12).get("tickers") or []
         except Exception:
             try:
                 uni = jget(BACKEND + "/api/universe", timeout=10).get("symbols") or []
@@ -293,15 +311,15 @@ def main():
                 hi, _ = donchian(b4[:-1], 55)
                 volmed = sorted(b["v"] for b in b4[-21:-1])[10]
                 a4 = atr(b4, 14)
-                if (b4[-1]["c"] > hi and a4 / px > 0.004
-                        and b4[-1]["v"] > 1.2 * volmed):
+                if (b4[-1]["c"] > hi and a4 / px > 0.002
+                        and b4[-1]["v"] > 0.9 * volmed):
                     d.open(sym, "buy", px, "4h close %.4f > 55-bar high %.4f, ATR %.2f%%" %
                            (b4[-1]["c"], hi, 100 * a4 / px))
                     log("%-12s BUY  %-10s break %.4f (ATR %.2f%%)" % (
                         "donchian4h", sym, hi, 100 * a4 / px))
 
             # --- squeeze1h
-            sq = books["squeeze1h"]
+            sq = books.get("squeeze1h")
             sq.manage({sym: px})
             if sym not in sq.positions and len(sq.positions) < 6:
                 lo_b, hi_b = bollinger(b1, 20, 2.0)
@@ -309,13 +327,13 @@ def main():
                 inside = all(True for _ in range(1)) and lo_b > lo_k and hi_b < hi_k
                 volmed = sorted(b["v"] for b in b1[-21:-1])[10]
                 if (inside and b1[-1]["c"] > max(b["h"] for b in b1[-7:-1])
-                        and b1[-1]["v"] > 1.2 * volmed):
+                        and b1[-1]["v"] > 0.9 * volmed):
                     sq.open(sym, "buy", px, "1h squeeze breakout, vol %.1fx median" %
                             (b1[-1]["v"] / volmed if volmed else 0))
                     log("%-12s BUY  %-10s squeeze break" % ("squeeze1h", sym))
 
             # --- pump_flag (KIMI's four filters)
-            pf = books["pump_flag"]
+            pf = books.get("pump_flag")
             pf.manage({sym: px})
             if sym not in pf.positions and len(pf.positions) < 6:
                 try:
@@ -325,7 +343,7 @@ def main():
                 a = next((x for x in al if x.get("kind") == "PUMP"), None)
                 if a and a.get("at_ms"):
                     age_min = (time.time() * 1000 - a["at_ms"]) / 60000.0
-                    if 5 <= age_min <= 240:
+                    if 0 <= age_min <= 1440:
                         post = [b for b in b15 if b["t"] >= a["at_ms"] - 15 * 60000]
                         if len(post) >= 5:
                             alert_px = a.get("price") or post[0]["o"]
@@ -334,9 +352,9 @@ def main():
                             base = [b for b in post if b["t"] > impulse["t"]]
                             retr50 = alert_px + 0.5 * (H - alert_px)
                             vol_impulse = impulse["v"] or 1e-9
-                            ok_base = len(base) >= 3
+                            ok_base = len(base) >= 1
                             ok_retr = all(b["l"] >= retr50 for b in base) if base else False
-                            ok_vol = all(b["v"] < 0.6 * vol_impulse for b in base) if base else False
+                            ok_vol = all(b["v"] < 0.9 * vol_impulse for b in base) if base else False
                             near = px >= H * 0.985
                             if ok_base and ok_retr and ok_vol and near and px > H:
                                 pf.open(sym, "buy", px,
@@ -346,7 +364,7 @@ def main():
                                     "pump_flag", sym, len(base), age_min))
 
             # --- KIMI's three
-            cf = books["climax_fade"]; cf.manage({sym: px})
+            cf = books.get("climax_fade"); cf.manage({sym: px})
             if sym not in cf.positions and len(cf.positions) < 6:
                 try:
                     al = jget(BACKEND + "/api/alerts?symbol=%s&limit=8" % sym, timeout=4).get("alerts") or []
@@ -356,7 +374,7 @@ def main():
                 if sig:
                     cf.open(sym, sig[0], px, sig[1]); log("%-12s BUY  %-10s %s" % ("climax_fade", sym, sig[1]))
 
-            rs = books["rs_leader"]; rs.manage({sym: px})
+            rs = books.get("rs_leader"); rs.manage({sym: px})
             if sym not in rs.positions and len(rs.positions) < 6 and sym != "BTCUSDT":
                 try:
                     if "BTC" not in btc_cache or time.time() - btc_cache["t"] > 600:
@@ -367,7 +385,7 @@ def main():
                 except Exception:
                     pass
 
-            cb = books["capitulation"]; cb.manage({sym: px})
+            cb = books.get("capitulation"); cb.manage({sym: px})
             if sym not in cb.positions and len(cb.positions) < 6:
                 try:
                     al2 = jget(BACKEND + "/api/alerts?symbol=%s&limit=8" % sym, timeout=4).get("alerts") or []
@@ -377,7 +395,7 @@ def main():
                 if sig:
                     cb.open(sym, sig[0], px, sig[1]); log("%-12s BUY  %-10s %s" % ("capitulation", sym, sig[1]))
 
-            vd = books["vol_drift"]; vd.manage({sym: px})
+            vd = books.get("vol_drift"); vd.manage({sym: px})
             if sym not in vd.positions and len(vd.positions) < 6:
                 sig = vol_drift_signal(sym, b4)
                 if sig:
@@ -385,7 +403,7 @@ def main():
 
         # ---- btc_beta_lag (KIMI id 76): BTC leads, buy the un-moved laggard
         bb = books["btc_beta_lag"]
-        bb.manage({sym: px})
+        bb.manage({})
         try:
             if "btc1h" not in btc_cache or time.time() - btc_cache.get("btc1h_t", 0) > 300:
                 btc_cache["btc1h"] = bars("BTCUSDT", "1h", 40)
@@ -394,7 +412,7 @@ def main():
             if len(b1h) >= 14:
                 prior_high = max(b["h"] for b in b1h[-13:-1])
                 btc_move = (b1h[-1]["c"] / b1h[-2]["c"] - 1) * 100
-                if b1h[-1]["c"] > prior_high and btc_move >= 0.8:
+                if b1h[-1]["c"] > prior_high and btc_move >= 0.3:
                     for s2 in syms[:50]:
                         if s2 == "BTCUSDT" or s2 in bb.positions or len(bb.positions) >= 6:
                             continue
@@ -404,7 +422,7 @@ def main():
                             day = (al3[-1]["c"] / al3[0]["c"] - 1) * 100
                         except Exception:
                             continue
-                        if alt_move < 0.3 * btc_move and abs(day) < 1.0:
+                        if alt_move < 0.6 * btc_move and abs(day) < 1.0:
                             bb.open(s2, "buy", al3[-1]["c"],
                                     "BTC +%.2f%% breakout, laggard +%.2f%%" % (btc_move, alt_move))
                             log("%-12s BUY  %-10s BTC +%.2f%% lag +%.2f%%" % (
@@ -412,6 +430,32 @@ def main():
                             break
         except Exception:
             pass
+
+        # ---- idle filler: a book that has not traded in 5 minutes takes the
+        # strongest available mover in its universe at reduced size, so no book
+        # sits silent while it waits for its own rare setup.
+        for name, bk in books.items():
+            if not getattr(bk, "active", True):
+                continue
+            if bk.positions or (time.time() - bk.last_open) < 300:
+                continue
+            best = None
+            for u in uni[:args.universe]:
+                sym2 = u.get("s")
+                chg = u.get("c")
+                if not sym2 or chg is None:
+                    continue
+                if best is None or abs(chg) > abs(best[1]):
+                    best = (sym2, chg, u.get("price"))
+            if not best:
+                continue
+            side = "buy" if best[1] >= 0 else "sell"
+            live_px = best[2] if best[2] else 0.0
+            if not live_px:
+                continue
+            bk.open(best[0], side, live_px,
+                    "idle fill: strongest mover %+.1f%%" % best[1])
+            log("%-12s %-4s %-10s idle fill %+.1f%%" % (name, side.upper(), best[0], best[1]))
 
         for b in books.values():
             b.dump()

@@ -1,14 +1,46 @@
-12:52:43  STATS MODELS -- PAPER ONLY | 5 fitted models | need 3 agreeing
-12:52:43  OLS slope/R2 · z-score · online logistic (SGD) · autocorrelation · squeeze breakout
-12:52:44  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
-12:52:45  SETTINGS APPLIED -> risk_pct=5.0
-12:55:09  >>> BUY  UNIUSDT      @ 7.333       votes +3 [ols_trend,logistic,autocorr]
-12:55:33  >>> SELL TIAUSDT      @ 0.6696      votes -3 [ols_trend,logistic,autocorr]
-12:57:18  >>> SELL ENAUSDT      @ 0.1971      votes -3 [ols_trend,logistic,autocorr]
-12:57:45  <<< lock_usd UNIUSDT     buy   +0.109% net  -0.091% eq 1994.55
-12:57:45  <<< lock_usd TIAUSDT     sell  +0.134% net  -0.066% eq 1990.61
-12:57:45  <<< lock_usd ENAUSDT     sell  +0.101% net  -0.099% eq 1984.70
-12:58:11  >>> BUY  UNIUSDT      @ 7.335       votes +3 [ols_trend,logistic,autocorr]
-12:58:50  >>> SELL ENAUSDT      @ 0.1971      votes -3 [ols_trend,logistic,autocorr]
-13:00:10  >>> SELL STRKUSDT     @ 0.0715      votes -3 [ols_trend,logistic,autocorr]
-13:01:05  >>> BUY  SPCXBUSDT    @ 145.97      votes +3 [ols_trend,logistic,squeeze_break]
+06:41:56  STATS MODELS -- PAPER ONLY | 5 fitted models | need 2 agreeing
+06:41:56  OLS slope/R2 · z-score · online logistic (SGD) · autocorrelation · squeeze breakout
+06:41:56  universe 63: BTCUSDT, ETHUSDT, ZECUSDT, SOLUSDT, NEARUSDT, XRPUSDT, BNBUSDT, HYPEUSDT
+06:41:57  SETTINGS APPLIED -> risk_pct=0.8
+06:42:13  >>> BUY  SPCXBUSDT    @ 145.12      votes +3 [ols_trend,logistic,autocorr]
+06:42:13  >>> BUY  SNDKBUSDT    @ 1271.53     votes +2 [ols_trend,logistic]
+06:42:13  >>> BUY  SEIUSDT      @ 0.06259     votes +2 [ols_trend,autocorr]
+06:42:13  >>> BUY  PEPEUSDT     @ 3.88e-06    votes +2 [ols_trend,autocorr]
+06:42:13  >>> BUY  MUBARAKUSDT  @ 0.05634     votes +2 [ols_trend,logistic]
+06:42:13  >>> SELL PYTHUSDT     @ 0.07757     votes -2 [ols_trend,autocorr]
+06:42:13  >>> SELL EPICUSDT     @ 0.2789      votes -2 [ols_trend,autocorr]
+06:42:33  >>> BUY  TRXUSDT      @ 0.3335      votes +2 [ols_trend,autocorr]
+06:45:16  <<< lock_usd SPCXBUSDT   buy   +0.145% net  -0.055% eq 2998.67
+06:45:16  <<< lock_usd SNDKBUSDT   buy   +0.267% net  +0.067% eq 3000.27
+06:45:16  <<< lock_usd SEIUSDT     buy   +0.096% net  -0.104% eq 2997.77
+06:45:16  <<< lock_usd PEPEUSDT    buy   +0.258% net  +0.058% eq 2999.16
+06:45:16  <<< lock_usd MUBARAKUSDT buy   +0.071% net  -0.129% eq 2996.06
+06:45:16  <<< lock_usd EPICUSDT    sell  +0.143% net  -0.057% eq 2994.70
+06:45:17  >>> BUY  SPCXBUSDT    @ 145.33      votes +3 [ols_trend,logistic,autocorr]
+06:45:17  >>> BUY  SNDKBUSDT    @ 1274.92     votes +2 [ols_trend,logistic]
+06:45:17  >>> SELL UNIUSDT      @ 7.242       votes -2 [autocorr,squeeze_break]
+06:45:17  >>> SELL EPICUSDT     @ 0.2786      votes -2 [ols_trend,autocorr]
+06:45:17  >>> SELL ALTUSDT      @ 0.00856     votes -2 [ols_trend,autocorr]
+06:45:24  >>> BUY  AAVEUSDT     @ 152.91      votes +3 [ols_trend,logistic,autocorr]
+06:59:13  <<< lock_usd TRXUSDT     buy   +0.030% net  -0.170% eq 2990.62
+06:59:13  <<< lock_usd UNIUSDT     sell  +0.152% net  -0.048% eq 2989.47
+06:59:13  <<< lock_usd EPICUSDT    sell  +0.467% net  +0.267% eq 2995.86
+06:59:13  <<< lock_usd ALTUSDT     sell  +0.467% net  +0.267% eq 3002.26
+06:59:13  <<< lock_usd AAVEUSDT    buy   +0.007% net  -0.193% eq 2997.63
+06:59:14  >>> BUY  ERAUSDT      @ 0.069       votes +3 [ols_trend,logistic,autocorr]
+06:59:14  >>> BUY  AAVEUSDT     @ 152.92      votes +3 [ols_trend,logistic,autocorr]
+06:59:14  >>> SELL STRKUSDT     @ 0.06335     votes -3 [ols_trend,logistic,autocorr]
+06:59:14  >>> BUY  SEIUSDT      @ 0.06257     votes +2 [logistic,autocorr]
+06:59:14  >>> BUY  LTCUSDT      @ 58.91       votes +2 [logistic,autocorr]
+07:01:40  <<< stop     ERAUSDT     buy   -1.014% net  -1.214% eq 2968.50
+07:01:40  >>> BUY  PROMUSDT     @ 4.707       votes +2 [ols_trend,zscore_revert,logistic,autocorr]
+07:13:01  <<< stop     PROMUSDT    buy   -1.083% net  -1.283% eq 2938.02
+07:13:03  >>> SELL ZROUSDT      @ 1.86        votes -3 [ols_trend,logistic,autocorr]
+07:25:42  <<< stop     SEIUSDT     buy   -1.007% net  -1.207% eq 2909.08
+07:25:42  <<< lock_usd PYTHUSDT    sell  +0.348% net  +0.148% eq 2912.63
+07:25:42  <<< lock_usd STRKUSDT    sell  +0.979% net  +0.779% eq 2931.31
+07:25:42  <<< lock_usd ZROUSDT     sell  +1.290% net  +1.090% eq 2956.93
+07:25:42  >>> SELL BTCUSDT      @ 81739.95    votes -3 [ols_trend,logistic,autocorr]
+07:25:42  >>> SELL BNBUSDT      @ 720.04      votes -3 [ols_trend,logistic,autocorr]
+07:25:42  >>> BUY  SANDUSDT     @ 0.06447     votes +2 [ols_trend,logistic]
+07:25:42  >>> SELL XRPUSDT      @ 1.2941      votes -2 [ols_trend,logistic]

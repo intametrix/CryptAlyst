@@ -1,77 +1,246 @@
-12:52:43  ALPHA — xsec_momentum, cascade_rebound, funding_carry
-12:52:43  xsec_momentum    BUY  AGTUSDT     +87.4% (strongest)
-12:52:43  xsec_momentum    BUY  QUSDT       +34.3% (strongest)
-12:52:43  xsec_momentum    BUY  ICNTUSDT    +33.9% (strongest)
-12:52:43  xsec_momentum    SELL SNXXUSDT    -10.6% (weakest)
-12:52:43  xsec_momentum    SELL ZROUSDT     -11.7% (weakest)
-12:52:43  xsec_momentum    SELL ZEREBROUSDT -35.0% (weakest)
-12:52:51  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:53:00  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:53:10  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:53:20  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:53:30  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:53:39  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:53:49  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:53:58  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:54:09  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:54:18  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:54:29  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:54:39  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:54:49  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:54:58  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:55:10  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:55:20  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:55:30  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:55:40  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:55:49  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:55:59  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:56:09  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:56:19  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:56:29  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:56:40  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:56:50  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:57:00  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:57:10  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:57:20  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:57:29  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:57:39  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:57:49  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:57:59  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 0 open
-12:58:10  funding_carry    BUY  BRUSDT      funding -0.1201%
-12:58:10  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:58:19  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:58:29  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:58:39  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:58:42  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:58:48  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:58:54  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:01  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:06  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:12  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:19  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:25  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:32  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:39  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:46  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:52  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-12:59:59  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:06  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:12  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:18  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:25  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:31  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:38  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:44  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:51  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:00:57  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:04  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:10  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:17  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:23  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:30  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:35  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:41  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:47  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:01:54  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:02:00  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
-13:02:07  cycle: xsec_momentum 6 open, cascade_rebound 0 open, funding_carry 1 open
+07:50:42  ALPHA — xsec_momentum, cascade_rebound, funding_carry
+07:50:42  ACTIVE: xsec_momentum, funding_carry
+07:50:42  cycle: xsec_momentum 0 open, funding_carry 0 open
+07:50:45  cycle: xsec_momentum 0 open, funding_carry 0 open
+07:50:47  xsec_momentum    BUY  QUSDT       +94.4% confirmed 10s
+07:50:47  xsec_momentum    BUY  AVAUSDT     +27.5% confirmed 10s
+07:50:47  xsec_momentum    SELL FILUSDT     -11.2% confirmed 10s
+07:50:47  xsec_momentum    SELL STRKUSDT    -11.5% confirmed 10s
+07:50:47  xsec_momentum    SELL TIAUSDT     -16.5% confirmed 10s
+07:50:47  funding_carry    BUY  SANDUSDT    funding -1.3315%
+07:50:47  funding_carry    BUY  GTCUSDT     funding -1.0447%
+07:50:47  funding_carry    BUY  QUSDT       funding -0.1157%
+07:50:47  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:50:50  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:50:52  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:50:55  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:50:57  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:50:59  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:02  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:05  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:08  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:10  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:13  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:16  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:18  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:21  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:24  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:26  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:29  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:31  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:34  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:36  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:39  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:41  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:44  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:46  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:49  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:51  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:54  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:57  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:51:59  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:02  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:04  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:07  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:09  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:12  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:15  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:17  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:20  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:22  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:25  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:27  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:30  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:32  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:34  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:37  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:40  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:42  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:44  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:47  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:49  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:52  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:54  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:52:57  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:00  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:02  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:04  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:07  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:09  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:12  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:14  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:17  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:19  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:22  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:24  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:27  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:29  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:32  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:34  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:37  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:39  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:42  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:44  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:47  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:49  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:52  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:54  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:53:58  funding_carry    BUY  GTCUSDT     funding -1.0312%
+07:53:58  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:00  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:03  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:05  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:08  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:11  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:13  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:16  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:18  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:21  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:23  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:26  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:28  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:30  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:33  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:36  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:38  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:41  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:43  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:46  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:48  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:51  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:53  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:56  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:54:58  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:01  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:03  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:06  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:08  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:11  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:14  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:16  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:19  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:21  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:24  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:26  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:29  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:32  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:34  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:37  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:39  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:42  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:44  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:47  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:49  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:51  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:54  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:55:57  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:00  funding_carry    BUY  SANDUSDT    funding -1.3410%
+07:56:00  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:03  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:05  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:07  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:10  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:12  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:15  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:17  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:20  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:23  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:25  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:28  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:30  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:32  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:35  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:37  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:40  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:43  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:45  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:47  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:50  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:52  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:55  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:57  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:56:59  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:02  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:05  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:07  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:09  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:12  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:14  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:17  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:19  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:22  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:25  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:27  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:30  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:32  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:34  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:37  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:39  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:42  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:44  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:47  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:49  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:51  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:54  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:57  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:57:59  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:02  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:05  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:07  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:10  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:12  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:15  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:17  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:20  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:22  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:25  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:27  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:29  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:32  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:34  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:37  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:39  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:42  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:44  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:47  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:49  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:51  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:54  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:56  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:58:59  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:01  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:04  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:06  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:09  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:11  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:14  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:16  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:18  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:21  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:23  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:26  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:28  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:31  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:33  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:36  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:38  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:41  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:43  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:46  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:48  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:50  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:54  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:56  cycle: xsec_momentum 5 open, funding_carry 3 open
+07:59:59  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:02  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:04  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:07  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:09  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:12  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:14  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:17  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:19  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:22  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:25  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:27  cycle: xsec_momentum 5 open, funding_carry 3 open
+08:00:30  cycle: xsec_momentum 5 open, funding_carry 3 open

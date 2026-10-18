@@ -1,43 +1,137 @@
-12:52:43  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 3 agreeing votes
-12:52:43  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
-12:52:44  universe 24: BTCUSDT, ETHUSDT, SOLUSDT, ZECUSDT, NEARUSDT, XRPUSDT, BNBUSDT, DOGEUSDT
-12:52:44  SETTINGS APPLIED -> risk_pct=5.0
-12:52:52  >>> BUY  XRPUSDT      @ 1.3092      votes +3 [rsi,macd,bbands]
-12:53:08  >>> BUY  ETHUSDT      @ 2439.82     votes +3 [rsi,macd,bbands]
-12:53:15  >>> BUY  SNDKBUSDT    @ 1302.05     votes +3 [macd,donchian,bbands]
-12:54:05  >>> BUY  TRXUSDT      @ 0.3362      votes +3 [rsi,macd,bbands]
-12:59:31  >>> BUY  ZECUSDT      @ 1181.52     votes +3 [rsi,macd,bbands]
-13:00:11  LOCK: unrealised $20.11 >= $20
-13:00:11  <<< lock_usd ETHUSDT     buy   +0.007% net  -0.193% eq 1980.74
-13:00:11  <<< lock_usd SNDKBUSDT   buy   +0.092% net  -0.108% eq 1969.95
-13:00:11  <<< lock_usd ZECUSDT     buy   +0.117% net  -0.083% eq 1961.63
-13:00:11  LOCKED IN 3, 2 still open
-13:00:13  >>> BUY  SNDKBUSDT    @ 1303.25     votes +4 [rsi,macd,donchian,bbands]
-13:00:13  >>> BUY  ZECUSDT      @ 1182.96     votes +3 [rsi,macd,bbands]
-13:00:18  >>> BUY  SPCXBUSDT    @ 145.97      votes +4 [rsi,macd,donchian,bbands]
-13:00:18  >>> BUY  SOXLBUSDT    @ 94.81       votes +3 [macd,donchian,bbands]
-13:01:00  >>> BUY  NEARUSDT     @ 5.182       votes +3 [rsi,macd,bbands]
-13:01:00  LOCK: unrealised $20.01 >= $20
-13:01:00  <<< lock_usd XRPUSDT     buy   +0.038% net  -0.162% eq 1945.45
-13:01:00  <<< lock_usd TRXUSDT     buy   +0.030% net  -0.170% eq 1928.43
-13:01:00  <<< lock_usd ZECUSDT     buy   +0.138% net  -0.062% eq 1922.33
-13:01:00  <<< lock_usd NEARUSDT    buy   +0.039% net  -0.161% eq 1906.49
-13:01:00  LOCKED IN 4, 3 still open
-13:01:02  >>> BUY  ZECUSDT      @ 1184.6      votes +4 [rsi,macd,donchian,bbands]
-13:01:02  >>> BUY  XRPUSDT      @ 1.3097      votes +4 [ma,rsi,macd,bbands]
-13:01:02  >>> BUY  TRXUSDT      @ 0.3363      votes +4 [rsi,macd,donchian,bbands]
-13:01:02  >>> BUY  NEARUSDT     @ 5.184       votes +3 [rsi,macd,bbands]
-13:01:06  >>> BUY  ETHUSDT      @ 2441.02     votes +3 [rsi,macd,bbands]
-13:01:23  >>> BUY  DOGEUSDT     @ 0.08056     votes +3 [rsi,macd,bbands]
-13:01:53  LOCK: unrealised $20.60 >= $20
-13:01:53  <<< lock_usd SPCXBUSDT   buy   +0.021% net  -0.179% eq 1888.89
-13:01:53  <<< lock_usd SOXLBUSDT   buy   +0.011% net  -0.189% eq 1870.31
-13:01:53  <<< lock_usd XRPUSDT     buy   +0.031% net  -0.169% eq 1854.16
-13:01:53  <<< lock_usd NEARUSDT    buy   +0.193% net  -0.007% eq 1853.48
-13:01:53  <<< lock_usd ETHUSDT     buy   +0.013% net  -0.187% eq 1835.67
-13:01:53  LOCKED IN 5, 4 still open
-13:01:54  >>> BUY  XRPUSDT      @ 1.3101      votes +5 [ma,rsi,macd,donchian,bbands]
-13:01:54  >>> BUY  SPCXBUSDT    @ 145.99      votes +4 [rsi,macd,donchian,bbands]
-13:01:54  >>> BUY  SOXLBUSDT    @ 94.82       votes +3 [macd,donchian,bbands]
-13:01:54  >>> BUY  NEARUSDT     @ 5.194       votes +3 [rsi,macd,bbands]
-13:01:54  >>> BUY  ETHUSDT      @ 2441.34     votes +3 [rsi,macd,bbands]
+06:41:56  MULTI-MODEL -- PAPER ONLY | 5 self-adjusting models | need 2 agreeing votes
+06:41:56  exits: +1.5% scrape | -1.0% stop | 3600s clock | $20 book lock
+06:41:57  universe 63: BTCUSDT, ETHUSDT, ZECUSDT, SOLUSDT, NEARUSDT, XRPUSDT, BNBUSDT, HYPEUSDT
+06:41:57  SETTINGS APPLIED -> risk_pct=0.8
+06:42:13  >>> SELL WLDUSDT      @ 0.4908      votes -4 [ma,rsi,macd,bbands]
+06:42:13  >>> SELL STRKUSDT     @ 0.06308     votes -4 [rsi,macd,donchian,bbands]
+06:42:13  >>> SELL PROMUSDT     @ 4.759       votes -4 [rsi,macd,donchian,bbands]
+06:42:13  >>> SELL INJUSDT      @ 8.543       votes -4 [rsi,macd,donchian,bbands]
+06:42:13  >>> SELL AVAXUSDT     @ 9.782       votes -4 [ma,rsi,macd,bbands]
+06:42:13  >>> SELL XRPUSDT      @ 1.2956      votes -3 [rsi,macd,bbands]
+06:42:13  >>> SELL OPUSDT       @ 0.1274      votes -3 [rsi,macd,bbands]
+06:42:13  >>> SELL FILUSDT      @ 1.0572      votes -3 [rsi,macd,bbands]
+06:44:33  prices failed: URLError(ConnectionResetError(54, 'Connection reset by peer'))
+06:47:08  <<< scrape   PROMUSDT    sell  +1.513% net  +1.313% eq 3031.51
+06:47:11  >>> SELL PROMUSDT     @ 4.693       votes -4 [rsi,macd,donchian,bbands]
+06:47:56  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:47:56  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:47:57  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:47:57  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:47:58  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:47:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:47:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:48:51  <<< stop     PROMUSDT    sell  -1.001% net  -1.201% eq 3002.37
+06:48:52  >>> SELL PROMUSDT     @ 4.74        votes -4 [rsi,macd,donchian,bbands]
+06:49:18  <<< stop     PROMUSDT    sell  -1.055% net  -1.255% eq 2972.23
+06:49:20  >>> SELL PROMUSDT     @ 4.786       votes -3 [rsi,macd,bbands]
+06:49:38  LOCK: unrealised $20.44 >= $20
+06:49:38  <<< lock_usd STRKUSDT    sell  +0.079% net  -0.121% eq 2969.33
+06:49:38  <<< lock_usd INJUSDT     sell  +0.164% net  -0.036% eq 2968.47
+06:49:38  <<< lock_usd FILUSDT     sell  +0.009% net  -0.191% eq 2963.89
+06:49:38  <<< lock_usd PROMUSDT    sell  +0.898% net  +0.698% eq 2980.50
+06:49:38  LOCKED IN 4, 4 still open
+06:49:40  >>> SELL PROMUSDT     @ 4.743       votes -4 [rsi,macd,donchian,bbands]
+06:49:40  >>> SELL INJUSDT      @ 8.53        votes -4 [rsi,macd,donchian,bbands]
+06:49:40  >>> SELL EIGENUSDT    @ 0.2485      votes -3 [rsi,macd,bbands]
+06:49:40  >>> SELL ADAUSDT      @ 0.2202      votes -3 [ma,macd,bbands]
+06:51:50  LOCK: unrealised $20.65 >= $20
+06:51:50  <<< lock_usd AVAXUSDT    sell  +0.041% net  -0.159% eq 2976.68
+06:51:50  <<< lock_usd PROMUSDT    sell  +0.654% net  +0.454% eq 2987.50
+06:51:50  <<< lock_usd INJUSDT     sell  +0.141% net  -0.059% eq 2986.08
+06:51:50  <<< lock_usd EIGENUSDT   sell  +0.080% net  -0.120% eq 2983.23
+06:51:50  <<< lock_usd ADAUSDT     sell  +0.045% net  -0.155% eq 2979.55
+06:51:50  LOCKED IN 5, 3 still open
+06:51:52  >>> SELL INJUSDT      @ 8.516       votes -4 [rsi,macd,donchian,bbands]
+06:51:52  >>> SELL PROMUSDT     @ 4.712       votes -2 [rsi,macd]
+06:51:52  >>> SELL PEPEUSDT     @ 3.88e-06    votes -2 [macd,bbands]
+06:51:52  >>> SELL FILUSDT      @ 1.0565      votes -2 [rsi,bbands]
+06:51:52  >>> SELL ETHUSDT      @ 2416.29     votes -2 [macd,bbands]
+06:52:57  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:52:57  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:52:58  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:52:58  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:52:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:52:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:56:20  prices failed: timeout('The read operation timed out')
+06:57:58  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:57:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+06:57:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:02:41  LOCK: unrealised $21.28 >= $20
+07:02:41  <<< lock_usd WLDUSDT     sell  +0.265% net  +0.065% eq 2981.11
+07:02:41  <<< lock_usd OPUSDT      sell  +0.235% net  +0.035% eq 2981.96
+07:02:41  <<< lock_usd PROMUSDT    sell  +0.531% net  +0.331% eq 2989.84
+07:02:41  <<< lock_usd FILUSDT     sell  +0.133% net  -0.067% eq 2988.23
+07:02:41  <<< lock_usd ETHUSDT     sell  +0.035% net  -0.165% eq 2984.29
+07:02:41  LOCKED IN 5, 3 still open
+07:02:42  >>> SELL ZECUSDT      @ 1136.67     votes -4 [ma,rsi,macd,bbands]
+07:02:42  >>> SELL PUMPUSDT     @ 0.004304    votes -4 [rsi,macd,donchian,bbands]
+07:02:42  >>> SELL WLDUSDT      @ 0.4895      votes -3 [rsi,macd,bbands]
+07:02:42  >>> SELL TIAUSDT      @ 0.6284      votes -3 [rsi,macd,bbands]
+07:02:42  >>> BUY  TRXUSDT      @ 0.3336      votes +2 [ma,macd]
+07:02:58  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:02:58  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:02:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:02:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:07:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:17:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:22:45  LOCK: unrealised $22.16 >= $20
+07:22:45  <<< lock_usd ZECUSDT     sell  +0.391% net  +0.191% eq 2988.84
+07:22:45  <<< lock_usd PUMPUSDT    sell  +0.325% net  +0.125% eq 2991.83
+07:22:45  <<< lock_usd WLDUSDT     sell  +0.286% net  +0.086% eq 2993.88
+07:22:45  <<< lock_usd TIAUSDT     sell  +0.016% net  -0.184% eq 2989.49
+07:22:45  LOCKED IN 4, 4 still open
+07:22:46  >>> SELL TRUMPUSDT    @ 1.749       votes -4 [rsi,macd,donchian,bbands]
+07:22:46  >>> SELL HBARUSDT     @ 0.0854      votes -4 [rsi,macd,donchian,bbands]
+07:22:46  >>> SELL AUSDT        @ 0.1056      votes -4 [rsi,macd,donchian,bbands]
+07:22:46  >>> SELL ALTUSDT      @ 0.0084      votes -4 [rsi,macd,donchian,bbands]
+07:22:58  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:22:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:22:59  prices failed: <HTTPError 429: 'Too Many Requests'>
+07:23:50  LOCK: unrealised $20.11 >= $20
+07:23:50  <<< lock_usd XRPUSDT     sell  +0.031% net  -0.169% eq 2985.43
+07:23:50  <<< lock_usd INJUSDT     sell  +0.023% net  -0.177% eq 2981.22
+07:23:50  <<< lock_usd PEPEUSDT    sell  +0.258% net  +0.058% eq 2982.60
+07:23:50  <<< lock_usd TRUMPUSDT   sell  +0.057% net  -0.143% eq 2979.18
+07:23:50  <<< lock_usd HBARUSDT    sell  +0.164% net  -0.036% eq 2978.32
+07:23:50  <<< lock_usd AUSDT       sell  +0.189% net  -0.011% eq 2978.07
+07:23:50  <<< lock_usd ALTUSDT     sell  +0.119% net  -0.081% eq 2976.13
+07:23:50  LOCKED IN 7, 1 still open
+07:23:53  >>> SELL AAVEUSDT     @ 152.02      votes -5 [ma,rsi,macd,donchian,bbands]
+07:23:53  >>> SELL WLDUSDT      @ 0.4878      votes -4 [rsi,macd,donchian,bbands]
+07:23:53  >>> SELL TRUMPUSDT    @ 1.748       votes -4 [rsi,macd,donchian,bbands]
+07:23:53  >>> SELL SUIUSDT      @ 0.9772      votes -4 [rsi,macd,donchian,bbands]
+07:23:53  >>> SELL SEIUSDT      @ 0.06209     votes -4 [rsi,macd,donchian,bbands]
+07:23:53  >>> SELL PUMPUSDT     @ 0.004283    votes -4 [rsi,macd,donchian,bbands]
+07:23:53  >>> SELL HBARUSDT     @ 0.08526     votes -4 [rsi,macd,donchian,bbands]
+07:24:43  LOCK: unrealised $20.17 >= $20
+07:24:43  <<< lock_usd AAVEUSDT    sell  +0.053% net  -0.147% eq 2972.62
+07:24:43  <<< lock_usd WLDUSDT     sell  +0.226% net  +0.026% eq 2973.23
+07:24:43  <<< lock_usd TRUMPUSDT   sell  +0.114% net  -0.086% eq 2971.19
+07:24:43  <<< lock_usd SUIUSDT     sell  +0.092% net  -0.108% eq 2968.62
+07:24:43  <<< lock_usd SEIUSDT     sell  +0.048% net  -0.152% eq 2965.01
+07:24:43  <<< lock_usd PUMPUSDT    sell  +0.257% net  +0.057% eq 2966.36
+07:24:43  <<< lock_usd HBARUSDT    sell  +0.117% net  -0.083% eq 2964.39
+07:24:43  LOCKED IN 7, 1 still open
+07:24:45  >>> SELL AAVEUSDT     @ 151.95      votes -5 [ma,rsi,macd,donchian,bbands]
+07:24:45  >>> SELL ZROUSDT      @ 1.848       votes -4 [rsi,macd,donchian,bbands]
+07:24:45  >>> SELL WLDUSDT      @ 0.487       votes -4 [rsi,macd,donchian,bbands]
+07:24:45  >>> SELL TRUMPUSDT    @ 1.746       votes -4 [rsi,macd,donchian,bbands]
+07:24:45  >>> SELL TAOUSDT      @ 267.8       votes -4 [rsi,macd,donchian,bbands]
+07:24:45  >>> SELL SUIUSDT      @ 0.9764      votes -4 [rsi,macd,donchian,bbands]
+07:24:45  >>> SELL SEIUSDT      @ 0.06206     votes -4 [rsi,macd,donchian,bbands]
+07:25:13  LOCK: unrealised $28.54 >= $20
+07:25:13  <<< lock_usd AAVEUSDT    sell  +0.072% net  -0.128% eq 2961.37
+07:25:13  <<< lock_usd ZROUSDT     sell  +0.649% net  +0.449% eq 2972.02
+07:25:13  <<< lock_usd WLDUSDT     sell  +0.082% net  -0.118% eq 2969.23
+07:25:13  <<< lock_usd TRUMPUSDT   sell  +0.057% net  -0.143% eq 2965.84
+07:25:13  <<< lock_usd TAOUSDT     sell  +0.149% net  -0.051% eq 2964.64
+07:25:13  <<< lock_usd SUIUSDT     sell  +0.092% net  -0.108% eq 2962.09
+07:25:13  <<< lock_usd SEIUSDT     sell  +0.161% net  -0.039% eq 2961.17
+07:25:13  LOCKED IN 7, 1 still open
+07:25:14  >>> SELL AAVEUSDT     @ 151.84      votes -5 [ma,rsi,macd,donchian,bbands]
+07:25:14  >>> SELL ZECUSDT      @ 1128.75     votes -4 [rsi,macd,donchian,bbands]
+07:25:14  >>> SELL WLDUSDT      @ 0.4866      votes -4 [rsi,macd,donchian,bbands]
+07:25:14  >>> SELL TAOUSDT      @ 267.3       votes -4 [rsi,macd,donchian,bbands]
+07:25:14  >>> SELL SUIUSDT      @ 0.9755      votes -4 [rsi,macd,donchian,bbands]
+07:25:14  >>> SELL SEIUSDT      @ 0.06196     votes -4 [rsi,macd,donchian,bbands]
+07:25:14  >>> SELL PUMPUSDT     @ 0.00427     votes -4 [rsi,macd,donchian,bbands]

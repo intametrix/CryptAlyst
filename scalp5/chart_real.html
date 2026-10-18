@@ -1107,7 +1107,7 @@ function clearEngine(){
 var UNIVERSE=[], UNIVERSE_AT=0, SYMIDX=-1, SYMHITS=[];
 function loadUniverse(cb){
   if(UNIVERSE.length && Date.now()-UNIVERSE_AT < 60000){ if(cb)cb(); return; }
-  fetch("/api/universe800",{cache:"no-store"}).then(function(r){return r.json();})
+  fetch("/api/symbols",{cache:"no-store"}).then(function(r){return r.json();})
     .then(function(d){ UNIVERSE=d.tickers||[]; UNIVERSE_AT=Date.now(); if(cb)cb(); })
     .catch(function(){ if(cb)cb(); });
 }
@@ -1116,7 +1116,19 @@ function closeSymList(){ var el=symListEl(); if(el){ el.classList.remove("open")
 function symFilter(){
   var q=($("sym").value||"").trim().toUpperCase();
   loadUniverse(function(){
-    SYMHITS = UNIVERSE.filter(function(t){ return t.s.indexOf(q)>=0; }).slice(0,14);
+    var pool=UNIVERSE.slice();
+    if(!q){
+      var rec=JSON.parse(localStorage.getItem("recentSyms")||"[]");
+      pool = rec.map(function(x){ return UNIVERSE.filter(function(t){return t.s===x;})[0]; })
+                 .filter(Boolean).concat(pool);
+    }
+    var seen={};
+    SYMHITS = pool.filter(function(t){
+      if(seen[t.s]) return false;
+      if(!q) { seen[t.s]=1; return true; }
+      if(t.s.indexOf(q)<0 && (t.base||"").indexOf(q)<0) return false;
+      seen[t.s]=1; return true;
+    }).slice(0,16);
     var el=symListEl(); if(!el) return;
     if(!q && SYMHITS.length){
       el.innerHTML='<div class="symempty">top '+SYMHITS.length+' of '+UNIVERSE.length+
@@ -1126,10 +1138,12 @@ function symFilter(){
       el.innerHTML='<div class="symempty">no match for “'+esc(q)+'”</div>';
     } else {
       el.innerHTML=SYMHITS.map(function(t,i){
-        var chg=(t.c==null?0:t.c);
+        var chg=(t.chg==null?0:t.chg);
+        var mk=(t.mkts||[]).join("+");
         return '<div class="symrow" data-i="'+i+'" onclick="pickSym('+i+')">'+
-          '<span>'+esc(t.s)+'</span>'+
-          '<span class="px2">'+(t.price==null?'':Number(t.price).toPrecision(7))+'</span>'+
+          '<span><b>'+esc(t.base||t.s)+'</b><span style="color:#4d5d70">/'+esc(t.quote||"")+'</span>'+
+          (mk?'<span style="color:#33414f;font-size:9.5px;margin-left:6px">'+mk+'</span>':'')+'</span>'+
+          '<span class="px2">'+(t.price?Number(t.price).toPrecision(7):'')+'</span>'+
           '<span class="ch2 '+(chg>=0?'up':'down')+'">'+(chg>=0?'+':'')+Number(chg).toFixed(1)+'%</span></div>';
       }).join("");
     }
@@ -1139,6 +1153,10 @@ function symFilter(){
 }
 function pickSym(i){
   var t=SYMHITS[i]; if(!t) return;
+  try{
+    var rec=JSON.parse(localStorage.getItem("recentSyms")||"[]").filter(function(x){return x!==t.s;});
+    rec.unshift(t.s); localStorage.setItem("recentSyms",JSON.stringify(rec.slice(0,8)));
+  }catch(e){}
   $("sym").value=t.s;
   closeSymList();
   setSym(t.s);

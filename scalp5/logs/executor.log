@@ -1,0 +1,29 @@
+EXECUTOR — advisor-driven, lock 0.30%, stop 0.90%, clock 600s, risk 2.0%
+08:06:56  OPEN  SANDUSDT    buy  0.06548  TA3 risk 2.4%  ema up, rsi 59, above vwap
+08:06:56  OPEN  BTCUSDT     buy  81738  TA3 risk 2.4%  ema up, rsi 54, above vwap
+08:06:56  OPEN  ETHUSDT     buy  2411.61  TA3 risk 2.4%  ema up, rsi 58, above vwap
+08:06:57  OPEN  SOLUSDT     buy  103.61  TA3 risk 2.4%  ema up, rsi 57, above vwap
+08:06:58  OPEN  BNBUSDT     buy  719.46  TA4 risk 2.8%  ema up, rsi 58, above vwap, vol 10.9x
+08:06:58  OPEN  FILUSDT     buy  1.0483  TA3 risk 2.4%  ema up, rsi 61, above vwap
+08:06:59  OPEN  TIAUSDT     buy  0.627  TA3 risk 2.4%  ema up, rsi 51, above vwap
+08:06:59  OPEN  ADAUSDT     buy  0.2197  TA4 risk 2.8%  ema up, rsi 63, above vwap, vol 1.9x
+08:07:00  OPEN  HYPEUSDT    buy  78.58  TA3 risk 2.4%  ema up, rsi 53, above vwap
+08:07:42  OPEN  DOGEUSDT    sell 0.07908  TA2 risk 2.0%  rsi 51, vol 3.0x
+08:08:46  OPEN  SUIUSDT     buy  0.9772  TA3 risk 2.4%  ema up, rsi 60, above vwap
+08:09:20  OPEN  PUMPUSDT    sell 0.004284  TA2 risk 2.0%  rsi 53, vol 1.7x
+08:09:37  OPEN  NEARUSDT    sell 4.944  TA2 risk 2.0%  rsi 49, below vwap
+08:10:08  OPEN  ZECUSDT     buy  1131.54  TA3 risk 2.4%  ema up, rsi 55, above vwap
+08:14:54  CLOSE SANDUSDT    buy  +0.305% net +0.105% lock
+08:14:54  OPEN  SANDUSDT    buy  0.06568  TA4 risk 2.8%  ema up, rsi 50, above vwap, vol 1.6x
+08:16:56  CLOSE BTCUSDT     buy  -0.009% net -0.209% clock
+08:16:56  CLOSE ETHUSDT     buy  +0.014% net -0.186% clock
+08:16:56  CLOSE SOLUSDT     buy  -0.039% net -0.239% clock
+08:16:56  CLOSE BNBUSDT     buy  +0.135% net -0.065% clock
+08:16:56  CLOSE FILUSDT     buy  -0.305% net -0.505% clock
+08:16:56  CLOSE TIAUSDT     buy  -0.463% net -0.663% clock
+08:16:56  CLOSE ADAUSDT     buy  -0.137% net -0.337% clock
+08:16:57  OPEN  BTCUSDT     buy  81730.4  TA2 risk 2.0%  ema up, rsi 58
+08:16:57  OPEN  ETHUSDT     buy  2411.94  TA4 risk 2.8%  ema up, rsi 61, above vwap, vol 38.6x
+08:16:57  OPEN  TIAUSDT     sell 0.6241  TA3 risk 2.4%  ema down, rsi 49, below vwap
+08:16:58  OPEN  SOLUSDT     sell 103.57  TA2 risk 2.0%  rsi 60, below vwap
+08:16:58  OPEN  ADAUSDT     buy  0.2194  TA4 risk 2.8%  ema up, rsi 57, above vwap, vol 2.4x

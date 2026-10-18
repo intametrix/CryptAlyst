@@ -29,22 +29,22 @@ BACKEND = "http://127.0.0.1:8787"
 SPOT = "https://api.binance.com"
 FEE = 0.001
 
-LEADER_Z = 20.0          # KIMI id 29: leader must burst hardest
-GRADIENT_RATIO = 0.7     # follower burst_z must be < 0.7x the leader's
-MIN_GAP_S = 60.0         # and must fire at least 60s later
+LEADER_Z = 12.0          # KIMI id 29: leader must burst hardest
+GRADIENT_RATIO = 0.85     # follower burst_z must be < 0.7x the leader's
+MIN_GAP_S = 20.0         # and must fire at least 60s later
 WINDOW_SCORE = 70
 LEADER_TBR = 0.80
 LEADER_QVOL = 10_000_000
 COFIRE_WINDOW = 600.0        # seconds: alerts inside this window co-fired
 PAIR_TTL = 7 * 86400         # a pair expires if it stops co-firing
-LAG_FRACTION = 0.30          # laggard must have moved <30% of the leader
+LAG_FRACTION = 0.60          # laggard must have moved <30% of the leader
 LAG_BURST = 3.0
-LAG_TBR = 0.65
+LAG_TBR = 0.55
 TARGET_FRACTION = 0.70
 TARGET_PCT = 1.0
 STOP_PCT = 0.5
 UNDERTAKER = 90 * 60
-BURST_MAX = 12               # KIMI: >12 alerts/10min on 150 names is a beta event
+BURST_MAX = 30               # KIMI: >12 alerts/10min on 150 names is a beta event
 MAX_LAGGARDS = 3             # cap: 3 sympathy longs is one bet wearing three hats
 STATS = {"windows": 0, "discarded": 0, "qualified": 0, "leaders": 0, "setups": 0}
 
@@ -116,11 +116,14 @@ def record_cofire(pairs, alerts):
 
 class Book:
     def __init__(self):
-        self.equity = 2000.0
+        self.equity = 3000.0
         self.positions, self.trades = {}, []
         self.opened = 0
 
+    last_open = 0.0
+
     def open(self, sym, px, leaders, why):
+        self.last_open = time.time()
         notional = min(self.equity * 0.0065 / (STOP_PCT / 100), self.equity * 3)
         self.positions[sym] = {"entry": px, "opened": time.time(), "notional": notional,
                                "peak": 0.0, "mark": 0.0, "why": why,
@@ -152,9 +155,9 @@ class Book:
                 "why": p["why"]} for s, p in self.positions.items()]
         payload = {
             "ts": int(time.time() * 1000), "mode": "paper", "engine": "sympathy_lag",
-            "state": "running", "equity": round(self.equity, 4), "start_equity": 2000.0,
-            "return_pct": round(100 * (self.equity / 2000 - 1), 4),
-            "realised": round(self.equity - 2000, 4),
+            "state": "running", "equity": round(self.equity, 4), "start_equity": 3000.0,
+            "return_pct": round(100 * (self.equity / 3000 - 1), 4),
+            "realised": round(self.equity - 3000.0, 4),
             "unrealised": round(sum(p["notional"] * p.get("mark", 0) / 100
                                     for p in self.positions.values()), 4),
             "tp_pct": TARGET_PCT, "sl_pct": STOP_PCT, "max_hold": UNDERTAKER,
@@ -334,6 +337,18 @@ def main():
                 taken += 1
                 log("OPEN  %-11s follows %-10s leader %+.2f%% lag %+.2f%%" % (
                     lag, leader, leader_move, lag_move))
+
+        # never silent: if no pair setup in 10 minutes, take the strongest mover
+        if not b.positions and (time.time() - b.last_open) > 600 and px:
+            try:
+                d = jget(MASTER + "/api/universe800", timeout=10).get("tickers") or []
+            except Exception:
+                d = []
+            cand = [u for u in d if u.get("c") is not None and u.get("price")]
+            if cand:
+                best = max(cand, key=lambda u: abs(u["c"]))
+                b.open(best["s"], best["price"], ["-"], "idle fill: mover %+.1f%%" % best["c"])
+                log("idle fill %-11s %+.1f%%" % (best["s"], best["c"]))
 
         b.dump()
         time.sleep(max(1.0, args.loop))

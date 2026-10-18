@@ -38,6 +38,63 @@ _META = {"at": 0.0, "rows": {}}
 
 
 UNI800 = {"ts": 0, "rows": []}
+SPARK = {"ts": 0, "data": {}}
+
+
+def sparklines(n=24, interval="1m", limit=60):
+    """Short close series per liquid symbol, cached so the UI can poll cheaply."""
+    if SPARK["data"] and (time.time() - SPARK["ts"]) < 15:
+        return SPARK["data"]
+    rows = universe800(800)[:n]
+    out = {}
+    for r in rows:
+        sym = r.get("s")
+        if not sym:
+            continue
+        try:
+            d = jget("https://api.binance.com/api/v3/klines?symbol=%s&interval=%s&limit=%d"
+                     % (sym, interval, limit), timeout=6.0)
+            out[sym] = [float(x[4]) for x in d]
+        except Exception:
+            continue
+    SPARK["ts"], SPARK["data"] = time.time(), out
+    return out
+SYMBOLS = {"ts": 0, "rows": []}
+
+
+def all_symbols():
+    """Every tradable symbol on spot and futures, not just USDT pairs."""
+    if SYMBOLS["rows"] and (time.time() - SYMBOLS["ts"]) < 600:
+        return SYMBOLS["rows"]
+    seen = {}
+    for base, key in (("https://api.binance.com/api/v3/exchangeInfo", "spot"),
+                      ("https://fapi.binance.com/fapi/v1/exchangeInfo", "futures")):
+        try:
+            d = jget(base, timeout=14.0)
+        except Exception:
+            continue
+        for x in d.get("symbols") or []:
+            if x.get("status") not in ("TRADING", None):
+                continue
+            sym = x.get("symbol")
+            if not sym:
+                continue
+            cur = seen.setdefault(sym, {"s": sym, "base": x.get("baseAsset"),
+                                        "quote": x.get("quoteAsset"), "mkts": [], "qvol": 0})
+            if key not in cur["mkts"]:
+                cur["mkts"].append(key)
+    try:
+        for r in jget("https://api.binance.com/api/v3/ticker/24hr", timeout=14.0):
+            c = seen.get(r.get("symbol"))
+            if c:
+                c["qvol"] = float(r.get("quoteVolume") or 0)
+                c["price"] = float(r.get("lastPrice") or 0)
+                c["chg"] = float(r.get("priceChangePercent") or 0)
+    except Exception:
+        pass
+    rows = sorted(seen.values(), key=lambda x: -(x.get("qvol") or 0))
+    SYMBOLS["ts"], SYMBOLS["rows"] = time.time(), rows
+    return rows
 TICK = {"ts": 0, "p": {}}
 
 
@@ -57,29 +114,14 @@ def trading_start():
         return TRADING_STATE
     py = sys.executable or "python3"
     engines = {
-        "multi_models": [py, "-u", "multi_models.py", "--seconds", "86400", "--universe", "300",
-                         "--min-volume", "20000000", "--interval", "5m", "--min-agree", "3",
-                         "--tp-pct", "1.5", "--sl-pct", "1.0", "--max-hold", "3600",
-                         "--scan-every", "2", "--max-positions", "10", "--risk-pct", "0.65"],
-        "stats_models": [py, "-u", "stats_models.py", "--seconds", "86400", "--universe", "300",
-                         "--min-volume", "20000000", "--interval", "5m", "--min-agree", "3",
-                         "--tp-pct", "1.5", "--sl-pct", "1.0", "--max-hold", "3600",
-                         "--scan-every", "2", "--max-positions", "10", "--risk-pct", "0.65"],
-        "slow_edges": [py, "-u", "slow_edges.py", "--seconds", "86400", "--universe", "150"],
-        "sympathy_lag": [py, "-u", "sympathy_lag.py", "--seconds", "86400"],
-        "crypto_strategies": [py, "-u", "crypto_strategies.py", "--seconds", "86400"],
+        "alpha": [py, "-u", "alpha.py", "--seconds", "86400", "--universe", "60",
+                  "--loop", "10", "--only", "xsec_momentum,funding_carry"],
     }
     for name, argv in engines.items():
         try:
             _spawn(name, argv)
         except Exception:
             pass
-    try:
-        req = urllib.request.Request("http://127.0.0.1:8787/api/turtle?action=start",
-                                     data=b"{}", headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=6).read()
-    except Exception:
-        pass
     TRADING_STATE["on"] = True
     return TRADING_STATE
 
@@ -109,9 +151,7 @@ def trading_loop_state():
     """Report what is actually alive, not what we asked for."""
     import subprocess
     alive = {}
-    for name, pat in (("multi_models", "multi_models.py"), ("stats_models", "stats_models.py"),
-                      ("slow_edges", "slow_edges.py"), ("sympathy_lag", "sympathy_lag.py"),
-                      ("crypto_strategies", "crypto_strategies.py")):
+    for name, pat in (("alpha", "alpha.py"),):
         r = subprocess.run(["pgrep", "-f", pat], capture_output=True)
         alive[name] = r.returncode == 0
     TRADING_STATE["alive"] = alive
@@ -232,9 +272,11 @@ def fetch(paths, base="http://127.0.0.1"):
 def collect():
     engines = []
 
-    # ---- turtle (Go backend)
+    # ---- turtle (Go backend) — only when its session is actually running
     try:
         t = jget("http://127.0.0.1:8787/api/turtle")
+        if (t.get("state") or "") != "running":
+            raise RuntimeError("turtle idle")
         s = jget("http://127.0.0.1:8787/api/turtle/stats")
         engine = {
             "key": "turtle", "label": "Go · Donchian/2N", "colour": "#a371f7", "alive": True,
@@ -340,7 +382,7 @@ def collect():
     # ---- crypto strategies (each writes state/strategy_<name>.json)
     try:
         for fn in sorted(os.listdir(os.path.join(HERE, "state"))):
-            if not ((fn.startswith("strategy_") or fn.startswith("edge_") or fn.startswith("slow_") or fn.startswith("alpha_"))
+            if not ((fn.startswith("strategy_") or fn.startswith("edge_") or fn.startswith("slow_") or fn.startswith("alpha_") or fn.startswith("pack_"))
                     and fn.endswith(".json")):
                 continue
             fp = os.path.join(HERE, "state", fn)
@@ -519,6 +561,10 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   #models.on{display:block}
   #tape{display:none}
   #tape.on{display:block}
+  #signals{display:none}
+  #signals.on{display:block}
+  #advisor{display:none}
+  #advisor.on{display:block}
   .podium{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
   .pod{background:#101821;border:1px solid #1d2836;border-radius:12px;padding:14px 16px;
        cursor:pointer;transition:transform .15s,border-color .15s;position:relative;overflow:hidden}
@@ -771,9 +817,58 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   .cmhead{display:flex;align-items:center;gap:12px;padding:9px 14px;background:#101923;
           border-bottom:1px solid #1b2836}
   .cmhead b{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#8494a8}
+#rail{position:fixed;left:0;top:0;bottom:0;width:186px;background:linear-gradient(180deg,#0c1219,#0a0e13);
+ border-right:1px solid #1c2836;display:flex;flex-direction:column;z-index:50}
+#rail-btn{}
+.rlogo{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;font-family:var(--mono);font-size:13px;letter-spacing:.16em;
+ text-transform:uppercase;color:#8fa3b8;border-bottom:1px solid #16202b}
+.rlogo span{color:#3fb950}
+#rail nav{flex:1;padding:10px 8px;display:flex;flex-direction:column;gap:2px;overflow:auto}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;
+ color:#7c8b9d;font-size:12.5px;font-family:var(--mono);transition:.12s;user-select:none}
+.nav i{font-style:normal;width:14px;text-align:center;color:#4d5d70}
+.nav:hover{background:#131d28;color:#c9d6e3}
+.nav.on{background:#16232f;color:#e6edf6;box-shadow:inset 2px 0 0 #3fb950}
+.nav.on i{color:#3fb950}
+.rfoot{padding:12px;border-top:1px solid #16202b;display:flex;justify-content:center}
+#rail.collapsed{width:56px}
+#rail.collapsed .rlogo b,#rail.collapsed .nav span,#rail.collapsed .rfoot{display:none}
+#rail.collapsed .nav{justify-content:center;padding:10px 0}
+#rail.collapsed .rlogo{justify-content:center;padding:14px 0}
+#railbtn{background:none;border:1px solid #1c2836;color:#8fa3b8;border-radius:6px;
+ width:24px;height:24px;cursor:pointer;font-size:12px;line-height:1;padding:0}
+#railbtn:hover{border-color:#3d6a94;color:#c9d6e3}
+body.rail-min header,body.rail-min .wrap{margin-left:56px}
+header{margin-left:186px}
+.wrap{margin-left:186px}
+@media(max-width:900px){#rail{width:56px}#rail .rlogo b,#rail .nav span,#rail .rfoot{display:none}
+ #rail .nav{justify-content:center}#rail .rlogo{justify-content:center}
+ header,.wrap{margin-left:56px !important}}
 </style></head><body>
+<aside id="rail">
+  <div class="rlogo"><b>Crypt<span>Alyst</span></b>
+  <button id="railbtn" onclick="toggleRail()" title="collapse / expand">☰</button></div>
+  <nav>
+    <a onclick="showTab('dash')" id="nav-dash" class="nav on"><i>▦</i><span>Dashboard</span></a>
+    <a onclick="showTab('tape')" id="nav-tape" class="nav"><i>≡</i><span>Tape</span></a>
+    <a onclick="showTab('signals')" id="nav-signals" class="nav"><i>◎</i><span>Signals</span></a>
+    <a onclick="showTab('advisor')" id="nav-advisor" class="nav"><i>◉</i><span>Advisor</span></a>
+    <a onclick="showTab('market')" id="nav-market" class="nav"><i>◧</i><span>Chart</span></a>
+    <a onclick="showTab('lb')" id="nav-lb" class="nav"><i>▲</i><span>Leaderboard</span></a>
+    <a onclick="showTab('models')" id="nav-models" class="nav"><i>◈</i><span>Models</span></a>
+    <a onclick="showTab('opt')" id="nav-opt" class="nav"><i>⚙</i><span>Optimiser</span></a>
+    <a onclick="showTab('why')" id="nav-why" class="nav"><i>?</i><span>Why</span></a>
+    <a onclick="showTab('review')" id="nav-review" class="nav"><i>◫</i><span>Review</span></a>
+    <a onclick="showTab('control')" id="nav-control" class="nav"><i>⏻</i><span>Control</span></a>
+  </nav>
+  <div class="rfoot" style="flex-direction:column;gap:6px">
+    <span id="rail-live" class="pill ok">live</span>
+    <span id="rail-books" class="pill">0 books</span>
+    <span id="rail-trade" class="pill">idle</span>
+  </div>
+</aside>
 <header><h1>All engines</h1>
-  <div class="tabs">
+  <div class="tabs" style="display:none">
     <button class="tab2 on" id="tab-dash" onclick="showTab('dash')">Dashboard</button>
     <button class="tab2" id="tab-market" onclick="showTab('market')">Market chart</button>
     <button class="tab2" id="tab-why" onclick="showTab('why')">Why</button>
@@ -787,6 +882,7 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   <span class="pill ok" id="live">—</span>
   <span class="pill" id="hz" title="service health">health —</span>
   <span class="pill" id="beat" title="platform heartbeat">beat —</span>
+  <span class="pill ok" id="toteq" title="total equity across every book">total —</span>
   <button id="tradebtn" class="tbtn" onclick="toggleTrading()">▶ start trading</button>
   <span class="pill" id="models">—</span>
   <span class="spacer"></span>
@@ -797,6 +893,20 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <div class="wrap">
   <div class="totals" id="totals" style="margin:0 -20px 0"></div>
   <div id="dash">
+    <div class="panel" style="margin-bottom:12px">
+      <div class="mhead"><span class="sym">advisor</span>
+        <span class="mk">what the agent is flagging now</span>
+        <span style="flex:1"></span>
+        <button class="tbtn" onclick="showTab('advisor')">open advisor</button></div>
+      <div id="dashadv" style="font-family:var(--mono);font-size:11.5px"></div>
+    </div>
+    <div class="panel" style="margin-bottom:12px">
+      <div class="mhead"><span class="sym">live tape</span>
+        <span class="mk">every fill, newest first</span>
+        <span style="flex:1"></span><span class="mk" id="tapen">—</span>
+        <button class="tbtn" onclick="showTab('tape')" style="margin-left:8px">open full tape</button></div>
+      <div id="tapestrip" style="max-height:190px;overflow:auto;font-family:var(--mono);font-size:11.5px"></div>
+    </div>
     <div class="gctl">
       <div class="gtitle">Global controls
         <span class="gsub">one click sets every model</span></div>
@@ -854,6 +964,33 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
                    border-radius:12px;display:block;background:#0b0f14"></iframe>
   </div>
 
+  <div id="advisor">
+    <div class="mhead"><span class="sym">Agent Advisor</span>
+      <span class="mk">live reasoning of the market information agent</span>
+      <span style="flex:1"></span><span class="mk" id="advnote">—</span></div>
+    <div class="panel" style="margin-bottom:12px">
+      <div class="ctitle">thinking</div>
+      <div id="advthoughts" style="max-height:260px;overflow:auto"></div>
+    </div>
+    <div class="panel">
+      <div class="ctitle">board the models are given</div>
+      <div id="advboard"></div>
+    </div>
+  </div>
+  <div id="signals">
+    <div class="mhead"><span class="sym">Live signals</span>
+      <span class="mk">most liquid first · alerts · model votes</span>
+      <span style="flex:1"></span><span class="mk" id="signote">—</span></div>
+    <div class="panel" style="margin-bottom:12px">
+      <div class="ctitle">market agent · opportunity board <span class="mk" id="oppn"></span></div>
+      <div id="oppbox"><div class="hint">loading…</div></div>
+    </div>
+    <div class="panel" style="margin-bottom:12px">
+      <div class="ctitle">awaiting 10s confirmation</div>
+      <div id="pendingbox"><div class="hint">loading…</div></div>
+    </div>
+    <div id="signalsbody"></div>
+  </div>
   <div id="tape">
     <div class="mhead"><span class="sym">Fill tape</span>
       <span class="mk">every entry and exit, newest first</span>
@@ -866,6 +1003,9 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
         <option value="open">entries only</option>
         <option value="close">exits only</option>
       </select>
+      <input id="tsearch" placeholder="search symbol, engine, reason…" oninput="renderTape()"
+        style="background:#0d141c;color:#c9d6e3;border:1px solid #1c2836;border-radius:6px;
+        padding:4px 10px;font:inherit;font-size:11px;min-width:210px">
       <span class="mk" id="tapenf"></span></div>
     <div id="tapebody"></div>
   </div>
@@ -995,8 +1135,22 @@ async function applyEngineSettings(key){
     if(st) st.textContent = r.ok ? ("✓ applied "+d.applied_count+" rules") : ("rejected: "+(d.error||r.status));
   }catch(err){ if(st) st.textContent="failed"; }
 }
+var RAIL_MIN = (localStorage.getItem("railMin")==="1");
+function applyRail(){
+  var r=document.getElementById("rail"), b=document.getElementById("railbtn");
+  if(!r) return;
+  r.classList.toggle("collapsed",RAIL_MIN);
+  document.body.classList.toggle("rail-min",RAIL_MIN);
+  if(b) b.textContent=RAIL_MIN?"\u25b8":"\u2630";
+}
+function toggleRail(){
+  RAIL_MIN=!RAIL_MIN;
+  localStorage.setItem("railMin",RAIL_MIN?"1":"0");
+  applyRail();
+}
+applyRail();
 function showTab(which){
-  ["dash","market","why","review","control","lb","opt","models","tape"].forEach(function(k){
+  ["dash","market","why","review","control","lb","opt","models","tape","signals","advisor"].forEach(function(k){
     var el=$(k); if(!el) return;
     if(k==="dash"){
       el.classList.toggle("off", which!=="dash");   // dash hides with .off
@@ -1004,6 +1158,7 @@ function showTab(which){
       el.classList.toggle("on", which===k);         // others show with .on
     }
     var b=$("tab-"+k); if(b) b.classList.toggle("on", which===k);
+    var nv=$("nav-"+k); if(nv) nv.classList.toggle("on", which===k);
   });
   try{ if(which==="why") renderWhy(); }catch(e){ tabErr("why",e); }
   try{ if(which==="review") renderReview(); }catch(e){ tabErr("review",e); }
@@ -1012,6 +1167,8 @@ function showTab(which){
   try{ if(which==="opt") renderOptimiser(); }catch(e){ tabErr("opt",e); }
   try{ if(which==="models") renderModels(); }catch(e){ tabErr("models",e); }
   try{ if(which==="tape") renderTape(); }catch(e){ tabErr("tape",e); }
+  try{ if(which==="signals"){ renderSignals(); renderPending(); renderOpps(); } }catch(e){ tabErr("signals",e); }
+  try{ if(which==="advisor") renderAdvisor(); }catch(e){ tabErr("advisor",e); }
 }
 
 
@@ -1543,7 +1700,8 @@ function lbRow(e, rank, best, worst){
     '<td><span class="rank '+medal+'">'+rank+'</span></td>'+
     '<td style="color:'+e.colour+';font-weight:700">'+esc(e.key)+
       '<div class="mk" style="font-weight:400">'+esc(e.label||'')+'</div></td>'+
-    '<td>$'+money(e.equity)+'</td>'+
+    '<td>$'+money(e.equity)+'<div class="mk" style="font-weight:400">'+
+      (TOTEQ?(100*e.equity/TOTEQ).toFixed(1)+'% of book':'')+'</div></td>'+
     '<td class="'+(ret>=0?'up':'down')+'"><b>'+(ret>=0?'+':'')+ret.toFixed(2)+'%</b>'+
       '<div class="lbbar" style="margin-top:4px"><i style="width:'+pctW.toFixed(0)+'%;background:'+
       (ret>=0?'#3fb950':'#f85149')+'"></i></div></td>'+
@@ -1585,6 +1743,7 @@ function renderLeaderboard(){
     if(S.key==="closed") return tr.length;
     return e[S.key]==null?-999:e[S.key];
   };
+  TOTEQ=es.reduce(function(a,e){return a+(e.equity||0);},0);
   es.sort(function(a,b){
     var x=val(a), y=val(b);
     if(typeof x==="string") return d*x.localeCompare(y);
@@ -2080,35 +2239,213 @@ async function refreshTrading(){
     b.className="tbtn "+(n>0?"on":"");
   }catch(e){ b.textContent="▶ start trading"; }
 }
-var TAPEDATA=[];
+var TAPEDATA=[], TAPESORT={k:"t", dir:-1}, TOTEQ=0;
+function tapeSort(col){
+  if(TAPESORT.k===col) TAPESORT.dir*=-1;
+  else { TAPESORT.k=col; TAPESORT.dir=(col==="t"||col==="why")?-1:1; }
+  renderTape();
+}
+async function renderAdvisor(){
+  var th=$("advthoughts"), bd=$("advboard"), note=$("advnote");
+  try{
+    var d=await (await fetch("/api/opportunities",{cache:"no-store"})).json();
+    var ts=d.thoughts||[], rows=d.opportunities||[];
+    if(note) note.textContent=rows.length+" ranked · "+(d.flagged||[]).length+" flagged · "+
+      new Date(d.ts||Date.now()).toLocaleTimeString();
+    var col={new:"#3fb950",up:"#3fb950",down:"#f85149",out:"#7c8b9d",flag:"#58a6ff"};
+    th.innerHTML=ts.map(function(t){
+      var c=col[t.kind]||"#7c8b9d";
+      return '<div style="display:grid;grid-template-columns:52px 1fr;gap:10px;padding:3px 0;'+
+        'border-bottom:1px solid #131c26;font-family:var(--mono);font-size:11.5px">'+
+        '<span style="color:'+c+';font-weight:700">'+esc(t.kind)+'</span>'+
+        '<span style="color:#9fb0c4">'+esc(t.text)+'</span></div>';
+    }).join("")||'<div class="hint">waiting for the first cycle…</div>';
+    bd.innerHTML='<table class="wide" style="width:100%"><thead><tr><th>symbol</th><th>spark</th>'+
+      '<th>score</th><th>alert</th><th>funding</th><th>oi</th><th>book</th>'+
+      '<th>move</th><th>depth</th><th style="text-align:left">why</th></tr></thead><tbody>'+
+      rows.slice(0,12).map(function(r){
+        var c=r.components||{};
+        var flagged=(d.flagged||[]).indexOf(r.symbol)>=0;
+        return '<tr'+(flagged?' style="background:#0f1a14"':'')+'>'+
+          '<td style="font-weight:700;cursor:pointer" onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+
+            esc(r.symbol)+'</td>'+
+          '<td>'+symbolSpark(r.symbol,60,16)+'</td>'+
+          '<td style="color:'+(r.score>0.45?"#3fb950":r.score>0.3?"#d29922":"#58a6ff")+'">'+
+            r.score.toFixed(3)+'</td>'+
+          ['alert','funding','oi','imbal','move','depth'].map(function(k){
+            return '<td style="color:#5f7186">'+((c[k]||0)).toFixed(2)+'</td>';}).join('')+
+          '<td style="text-align:left;color:#7c8b9d">'+esc(r.why)+'</td></tr>';
+      }).join("")+'</tbody></table>';
+  }catch(e){}
+}
+async function renderOpps(){
+  var el=$("oppbox"); if(!el) return;
+  try{
+    var d=await (await fetch("/api/opportunities",{cache:"no-store"})).json();
+    var rows=d.opportunities||[];
+    if(!rows.length){ el.innerHTML='<div class="hint">agent warming up…</div>'; return; }
+    el.innerHTML=rows.slice(0,10).map(function(r){
+      var pct=Math.min(100,100*r.score/0.7);
+      var col=r.score>0.45?"#3fb950":r.score>0.3?"#d29922":"#58a6ff";
+      return '<div style="display:grid;grid-template-columns:92px 110px 1fr 70px 60px;gap:10px;'+
+        'align-items:center;padding:4px 0;font-family:var(--mono);font-size:11.5px">'+
+        '<span style="font-weight:700">'+esc(r.symbol)+'</span>'+
+        '<span class="lbbar"><i style="width:'+pct.toFixed(0)+'%;background:'+col+'"></i></span>'+
+        '<span style="color:#7c8b9d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+          esc(r.why)+'</span>'+
+        '<span class="'+((r.chg||0)>=0?'up':'down')+'" style="text-align:right">'+
+          ((r.chg||0)>=0?"+":"")+Number(r.chg||0).toFixed(1)+'%</span>'+
+        '<span style="color:'+col+';text-align:right">'+r.score.toFixed(2)+'</span></div>';
+    }).join("");
+  }catch(e){ el.innerHTML=''; }
+}
+async function renderPending(){
+  var el=$("pendingbox"); if(!el) return;
+  try{
+    var d=await (await fetch("/api/pending",{cache:"no-store"})).json();
+    var p=(d.pending||[]).slice(0,10), win=d.confirm_secs||10;
+    if(!p.length){ el.innerHTML='<div class="hint">no signals awaiting confirmation</div>'; return; }
+    el.innerHTML=p.map(function(r){
+      var pct=Math.max(0,Math.min(100,100*(1-r.left/win)));
+      var col=r.left<=0?"#3fb950":"#d29922";
+      return '<div style="display:grid;grid-template-columns:150px 90px 70px 1fr 60px;gap:10px;'+
+        'align-items:center;padding:4px 0;font-family:var(--mono);font-size:11.5px">'+
+        '<span style="color:#8095ab">'+esc(r.book)+'</span>'+
+        '<span style="font-weight:700">'+esc(r.symbol)+'</span>'+
+        '<span style="color:'+(r.side==="buy"?"#3fb950":"#f85149")+'">'+r.side.toUpperCase()+'</span>'+
+        '<span class="lbbar"><i style="width:'+pct.toFixed(0)+'%;background:'+col+'"></i></span>'+
+        '<span style="color:'+col+';text-align:right">'+(r.left>0?r.left.toFixed(1)+"s":"ready")+'</span>'+
+        '</div>';
+    }).join("");
+  }catch(e){ el.innerHTML=''; }
+}
+var SPARKC={};
+async function refreshSparks(){
+  try{
+    var d=await (await fetch("/api/sparklines?n=30",{cache:"no-store"})).json();
+    SPARKC=d.series||{};
+  }catch(e){}
+}
+function symbolSpark(sym, w, h){
+  return sparkSVG(SPARKC[sym], w||64, h||16);
+}
+function sparkSVG(vals, w, h){
+  if(!vals || vals.length < 2) return '<span style="color:#33414f">—</span>';
+  var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals), rng=(hi-lo)||1;
+  var pts=vals.map(function(v,i){
+    var x=(i/(vals.length-1))*w;
+    var y=h-1-((v-lo)/rng)*(h-2);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(" ");
+  var up=vals[vals.length-1]>=vals[0];
+  return '<svg width="'+w+'" height="'+h+'" style="display:block">'+
+    '<polyline points="'+pts+'" fill="none" stroke="'+(up?'#3fb950':'#f85149')+
+    '" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+}
+async function renderSignals(){
+  var box=$("signalsbody"); if(!box) return;
+  var tick, alerts, votes;
+  try{ tick=(await (await fetch("/api/universe800",{cache:"no-store"})).json()).tickers||[]; }catch(e){ tick=[]; }
+  var sparks=SPARKC;
+  try{ alerts=(await (await fetch("/api/alerts?limit=200",{cache:"no-store"})).json()).alerts||[]; }catch(e){ alerts=[]; }
+  try{ votes=(await (await fetch("/api/votes",{cache:"no-store"})).json()).signals||[]; }catch(e){ votes=[]; }
+  var amap={}, vmap={};
+  alerts.forEach(function(a){ if(a.symbol) amap[a.symbol]=a; });
+  votes.forEach(function(v){ vmap[v.symbol]=(vmap[v.symbol]||0)+((v.direction||"").indexOf("BUY")>=0||(v.direction||"").indexOf("PUMP")>=0?1:-1); });
+  if($("signote")) $("signote").textContent=tick.length+" symbols · "+alerts.length+" alerts · "+votes.length+" votes";
+  var rows=tick.slice(0,40).map(function(t){
+    var a=amap[t.s], v=vmap[t.s]||0, chg=t.c||0;
+    var al=a?('<span style="color:'+(a.kind==="PUMP"?"#3fb950":"#f85149")+';font-weight:700">'+
+      a.kind+' '+Math.round(a.score||0)+'</span>'):'<span style="color:#33414f">—</span>';
+    var vc=v>0?"#3fb950":v<0?"#f85149":"#4d5d70";
+    return '<tr class="sigrow" style="cursor:pointer" onclick="drillChart(\''+esc(t.s)+'\',null)" '+
+      'title="open '+esc(t.s)+' chart">'+
+      '<td style="font-weight:600">'+esc(t.s)+'</td>'+
+      '<td>'+sparkSVG(sparks[t.s],72,18)+'</td>'+
+      '<td>'+(t.price?Number(t.price).toPrecision(7):'—')+'</td>'+
+      '<td class="'+(chg>=0?'up':'down')+'">'+(chg>=0?'+':'')+Number(chg).toFixed(2)+'%</td>'+
+      '<td>'+(t.v?('$'+(t.v/1e6).toFixed(1)+'M'):'—')+'</td>'+
+      '<td>'+al+'</td><td style="color:'+vc+';font-weight:700">'+(v>0?'+':'')+v+'</td></tr>';
+  }).join("");
+  box.innerHTML='<table class="wide" style="width:100%"><thead><tr><th>symbol</th><th>spark</th><th>price</th>'+
+    '<th>24h</th><th>liquidity</th><th>alert</th><th>votes</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
 async function renderTape(){
   var box=$("tapebody"); if(!box) return;
   try{ TAPEDATA=(await (await fetch("/api/tape",{cache:"no-store"})).json()).fills||[]; }catch(e){ TAPEDATA=[]; }
-  var f=$("tfilt"), k=$("tkind");
+  var f=$("tfilt"), k=$("tkind"), q=($("tsearch")?$("tsearch").value:"").toLowerCase();
   var eng=f?f.value:"all", kind=k?k.value:"all";
   if(f && f.options.length<=1){
     var srcs={};TAPEDATA.forEach(function(x){srcs[x.src]=1;});
     Object.keys(srcs).sort().forEach(function(s2){
       var o=document.createElement("option");o.value=s2;o.textContent=s2;f.appendChild(o);});
   }
-  var rows=TAPEDATA.slice().reverse().filter(function(x){
+  var rows=TAPEDATA.filter(function(x){
     if(eng!=="all"&&x.src!==eng)return false;
     if(kind!=="all"&&x.kind!==kind)return false;
+    if(q&&(x.sym+" "+x.src+" "+x.side+" "+x.why+" "+x.kind).toLowerCase().indexOf(q)<0)return false;
     return true;});
+  var K=TAPESORT.k, D=TAPESORT.dir;
+  rows.sort(function(a,b){var x=a[K]||"",y=b[K]||"";
+    return typeof x==="number"&&typeof y==="number"?D*(x-y):D*String(x).localeCompare(String(y));});
   if($("tapenf")) $("tapenf").textContent=rows.length+" fills";
+  var ar=function(col){return TAPESORT.k===col?(TAPESORT.dir<0?" \u25bc":" \u25b2"):"";};
+  var th=function(col,label,al){return '<th class="sortable" style="cursor:pointer;'+
+    (al?'text-align:left':'')+'" onclick="tapeSort(\''+col+'\')">'+label+ar(col)+'</th>';};
   box.innerHTML=rows.length?'<table class="wide" style="width:100%"><thead><tr>'+
-    '<th>time</th><th>engine</th><th>side</th><th>symbol</th><th>type</th>'+
-    '<th style="text-align:left">reason</th></tr></thead><tbody>'+
+    th("t","time")+th("src","engine")+th("side","side")+th("sym","symbol")+
+    th("kind","type")+th("why","reason",true)+'</tr></thead><tbody>'+
     rows.slice(0,300).map(function(x){
       var c=x.kind==="open"?(x.side==="BUY"?"#3fb950":"#f85149"):"#58a6ff";
       return '<tr class="sigrow" style="cursor:pointer" onclick="drillChart(\''+x.sym+'\',null)">'+
         '<td style="color:#5f7186">'+x.t+'</td>'+
+        '<td>'+symbolSpark(x.sym,60,16)+'</td>'+
         '<td style="color:#8095ab">'+x.src+'</td>'+
         '<td style="color:'+c+';font-weight:700">'+x.side+'</td>'+
         '<td style="font-weight:600">'+x.sym+'</td>'+
         '<td>'+(x.kind==="open"?'entry':'exit')+'</td>'+
         '<td style="text-align:left;color:#7c8b9d">'+esc(x.why)+'</td></tr>';
     }).join("")+'</tbody></table>':'<div class="empty">no fills match</div>';
+}
+async function dashAdv(){
+  var el=$("dashadv"); if(!el) return;
+  try{
+    var d=await (await fetch("/api/opportunities",{cache:"no-store"})).json();
+    var f=d.flagged||[], rows=(d.opportunities||[]).filter(function(r){return f.indexOf(r.symbol)>=0;});
+    el.innerHTML=rows.slice(0,6).map(function(r){
+      var col=r.score>0.45?"#3fb950":"#d29922";
+      return '<div style="display:grid;grid-template-columns:96px 1fr 70px;gap:10px;padding:2px 0">'+
+        '<b>'+esc(r.symbol)+'</b><span style="color:#7c8b9d">'+esc(r.why)+'</span>'+
+        '<span style="color:'+col+';text-align:right">'+r.score.toFixed(2)+'</span></div>';
+    }).join("")||'<span class="hint">agent warming up…</span>';
+  }catch(e){}
+}
+async function totalEquity(){
+  try{
+    var a=await (await fetch("/api/all",{cache:"no-store"})).json();
+    var L=(a.engines||[]).filter(function(e){return e.equity!=null;});
+    var tot=L.reduce(function(s2,e){return s2+(e.equity||0);},0);
+    var st=L.reduce(function(s2,e){return s2+(e.start_equity||0);},0);
+    var el=$("toteq");
+    if(el){
+      el.textContent="total $"+Math.round(tot).toLocaleString()+
+        " ("+(st?((tot/st-1)*100>=0?"+":"")+((tot/st-1)*100).toFixed(2)+"%":"—")+")";
+      el.className="pill "+((st&&tot>=st)?"ok":"bad");
+    }
+    var rb=$("rail-books"); if(rb) rb.textContent=L.length+" books · $"+Math.round(tot/1000)+"k";
+  }catch(e){}
+}
+async function railStatus(){
+  try{
+    var t=await (await fetch("/api/trading",{cache:"no-store"})).json();
+    var a=await (await fetch("/api/all",{cache:"no-store"})).json();
+    var books=(a.engines||[]).filter(function(e){return e.equity!=null;}).length;
+    var on=t.on===true;
+    $("rail-trade").textContent=on?"trading":"idle";
+    $("rail-trade").className="pill "+(on?"ok":"");
+    $("rail-books").textContent=books+" books";
+    $("rail-live").className="pill "+(books>0?"ok":"");
+  }catch(e){}
 }
 async function tape(){
   var el=$("tapestrip"); if(!el) return;
@@ -2195,7 +2532,9 @@ async function tick(){
       </div>
       <div class="scanline"></div>
       <div class="rows">
-        <span>equity <b>$${money(e.equity)}</b></span>
+        <span>equity <b>$${money(e.equity)}</b> ${sparkSVG((HIST[e.key]||[]).slice(-40),58,14)}</span>
+        <span>start <b>$${money(e.start_equity||2000)}</b></span>
+        <span>Δ <b class="${cls((e.equity||0)-(e.start_equity||2000))}">${((e.equity||0)-(e.start_equity||2000)>=0?"+":"")}$${money((e.equity||0)-(e.start_equity||2000))}</b></span>
         <span>real <b class="${cls(e.realised)}">${money(e.realised)}</b></span>
         <span>unreal <b class="${cls(e.unrealised)}">${money(e.unrealised)}</b></span>
         <span>closed <b>${e.closed??"—"}</b></span>
@@ -2459,7 +2798,15 @@ health(); setInterval(health,5000);
 beat(); setInterval(beat,5000);
 refreshTrading(); setInterval(refreshTrading,4000);
 tape(); setInterval(tape,1500);
+dashAdv(); setInterval(dashAdv,3000);
+railStatus(); setInterval(railStatus,4000);
+totalEquity(); setInterval(totalEquity,4000);
+refreshSparks(); setInterval(refreshSparks,15000);
 renderTape(); setInterval(function(){ if(document.getElementById("tape").classList.contains("on")) renderTape(); },1500);
+renderSignals(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderSignals(); },3000);
+renderOpps(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderOpps(); },2000);
+renderAdvisor(); setInterval(function(){ if(document.getElementById("advisor").classList.contains("on")) renderAdvisor(); },2000);
+renderPending(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderPending(); },1000);
 </script></body></html>"""
 
 
@@ -2842,6 +3189,39 @@ class H(BaseHTTPRequestHandler):
                 time.sleep(0.4)
                 return self._send(200, json.dumps(trading_loop_state()), "application/json")
             return self._send(200, json.dumps(trading_loop_state()), "application/json")
+        if p == "/api/alerts":
+            try:
+                q = urllib.parse.urlparse(self.path).query
+                d = jget("http://127.0.0.1:8787/api/alerts" + ("?" + q if q else ""), timeout=8.0)
+                return self._send(200, json.dumps(d), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/votes":
+            try:
+                d = jget("http://127.0.0.1:8787/api/models/signals?limit=400", timeout=8.0)
+                return self._send(200, json.dumps(d), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/sparklines":
+            try:
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                n = int((q.get("n", ["24"])[0]) or 24)
+                return self._send(200, json.dumps({"series": sparklines(n)}),
+                                  "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/opportunities":
+            try:
+                with open(os.path.join(HERE, "state", "opportunities.json")) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception:
+                return self._send(200, json.dumps({"opportunities": []}), "application/json")
+        if p == "/api/pending":
+            try:
+                with open(os.path.join(HERE, "state", "pending.json")) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception:
+                return self._send(200, json.dumps({"pending": []}), "application/json")
         if p == "/api/tape":
             try:
                 with open(os.path.join(HERE, "state", "tape.json")) as fh:
@@ -2862,6 +3242,17 @@ class H(BaseHTTPRequestHandler):
                 px = {k: px[k] for k in qs.split(",") if k in px}
             return self._send(200, json.dumps({"ts": TICK["ts"], "age_ms": int(
                 (time.time() - TICK["ts"]) * 1000), "p": px}), "application/json")
+        if p in ("/api/symbols", "/api/symbols/all"):
+            try:
+                rows = all_symbols()
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                needle = (q.get("q", [""])[0] or "").upper()
+                if needle:
+                    rows = [r for r in rows if needle in r["s"]][:200]
+                return self._send(200, json.dumps({"count": len(rows), "symbols": rows}),
+                                  "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
         if p in ("/api/universe800", "/api/tickers800"):
             try:
                 rows = universe800(800)
@@ -2931,9 +3322,12 @@ class H(BaseHTTPRequestHandler):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8799)
+    ap.add_argument("--host", default="127.0.0.1",
+                    help="127.0.0.1 = this machine only, 0.0.0.0 = reachable on the LAN")
     args = ap.parse_args()
     ticker_loop()
-    httpd = ThreadingHTTPServer(("127.0.0.1", args.port), H)
+    httpd = ThreadingHTTPServer((args.host, args.port), H)
+    print("dashboard on http://%s:%d" % (args.host, args.port), flush=True)
     print("MASTER dashboard: http://127.0.0.1:%d" % args.port, flush=True)
     try:
         httpd.serve_forever()
