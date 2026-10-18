@@ -1,7 +1,0 @@
-CHURN — one fill per 1.0s, hold 4s, paper only
-Traceback (most recent call last):
-  File "/Users/users1/Documents/deepseek-harness/default-workspace/scalp5/churn.py", line 76, in <module>
-    if __name__ == "__main__": main()
-  File "/Users/users1/Documents/deepseek-harness/default-workspace/scalp5/churn.py", line 35, in main
-    chg = (px[s] / p["entry"] - 1) * 100 * (1 if p["side"] == "buy" else -1)
-ZeroDivisionError: float division by zero

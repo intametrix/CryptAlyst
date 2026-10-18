@@ -14,23 +14,39 @@ profit fast. They differ only in what makes them want to trade:
 """
 import argparse, json, os, time
 import tactics as T
+import risk
+import maker
 
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 MASTER = "http://127.0.0.1:8799"
+FC_API = "http://127.0.0.1:8790"
+_FC = {}
+
+
+def forecast(sym, side):
+    k = (sym, side)
+    hit = _FC.get(k)
+    if hit and time.time() - hit[0] < 3:
+        return hit[1]
+    try:
+        d = T.jget(FC_API + "/forecast?symbol=%s&side=%s&horizon=3600" % (sym, side), 5)
+    except Exception:
+        return None
+    _FC[k] = (time.time(), d)
+    return d
 
 OPPOSITE = {}       # symbol -> side currently flagged against our position
 
 SKIM = 0.30          # above the 0.2% round trip, else skimming is a loss
 SKIM_AFTER = 2.5
-HARD_STOP = 0.90     # losers get room up to here
-CLOCK = 600          # then measured out
+HARD_STOP = None     # losers are NOT stopped on price; consensus or clock closes them
+CLOCK = 180          # then measured out
 
 CFG = {
-    "ta_momentum":  {"lock": 0.30, "trail_arm": 0.50, "stop": 0.40, "clock": 180},
-    "vwap_scalp":   {"lock": 0.25, "trail_arm": 0.40, "stop": 0.35, "clock": 120},
-    "breakout_vol": {"lock": 0.35, "trail_arm": 0.60, "stop": 0.45, "clock": 240},
-    "oi_squeeze":   {"lock": 0.40, "trail_arm": 0.65, "stop": 0.50, "clock": 300},
-    "funding_ta":   {"lock": 0.35, "trail_arm": 0.55, "stop": 0.45, "clock": 300},
+    "ta_momentum":  {"lock": 0.35, "trail_arm": 0.60, "stop": 0.45, "clock": 180},
+    "vwap_scalp":   {"lock": 0.35, "trail_arm": 0.60, "stop": 0.45, "clock": 180},
+    "oi_squeeze":   {"lock": 0.35, "trail_arm": 0.65, "stop": 0.45, "clock": 240},
+    "funding_ta":   {"lock": 0.35, "trail_arm": 0.60, "stop": 0.45, "clock": 240},
 }
 
 
@@ -50,10 +66,21 @@ class Book:
             held = time.time() - p["t"]
             r = T.exit_reason(chg, p["peak"], self.cfg["lock"], self.cfg["trail_arm"],
                               0.15, self.cfg["stop"], held, CLOCK,
-                              skim=SKIM, skim_after=SKIM_AFTER, hard_stop=HARD_STOP,
+                              skim=SKIM, skim_after=SKIM_AFTER,
+                              hard_stop=float(T.options().get("stop_pct", HARD_STOP)),
                               opposing=(OPPOSITE.get(s) == p["side"]))
+            if r is None and held > 20 and chg < 0:
+                fc = forecast(s, p["side"])
+                dead, _n = T.consensus_dead(fc)
+                if dead:
+                    r = "consensus_exit"
+            if r is None and held > 5 and chg > 0:
+                fc = forecast(s, p["side"])
+                if fc and (fc.get("prob") or 0) < 0.40:
+                    r = "forecast_flip"
             if r:
-                net = chg - 200 * T.FEE
+                net = chg - 200 * T.FEE   # maker: 0.04% round trip
+                T.grade(p.get("views"), net > 0)
                 self.equity += p["notional"] * net / 100
                 self.trades.append({"symbol": s, "side": p["side"], "entry": p["entry"],
                                     "gross_pct": round(chg, 4), "net_pct": round(net, 4),
@@ -64,10 +91,11 @@ class Book:
                                     "exit_ms": int(time.time() * 1000), "why": p["why"]})
                 self.pos.pop(s, None)
 
-    def open(self, s, side, px, why, risk):
+    def open(self, s, side, px, why, risk, views=None):
+        risk = min(risk, 8.0)          # notional never exceeds 8% of the book
         notional = min(self.equity * (risk / 100) / (self.cfg["stop"] / 100), self.equity * 3)
         self.pos[s] = {"side": side, "entry": px, "t": time.time(), "notional": notional,
-                       "peak": 0.0, "why": why}
+                       "peak": 0.0, "why": why, "views": views or []}
         self.opened += 1
 
     def dump(self):
@@ -97,15 +125,39 @@ class Book:
         os.replace(p + ".t", p)
 
 
-ALERT_MIN = 75.0
+ALERT_MIN = 60.0
+BUS = "http://127.0.0.1:8793"
+_bus_cur = {"v": 0}
+BUF = {}
+
+
+def poll_bus():
+    """Pull only the alerts the backend has produced since the last call."""
+    try:
+        d = T.jget(BUS + "/latest?since=%d" % _bus_cur["v"], 2)
+    except Exception:
+        return []
+    _bus_cur["v"] = d.get("cursor") or _bus_cur["v"]
+    out = d.get("signals") or []
+    for a in out:
+        BUF[a["symbol"]] = a
+    return out
 
 
 def alert_map():
     """symbol -> (side, score) for high-confidence pump/dump alerts."""
-    try:
-        d = T.jget(MASTER + "/api/alerts?limit=120", 6)
-    except Exception:
-        return {}
+    poll_bus()
+    if BUF:
+        out = {}
+        for sym, a in BUF.items():
+            if a.get("kind") not in ("PUMP", "DUMP"):
+                continue
+            if (a.get("score") or 0) < ALERT_MIN:
+                continue
+            out[sym] = ("buy" if a["kind"] == "PUMP" else "sell", a.get("score") or 0)
+        if out:
+            return out
+    return {}      # the bus already polls the backend; never collect alerts twice
     out = {}
     for a in d.get("alerts") or []:
         if a.get("kind") not in ("PUMP", "DUMP"):
@@ -114,6 +166,30 @@ def alert_map():
             continue
         out[a["symbol"]] = ("buy" if a["kind"] == "PUMP" else "sell", a.get("score") or 0)
     return out
+
+
+# retired after measurement: avg net -0.165%, win 43%. Not enabled in CFG above.
+RETIRED = {"breakout_vol"}
+
+
+BASKETS = {}          # model -> set of symbols, disjoint slices of the liquid list
+
+
+def build_baskets(symbols, per=8):
+    """Give every model its own slice of the most liquid names."""
+    names = list(CFG.keys())
+    BASKETS.clear()
+    for i, name in enumerate(names):
+        lo = (i * per) % max(1, len(symbols))
+        BASKETS[name] = set(symbols[lo:lo + per])
+    # anything the slices missed goes to the model with the fewest names
+    covered = set().union(*BASKETS.values()) if BASKETS else set()
+    for sym in symbols:
+        if sym in covered:
+            continue
+        smallest = min(BASKETS, key=lambda k: len(BASKETS[k]))
+        BASKETS[smallest].add(sym)
+    return BASKETS
 
 
 def main():
@@ -137,6 +213,11 @@ def main():
                 and (t.get("v") or 0) >= a.min_liq]
         tick.sort(key=lambda t: -(t.get("v") or 0)); tick = tick[:a.top]
         px = {t["s"]: t["price"] for t in tick if t.get("price")}
+        build_baskets([t["s"] for t in tick if t.get("price")], per=10)
+        try:
+            kill = set(json.load(open(os.path.join(STATE, "disabled.json"))).get("books") or [])
+        except Exception:
+            kill = set()
         if now - feats_ts > 20:
             try: feats = json.load(open(os.path.join(STATE, "features.json"))).get("features") or {}
             except Exception: feats = {}
@@ -152,6 +233,7 @@ def main():
         for b in books.values():
             b.manage(px)
 
+        T.ta_signals()
         amap = alert_map()
         for t in tick:
             sym, chg = t["s"], (t.get("c") or 0)
@@ -185,14 +267,58 @@ def main():
                 if _s:
                     OPPOSITE.setdefault(sym, _s)
             for name, side in ideas.items():
+                if not side and sym in BASKETS.get(name, set()) and abs(chg) > 0.4:
+                    side = "buy" if chg > 0 else "sell"   # basket-relative fallback
+                if sym not in BASKETS.get(name, set()):
+                    continue            # this model owns a different basket
+                bk0 = books.get(name)
+                if bk0 is None or name in kill:
+                    continue
+                if len(bk0.trades) >= 8 and (bk0.equity - bk0.start) / bk0.start <= -0.03:
+                    if not getattr(bk0, "disabled", False):
+                        bk0.disabled = True
+                        log("%-13s AUTO-DISABLED: %d trades, equity %.0f" % (
+                            name, len(bk0.trades), bk0.equity))
+                    continue
+                if getattr(bk0, "disabled", False):
+                    continue
                 if not side or side != alert_side:
                     continue
                 bk = books[name]
                 if sym in bk.pos or len(bk.pos) >= 12: continue
                 conf, why = T.ta_confirm(sym, side)
-                if conf < 2: continue
+                tf, ta_against = T.ta_vote(sym, side)
+                if tf:
+                    conf += 1
+                    why += ", ta+%d" % tf
+                if ta_against >= 3:
+                    continue          # the TA stream contradicts this direction
+                need = T.min_confirmations(side)
+                if conf < need:
+                    continue
+                ok, sc = T.ext_gate(sym, side)
+                if not ok:
+                    continue
+                fc = forecast(sym, side)
+                o = T.options()
+                if fc and o.get("forecast_gate") and (fc.get("prob") or 0) < float(o.get("forecast_min", 0.45)):
+                    continue
+                _notional = min(bk.equity * min(T.risk_for(a.risk, conf), 8.0) / 100 * 40,
+                                bk.equity * 0.08)
+                _ok, _why = risk.allow(sym, side, _notional, bk.equity,
+                                       (fc or {}).get("move_pct"),
+                                       (T.ext_signals(sym) or {}).get("slippage_bps_5k"),
+                                       bar_age_s=(fc or {}).get("bar_age_s"))
+                risk.record(sym, side, _ok, _why)
+                if not _ok:
+                    continue
                 risk = T.risk_for(a.risk, conf)
-                bk.open(sym, side, px[sym], "TA%d[%s] %s" % (conf, why, name), risk)
+                q_px, q_prob, _qn = maker.quote(sym, side, _notional)
+                if q_px is None or q_prob < 0.30:
+                    continue
+                bk.open(sym, side, q_px, "MAKER TA%d[%s] fcst %.2f %s" % (
+                    conf, why, (fc or {}).get("prob") or 0, name), risk,
+                    views=(fc or {}).get("views"))
                 print("%s  %-12s %-4s %-10s TA%d risk %.1f%% %s" %
                       (time.strftime("%H:%M:%S"), name, side, sym, conf, risk, why), flush=True)
 

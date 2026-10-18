@@ -37,8 +37,21 @@ SOURCES = [
 _META = {"at": 0.0, "rows": {}}
 
 
+BUILD_TS = int(time.time() * 1000)
 UNI800 = {"ts": 0, "rows": []}
-SPARK = {"ts": 0, "data": {}}
+def norm_ret(d):
+    """Always derive return from equity/start_equity - book files disagree."""
+    try:
+        eq = d.get("equity")
+        st = d.get("start_equity") or d.get("start") or 0
+        if eq is not None and st:
+            return round(100 * (eq / st - 1), 4)
+        return d.get("return_pct")
+    except Exception:
+        return d.get("return_pct")
+
+
+SPARK = {"ts": 0, "data": {}, "ttl": 10.0}
 METRIC_CACHE = {"ts": 0, "data": {}}
 METRIC_HIST = {}     # symbol -> {"price":[], "volume":[], "risk":[], "liquidity":[], "forecast":[]}
 METRIC_MAX = 40
@@ -62,8 +75,10 @@ def metric_sample(n=30):
         fmap[sym] = fmap.get(sym, 0) + (1 if ("BUY" in d or "PUMP" in d) else -1)
     def fetch(sym):
         try:
-            return sym, jget("https://api.binance.com/api/v3/klines?symbol=%s&interval=1m&limit=60"
-                             % sym, timeout=6.0)
+            d = jget("http://127.0.0.1:8796/klines?symbol=%s&interval=1m&limit=60"
+                     % sym, timeout=8.0).get("klines") or []
+            out = [(float(x["c"]) if isinstance(x, dict) else float(x[4])) for x in d]
+            return sym, out or None
         except Exception:
             return sym, None
 
@@ -105,24 +120,30 @@ def metric_sample(n=30):
 
 
 def sparklines(n=24, interval="1m", limit=60):
-    """Short close series per liquid symbol, cached so the UI can poll cheaply."""
-    if SPARK["data"] and (time.time() - SPARK["ts"]) < 15:
+    """Short close series per liquid symbol, fetched in parallel and cached."""
+    if SPARK["data"] and (time.time() - SPARK["ts"]) < SPARK.get("ttl", 10.0):
         return SPARK["data"]
-    rows = universe800(800)[:n]
-    out = {}
-    for r in rows:
-        sym = r.get("s")
-        if not sym:
-            continue
+
+    def fetch(sym):
         try:
-            d = jget("https://api.binance.com/api/v3/klines?symbol=%s&interval=%s&limit=%d"
-                     % (sym, interval, limit), timeout=6.0)
-            out[sym] = [float(x[4]) for x in d]
+            d = (jget("http://127.0.0.1:8796/klines?symbol=%s&interval=%s&limit=%d"
+                      % (sym, interval, limit), timeout=8.0).get("klines") or [])
+            if d and isinstance(d[0], dict):
+                d = [[x["t"], x["o"], x["h"], x["l"], x["c"], x["v"]] for x in d]
+            return sym, [float(x[4]) for x in d]
         except Exception:
-            continue
+            return sym, None
+
+    rows = universe800(800)[:n]
+    syms = [r.get("s") for r in rows if r.get("s")]
+    from concurrent.futures import ThreadPoolExecutor
+    out = {}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for sym, series in pool.map(fetch, syms):
+            if series:
+                out[sym] = series
     SPARK["ts"], SPARK["data"] = time.time(), out
     return out
-SYMBOLS = {"ts": 0, "rows": []}
 
 
 def all_symbols():
@@ -177,8 +198,12 @@ def trading_start():
         return TRADING_STATE
     py = sys.executable or "python3"
     engines = {
-        "alpha": [py, "-u", "alpha.py", "--seconds", "86400", "--universe", "60",
-                  "--loop", "10", "--only", "xsec_momentum,funding_carry"],
+        "models10": [py, "-u", "models10.py", "--start", "5000", "--top", "60",
+                     "--loop", "2", "--probation", "60"],
+        "crypto_pack": [py, "-u", "crypto_pack.py", "--risk", "0.5", "--start", "5000",
+                        "--top", "32", "--min-liq", "150000000", "--loop", "1.0"],
+        "executor": [py, "-u", "executor.py", "--risk", "0.5", "--lock", "0.50",
+                     "--clock", "180", "--min-alert", "60", "--start", "5000"],
     }
     for name, argv in engines.items():
         try:
@@ -198,8 +223,9 @@ def trading_stop():
             pass
     PROCS.clear()
     import subprocess
-    for pat in ("multi_models.py", "stats_models.py", "slow_edges.py",
-                "sympathy_lag.py", "crypto_strategies.py"):
+    for pat in ("alpha.py", "multi_models.py", "stats_models.py", "slow_edges.py",
+                "sympathy_lag.py", "crypto_strategies.py",
+                "models10.py", "crypto_pack.py", "executor.py"):
         subprocess.run(["pkill", "-f", pat], check=False)
     try:
         req = urllib.request.Request("http://127.0.0.1:8787/api/turtle?action=stop",
@@ -214,7 +240,8 @@ def trading_loop_state():
     """Report what is actually alive, not what we asked for."""
     import subprocess
     alive = {}
-    for name, pat in (("alpha", "alpha.py"),):
+    for name, pat in (("models10", "models10.py"), ("crypto_pack", "crypto_pack.py"),
+                      ("executor", "executor.py")):
         r = subprocess.run(["pgrep", "-f", pat], capture_output=True)
         alive[name] = r.returncode == 0
     TRADING_STATE["alive"] = alive
@@ -240,14 +267,14 @@ def metric_loop(every=15.0, n=30):
 
 
 def ticker_loop():
-    """Poll every symbol's last price once a second and keep it in memory."""
+    """Read prices from the stream cache. We never collect them a second time."""
     import threading
     def run():
         while True:
             try:
-                d = jget("https://api.binance.com/api/v3/ticker/price", timeout=8.0)
-                if isinstance(d, list):
-                    TICK["p"] = {r["symbol"]: float(r["price"]) for r in d}
+                d = jget("http://127.0.0.1:8796/streamprices", timeout=4.0)
+                if isinstance(d, dict) and d.get("p"):
+                    TICK["p"] = {k: float(v) for k, v in d["p"].items()}
                     TICK["ts"] = time.time()
             except Exception:
                 pass
@@ -361,7 +388,7 @@ def collect():
         s = jget("http://127.0.0.1:8787/api/turtle/stats")
         engine = {
             "key": "turtle", "label": "Go · Donchian/2N", "colour": "#a371f7", "alive": True,
-            "equity": t.get("equity"), "return_pct": t.get("return_pct"),
+            "equity": t.get("equity"), "return_pct": norm_ret(t),
             "realised": t.get("realized_pnl"), "unrealised": t.get("unrealized_pnl"),
             "closed": s.get("closed"), "wins": None,
             "win_rate": s.get("win_rate_pct"),
@@ -408,7 +435,7 @@ def collect():
                 d = json.load(fh)
             engines.append({
                 "key": key, "label": label, "colour": colour, "alive": not d.get("missing"),
-                "equity": d.get("equity"), "return_pct": d.get("return_pct"),
+                "equity": d.get("equity"), "return_pct": norm_ret(d),
                 "realised": d.get("realised", (d.get("equity", 0) - d.get("start_equity", 0))
                                   if d.get("equity") is not None else None),
                 "unrealised": d.get("unrealised", round(sum(
@@ -444,7 +471,7 @@ def collect():
             engines.append({
                 "key": e.get("name"), "label": "Turtle " + str(e.get("interval")),
                 "colour": "#58a6ff", "alive": True,
-                "equity": e.get("equity"), "return_pct": e.get("return_pct"),
+                "equity": e.get("equity"), "return_pct": norm_ret(e),
                 "realised": e.get("realised"), "unrealised": e.get("unrealised"),
                 "closed": e.get("closed"), "wins": e.get("wins"), "win_rate": None,
                 "positions": e.get("open") or [],
@@ -474,7 +501,7 @@ def collect():
             engines.append({
                 "key": d.get("engine"), "label": d.get("basis", "crypto strategy"),
                 "colour": "#39d353", "alive": True,
-                "equity": d.get("equity"), "return_pct": d.get("return_pct"),
+                "equity": d.get("equity"), "return_pct": norm_ret(d),
                 "realised": d.get("realised"), "unrealised": d.get("unrealised"),
                 "closed": d.get("trade_count"), "wins": d.get("wins"),
                 "win_rate": None, "scans": d.get("opened"),
@@ -501,6 +528,8 @@ def collect():
 
 PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <title>All engines</title><style>
  :root{--bg:#080b10;--card:#111823;--line:#1e2733;--fg:#e8eef6;--dim:#8a99ad;
        --faint:#59677a;--up:#3fb950;--down:#f85149;--mono:ui-monospace,Menlo,monospace}
@@ -646,6 +675,26 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   #signals.on{display:block}
   #advisor{display:none}
   #advisor.on{display:block}
+  #forecast{display:none}
+  #forecast.on{display:block}
+  #health{display:none}
+  #health.on{display:block}
+  #busview{display:none}
+  #busview.on{display:block}
+  #thinking{display:none}
+  #thinking.on{display:block}
+  #moversview{display:none}
+  #moversview.on{display:block}
+  #marketlive{display:none}
+  #marketlive.on{display:block}
+  .mlkpis{position:sticky;top:0;z-index:20;display:grid;
+    grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;
+    background:rgba(10,14,19,.96);backdrop-filter:blur(10px);
+    border-bottom:1px solid #1b2632;padding:10px 0 12px;margin:-6px 0 12px}
+  .mlkpi{background:#0f1620;border:1px solid #1b2632;border-radius:9px;padding:8px 10px}
+  .mlkpi .k{font-size:9px;letter-spacing:.11em;text-transform:uppercase;color:#5f7186}
+  .mlkpi .v{font-family:var(--mono);font-size:15px;font-weight:700;margin-top:2px;color:#e6edf6}
+    @media(max-width:1200px){.mlkpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
   .podium{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
   .pod{background:#101821;border:1px solid #1d2836;border-radius:12px;padding:14px 16px;
        cursor:pointer;transition:transform .15s,border-color .15s;position:relative;overflow:hidden}
@@ -899,12 +948,14 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
           border-bottom:1px solid #1b2836}
   .cmhead b{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#8494a8}
   :root{--gap:14px;--pad:14px 16px;--r:10px}
-  .wrap{padding:18px 22px 40px;max-width:1680px}
+  html,body{overflow-x:hidden;max-width:100%}
+  .wrap{padding:18px 22px 40px;max-width:1680px;overflow-x:hidden}
+  .panel{overflow-x:auto}
   .panel{background:#0f1620;border:1px solid #1b2632;border-radius:var(--r);padding:var(--pad);margin-bottom:var(--gap)}
   .mhead{display:flex;align-items:center;gap:10px;margin:-2px 0 10px}
   .mhead .sym{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8fa3b8;font-weight:700}
   .ctitle{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#6b7c90;margin-bottom:8px;font-weight:600}
-  .dashgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--gap);align-items:start;margin-bottom:var(--gap)}
+  .dashgrid{display:grid;grid-template-columns:minmax(0,1fr);gap:var(--gap);align-items:start;margin-bottom:var(--gap)}
   @media(max-width:1200px){.dashgrid{grid-template-columns:minmax(0,1fr)}}
   .totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:var(--gap)}
   .kpi{background:#0f1620;border:1px solid #1b2632;border-radius:var(--r);padding:12px 14px}
@@ -925,6 +976,76 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 .taperow{display:grid;grid-template-columns:54px 58px 64px 46px 96px minmax(0,1fr);gap:6px;align-items:center;padding:3px 0;border-bottom:1px solid #131c26}
 .taperow>span.reason{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7c8b9d}
 @media(max-width:1400px){.advrow{grid-template-columns:80px minmax(0,1fr) 50px}.advrow .mblock{display:none}.taperow{grid-template-columns:52px 56px minmax(0,1fr) 46px 76px}}
+@keyframes tickflash{0%{background:#123a24;box-shadow:inset 3px 0 0 #3fb950}70%{background:#0f2418}100%{background:transparent;box-shadow:none}}
+@keyframes tickdown{0%{background:#3a1616;box-shadow:inset 3px 0 0 #f85149}70%{background:#241010}100%{background:transparent;box-shadow:none}}
+tr.row-up{animation:tickflash 1.4s ease-out}
+tr.row-down{animation:tickdown 1.4s ease-out}
+.prevpx{display:block;font-size:9.5px;color:#3d4d5f}
+.frow{display:grid;grid-template-columns:92px 46px 96px 46px 62px 74px minmax(120px,1fr);gap:8px;align-items:center;
+      padding:5px 0;border-bottom:1px solid #131c26;font-family:var(--mono);font-size:11.5px}
+.frow .agents{display:flex;gap:3px}
+.frow .agents i{width:9px;height:9px;border-radius:2px;display:block}
+.facc{display:grid;grid-template-columns:120px 130px 1fr;gap:10px;align-items:center;
+      padding:3px 0;font-family:var(--mono);font-size:11.5px;color:#9fb0c4}
+#chartbox{position:fixed;inset:0;background:#04070be6;backdrop-filter:blur(4px);
+  display:none;z-index:120;padding:18px;overflow:auto}
+#chartbox.open{display:block}
+#chartbox .sheet{max-width:1400px;margin:0 auto;background:#0b1119;border:1px solid #24313e;
+  border-radius:12px;padding:16px}
+table th.sortable{cursor:pointer;user-select:none;position:relative}
+table th.sortable:hover{color:#c9d6e3}
+table th.sort-asc:after{content:" \25B2";font-size:8px;color:#58a6ff}
+table th.sort-desc:after{content:" \25BC";font-size:8px;color:#58a6ff}
+.pbar{height:8px;background:#16202b;border-radius:4px;overflow:hidden;min-width:110px}
+.pbar i{display:block;height:100%;transition:width .3s ease}
+.extrow{display:grid;grid-template-columns:96px 200px 62px 62px 56px 62px 62px 58px;gap:10px;
+  align-items:center;font-family:var(--mono);font-size:11px;padding:3px 0;border-bottom:1px solid #131c26}
+.extrow b{cursor:pointer;color:#c9d6e3}
+.ebar{height:5px;background:#16202b;border-radius:3px;overflow:hidden;display:flex}
+.ebar i{display:block;height:100%}
+.flowrow{display:grid;grid-template-columns:96px 240px 86px 56px 130px;gap:10px;align-items:center;
+  font-family:var(--mono);font-size:11px;padding:3px 0;border-bottom:1px solid #131c26}
+.flowrow b{cursor:pointer;color:#c9d6e3}
+.fbar{height:5px;background:#16202b;border-radius:3px;overflow:hidden;display:flex}
+.fbar i{display:block;height:100%}
+.mvwrap{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:8px 0 14px}
+@media(max-width:1200px){.mvwrap{grid-template-columns:minmax(0,1fr)}}
+.mvcard{background:#0f1620;border:1px solid #1b2632;border-radius:10px;padding:10px 12px}
+.mvcard h4{margin:0 0 8px;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#6b7c90}
+.mvrow{display:grid;grid-template-columns:86px 1fr 74px 62px;gap:8px;align-items:center;
+  font-family:var(--mono);font-size:11px;padding:3px 0;border-bottom:1px solid #131c26}
+.mvrow b{cursor:pointer;color:#c9d6e3}
+.mvbar{height:4px;background:#16202b;border-radius:2px;overflow:hidden}
+.mvbar i{display:block;height:100%}
+.mlscroll{max-height:calc(100vh - 300px);overflow:auto;border-radius:8px}
+.mltable{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+.mltable thead th{position:sticky;top:0;z-index:6;background:#0b1016;text-align:right;
+  font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#59677a;font-weight:600;
+  padding:7px 10px;border-bottom:1px solid #1b2632;white-space:nowrap}
+.mltable thead th:first-child{text-align:left}
+.mltable td{padding:5px 10px;border-bottom:1px solid #121a24;vertical-align:middle}
+.mltable tbody tr:nth-child(odd){background:#0a0f16}
+.mltable th:nth-child(1),.mltable td:nth-child(1){width:112px}
+.mltable th:nth-child(2),.mltable td:nth-child(2){width:118px}
+.mltable th:nth-child(3),.mltable td:nth-child(3){width:124px}
+.mltable th:nth-child(4),.mltable td:nth-child(4){width:86px}
+.mltable th:nth-child(5),.mltable td:nth-child(5){width:118px}
+.mltable th:nth-child(6),.mltable td:nth-child(6){width:92px}
+.mltable th:nth-child(7),.mltable td:nth-child(7){width:84px}
+.mltable tbody tr:hover{background:#131d28}
+.mltable .sym{font-weight:700;color:#c9d6e3;cursor:pointer;letter-spacing:.02em}
+.mltable .px{text-align:right;font-weight:600;color:#e6edf6;position:relative}
+.mltable .chg{text-align:right;font-weight:600}
+.mltable .liq{text-align:right;color:#7c8b9d}
+.mltable .vol{text-align:right;color:#58a6ff}
+.mltable .age{text-align:right;font-size:10px;color:#59677a}
+.mltable .spark{width:96px}
+.flash-up{animation:cellup 1.1s ease-out}
+.flash-down{animation:celldown 1.1s ease-out}
+@keyframes cellup{0%{background:#123a24;color:#7ee787}100%{background:transparent}}
+@keyframes celldown{0%{background:#3a1616;color:#ff9a92}100%{background:transparent}}
+.liqbar{height:3px;background:#16202b;border-radius:2px;margin-top:3px;overflow:hidden}
+.liqbar i{display:block;height:100%;background:#3d6a94}
 #rail{position:fixed;left:0;top:0;bottom:0;width:186px;background:linear-gradient(180deg,#0c1219,#0a0e13);
  border-right:1px solid #1c2836;display:flex;flex-direction:column;z-index:50}
 #rail-btn{}
@@ -947,12 +1068,40 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
  width:24px;height:24px;cursor:pointer;font-size:12px;line-height:1;padding:0}
 #railbtn:hover{border-color:#3d6a94;color:#c9d6e3}
 body.rail-min header,body.rail-min .wrap{margin-left:56px}
+#ovr,#stale,#err{margin-left:186px;padding-left:14px}
+body.rail-min #ovr,body.rail-min #stale,body.rail-min #err{margin-left:56px}
 header{margin-left:186px}
 .wrap{margin-left:186px}
 @media(max-width:900px){#rail{width:56px}#rail .rlogo b,#rail .nav span,#rail .rfoot{display:none}
  #rail .nav{justify-content:center}#rail .rlogo{justify-content:center}
  header,.wrap{margin-left:56px !important}}
-</style></head><body>
+</style>
+<script>__UI_LIB__</script>
+<script>
+/* EARLY TAB FALLBACK — runs before the main script so a later failure can never
+   make the sidebar unclickable. The full showTab replaces this on load. */
+(function(){
+  window.__earlyErr = null;
+  window.addEventListener("error", function(e){
+    var b=document.getElementById("err");
+    if(b){ b.style.display="block"; b.textContent="JS error: "+e.message+" @"+e.lineno; }
+    window.__earlyErr = e.message;
+  });
+  var PANELS=["dash","market","why","review","control","lb","opt","models","tape","signals","advisor","forecast","thinking","busview","moversview","marketlive","health"];
+  window.showTab = window.showTab || function(which){
+    PANELS.forEach(function(k){
+      var el=document.getElementById(k); if(!el) return;
+      if(k==="dash"){ el.classList.toggle("off", which!=="dash"); }
+      else { el.classList.toggle("on", which===k); }
+      var nv=document.getElementById("nav-"+k); if(nv) nv.classList.toggle("on", which===k);
+    });
+    var body=document.getElementById(which+"body");
+    if(body && !body.innerHTML.trim()){
+      body.innerHTML='<div class="panel"><div class="empty">panel switched, but the renderer did not run — check the red error bar above.</div></div>';
+    }
+  };
+})();
+</script></head><body>
 <aside id="rail">
   <div class="rlogo"><b>Crypt<span>Alyst</span></b>
   <button id="railbtn" onclick="toggleRail()" title="collapse / expand">☰</button></div>
@@ -961,13 +1110,17 @@ header{margin-left:186px}
     <a onclick="showTab('tape')" id="nav-tape" class="nav"><i>≡</i><span>Tape</span></a>
     <a onclick="showTab('signals')" id="nav-signals" class="nav"><i>◎</i><span>Signals</span></a>
     <a onclick="showTab('advisor')" id="nav-advisor" class="nav"><i>◉</i><span>Advisor</span></a>
+    <a onclick="showTab('forecast')" id="nav-forecast" class="nav"><i>◈</i><span>Forecast</span></a>
+    <a onclick="showTab('moversview')" id="nav-moversview" class="nav"><i>↕</i><span>Movers</span></a>
+    <a onclick="showTab('marketlive')" id="nav-marketlive" class="nav"><i>◇</i><span>Market live</span></a>
     <a onclick="showTab('market')" id="nav-market" class="nav"><i>◧</i><span>Chart</span></a>
     <a onclick="showTab('lb')" id="nav-lb" class="nav"><i>▲</i><span>Leaderboard</span></a>
     <a onclick="showTab('models')" id="nav-models" class="nav"><i>◈</i><span>Models</span></a>
     <a onclick="showTab('opt')" id="nav-opt" class="nav"><i>⚙</i><span>Optimiser</span></a>
     <a onclick="showTab('why')" id="nav-why" class="nav"><i>?</i><span>Why</span></a>
     <a onclick="showTab('review')" id="nav-review" class="nav"><i>◫</i><span>Review</span></a>
-    <a onclick="showTab('control')" id="nav-control" class="nav"><i>⏻</i><span>Control</span></a>
+    <a onclick="showTab('control')" id="nav-control" class="nav"><i>⏻</i><span>TA Analysis</span></a>
+    <a onclick="showTab('health')" id="nav-health" class="nav"><i>✚</i><span>Health</span></a>
   </nav>
   <div class="rfoot" style="flex-direction:column;gap:6px">
     <span id="rail-live" class="pill ok">live</span>
@@ -981,7 +1134,7 @@ header{margin-left:186px}
     <button class="tab2" id="tab-market" onclick="showTab('market')">Market chart</button>
     <button class="tab2" id="tab-why" onclick="showTab('why')">Why</button>
     <button class="tab2" id="tab-review" onclick="showTab('review')">Review</button>
-    <button class="tab2" id="tab-control" onclick="showTab('control')">Control</button>
+    <button class="tab2" id="tab-control" onclick="showTab('control')">TA Analysis</button>
     <button class="tab2" id="tab-lb" onclick="showTab('lb')">Leaderboard</button>
     <button class="tab2" id="tab-opt" onclick="showTab('opt')">Optimiser</button>
     <button class="tab2" id="tab-models" onclick="showTab('models')">Models</button>
@@ -992,15 +1145,26 @@ header{margin-left:186px}
   <span class="pill" id="beat" title="platform heartbeat">beat —</span>
   <span class="pill ok" id="toteq" title="total equity across every book">total —</span>
   <button id="tradebtn" class="tbtn" onclick="toggleTrading()">▶ start trading</button>
-  <span class="pill" id="models">—</span>
+  <span class="pill" id="modelsbadge">—</span>
   <span class="spacer"></span>
   <span class="pill" id="clock">—</span>
 </header>
+<div id="ovr" style="display:none;background:#4a1111;border-bottom:1px solid #f85149;
+  color:#ffb3ad;padding:8px 16px;font-size:12px;font-family:ui-monospace,monospace;
+  gap:12px;align-items:center">OVERRIDE ACTIVE — every risk, cost and forecast gate is bypassed.
+  This is crazy trading. <button onclick="setOpt('override_crazy',false)" style="background:#2a0f0f;
+  border:1px solid #f85149;color:#ffd0cc;border-radius:6px;padding:3px 10px;cursor:pointer">stop override</button></div>
+<div id="stale" style="display:none;background:#1d2a3a;border-bottom:1px solid #3d6a94;
+     color:#9fc7ef;padding:8px 16px;font-size:12px;font-family:ui-monospace,monospace;
+     gap:12px;align-items:center">A newer version of this dashboard is running.
+     <button onclick="location.reload(true)" style="background:#16232f;border:1px solid #3d6a94;
+     color:#cfe4f7;border-radius:6px;padding:3px 10px;cursor:pointer">reload</button></div>
 <div id="err" style="display:none;background:#3a1d1d;border-bottom:1px solid #f85149;
      color:#ffb3ad;padding:8px 16px;font-size:12px;font-family:ui-monospace,monospace"></div>
 <div class="wrap">
   <div class="totals" id="totals" style="margin:0 -20px 0"></div>
   <div id="dash">
+    <div id="attrib" class="panel" style="padding:10px 14px;margin-bottom:0"></div>
     <div class="dashgrid">
     <div class="panel" style="margin-bottom:0">
       <div class="mhead"><span class="sym">advisor</span>
@@ -1009,53 +1173,7 @@ header{margin-left:186px}
         <button class="tbtn" onclick="showTab('advisor')">open advisor</button></div>
       <div id="dashadv" style="font-family:var(--mono);font-size:11.5px"></div>
     </div>
-    <div class="panel" style="margin-bottom:0">
-      <div class="mhead"><span class="sym">live tape</span>
-        <span class="mk">every fill, newest first</span>
-        <span style="flex:1"></span><span class="mk" id="tapen">—</span>
-        <button class="tbtn" onclick="showTab('tape')" style="margin-left:8px">open full tape</button></div>
-      <div id="tapestrip" style="max-height:190px;overflow:auto;font-family:var(--mono);font-size:11.5px"></div>
-    </div>
-    </div>
-    <div class="gctl">
-      <div class="gtitle">Global controls
-        <span class="gsub">one click sets every model</span></div>
-      <div class="gfields">
-        <label class="gf"><span>risk / trade %</span>
-          <input id="g-risk" type="number" step="0.1" min="0.05" max="15" placeholder="—"></label>
-        <label class="gf"><span>take profit %</span>
-          <input id="g-tp" type="number" step="0.1" min="0.2" max="10" placeholder="—"></label>
-        <label class="gf"><span>stop %</span>
-          <input id="g-sl" type="number" step="0.1" min="0.2" max="8" placeholder="—"></label>
-        <label class="gf"><span>max positions</span>
-          <input id="g-max" type="number" step="1" min="1" max="40" placeholder="—"></label>
-        <label class="gf"><span>book risk ceiling %</span>
-          <input id="g-ceil" type="number" step="1" min="5" max="100" placeholder="—"></label>
-        <label class="gf"><span>scan cadence s</span>
-          <input id="g-scan" type="number" step="0.5" min="0.5" max="600" placeholder="—"></label>
-        <label class="gf"><span>trail ratio</span>
-          <input id="g-trail" type="number" step="0.05" min="0" max="1" placeholder="—"></label>
-        <label class="gf"><span>max hold s</span>
-          <input id="g-hold" type="number" step="10" min="0" max="86400" placeholder="—"></label>
-        <label class="gf"><span>min liquidity $</span>
-          <input id="g-liq" type="number" step="1000000" min="0" max="5000000000" placeholder="—"></label>
-        <label class="gf"><span>hold (turtles) s</span>
-          <input id="g-hs" type="number" step="10" min="5" max="3600" placeholder="—"></label>
-      </div>
-      <div class="grow" style="margin-top:10px">
-        <span class="gsub" style="margin-right:4px">chart default</span>
-        <select id="g-iv" class="gfsel" onchange="setDefaultIv(this.value)">
-          <option value="1m">1m</option><option value="5m" selected>5m</option>
-          <option value="15m">15m</option><option value="1h">1h</option>
-          <option value="4h">4h</option><option value="1d">1d</option>
-        </select>
-        <span class="mk">applies to every chart you open</span>
-      </div>
-      <div class="grow">
-        <button class="applybtn" onclick="applyAll()">Apply to all models</button>
-        <button class="ghost" onclick="forceAll()">Force rescan all</button>
-        <span class="mk" id="gstat"></span>
-      </div>
+
     </div>
     <div id="sections"></div>
   </div>
@@ -1073,13 +1191,62 @@ header{margin-left:186px}
             style="width:100%;height:calc(100vh - 130px);min-height:520px;border:0;
                    border-radius:12px;display:block;background:#0b0f14"></iframe>
   </div>
-
+  <div id="health">
+    <div class="mhead"><span class="sym">Dashboard health</span>
+      <span class="mk">every view and the data it needs</span>
+      <span style="flex:1"></span><button class="tbtn" onclick="renderHealth()">recheck</button></div>
+    <div class="panel"><div id="healthbody"><div class="hint">checking…</div></div></div>
+  </div>
+  <div id="busview">
+    <div class="mhead"><span class="sym">Message bus</span>
+      <span class="mk">RabbitMQ — queues, rates, consumers</span>
+      <span style="flex:1"></span>
+      <a href="http://127.0.0.1:15672" target="_blank" class="tbtn" style="text-decoration:none">open management UI</a></div>
+    <div id="busbody"><div class="hint" style="padding:14px">reading broker…</div></div>
+  </div>
+  <div id="thinking">
+    <div class="mhead"><span class="sym">Thinking</span>
+      <span class="mk">what the platform sees, decides, and refuses</span>
+      <span style="flex:1"></span><span class="mk" id="thn">—</span></div>
+    <div id="thbody"><div class="hint" style="padding:14px">reading the system…</div></div>
+  </div>
+  <div id="moversview">
+    <div class="mhead"><span class="sym">Movers</span>
+      <span class="mk">biggest increase · biggest decrease · most traded · money flow</span>
+      <span style="flex:1"></span><span class="mk" id="mvn">—</span></div>
+    <div id="movers" class="mvwrap"></div>
+    <div id="flowmap" class="panel" style="padding:10px 14px;margin-top:12px"></div>
+  </div>
+  <div id="marketlive">
+    <div class="mhead"><span class="sym">Live market</span>
+      <span class="mk">deepest books first · ticking every second</span>
+      <span style="flex:1"></span>
+      <span class="pill" id="mlage">—</span>
+      <span class="mk" id="mlcount"></span></div>
+    <div class="panel" style="padding:0">
+      <div id="mlbody"><div class="hint" style="padding:14px">loading market…</div></div>
+    </div>
+  </div>
+  <div id="forecast">
+    <div class="mhead"><span class="sym">Forecast supervisor</span>
+      <span class="mk">seven agents blended by measured accuracy</span>
+      <span style="flex:1"></span><span class="mk" id="fcnote">—</span></div>
+    <div class="panel" style="margin-bottom:12px">
+      <div class="ctitle">agent accuracy (learned from closed trades)</div>
+      <div id="fcstate"></div>
+    </div>
+    <div class="panel">
+      <div class="ctitle">live forecasts for held and flagged symbols</div>
+      <div id="fcbody"><div class="hint">loading…</div></div>
+    </div>
+  </div>
   <div id="advisor">
     <div class="mhead"><span class="sym">Agent Advisor</span>
       <span class="mk">live reasoning of the market information agent</span>
       <span style="flex:1"></span><span class="mk" id="advnote">—</span></div>
     <div class="panel" style="margin-bottom:12px">
       <div class="ctitle">thinking</div>
+      <div id="advagents" style="margin:10px 0"></div>
       <div id="advthoughts" style="max-height:260px;overflow:auto"></div>
     </div>
     <div class="panel">
@@ -1120,6 +1287,7 @@ header{margin-left:186px}
     <div id="tapebody"></div>
   </div>
   <div id="models">
+    <div id="revcount" class="panel" style="padding:9px 14px;margin-bottom:10px"></div>
     <div class="mhead"><span class="sym">All models</span>
       <span class="mk">every constituent model, not just the books</span>
       <span style="flex:1"></span><span class="mk" id="mn"></span></div>
@@ -1138,10 +1306,53 @@ header{margin-left:186px}
     <div id="lbbody"></div>
   </div>
   <div id="control">
-    <div class="mhead"><span class="sym">Control</span>
+<div id="optpanel" class="panel" style="margin-bottom:12px">
+    <div class="ctitle">Trading options — live, no restart needed</div>
+    <div id="optsbody" style="font-family:var(--mono);font-size:12px"></div>
+    <div class="mhead"><span class="sym">TA Analysis</span>
       <span class="mk">one panel · every property · every model</span>
       <span style="flex:1"></span><span class="mk" id="cstat"></span></div>
     <div class="cscope" id="cscope"></div>
+    <div class="gctl">
+      <div class="gtitle">Global controls
+        <span class="gsub">one click sets every model</span></div>
+      <div class="gfields">
+        <label class="gf"><span>risk / trade %</span>
+          <input id="g-risk" type="number" step="0.1" min="0.05" max="15" placeholder="—"></label>
+        <label class="gf"><span>take profit %</span>
+          <input id="g-tp" type="number" step="0.1" min="0.2" max="10" placeholder="—"></label>
+        <label class="gf"><span>stop %</span>
+          <input id="g-sl" type="number" step="0.1" min="0.2" max="8" placeholder="—"></label>
+        <label class="gf"><span>max positions</span>
+          <input id="g-max" type="number" step="1" min="1" max="40" placeholder="—"></label>
+        <label class="gf"><span>book risk ceiling %</span>
+          <input id="g-ceil" type="number" step="1" min="5" max="100" placeholder="—"></label>
+        <label class="gf"><span>scan cadence s</span>
+          <input id="g-scan" type="number" step="0.5" min="0.5" max="600" placeholder="—"></label>
+        <label class="gf"><span>trail ratio</span>
+          <input id="g-trail" type="number" step="0.05" min="0" max="1" placeholder="—"></label>
+        <label class="gf"><span>max hold s</span>
+          <input id="g-hold" type="number" step="10" min="0" max="86400" placeholder="—"></label>
+        <label class="gf"><span>min liquidity $</span>
+          <input id="g-liq" type="number" step="1000000" min="0" max="5000000000" placeholder="—"></label>
+        <label class="gf"><span>hold (turtles) s</span>
+          <input id="g-hs" type="number" step="10" min="5" max="3600" placeholder="—"></label>
+      </div>
+      <div class="grow" style="margin-top:10px">
+        <span class="gsub" style="margin-right:4px">chart default</span>
+        <select id="g-iv" class="gfsel" onchange="setDefaultIv(this.value)">
+          <option value="1m">1m</option><option value="5m" selected>5m</option>
+          <option value="15m">15m</option><option value="1h">1h</option>
+          <option value="4h">4h</option><option value="1d">1d</option>
+        </select>
+        <span class="mk">applies to every chart you open</span>
+      </div>
+      <div class="grow">
+        <button class="applybtn" onclick="applyAll()">Apply to all models</button>
+        <button class="ghost" onclick="forceAll()">Force rescan all</button>
+        <span class="mk" id="gstat"></span>
+      </div>
+    </div>
     <div id="cbody"></div>
   </div>
   <div id="review">
@@ -1158,11 +1369,11 @@ header{margin-left:186px}
       <span class="mk" id="wnote"></span>
     </div>
     <div id="wbody"></div>
-  </div>
-  <div class="section">
-    <h2>Signal source — model aggregate</h2>
-    <div class="card" id="modelspanel" style="max-height:none">
-      <div class="empty">loading…</div>
+    <div class="section">
+      <h2>Signal source — model aggregate</h2>
+      <div class="card" id="modelspanel" style="max-height:none">
+        <div class="empty">loading…</div>
+      </div>
     </div>
   </div>
 </div>
@@ -1172,12 +1383,21 @@ header{margin-left:186px}
     <h2 id="charttitle" style="color:#58a6ff">—</h2>
     <div class="label" id="chartsub">live market</div>
     <div class="ivs" id="ivs"></div>
-    <svg id="chartsvg" viewBox="0 0 1000 360" preserveAspectRatio="none"></svg>
+    <div id="chartctl" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px">
+      <button class="tbtn" onclick="zoomStep(0.6)" title="zoom in (+)">zoom +</button>
+      <button class="tbtn" onclick="zoomStep(1.7)" title="zoom out (-)">zoom −</button>
+      <button class="tbtn" onclick="resetView()" title="reset zoom (0)">reset</button>
+      <button class="tbtn" onclick="resetY()" title="reset price axis (y)">reset price</button>
+      <span class="mk" style="margin-left:6px">drag to pan · shift+drag to select a range · wheel zooms · double-click resets</span>
+    </div>
+    <svg id="chartsvg" viewBox="0 0 1000 360" preserveAspectRatio="none"
+         style="width:100%;height:360px;display:block;touch-action:none;cursor:crosshair"></svg>
     <div class="label" id="chartfoot" style="margin-top:8px">—</div>
   </div>
 </div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="sheet" id="sheet"></div>
+</div>
 </div>
 <footer id="foot">—</footer>
 <script>
@@ -1260,14 +1480,57 @@ function toggleRail(){
   applyRail();
 }
 applyRail();
+async function renderBus(){
+  var box=$("busbody"); if(!box) return;
+  var d={};
+  try{ d=await (await fetch("/api/bus",{cache:"no-store"})).json(); }catch(e){
+    box.innerHTML=UI.panel("message bus", '<div class="empty">broker unreachable</div>'); return; }
+  if(d.error){ box.innerHTML=UI.panel("message bus", '<div class="empty">'+UI.esc(d.error)+'</div>'); return; }
+  var t=d.totals||{};
+  var stats=[UI.stat("broker", "RabbitMQ "+UI.esc(d.version||""), "#a371f7"),
+             UI.stat("queues", t.queues||0),
+             UI.stat("consumers", t.consumers||0, (t.consumers?"#3fb950":"#f85149")),
+             UI.stat("connections", t.connections||0)].join("");
+  var rows=(d.queues||[]).sort(function(a,b){return (b.messages||0)-(a.messages||0);}).map(function(q){
+    var rate=q.publish_rate==null?0:q.publish_rate;
+    return [UI.esc(q.name), q.messages==null?0:q.messages,
+            rate?rate.toFixed(2)+"/s":"—",
+            q.consumers?UI.pill(q.consumers+" consumer"+(q.consumers>1?"s":""),"ok"):UI.pill("no consumer","warn"),
+            q.durable?UI.pill("durable","mute"):UI.pill("transient","mute")];
+  });
+  box.innerHTML=UI.panel("broker", '<div style="display:flex;gap:26px;flex-wrap:wrap">'+stats+'</div>',
+      {note:"management :15672"})+
+    '<div style="margin-top:12px">'+UI.panel("queues",
+      UI.table({key:"bus-queues", cols:[{label:"queue",align:"left"},{label:"messages"},
+        {label:"publish"},{label:"consumers",align:"left"},{label:"type",align:"left"}], rows:rows}),
+      {note:"queues with no consumer are collecting and will be trimmed by policy"})+'</div>';
+}
+function normalisePanels(){
+  /* any panel stranded inside a collapsed container is hoisted to .wrap */
+  var wrap=document.querySelector(".wrap"); if(!wrap) return;
+  ["dash","thinking","moversview","marketlive","forecast","advisor","signals","tape",
+   "models","opt","lb","control","review","why","health","thinking","busview"].forEach(function(id){
+    var e=document.getElementById(id);
+    if(e && e.parentElement && e.parentElement!==wrap){
+      wrap.appendChild(e);
+    }
+  });
+}
 function showTab(which){
-  ["dash","market","why","review","control","lb","opt","models","tape","signals","advisor"].forEach(function(k){
+  try{ normalisePanels(); }catch(e){}
+  try{ var cb=$("chartbox"); if(cb) cb.classList.remove("open"); }catch(e){}
+  try{ window.scrollTo(0,0); document.documentElement.scrollLeft=0; document.body.scrollLeft=0; }catch(e){}
+  ["dash","market","why","review","control","lb","opt","models","tape","signals","advisor",
+   "forecast","thinking","busview","moversview","marketlive","health"].forEach(function(k){
     var el=$(k); if(!el) return;
     if(k==="dash"){
-      el.classList.toggle("off", which!=="dash");   // dash hides with .off
+      el.classList.toggle("off", which!=="dash");
     } else {
-      el.classList.toggle("on", which===k);         // others show with .on
+      el.classList.toggle("on", which===k);
     }
+    // belt and braces: inline display wins over any leftover class
+    el.style.display = (k===which) ? "block" : "none";
+    el.scrollLeft = 0;
     var b=$("tab-"+k); if(b) b.classList.toggle("on", which===k);
     var nv=$("nav-"+k); if(nv) nv.classList.toggle("on", which===k);
   });
@@ -1276,10 +1539,22 @@ function showTab(which){
   try{ if(which==="control") renderControl(); }catch(e){ tabErr("control",e); }
   try{ if(which==="lb") renderLeaderboard(); }catch(e){ tabErr("lb",e); }
   try{ if(which==="opt") renderOptimiser(); }catch(e){ tabErr("opt",e); }
-  try{ if(which==="models") renderModels(); }catch(e){ tabErr("models",e); }
+  try{ if(which==="models"){ renderReviewCountdown(); renderModels(); setTimeout(function(){
+        var el=$("modelsbody");
+        if(el && !el.innerHTML.replace(/\s/g,"")){
+          el.innerHTML='<div class="panel"><div class="empty">Models view returned nothing — '+
+            'click Health to check the data feed, or reload the page.</div></div>';
+        }
+      },5000); } }catch(e){ tabErr("models",e); }
   try{ if(which==="tape") renderTape(); }catch(e){ tabErr("tape",e); }
   try{ if(which==="signals"){ renderSignals(); renderPending(); renderOpps(); } }catch(e){ tabErr("signals",e); }
-  try{ if(which==="advisor") renderAdvisor(); }catch(e){ tabErr("advisor",e); }
+  try{ if(which==="advisor"){ renderAdvisor(); renderAgentPanel(); } }catch(e){ tabErr("advisor",e); }
+  try{ if(which==="forecast") renderForecast(); }catch(e){ tabErr("forecast",e); }
+  try{ if(which==="busview") renderBus(); }catch(e){ tabErr("busview",e); }
+  try{ if(which==="thinking") renderThinking(); }catch(e){ tabErr("thinking",e); }
+  try{ if(which==="moversview"){ renderMovers(); renderFlow(); } }catch(e){ tabErr("moversview",e); }
+  try{ if(which==="marketlive"){ renderMarketLive(); mlStream(); } else { mlStop(); } }catch(e){ tabErr("marketlive",e); }
+  try{ if(which==="health") renderHealth(); }catch(e){ tabErr("health",e); }
 }
 
 
@@ -1310,10 +1585,73 @@ function closeChartModal(){
 }
 function restoreSide(){ } function restoreIv(){} function restoreOv(){} function restoreEngine(){}
 function refreshCtlBtn(){ } function ctlSummary(){ return ''; }
-function toggleSide(){ /* handled inside the chart page */ } function resetView(){} function resetY(){} function zoomStep(){}
+function toggleSide(){ /* handled inside the chart page */ }
 function toggleMeasure(){} function renderEngines(){} function renderMivs(){}
 function renderOverlays(){} function renderTickerList(){ /* the ticker list lives in the chart page now */ } function setDefaultIv(){}
-function toggleChartCtl(){ } function chartGestures(){ } function drawMarket(){ }
+function toggleChartCtl(){ var b=$("chartctl"); if(b) b.style.display = (b.style.display==="none"?"flex":"none"); }
+function chartGestures(){ return "drag to pan · shift+drag to select a range · wheel to zoom · +/- keys · double-click to reset"; }
+
+/* ---- chart state + renderer ------------------------------------------- */
+if (typeof VIEW === "undefined") { window.VIEW = {s:0, c:120, y:null}; }
+function chartRows(){ return (typeof LASTROWS!=="undefined" && LASTROWS) ? LASTROWS : []; }
+
+function resetView(){
+  var rows=chartRows();
+  VIEW.s = Math.max(0, rows.length-120);
+  VIEW.c = Math.min(120, rows.length||120);
+  VIEW.y = null;
+  drawMarket();
+}
+function resetY(){ VIEW.y=null; drawMarket(); }
+function zoomStep(factor){ zoomAt(600, (VIEW.c||120)*factor); }
+
+function drawMarket(){
+  var svg=$("chartsvg"); if(!svg) return;
+  var rows=chartRows();
+  if(!rows.length){ svg.innerHTML='<text x="20" y="40" fill="#59677a">no candles yet</text>'; return; }
+  var W=1000,H=360,PL=8,PR=64,PT=10,PB=30;
+  var n=rows.length, c=Math.max(10, Math.min(VIEW.c||120, n));
+  var s=Math.max(0, Math.min(n-c, VIEW.s||0));
+  var view=rows.slice(s, s+c);
+  var lo=Infinity, hi=-Infinity, vmax=0;
+  view.forEach(function(r){ lo=Math.min(lo,r.l); hi=Math.max(hi,r.h); vmax=Math.max(vmax,r.v||0); });
+  if(VIEW.y){ lo=VIEW.y.lo; hi=VIEW.y.hi; }
+  var pad=(hi-lo)*0.06 || 0.001; lo-=pad; hi+=pad;
+  var plotW=W-PL-PR, plotH=H-PT-PB-56, volH=48;
+  var bw=plotW/c;
+  var y=function(p){ return PT + (hi-p)/(hi-lo)*plotH; };
+  var volBase=PT+plotH+volH;
+  var g='';
+  // grid
+  for(var i=0;i<=4;i++){
+    var py=PT+plotH*i/4, price=hi-(hi-lo)*i/4;
+    g+='<line x1="'+PL+'" y1="'+py+'" x2="'+(PL+plotW)+'" y2="'+py+'" stroke="#16202b"/>';
+    g+='<text x="'+(PL+plotW+6)+'" y="'+(py+3)+'" fill="#59677a" font-size="10">'+price.toPrecision(6)+'</text>';
+  }
+  // candles + volume
+  view.forEach(function(r,i){
+    var x=PL+i*bw+bw*0.5, up=r.c>=r.o;
+    var col=up?"#3fb950":"#f85149";
+    g+='<line x1="'+x.toFixed(1)+'" y1="'+y(r.h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+y(r.l).toFixed(1)+'" stroke="'+col+'" stroke-width="1"/>';
+    var top=y(Math.max(r.o,r.c)), bot=y(Math.min(r.o,r.c));
+    g+='<rect x="'+(x-bw*0.32).toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+Math.max(1,bw*0.64).toFixed(1)+
+       '" height="'+Math.max(1,bot-top).toFixed(1)+'" fill="'+col+'"/>';
+    var vh=vmax? (r.v/vmax)*volH : 0;
+    g+='<rect x="'+(x-bw*0.32).toFixed(1)+'" y="'+(volBase-vh).toFixed(1)+'" width="'+Math.max(1,bw*0.64).toFixed(1)+
+       '" height="'+vh.toFixed(1)+'" fill="'+(up?"#1d3b2a":"#3b1d1d")+'"/>';
+  });
+  // time axis
+  var ticks=Math.min(6, view.length);
+  for(var t=0;t<ticks;t++){
+    var idx=Math.floor(t*(view.length-1)/Math.max(1,ticks-1));
+    var d=new Date(view[idx].t);
+    var tx=PL+ (idx*bw) + bw*0.5;
+    g+='<text x="'+tx.toFixed(0)+'" y="'+(H-10)+'" fill="#59677a" font-size="9" text-anchor="middle">'+
+       d.toTimeString().slice(0,5)+'</text>';
+  }
+  svg.innerHTML=g;
+  GEO={vs:s, vc:c, PL:PL, PR:PR, PT:PT, PB:PB, W:W, H:H, LO:lo, HI:hi, plotW:plotW, plotH:plotH};
+}
 function allLayers(){} function setLayerScope(){}
 
 
@@ -1671,103 +2009,243 @@ function updateCross(ev){
 
 
 
+var OPTMODELS=["donchian55","orb","boll_squeeze","rsi2","vwap_revert","macd_trend","vol_break","ema_pullback","atr_channel","funding_fade"];
 async function renderOptimiser(){
-  var box=$("optbody"), note=$("optn");
-  if(!box) return;
-  box.innerHTML='<div class="panel"><div class="empty">reading optimiser…</div></div>';
-  var sent=null;
-  try{ sent=await (await fetch("/api/sentinel",{cache:"no-store"})).json(); }catch(e){}
-  var d;
-  try{ d=await (await fetch("/api/optimizer",{cache:"no-store"})).json(); }
-  catch(e){ box.innerHTML='<div class="panel"><div class="empty">optimiser not running</div></div>'; return; }
-  var cycles=d.cycles||[];
-  if(!cycles.length){ box.innerHTML='<div class="panel"><div class="empty">no cycles yet — first run within 5 min</div></div>'; return; }
-  var last=cycles[cycles.length-1];
-  var prev=cycles.length>1?cycles[cycles.length-2]:null;
-  if(note) note.textContent=cycles.length+" cycles · last "+
-    new Date(last.ts).toLocaleTimeString(undefined,{hour12:false})+
-    " · "+last.applied+" changes";
-
-  var html='';
-  if(sent && sent.models){
-    html+='<div class="panel" style="margin-bottom:12px"><div class="ctitle">sentinel — trading gate</div>'+
-      Object.keys(sent.models).map(function(k){
-        var s2=sent.models[k];
-        var col=s2.status==="live"?"#3fb950":s2.status==="testing"?"#d29922":"#f85149";
-        return '<div class="prow2" style="cursor:pointer" onclick="drillEngine(\''+esc(k)+'\')">'+
-          '<span>'+esc(k)+'</span>'+
-          '<b style="color:'+col+'">'+esc(s2.status)+(s2.status==="testing"?(" · trial "+(s2.candidate+1)):"")+
-          (s2.reason?' <span class="mk">'+esc(s2.reason)+'</span>':'')+'</b></div>';
-      }).join("")+'</div>';
-  }
-  (last.engines||[]).forEach(function(r){
-    var m=r.metrics||{};
-    var ch=r.changes||[];
-    html+='<div class="rcard">'+
-      '<div class="rchead"><span style="cursor:pointer;text-decoration:underline dotted" '+
-      'onclick="drillEngine(\''+esc(r.engine)+'\')" title="open '+esc(r.engine)+'">'+
-      esc(r.engine)+'</span>'+
-      '<span class="mk">'+(m.n||0)+' closes scored</span>'+
-      '<span class="'+((r.return_pct||0)>=0?'up':'down')+'" style="margin-left:auto;font-family:var(--mono)">'+
-      ((r.return_pct>=0?"+":"")+Number(r.return_pct||0).toFixed(2)+'%')+'</span></div>'+
-      '<div class="score">'+
-        '<div class="sbox"><b>'+(r.drawdown_pct==null?"—":r.drawdown_pct.toFixed(1)+"%")+'</b>'+
-          '<span>drawdown</span></div>'+
-        '<div class="sbox"><b style="color:'+
-          (r.brake==="none"?"#3fb950":r.brake==="no-growth"?"#d29922":"#f85149")+'">'+
-          esc(r.brake||"—")+'</b><span>brake</span></div>'+
-        '<div class="sbox"><b>'+(m.wr==null?"—":m.wr.toFixed(0)+"%")+'</b><span>hit rate</span></div>'+
-        '<div class="sbox"><b>'+(m.avg==null?"—":(m.avg>=0?"+":"")+m.avg.toFixed(3)+"%")+'</b><span>avg net</span></div>'+
-        '<div class="sbox"><b>'+(m.fee==null?"—":(100*m.fee).toFixed(0)+"%")+'</b><span>fee share</span></div>'+
-        '<div class="sbox"><b>'+(m.leaked==null?"—":m.leaked.toFixed(0)+"%")+'</b><span>leaked</span></div>'+
-        '<div class="sbox"><b>'+(m.timeout==null?"—":m.timeout.toFixed(0)+"%")+'</b><span>timeouts</span></div>'+
-        '<div class="sbox"><b>'+(m.per_hour==null?"—":m.per_hour.toFixed(0))+'</b><span>closes/hr</span></div>'+
-      '</div>'+
-      (ch.length
-        ? '<div class="ctitle">adjustments</div>'+ch.map(function(c){
-            return '<div class="prow2"><span>'+esc(c.key)+' → '+esc(String(c.to))+'</span><b class="mk">'+esc(c.why)+'</b></div>';
-          }).join("")
-        : '<div class="hint">within tolerance — no change</div>')+
-      '</div>';
-  });
-  box.innerHTML=html;
+  var box=$("optbody"); if(!box) return;
+  var jobs={};
+  try{ jobs=(await (await fetch("/api/opt/jobs",{cache:"no-store"})).json()).jobs||{}; }catch(e){}
+  var running=Object.keys(jobs).filter(function(k){return jobs[k].status==="running"||jobs[k].status==="queued";}).length;
+  if($("optn")) $("optn").textContent=Object.keys(jobs).length+" backtests · "+running+" running";
+  var rows=OPTMODELS.map(function(m){
+    var j=jobs[m]||{}, pct=j.progress||0, st=j.status||"idle";
+    var res=(j.result||{}).best;
+    var bar='<div class="pbar"><i style="width:'+pct+'%;background:'+
+      (st==="done"?"#3fb950":st==="failed"?"#f85149":st==="running"?"#d29922":"#2a3644")+'"></i></div>';
+    var verdict=res?('<span class="'+(res.avg_net>=0.10?"up":"down")+'">'+res.avg_net.toFixed(3)+
+      '% avg · '+res.trades+' trades · '+res.win_pct.toFixed(0)+'% win</span>'):'<span style="color:#59677a">not calculated</span>';
+    var bestp=res?('lock '+res.params.lock+'% · stop '+res.params.stop+'% · clock '+res.params.clock+'s'):'—';
+    var btn=(st==="running"||st==="queued")?('<span class="mk">'+pct+'% '+(j.note||"")+'</span>'):
+      '<button class="tbtn" onclick="optRun(\''+m+'\')">Calculate</button>';
+    var apply=res?' <button class="tbtn" onclick="optApply(\''+m+'\')">apply</button>':'';
+    return '<tr><td style="font-weight:600">'+m+'</td><td>'+bar+'</td>'+
+      '<td class="mini">'+st+'</td><td>'+verdict+'</td><td class="mini">'+bestp+'</td>'+
+      '<td style="text-align:right">'+btn+apply+'</td></tr>';
+  }).join("");
+  box.innerHTML='<div class="panel"><table class="wide"><thead><tr><th>model</th><th>progress</th><th>status</th>'+
+    '<th>best backtest</th><th>winning parameters</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+async function optRun(m){
+  try{ await fetch("/api/opt/run?model="+encodeURIComponent(m),{method:"POST"}); }catch(e){}
+  renderOptimiser();
+  if(!window.__optTimer) window.__optTimer=setInterval(function(){
+    var el=document.getElementById("opt");
+    if(el && el.classList.contains("on")) renderOptimiser();
+  },1200);
+}
+async function optApply(m){
+  try{ await fetch("/api/opt/apply?model="+encodeURIComponent(m),{method:"POST"}); }catch(e){}
+  renderOptimiser();
 }
 
 
+async function renderHealth(){
+  var el=$("healthbody"); if(!el) return;
+  el.innerHTML='<div class="hint">checking every view…</div>';
+  try{
+    var d=await (await fetch("/api/selfcheck",{cache:"no-store"})).json();
+    el.innerHTML=(d.checks||[]).map(function(c){
+      return '<div style="display:grid;grid-template-columns:150px 70px 1fr;gap:10px;'+
+        'align-items:center;padding:5px 0;border-bottom:1px solid #131c26;font-family:var(--mono);font-size:11.5px">'+
+        '<b>'+esc(c.view)+'</b>'+
+        '<span class="pill '+(c.ok?'ok':'bad')+'">'+(c.ok?'ok':'failing')+'</span>'+
+        '<span style="color:#7c8b9d">'+esc(c.detail)+'</span></div>';
+    }).join("");
+  }catch(e){ el.innerHTML='<div class="hint">self-check unavailable</div>'; }
+}
+async function renderOptions(){
+  var el=$("optsbody"); if(!el) return;
+  var o={};
+  try{ o=await (await fetch("/api/options",{cache:"no-store"})).json(); }catch(e){}
+  var rows=[
+    ["override_crazy","BYPASS EVERY GATE — crazy trading","#f85149"],
+    ["allow_counter_trend","trade against the BTC 4h trend",o.allow_counter_trend],
+    ["forecast_gate","consult the forecast supervisor",o.forecast_gate],
+  ];
+  var nums=[["forecast_min","min forecast probability",o.forecast_min,0.05],
+            ["max_positions","max positions per model",o.max_positions,1],
+            ["clock_s","max hold (seconds)",o.clock_s,30],
+            ["lock_pct","take profit (%)",o.lock_pct,0.05]];
+  var html=rows.map(function(r){
+    var danger=r[0]==="override_crazy";
+    return '<label style="display:flex;gap:10px;align-items:center;padding:5px 0;'+
+      'border-bottom:1px solid '+(danger?'#f8514933':'#131c26')+'">'+
+      '<input type="checkbox" '+(r[2]?'checked':'')+' onchange="setOpt(\''+r[0]+'\',this.checked)">'+
+      '<b style="width:190px;color:'+(danger?'#f85149':'inherit')+'">'+r[0]+'</b>'+
+      '<span style="color:'+(danger?'#ffb3ad':'#7c8b9d')+'">'+r[1]+'</span></label>';
+  }).join("");
+  html+=nums.map(function(r){
+    return '<label style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid #131c26">'+
+      '<b style="width:190px">'+r[0]+'</b>'+
+      '<input type="number" step="'+r[3]+'" value="'+r[2]+'" style="width:90px;background:#0b1119;'+
+      'border:1px solid #24313e;color:#e6edf6;border-radius:5px;padding:3px 6px" '+
+      'onchange="setOpt(\''+r[0]+'\',parseFloat(this.value))">'+
+      '<span style="color:#7c8b9d">'+r[1]+'</span></label>';
+  }).join("");
+  el.innerHTML=html;
+}
+async function setOpt(k,v){
+  try{ await fetch("/api/options?"+encodeURIComponent(k)+"="+encodeURIComponent(v),{cache:"no-store"}); }catch(e){}
+  renderReviewCountdown(); setInterval(renderReviewCountdown,1000);
+normalisePanels();
+renderThinking(); setInterval(function(){ if(document.getElementById("thinking") && document.getElementById("thinking").classList.contains("on")) renderThinking(); },4000);
+renderOptions();
+}
+async function renderThinking(){
+  var box=$("thbody"); if(!box) return;
+  var d={};
+  try{ d=await (await fetch("/api/thinking",{cache:"no-store"})).json(); }catch(e){
+    box.innerHTML='<div class="panel"><div class="empty">thinking endpoint unavailable</div></div>'; return; }
+  try{
+  var src=d.sources||{}, b=d.books||{}, blocks=d.blocks||{}, dec=d.decisions||[];
+  var opts=d.options||{};
+  if($("thn")) $("thn").textContent=(b.count||0)+" books · "+(b.open||0)+" open · "+(b.closed||0)+" closed";
+
+  var card=function(title,accent,body){
+    return '<div class="panel" style="padding:12px 14px"><div style="font-size:10px;letter-spacing:.13em;'+
+      'text-transform:uppercase;color:'+accent+';margin-bottom:8px">'+title+'</div>'+body+'</div>';
+  };
+  var kv=function(k,v,c){ return '<div style="display:flex;justify-content:space-between;padding:3px 0;'+
+    'border-bottom:1px solid #131c26;font-family:var(--mono);font-size:11.5px">'+
+    '<span style="color:#7c8b9d">'+k+'</span><b style="color:'+(c||"#e6edf6")+'">'+v+'</b></div>'; };
+
+  // what it sees
+  var md=src.market_data||{};
+  var sees=kv("stream status", esc(md.status||"—"), "#3fb950")+
+    kv("messages received", (md.msgs||0).toLocaleString())+
+    kv("candle series", md.series||0)+
+    kv("tickers tracked", md.tickers||0)+
+    kv("prices live", md.prices||0)+
+    kv("rate-limit violations", md.violations||0, (md.violations?"#f85149":"#3fb950"))+
+    kv("alerts seen", ((src.signal_bus||{}).cursor||0));
+
+  // what it refuses
+  var blockRows=Object.keys(blocks).sort(function(a,b){return blocks[b]-blocks[a];}).slice(0,7)
+    .map(function(k){ return kv(esc(k), blocks[k], "#f85149"); }).join("") ||
+    '<div class="mk">no refusals recorded</div>';
+
+  // what it likes
+  var likes=(d.signals||[]).map(function(s){
+    var c=(s.flow_conf||0)>=0?"#3fb950":"#f85149";
+    return '<div style="display:grid;grid-template-columns:82px 1fr 56px;gap:8px;align-items:center;'+
+      'font-family:var(--mono);font-size:11px;padding:3px 0;border-bottom:1px solid #131c26">'+
+      '<b style="cursor:pointer" onclick="drillChart(\''+esc(s.symbol)+'\',null)">'+esc(s.symbol)+'</b>'+
+      '<span style="height:5px;background:#16202b;border-radius:3px;overflow:hidden;display:flex">'+
+      '<i style="width:'+Math.min(100,Math.abs(s.flow_conf||0))+'%;background:'+c+';'+
+      ((s.flow_conf||0)<0?'margin-left:auto':'')+'"></i></span>'+
+      '<span style="text-align:right;color:'+c+'">'+((s.flow_conf>0?'+':'')+(s.flow_conf||0)).toFixed(0)+'</span></div>';
+  }).join("") || '<div class="mk">signals warming up</div>';
+
+  // the narrative
+  var story=dec.slice(0,18).map(function(x){
+    var ok=x.allowed;
+    return '<div style="display:grid;grid-template-columns:64px 74px 1fr;gap:8px;font-family:var(--mono);'+
+      'font-size:11px;padding:2px 0;border-bottom:1px solid #10171f">'+
+      '<span style="color:#59677a">'+new Date(x.ts).toTimeString().slice(0,8)+'</span>'+
+      '<span style="color:'+(ok?"#3fb950":"#f85149")+'">'+(ok?"ALLOW":"BLOCK")+'</span>'+
+      '<span style="color:#9fb0c4">'+esc(x.symbol)+' '+esc((x.side||"").toUpperCase())+' — '+esc(x.reason)+'</span></div>';
+  }).join("") || '<div class="mk">no decisions yet</div>';
+
+  var mode=(opts.override_crazy?'<span style="color:#f85149">OVERRIDE — all gates bypassed</span>':
+    'normal — gates active');
+
+  box.innerHTML='<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">'+
+    card("what it sees","#58a6ff",sees)+
+    card("what it refuses","#f85149",blockRows)+
+    card("where flow is strongest","#3fb950",likes)+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;margin-top:12px">'+
+    card("decision stream","#a371f7",story)+
+    card("operating mode","#d29922",
+      kv("mode","",'')&&kv("gates",mode)+ kv("forecast gate",opts.forecast_gate?"on":"off")+
+      kv("counter-trend",opts.allow_counter_trend?"allowed":"blocked")+
+      kv("min expected move",(opts.min_expected_move||0)+"%")+
+      kv("max positions",opts.max_positions||0)+
+      kv("clock",(opts.clock_s||0)+"s")+
+      kv("books",(b.count||0)+" · "+(b.open||0)+" open")+
+      kv("equity","$"+Math.round(b.equity||0).toLocaleString()))+
+    '</div>';
+  }catch(err){ box.innerHTML='<div class="panel"><div class="empty">thinking error: '+
+    String(err && err.message || err).replace(/</g,"&lt;")+'</div></div>'; }
+}
+async function renderReviewCountdown(){
+  var box=$("revcount"); if(!box) return;
+  var d={};
+  try{ d=await (await fetch("/api/review_state",{cache:"no-store"})).json(); }catch(e){
+    box.innerHTML='<span class="mk">portfolio reviewer not running</span>'; return; }
+  var every=(d.every_s||10)*1000, ts=d.ts||Date.now();
+  var left=Math.max(0, every-(Date.now()-ts));
+  var pct=100*left/every;
+  var books=d.books||[], stopped=d.stopped||[];
+  var atRisk=books.filter(function(b){ return (b.trades>=3 && b.return_pct<=-1.5) || (b.trades>=3 && (b.recent_sum||0)<0); })
+                  .sort(function(a,b){ return (a.return_pct||0)-(b.return_pct||0); }).slice(0,5);
+  var chips=atRisk.map(function(b){
+    return '<span style="margin-right:10px;color:'+((b.return_pct||0)<0?'#f85149':'#d29922')+'">'+
+      esc(b.engine)+' '+(b.return_pct||0).toFixed(2)+'%</span>'; }).join("") || '<span class="mk">nobody at risk</span>';
+  box.innerHTML='<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'+
+    '<span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#6b7c90">'+
+      'portfolio review</span>'+
+    '<b style="font-family:var(--mono);font-size:15px;color:'+(left<5000?"#d29922":"#3fb950")+'">'+
+      Math.ceil(left/1000)+'s</b>'+
+    '<span style="width:120px;height:6px;background:#16202b;border-radius:3px;overflow:hidden">'+
+      '<i style="display:block;height:100%;width:'+pct.toFixed(0)+'%;background:#3d6a94"></i></span>'+
+    '<span class="mk">stops a book at −2% or a 5-loss streak</span>'+
+    '<span style="flex:1"></span>'+
+    '<span class="mk">at risk:</span>'+chips+
+    '<span class="mk">stopped: '+(stopped.length?esc(stopped.join(", ")):"none")+'</span></div>';
+}
 async function renderModels(){
   var box=$("modelsbody"), note=$("mn");
   if(!box) return;
-  box.innerHTML='<div class="panel"><div class="empty">reading models…</div></div>';
-  var d;
-  try{ d=await (await fetch("/api/models/all",{cache:"no-store"})).json(); }
-  catch(e){ box.innerHTML='<div class="panel"><div class="empty">model registry unavailable</div></div>'; return; }
-  var ms=d.models||[];
-  if(note) note.textContent=ms.length+" models across "+new Set(ms.map(function(m){return m.family;})).size+" families";
-  var maxV=Math.max.apply(null, ms.map(function(m){return m.votes||0;}).concat([1]));
-  var fams={};
-  ms.forEach(function(m){ (fams[m.family]=fams[m.family]||[]).push(m); });
-  box.innerHTML=Object.keys(fams).map(function(f){
-    return '<div class="panel" style="margin-bottom:12px">'+
-      '<div class="ctitle">'+esc(f)+' models</div>'+
-      '<table class="wide" style="width:100%"><thead><tr><th>model</th><th>book</th>'+
-      '<th>votes</th><th>split</th><th>parent</th></tr></thead><tbody>'+
-      fams[f].map(function(m){
-        var w=Math.round(100*(m.votes||0)/maxV);
-        var col=m.family==="signal"?"#39d353":m.family==="statistical"?"#f778ba":"#58a6ff";
-        var split=(m.kind==="signal")
-          ? '<span class="up">'+m.buy+' buy</span> / <span class="down">'+m.sell+' sell</span>'
-          : '<span class="mk">votes</span>';
-        return '<tr class="sigrow" style="cursor:pointer" onclick="drillEngine(\''+esc(m.parent)+'\')">'+
-          '<td style="color:'+col+';font-family:var(--mono);width:170px">'+esc(m.name)+'</td>'+
-          '<td style="width:70px">'+engSpark(m.parent,64,15)+'</td>'+
-          '<td style="width:45%"><div class="lbbar"><i style="width:'+w+'%;background:'+col+'"></i></div></td>'+
-          '<td style="text-align:right;font-family:var(--mono);width:70px">'+(m.votes||0)+'</td>'+
-          '<td style="text-align:right;width:150px">'+split+'</td>'+
-          '<td style="text-align:right;color:#5b6b7d;font-size:11px">'+esc(m.parent)+'</td></tr>';
-      }).join("")+'</tbody></table></div>';
+  box.innerHTML='<div class="hint" style="padding:8px 0">loading models…</div>';
+  var d1={}, alive={}, disabled=[];
+  try{ d1=await (await fetch("/api/all",{cache:"no-store"})).json(); }catch(e){}
+  try{ var dj=await (await fetch("/api/model_control",{cache:"no-store"})).json(); disabled=dj.disabled||[]; }catch(e){}
+  var books=(d1.engines||[]).filter(function(e){return e.equity!=null;});
+  if(note) note.textContent=books.length+" books · "+disabled.length+" stopped";
+  if(!books.length){ box.innerHTML='<div class="panel"><div class="empty">no books reporting</div></div>'; return; }
+  var rows=books.map(function(e){
+    var tr=e.trades||[], n=tr.length;
+    var wins=tr.filter(function(t){return (t.net_pct||0)>0;}).length;
+    var wr=n?(100*wins/n).toFixed(0)+"%":"—";
+    var off=disabled.indexOf(e.key)>=0;
+    var ret=e.return_pct||0;
+    return '<tr class="sigrow" style="cursor:pointer" onclick="openDetail(\''+esc(e.key)+'\')">'+
+      '<td style="color:'+(e.colour||'#c9d6e3')+';font-weight:700">'+esc(e.key)+'</td>'+
+      '<td>'+engSpark(e.key,70,15)+'</td>'+
+      '<td style="text-align:right">$'+money(e.equity)+'</td>'+
+      '<td class="'+(ret>=0?'up':'down')+'" style="text-align:right">'+(ret>=0?'+':'')+ret.toFixed(2)+'%</td>'+
+      '<td class="'+((e.realised||0)>=0?'up':'down')+'" style="text-align:right">'+
+        ((e.realised||0)>=0?'+':'')+money(e.realised)+'</td>'+
+      '<td style="text-align:right">'+n+'</td>'+
+      '<td style="text-align:right">'+wr+'</td>'+
+      '<td style="text-align:right">'+((e.positions||[]).length)+'</td>'+
+      '<td style="text-align:right">'+(off?'<span class="pill bad">stopped</span>':
+        '<span class="pill ok">running</span>')+'</td>'+
+      '<td style="text-align:right"><button class="tbtn" onclick="event.stopPropagation();toggleModel(\''+
+        esc(e.key)+'\','+(off?'true':'false')+')">'+(off?'enable':'disable')+'</button></td>'+
+      '</tr>';
   }).join("");
+  box.innerHTML='<table class="wide"><thead><tr><th>model</th><th>curve</th>'+
+    '<th style="text-align:right">equity</th><th style="text-align:right">return</th>'+
+    '<th style="text-align:right">realised</th><th style="text-align:right">trades</th>'+
+    '<th style="text-align:right">win</th><th style="text-align:right">open</th>'+
+    '<th style="text-align:right">status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
-
+async function toggleModel(name, enable){
+  var act=enable?"start":"stop";
+  try{ await fetch("/api/model_control?model="+encodeURIComponent(name)+"&action="+act,{method:"POST"}); }catch(e){}
+  renderModels();
+}
 /* ================= LEADERBOARD ================= */
 var HIST={};          // engine -> [equity samples]
 var LBSORT={key:"realised", dir:-1};   // default: best realised P&L first
@@ -1775,6 +2253,37 @@ function lbSort(k){
   if(LBSORT.key===k){ LBSORT.dir*=-1; }
   else { LBSORT.key=k; LBSORT.dir=(k==="engine"||k==="key")?1:-1; }
   renderLeaderboard();
+}
+function renderAttrib(es){
+  var box=$("attrib"); if(!box) return;
+  var all=[];
+  es.forEach(function(e){ (e.trades||[]).forEach(function(t){ t._e=e.key; all.push(t); }); });
+  if(!all.length){ box.innerHTML='<div class="mk">no closed trades yet — attribution appears with the first close</div>'; return; }
+  var longs=all.filter(function(t){return (t.side||"").toLowerCase()==="buy";});
+  var shorts=all.filter(function(t){return (t.side||"").toLowerCase()==="sell";});
+  var avg=function(a){ return a.length? a.reduce(function(x,t){return x+(t.net_pct||0);},0)/a.length : 0; };
+  var sum=function(a){ return a.reduce(function(x,t){return x+(t.net_pct||0);},0); };
+  var wins=all.filter(function(t){return (t.net_pct||0)>0;}).length;
+  var gross=all.reduce(function(x,t){return x+(t.gross_pct||0);},0)/all.length;
+  var net=sum(all)/all.length;
+  var fee=gross-net;
+  var holds=all.reduce(function(x,t){return x+(t.held_s||0);},0)/all.length;
+  var cell=function(k,v,c,sub){ return '<div style="min-width:118px"><div style="font-size:9px;letter-spacing:.11em;'+
+    'text-transform:uppercase;color:#5f7186">'+k+'</div><div style="font-family:var(--mono);'+
+    'font-size:14px;font-weight:700;color:'+(c||"#e6edf6")+'">'+v+'</div>'+
+    (sub?'<div style="font-size:9.5px;color:#59677a">'+sub+'</div>':'')+'</div>'; };
+  var c=function(v){ return v>=0?"#3fb950":"#f85149"; };
+  box.innerHTML='<div style="display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start">'+
+    '<div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6b7c90;'+
+    'writing-mode:vertical-rl;transform:rotate(180deg)">attribution</div>'+
+    cell("closed",all.length,"#e6edf6",wins+" wins")+
+    cell("win rate",(100*wins/all.length).toFixed(0)+"%",c(wins/all.length-0.5))+
+    cell("avg gross",(gross>=0?"+":"")+gross.toFixed(3)+"%",c(gross))+
+    cell("avg net",(net>=0?"+":"")+net.toFixed(3)+"%",c(net),"fee "+fee.toFixed(3)+"%")+
+    cell("longs",longs.length+" · "+(avg(longs)>=0?"+":"")+avg(longs).toFixed(3)+"%",c(avg(longs))) +
+    cell("shorts",shorts.length+" · "+(avg(shorts)>=0?"+":"")+avg(shorts).toFixed(3)+"%",c(avg(shorts)))+
+    cell("avg hold",Math.round(holds)+"s","#e6edf6")+
+    '</div>';
 }
 function histPush(es){
   es.forEach(function(e){
@@ -1868,7 +2377,7 @@ function renderLeaderboard(){
   if(!box) return;
   if(!es.length){ box.innerHTML='<div class="panel"><div class="empty">no engines reporting</div></div>'; return; }
   var tot=es.reduce(function(a,e){ return a+e.equity; },0);
-  var base=es.length*2000;
+  var base=es.reduce(function(a,e){return a+(e.start_equity||2000);},0)||1;
   if(note) note.textContent={
     value:es.length+" engines · combined $"+money(tot)+" ("+((100*(tot/base-1))>=0?'+':'')+
           (100*(tot/base-1)).toFixed(2)+"%)"
@@ -1958,8 +2467,12 @@ function scatter(ts, eng){
       <text x="${((L+tx)/2).toFixed(0)}" y="${H-B-6}" fill="#f8514988" font-size="8" text-anchor="middle">BAD ENTRY</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:210px">${g}</svg>`;
 }
-function shapeSVG(pts, entry, exit){
-  if(!pts||pts.length<3) return '<div class="mk">path unavailable</div>';
+function shapeSVG(pts, entry, exit, peak){
+  if(!pts||pts.length<3){
+    if(entry==null||exit==null) return '<div class="mk">—</div>';
+    var pk=entry*(1+(peak||0)/100);
+    pts=[entry, pk, exit];          // entry -> best moment -> exit
+  }
   const W=120,H=34, lo=Math.min(...pts), hi=Math.max(...pts);
   const y=v=>H-4-(H-8)*((v-lo)/((hi-lo)||1));
   const x=i=>2+(W-4)*(i/(pts.length-1));
@@ -2033,7 +2546,7 @@ function reviewCard(e){
           <span class="mk">${esc(t.reason||"")}</span>
           <span class="${(t.net_pct||0)>0?'up':'down'}" style="margin-left:auto;font-family:var(--mono)">
             ${pctOr(t.net_pct)}</span></div>
-        <div style="margin-top:6px">${shapeSVG(PATHS[t.symbol+"|"+(t.entry_ms||0)], t.entry, t.exit)}</div>
+        <div style="margin-top:6px">${shapeSVG(PATHS[t.symbol+"|"+(t.entry_ms||0)], t.entry, t.exit, t.peak_pct)}</div>
         <div class="dfacts"><span>peak <b>${pctOr(t.peak_pct)}</b></span>
           <span>held <b>${Math.round(t.held_s||0)}s</b></span>
           <span>${(t.pnl_usd||0)>=0?'+':''}$${money(t.pnl_usd||0)}</span></div>
@@ -2053,17 +2566,56 @@ async function loadPaths(ts){
   }));
 }
 async function renderReview(){
-  const all=(LAST||[]).flatMap(e=>e.trades||[]);
-  const worst=all.slice().sort((a,b)=>(a.pnl_usd||0)-(b.pnl_usd||0)).slice(0,10);
-  await loadPaths(worst);
-  const cards=(LAST||[]).map(reviewCard).filter(Boolean);
-  const note=$("rnote");
-  if(note) note.textContent=all.length?(all.length+" closed trades across "+(LAST||[]).length+" models"):"no closed trades yet";
-  $("rbody").innerHTML=cards.length?cards.join(""):
-    '<div class="panel"><div class="empty">No closed trades yet — this fills in as positions close.</div></div>';
+  await ensureBooks();
+  var all=tradesAll();
+  var box=$("rbody");
+  if(!box) return;
+  if(!all.length){
+    box.innerHTML=UI.panel("trade review",
+      '<div class="empty">No closed trades yet — this fills in as positions close.</div>');
+    return;
+  }
+  var worst=all.slice().sort(function(a,b){return (a.pnl_usd||0)-(b.pnl_usd||0);}).slice(0,12);
+  var byReason={};
+  all.forEach(function(t){ var r=t.reason||"unknown";
+    byReason[r]=byReason[r]||{n:0,sum:0,wins:0};
+    byReason[r].n++; byReason[r].sum+=(t.net_pct||0);
+    if((t.net_pct||0)>0) byReason[r].wins++; });
+  var wins=all.filter(function(t){return (t.net_pct||0)>0;}).length;
+  var gross=all.reduce(function(a,t){return a+(t.gross_pct||0);},0)/all.length;
+  var net=all.reduce(function(a,t){return a+(t.net_pct||0);},0)/all.length;
+
+  var stats=[
+    UI.stat("closed", all.length),
+    UI.stat("win rate", (100*wins/all.length).toFixed(0)+"%", UI.colour(wins/all.length-0.5)),
+    UI.stat("avg gross", UI.pct(gross,3), UI.colour(gross)),
+    UI.stat("avg net", UI.pct(net,3), UI.colour(net)),
+    UI.stat("avg hold", Math.round(all.reduce(function(a,t){return a+(t.held_s||0);},0)/all.length)+"s")
+  ].join("");
+
+  var reasonTbl=UI.table({key:"review-reason", cols:[
+      {label:"exit reason",align:"left"},{label:"trades"},{label:"avg net %"},{label:"wins %"}],
+    rows:Object.keys(byReason).sort(function(a,b){return byReason[b].n-byReason[a].n;}).map(function(r){
+      var v=byReason[r];
+      return [UI.esc(r), v.n, UI.pct(v.sum/v.n,3), (100*v.wins/v.n).toFixed(0)+"%"]; })});
+
+  var worstTbl=UI.table({key:"review-worst", cols:[
+      {label:"symbol",align:"left"},{label:"side",align:"left"},{label:"net %"},
+      {label:"gross %"},{label:"held"},{label:"reason",align:"left"},{label:"engine",align:"left"}],
+    rows:worst.map(function(t){ return [
+      '<b class="tick" style="cursor:pointer" onclick="drillChart(\''+UI.esc(t.symbol)+'\',null)">'+UI.esc(t.symbol)+'</b>',
+      UI.esc((t.side||"").toUpperCase()),
+      UI.pct(t.net_pct,3), UI.pct(t.gross_pct,3),
+      Math.round(t.held_s||0)+"s", UI.esc(t.reason||"—"), UI.esc(t.engine||"—")]; })});
+
+  box.innerHTML=UI.panel("trade quality", '<div style="display:flex;gap:26px;flex-wrap:wrap">'+stats+'</div>',
+      {note:all.length+" closed across "+new Set(all.map(function(t){return t.engine;})).size+" models"})+
+    '<div style="display:grid;grid-template-columns:320px minmax(0,1fr);gap:12px;margin-top:12px">'+
+      UI.panel("by exit reason", reasonTbl)+
+      UI.panel("worst trades", worstTbl, {note:"click a symbol for its chart"})+
+    '</div>';
 }
 
-/* ================= WHY: explainability ================= */
 function tradesAll(){
   const out=[];
   (LAST||[]).forEach(e=>(e.trades||[]).forEach(t=>out.push({...t, engine:e.key, colour:e.colour})));
@@ -2206,28 +2758,80 @@ function dnaCards(trades, sym){
     </div>`).join("");
 }
 
-async function renderWhy(){
-  const sym=(window.SELECTED_SYM||"BTCUSDT").toUpperCase();
-  $("wsym").textContent=sym;
-  const trades=tradesAll();
-  let sig=null;
-  try{ sig=await (await fetch(`/api/signals?symbol=${sym}`,{cache:"no-store"})).json(); }catch(e){}
-  RIBBON=sig||{};
-  const withDec=trades.filter(t=>t.decision).length;
-  $("wnote").textContent=`${trades.length} trades · ${withDec} with structured decisions`;
-  $("wbody").innerHTML=`
-    <div class="section"><h2>Gate funnel — where candidates die
-      <span style="margin-left:10px;vertical-align:middle">${symbolSpark(sym,90,18)}</span></h2>
-      <div class="panel fgrid">${funnelView()}</div></div>
-    <div class="section"><h2>Decision ribbon — ${esc(sym)}</h2>
-      <div class="panel">${ribbon()}</div></div>
-    <div class="section"><h2>What made the decision — ${esc(sym)}</h2>
-      <div class="dgrid">${dnaCards(trades, sym)}</div></div>
-    <div class="section"><h2>Did confidence mean anything?</h2>
-      <div class="panel">${calibration(trades)}</div></div>
-    <div class="section"><h2>Where the money went — exit rules</h2>
-      <div class="panel">${sankey(trades)}</div></div>`;
+async function ensureBooks(){
+  if(LAST && LAST.length) return LAST;
+  try{
+    var d=await (await fetch("/api/all",{cache:"no-store"})).json();
+    LAST=(d.engines||[]).filter(function(e){return e.equity!=null;});
+  }catch(e){ LAST=LAST||[]; }
+  return LAST;
 }
+
+async function renderWhy(){
+  var sym=(window.SELECTED_SYM||"BTCUSDT").toUpperCase();
+  if(typeof $("wsym")!=="undefined" && $("wsym")) $("wsym").textContent=sym;
+  await ensureBooks();
+  var trades=tradesAll();
+  var sig={};
+  try{ sig=await (await fetch("/api/signals?symbol="+sym,{cache:"no-store"})).json(); }catch(e){}
+  RIBBON=sig||{};
+  var alerts=(sig.alerts||[]).slice(0,10);
+  var ext={};
+  try{
+    var e=await (await fetch("/api/signals_ext",{cache:"no-store"})).json();
+    (e.rows||[]).forEach(function(r){ ext[r.symbol]=r; });
+  }catch(err){}
+  var x=ext[sym]||{};
+
+  if($("wnote")) $("wnote").textContent=trades.length+" closed trades · "+alerts.length+" alerts for "+sym;
+
+  var decided=UI.panel("the decision for "+sym, [
+    UI.kv("price vs SMA50", x.px_vs_sma50==null?"—":UI.pct(x.px_vs_sma50,2), UI.colour(x.px_vs_sma50)),
+    UI.kv("price vs SMA200", x.px_vs_sma200==null?"—":UI.pct(x.px_vs_sma200,2), UI.colour(x.px_vs_sma200)),
+    UI.kv("book imbalance", x.book_imbalance==null?"—":x.book_imbalance.toFixed(2), UI.colour(x.book_imbalance)),
+    UI.kv("taker buy share", x.buy_ratio==null?"—":(100*x.buy_ratio).toFixed(1)+"%", UI.colour((x.buy_ratio||0)-0.5)),
+    UI.kv("open interest 1h", x.oi_change_1h_pct==null?"—":UI.pct(x.oi_change_1h_pct,2), UI.colour(x.oi_change_1h_pct)),
+    UI.kv("top trader vs retail", x.smart_vs_dumb==null?"—":x.smart_vs_dumb.toFixed(2)+"x", UI.colour((x.smart_vs_dumb||1)-1)),
+    UI.kv("funding", x.funding_pct==null?"—":(100*x.funding_pct).toFixed(3)+"%", "#9fb0c4"),
+    UI.kv("spread", x.spread_bps==null?"—":x.spread_bps.toFixed(1)+"bp", "#9fb0c4"),
+    UI.kv("$5k slippage", x.slippage_bps_5k==null?"—":x.slippage_bps_5k.toFixed(1)+"bp", "#9fb0c4"),
+    UI.kv("flow confidence", x.flow_conf==null?"—":(x.flow_conf>0?"+":"")+x.flow_conf.toFixed(0), UI.colour(x.flow_conf)),
+    UI.kv("composite score", x.score==null?"—":(x.score>0?"+":"")+x.score.toFixed(1), UI.colour(x.score))
+  ].join(""), {note:"live signal fields"});
+
+  var alertsTbl=UI.table({key:"why-alerts", cols:[
+      {label:"time",align:"left"},{label:"kind",align:"left"},{label:"detector",align:"left"},
+      {label:"score"},{label:"move %"}],
+    rows:alerts.map(function(a){ return [
+      UI.time(a.ts_ms), UI.esc(a.kind||""), UI.esc(a.detector||""),
+      a.score==null?"—":Number(a.score).toFixed(0),
+      a.move_pct==null?"—":UI.pct(a.move_pct,2)]; })});
+
+  var funnel=UI.panel("where candidates die", [
+    UI.kv("alerts seen for this symbol", alerts.length),
+    UI.kv("trades taken (all models)", trades.length),
+    UI.kv("closed with a recorded decision", trades.filter(function(t){return t.decision;}).length),
+    UI.kv("blocked by risk governor",
+      (function(){ try{ return (window.__blocks||0); }catch(e){ return 0; } })())
+  ].join(""), {note:"counts from live books"});
+
+  $("wbody").innerHTML =
+    '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">'+
+      decided+funnel+'</div>'+
+    '<div style="margin-top:12px">'+UI.panel("alert ribbon — "+sym, alertsTbl, {note:"newest first"})+'</div>'+
+    '<div style="margin-top:12px">'+UI.panel("trade path", symbolSpark(sym,120,26)||"", {note:"1m candles from the stream"})+'</div>';
+}
+
+function chartKeyHandler(e){
+  var box=$("chartbox");
+  if(!box || !box.classList.contains("open")) return;
+  if(e.key==="+"||e.key==="="){ zoomStep(0.7); e.preventDefault(); }
+  else if(e.key==="-"){ zoomStep(1.4); e.preventDefault(); }
+  else if(e.key==="0"){ resetView(); e.preventDefault(); }
+  else if(e.key==="y"||e.key==="Y"){ resetY(); e.preventDefault(); }
+  else if(e.key==="Escape"){ closeChart(); }
+}
+document.addEventListener("keydown", chartKeyHandler);
 
 function closeChart(){ const b=$("chartbox"); if(b) b.classList.remove("open"); }
 
@@ -2360,43 +2964,341 @@ function tapeSort(col){
   else { TAPESORT.k=col; TAPESORT.dir=(col==="t"||col==="why")?-1:1; }
   renderTape();
 }
+var ML_PREV={}, ML_LAST={}, ML_TICKAGE=0, ML_LIVE={}, ML_ES=null, ML_HITS=0;
+var ML_SERIES={}, ML_METRICS={}, ML_SERIES_TS=0;
+function mlStream(){
+  if(ML_ES || typeof EventSource==="undefined") return;
+  try{
+    ML_ES=new EventSource("http://127.0.0.1:8797/subscribe?topics=ticks");
+    ML_ES.onmessage=function(ev){
+      try{
+        var d=JSON.parse(ev.data);
+        d=d.data||d;                     // bus envelope {seq,topic,data}
+        ML_LIVE=d.p||ML_LIVE; ML_TICKAGE=0; ML_HITS++;
+        var rows=document.querySelectorAll("#mlbody tbody tr");
+        for(var i=0;i<rows.length;i++){
+          var tr=rows[i], sym=tr.getAttribute("data-sym"), px=ML_LIVE[sym];
+          if(!px) continue;
+          var cell=tr.querySelector(".px");
+          if(!cell || cell.getAttribute("data-px")===String(px)) continue;
+          var prev=parseFloat(cell.getAttribute("data-prev")||px);
+          cell.setAttribute("data-prev",String(px));
+          cell.setAttribute("data-px",String(px));
+          cell.textContent=px.toPrecision(7);
+          var up=px>prev;
+          cell.classList.remove("flash-up","flash-down");
+          void cell.offsetWidth;
+          cell.classList.add(up?"flash-up":"flash-down");
+          cell.addEventListener("animationend",function(){this.classList.remove("flash-up","flash-down");},{once:true});
+          ML_LAST[sym]=Date.now();
+        }
+      }catch(e){}
+    };
+  }catch(e){ ML_ES=null; }
+}
+function mlStop(){ if(ML_ES){ ML_ES.close(); ML_ES=null; } }
+
+async function renderFlow(){
+  var box=$("flowmap"); if(!box) return;
+  var d={};
+  try{ d=await (await fetch("/api/flows?top=14",{cache:"no-store"})).json(); }catch(e){ return; }
+  var rows=d.rows||[];
+  if(!rows.length){ box.innerHTML='<div class="mk">money flow unavailable</div>'; return; }
+  var max=Math.max.apply(null,rows.map(function(r){return Math.abs(r.net_quote);}))||1;
+  var head='<div style="display:flex;gap:14px;align-items:baseline;margin-bottom:8px">'+
+    '<span style="font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#6b7c90">money flow — taker side, 30 min</span>'+
+    '<span style="color:#3fb950">buying '+d.buying+'</span>'+
+    '<span style="color:#f85149">selling '+d.selling+'</span></div>';
+  var body=rows.map(function(r){
+    var w=Math.round(100*Math.abs(r.net_quote)/max);
+    var pos=r.net_quote>=0;
+    return '<div class="flowrow"><b onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+esc(r.symbol)+'</b>'+
+      '<span class="fbar"><i style="width:'+w+'%;background:'+(pos?'#3fb950':'#f85149')+';'+
+        (pos?'':'margin-left:auto')+'"></i></span>'+
+      '<span style="text-align:right;color:'+(pos?'#3fb950':'#f85149')+'">'+
+        (pos?'+':'')+'$'+Math.abs(r.net_quote/1000).toFixed(0)+'k</span>'+
+      '<span style="text-align:right;color:#9fb0c4">'+(100*r.buy_ratio).toFixed(0)+'%</span>'+
+      '<span style="color:'+(r.buy_ratio>0.53?'#3fb950':r.buy_ratio<0.47?'#f85149':'#7c8b9d')+'">'+
+        esc(r.sentiment)+'</span></div>';
+  }).join("");
+  box.innerHTML=head+body;
+}
+async function renderMovers(){
+  var box=$("movers"); if(!box) return;
+  var d={};
+  try{ d=await (await fetch("/api/movers?limit=8",{cache:"no-store"})).json(); }catch(e){ return; }
+  var card=function(title,rows,colour,key){
+    if(!rows||!rows.length) return '<div class="mvcard"><h4>'+title+'</h4><div class="mk">no data</div></div>';
+    var max=Math.max.apply(null,rows.map(function(r){return key==="qv"?r.qv:Math.abs(r.pct);}))||1;
+    return '<div class="mvcard"><h4>'+title+'</h4>'+rows.map(function(r){
+      var v=key==="qv"?r.qv:Math.abs(r.pct);
+      var pctTxt=(key==="qv"?"$"+(r.qv/1e6).toFixed(0)+"M":(r.pct>=0?"+":"")+r.pct.toFixed(1)+"%");
+      return '<div class="mvrow"><b onclick="drillChart(\''+esc(r.s)+'\',null)">'+esc(r.s)+'</b>'+
+        '<span class="mvbar"><i style="width:'+Math.round(100*v/max)+'%;background:'+colour+'"></i></span>'+
+        '<span style="text-align:right;color:'+(key==="qv"?"#7c8b9d":(r.pct>=0?"#3fb950":"#f85149"))+'">'+pctTxt+'</span>'+
+        '<span style="text-align:right;color:#e6edf6">'+(r.p<1?r.p.toPrecision(4):r.p.toLocaleString(undefined,{maximumFractionDigits:2}))+'</span></div>';
+    }).join("")+'</div>';
+  };
+  box.innerHTML=card("most traded — 24h volume",d.most_traded,"#3d6a94","qv")+
+    card("biggest gainers — 24h",d.gainers,"#3fb950","pct")+
+    card("biggest losers — 24h",d.losers,"#f85149","pct");
+}
+async function renderMarketLive(){
+  var body=$("mlbody"); if(!body) return;
+  var t0=Date.now();
+  var d={tickers:[]}, f={series:{}}, m={series:{}}, live={};
+  try{ d=await (await fetch("/api/universe800",{cache:"no-store"})).json(); }catch(e){}
+  f={series:ML_SERIES}; m={series:ML_METRICS};
+  if(Date.now()-(ML_SERIES_TS||0) > 12000){
+    ML_SERIES_TS=Date.now();
+    fetch("/api/sparklines?n=24",{cache:"no-store"}).then(function(r){return r.json();})
+      .then(function(j){ ML_SERIES=j.series||{}; ML_SERIES_TS=Date.now(); }).catch(function(){});
+    fetch("/api/metrics?n=24",{cache:"no-store"}).then(function(r){return r.json();})
+      .then(function(j){ ML_METRICS=j.series||{}; }).catch(function(){});
+  }
+  try{
+    var syms=(d.tickers||[]).slice(0,40).map(function(x){return x.s;}).join(",");
+    var tk=await (await fetch("/api/tick?syms="+syms,{cache:"no-store"})).json();
+    live=tk.p||{}; ML_TICKAGE=tk.age_ms||0;
+  }catch(e){}
+  var px=(d.tickers||[]).slice(0,40).map(function(x){
+    if(live[x.s]!=null) return Object.assign({},x,{price:live[x.s]});
+    return x;
+  });
+  var sp=f.series||{}, mt=m.series||{}, X={};
+  try{
+    var xd=await (await fetch("/api/signals_ext",{cache:"no-store"})).json();
+    (xd.rows||[]).forEach(function(r){ X[r.symbol]=r; });
+  }catch(e){}
+  var maxLiq=Math.max.apply(null,px.map(function(t){return t.v||0;}).concat([1]));
+  if($("mlage")) $("mlage").textContent=ML_HITS+" stream pushes · "+new Date().toISOString().slice(0,19)+"Z";
+  if($("mlcount")) $("mlcount").textContent=px.length+" symbols · "+Object.keys(sp).length+" series";
+  var now=Date.now();
+  var rows=px.map(function(t){
+    var sym=t.s, prev=ML_PREV[sym], up=false, changed=false;
+    if(prev!=null && t.price!=null && t.price!==prev){ changed=true; up=t.price>prev; ML_LAST[sym]=now; }
+    var ago=ML_LAST[sym]?Math.max(0,Math.round((now-ML_LAST[sym])/1000)):null;
+    if(t.price!=null) ML_PREV[sym]=t.price;
+    var flash=(changed?(up?" flash-up":" flash-down"):"");
+    var chg=t.c||0;
+    return '<tr data-sym="'+esc(sym)+'">'+
+      '<td class="sym" onclick="drillChart(\''+esc(sym)+'\',null)">'+esc(sym)+'</td>'+
+      '<td class="spark">'+symbolSpark(sym,96,20)+'</td>'+
+      '<td class="px'+flash+'" data-px="'+(t.price!=null?t.price:"")+'" data-prev="'+(prev!=null?prev:"")+'">'+
+        (t.price!=null?Number(t.price).toPrecision(7):"—")+'</td>'+
+      '<td class="chg" style="color:'+(chg>=0?"#3fb950":"#f85149")+'">'+(chg>=0?"+":"")+Number(chg).toFixed(2)+'%</td>'+
+      '<td class="liq">'+(t.v?("$"+(t.v/1e6).toFixed(1)+"M"):"—")+
+        '<span class="liqbar"><i style="width:'+Math.round(100*(t.v||0)/maxLiq)+'%"></i></span></td>'+
+      '<td class="vol">'+((mt[sym]&&mt[sym].volume&&mt[sym].volume.length)?mt[sym].volume[mt[sym].volume.length-1].toFixed(0):"—")+'</td>'+
+      '<td style="text-align:right;color:#7c8b9d">'+(t.n?t.n.toLocaleString():"—")+'</td>'+
+      '<td style="text-align:right;color:#e3b341">'+((mt[sym]&&mt[sym].risk&&mt[sym].risk.length)?mt[sym].risk[mt[sym].risk.length-1].toFixed(3)+"%":"—")+'</td>'+
+      '<td style="text-align:right;color:#9fb0c4">'+((X[sym]&&X[sym].spread_bps!=null)?X[sym].spread_bps.toFixed(1):"—")+'</td>'+
+      '<td style="text-align:right;color:'+(((X[sym]||{}).buy_ratio||0.5)>=0.5?"#3fb950":"#f85149")+'">'+
+        ((X[sym]&&X[sym].buy_ratio!=null)?(100*X[sym].buy_ratio).toFixed(0)+"%":"—")+'</td>'+
+      '<td style="text-align:right;color:'+(((X[sym]||{}).oi_change_1h_pct||0)>=0?"#3fb950":"#f85149")+'">'+
+        ((X[sym]&&X[sym].oi_change_1h_pct!=null)?(X[sym].oi_change_1h_pct>0?"+":"")+X[sym].oi_change_1h_pct.toFixed(1)+"%":"—")+'</td>'+
+      '<td style="text-align:right;color:#9fb0c4">'+((X[sym]&&X[sym].funding_pct!=null)?(100*X[sym].funding_pct).toFixed(3)+"%":"—")+'</td>'+
+      '<td style="text-align:right;color:'+(((X[sym]||{}).score||0)>=0?"#3fb950":"#f85149")+'">'+
+        ((X[sym]&&X[sym].score!=null)?(X[sym].score>0?"+":"")+X[sym].score.toFixed(1):"—")+'</td>'+
+      '<td class="age" style="color:'+(ago!=null&&ago<3?"#3fb950":"#59677a")+'">'+
+        (ago==null?"—":(ago===0?"now":ago+"s"))+'</td></tr>';
+  }).join("");
+  body.innerHTML='<div class="mlscroll"><table class="mltable"><thead><tr>'+
+    '<th>symbol</th><th>price · 1m</th><th>last</th><th>24h</th>'+
+    '<th>liquidity</th><th>vol</th><th>trades</th><th>volat %</th><th>spread</th>'+
+    '<th>buy %</th><th>OI 1h</th><th>funding</th><th>score</th><th>updated</th></tr></thead><tbody>'+rows+
+    '</tbody></table></div>';
+}
+async function renderForecast(){
+  var box=$("fcbody"), note=$("fcnote"), st=$("fcstate");
+  if(!box) return;
+  box.innerHTML='<div class="hint" style="padding:10px">running the seven agents…</div>';
+
+  var d={forecasts:[]}, state={};
+  try{ d=await (await fetch("/api/forecast_matrix?n=10",{cache:"no-store"})).json(); }catch(e){}
+  try{ state=await (await fetch("/api/forecast_state",{cache:"no-store"})).json(); }catch(e){}
+  var fs=d.forecasts||[];
+
+  // ---- agent league table
+  var agents=Object.keys(state||{}).map(function(k){
+    var v=state[k];
+    return {agent:k, hits:v.hits||0, total:v.total||0, acc:v.accuracy||0};
+  }).sort(function(a,b){ return b.acc-a.acc; });
+  if(st){
+    st.innerHTML = agents.length ? agents.map(function(a){
+      var pct=Math.round(100*a.acc);
+      return '<div style="display:grid;grid-template-columns:110px 130px 84px;gap:10px;align-items:center;'+
+        'font-family:var(--mono);font-size:11.5px;padding:3px 0;border-bottom:1px solid #131c26">'+
+        '<b>'+esc(a.agent)+'</b>'+
+        UI.bar(a.acc*100,100,pct>=55?"#3fb950":pct>=45?"#d29922":"#f85149")+
+        '<span style="color:#7c8b9d">'+a.hits+'/'+a.total+' · '+pct+'%</span></div>';
+    }).join("") : '<div class="hint">no graded forecasts yet — accuracy appears after the first closed trade</div>';
+  }
+  if(note) note.textContent=fs.length+" forecasts · horizon 1h";
+
+  if(!fs.length){ box.innerHTML='<div class="panel"><div class="empty">no forecasts yet</div></div>'; return; }
+
+  // ---- headline
+  var avg=function(fn){ return fs.length? fs.reduce(function(a,f){return a+fn(f);},0)/fs.length : 0; };
+  var bull=fs.filter(function(f){return f.prob>=0.55;}).length;
+  var bear=fs.filter(function(f){return f.prob<=0.45;}).length;
+  var head='<div class="panel" style="padding:12px 14px;margin-bottom:12px">'+
+    '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center">'+
+      UI.stat("forecasts", fs.length)+
+      UI.stat("bullish", bull, "#3fb950")+
+      UI.stat("bearish", bear, "#f85149")+
+      UI.stat("avg probability", (100*avg(function(f){return f.prob;})).toFixed(0)+"%",
+              avg(function(f){return f.prob;})>=0.5?"#3fb950":"#f85149")+
+      UI.stat("avg expected move", avg(function(f){return f.move_pct;}).toFixed(3)+"%", "#e3b341")+
+      UI.stat("avg confidence", (100*avg(function(f){return f.confidence;})).toFixed(0)+"%", "#9fb0c4")+
+    '</div></div>';
+
+  // ---- per-symbol cards with every agent's view
+  var cards=fs.map(function(f){
+    var col=f.prob>=0.55?"#3fb950":f.prob<=0.45?"#f85149":"#d29922";
+    var views=(f.views||[]).map(function(v){
+      var c=v.prob>=0.55?"#3fb950":v.prob<=0.45?"#f85149":"#7c8b9d";
+      return '<div style="display:grid;grid-template-columns:86px 1fr 46px;gap:8px;align-items:center;'+
+        'font-family:var(--mono);font-size:10.5px;padding:2px 0">'+
+        '<span style="color:#9fb0c4">'+esc(v.agent)+'</span>'+
+        UI.bar((v.prob-0.5)*200,100,c)+
+        '<span style="text-align:right;color:'+c+'">'+v.prob.toFixed(2)+'</span></div>'+
+        '<div style="font-size:9.5px;color:#59677a;margin:0 0 3px 94px">'+esc(v.note||"")+'</div>';
+    }).join("");
+    var spread=0;
+    var probs=(f.views||[]).map(function(v){return v.prob;});
+    if(probs.length>1){
+      var m=probs.reduce(function(a,b){return a+b;},0)/probs.length;
+      spread=Math.sqrt(probs.reduce(function(a,b){return a+(b-m)*(b-m);},0)/probs.length);
+    }
+    return '<div class="panel" style="padding:12px 14px;margin-bottom:10px">'+
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">'+
+        '<b style="cursor:pointer;font-size:13px" onclick="drillChart(\''+esc(f.symbol)+'\',null)">'+
+          esc(f.symbol)+'</b>'+
+        '<span class="mk">'+esc(f.side)+'</span>'+
+        '<b style="color:'+col+';font-size:15px">'+(100*f.prob).toFixed(0)+'%</b>'+
+        '<span class="mk">expected '+(f.move_pct||0).toFixed(3)+'%</span>'+
+        '<span class="pill '+(f.action==="enter"?"ok":f.action==="liquidate"?"bad":"")+'">'+
+          esc(f.action)+'</span>'+
+        '<span style="flex:1"></span>'+
+        '<span class="mk">bar age '+Math.round(f.bar_age_s||0)+'s</span>'+
+        '<span class="mk">agents '+((f.confidence||0)*100).toFixed(0)+'% agreed · σ '+
+          spread.toFixed(3)+'</span>'+
+      '</div>'+ views +'</div>';
+  }).join("");
+
+  box.innerHTML=head+cards;
+}
+async function renderAgentPanel(){
+  var el=$("advagents"); if(!el) return;
+  var flagged=[];
+  try{
+    var ob=await (await fetch("/api/opportunities",{cache:"no-store"})).json();
+    flagged=(ob.flagged||[]).slice(0,5);
+  }catch(e){}
+  if(!flagged.length){ el.innerHTML='<div class="mk">no flagged symbols right now</div>'; return; }
+  var rows=[], agg={};
+  for(var i=0;i<flagged.length;i++){
+    var sym=flagged[i];
+    try{
+      var f=await (await fetch("/api/forecast?symbol="+encodeURIComponent(sym)+"&side=buy",{cache:"no-store"})).json();
+      if(!f||f.error) continue;
+      (f.views||[]).forEach(function(v){
+        agg[v.agent]=agg[v.agent]||{sum:0,n:0};
+        agg[v.agent].sum+=v.prob; agg[v.agent].n++;
+      });
+      rows.push('<div class="frow" style="grid-template-columns:92px repeat(7,44px) 70px">'+
+        '<b style="cursor:pointer" onclick="drillChart(\''+esc(sym)+'\',null)">'+esc(sym)+'</b>'+
+        (f.views||[]).map(function(v){
+          var c=v.prob>=0.55?"#3fb950":v.prob<=0.45?"#f85149":"#4d5d70";
+          return '<span title="'+esc(v.agent)+' '+v.prob.toFixed(2)+' — '+esc(v.note)+'" '+
+            'style="color:'+c+';font-weight:700">'+v.prob.toFixed(2)+'</span>';
+        }).join("")+
+        '<span style="color:'+(f.prob>=0.55?"#3fb950":f.prob<=0.45?"#f85149":"#d29922")+
+        ';font-weight:700">'+f.prob.toFixed(2)+'</span></div>');
+    }catch(e){}
+  }
+  var head='<div class="frow" style="grid-template-columns:92px repeat(7,44px) 70px;color:#59677a;'+
+    'font-size:9px;letter-spacing:.08em;text-transform:uppercase"><span>symbol</span>'+
+    ['momentum','volume','volatility','reversion','ma','breakout','pressure']
+      .map(function(n){return '<span>'+n.slice(0,6)+'</span>';}).join("")+
+    '<span>blend</span></div>';
+  var summary=Object.keys(agg).map(function(k){
+    var a=agg[k], avg=a.sum/a.n;
+    return '<span style="margin-right:14px">'+esc(k)+' <b style="color:'+
+      (avg>=0.55?"#3fb950":avg<=0.45?"#f85149":"#d29922")+'">'+avg.toFixed(2)+'</b></span>';
+  }).join("");
+  el.innerHTML='<div class="ctitle">what the agents say — per symbol, then averaged</div>'+head+
+    rows.join("")+'<div style="margin-top:8px;font-family:var(--mono);font-size:11px">'+summary+'</div>';
+}
 async function renderAdvisor(){
   var th=$("advthoughts"), bd=$("advboard"), note=$("advnote");
-  if(!Object.keys(SPARKC).length) await refreshSparks();
-  if(!Object.keys(METRICS).length) await refreshMetrics();
   try{
     var d=await (await fetch("/api/opportunities",{cache:"no-store"})).json();
-    var ts=d.thoughts||[], rows=d.opportunities||[];
+    var ts=d.thoughts||[], rows=(d.opportunities||[]).slice();
+    var ext={};
+    try{ var e=await (await fetch("/api/signals_ext",{cache:"no-store"})).json();
+         (e.rows||[]).forEach(function(r){ ext[r.symbol]=r; }); }catch(err){}
     if(note) note.textContent=rows.length+" ranked · "+(d.flagged||[]).length+" flagged · "+
       new Date(d.ts||Date.now()).toLocaleTimeString();
+
+    // ---- reasoning stream
     var col={new:"#3fb950",up:"#3fb950",down:"#f85149",out:"#7c8b9d",flag:"#58a6ff"};
-    th.innerHTML=ts.map(function(t){
+    th.innerHTML=(ts||[]).slice(-14).map(function(t){
       var c=col[t.kind]||"#7c8b9d";
-      return '<div style="display:grid;grid-template-columns:52px 1fr;gap:10px;padding:3px 0;'+
-        'border-bottom:1px solid #131c26;font-family:var(--mono);font-size:11.5px">'+
+      return '<div style="display:grid;grid-template-columns:54px 1fr;gap:10px;padding:3px 0;'+
+        'border-bottom:1px solid #131c26;font-family:var(--mono);font-size:11px">'+
         '<span style="color:'+c+';font-weight:700">'+esc(t.kind)+'</span>'+
         '<span style="color:#9fb0c4;display:flex;align-items:center;gap:8px">'+
-          (t.sym?symbolSpark(t.sym,56,14):'')+
-          '<span>'+esc(t.text)+'</span></span></div>';
-    }).join("")||'<div class="hint">waiting for the first cycle…</div>';
-    bd.innerHTML='<table class="wide" style="width:100%"><thead><tr><th>symbol</th><th>spark</th>'+
-      '<th>score</th><th>alert</th><th>funding</th><th>oi</th><th>book</th>'+
-      '<th>move</th><th>depth</th><th style="text-align:left">why</th></tr></thead><tbody>'+
-      rows.slice(0,12).map(function(r){
-        var c=r.components||{};
-        var flagged=(d.flagged||[]).indexOf(r.symbol)>=0;
-        return '<tr'+(flagged?' style="background:#0f1a14"':'')+'>'+
-          '<td style="font-weight:700;cursor:pointer" onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+
-            esc(r.symbol)+'</td>'+
-          '<td>'+metricBlock(r.symbol)+'</td>'+
-          '<td style="color:'+(r.score>0.45?"#3fb950":r.score>0.3?"#d29922":"#58a6ff")+'">'+
-            r.score.toFixed(3)+'</td>'+
-          ['alert','funding','oi','imbal','move','depth'].map(function(k){
-            return '<td style="color:#5f7186">'+((c[k]||0)).toFixed(2)+'</td>';}).join('')+
-          '<td style="text-align:left;color:#7c8b9d">'+esc(r.why)+'</td></tr>';
+        (t.sym?symbolSpark(t.sym,50,13):'')+esc(t.msg||t.text||'')+'</span></div>';
+    }).join("");
+
+    // ---- ranked board, best choice first
+    rows.sort(function(a,b){ return (b.score||0)-(a.score||0); });
+    var why=function(r){
+      var x=ext[r.symbol]||{}, bits=[];
+      var im=x.book_imbalance, br=x.buy_ratio, oi=x.oi_change_1h_pct, sd=x.smart_vs_dumb;
+      if(im!=null) bits.push((im>0.15?"bids stacked":"asks stacked")+" ("+(im>0?"+":"")+im.toFixed(2)+")");
+      if(br!=null) bits.push("takers "+(100*br).toFixed(0)+"% buying");
+      if(oi!=null) bits.push("OI "+(oi>0?"+":"")+oi.toFixed(1)+"% 1h");
+      if(sd!=null) bits.push("top traders "+(sd>=1?"":"")+sd.toFixed(2)+"x retail");
+      if(x.funding_pct!=null) bits.push("funding "+(100*x.funding_pct).toFixed(3)+"%");
+      if(x.spread_bps!=null) bits.push("spread "+x.spread_bps.toFixed(1)+"bp");
+      if(x.slippage_bps_5k!=null) bits.push("slip $5k "+x.slippage_bps_5k.toFixed(1)+"bp");
+      if(x.flow_conf!=null) bits.push("flow conf "+(x.flow_conf>0?"+":"")+x.flow_conf.toFixed(0));
+      return bits.join(" · ") || (r.why||"no signal explanation");
+    };
+    bd.innerHTML='<table class="wide"><thead><tr>'+
+      '<th>#</th><th>symbol</th><th>chart</th><th style="text-align:right">score</th>'+
+      '<th style="text-align:right">alert</th><th style="text-align:right">imbal</th>'+
+      '<th style="text-align:right">buy</th><th style="text-align:right">OI 1h</th>'+
+      '<th style="text-align:right">top/ret</th><th style="text-align:right">funding</th>'+
+      '<th style="text-align:right">slip</th><th>why</th></tr></thead><tbody>'+
+      rows.slice(0,24).map(function(r,i){
+        var x=ext[r.symbol]||{}, sc=r.score||0;
+        var c=sc>0.45?"#3fb950":sc>0.35?"#d29922":"#7c8b9d";
+        return '<tr><td class="mini">'+(i+1)+'</td>'+
+          '<td><b class="tick" style="cursor:pointer" onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+
+            esc(r.symbol)+'</b></td>'+
+          '<td>'+symbolSpark(r.symbol,72,18)+'</td>'+
+          '<td style="text-align:right"><b style="color:'+c+'">'+sc.toFixed(3)+'</b></td>'+
+          '<td style="text-align:right;color:#9fb0c4">'+(r.alert==null?"—":Number(r.alert).toFixed(2))+'</td>'+
+          '<td style="text-align:right;color:'+((x.book_imbalance||0)>=0?"#3fb950":"#f85149")+'">'+
+            (x.book_imbalance==null?"—":(x.book_imbalance>0?"+":"")+x.book_imbalance.toFixed(2))+'</td>'+
+          '<td style="text-align:right;color:'+((x.buy_ratio||0.5)>=0.5?"#3fb950":"#f85149")+'">'+
+            (x.buy_ratio==null?"—":(100*x.buy_ratio).toFixed(0)+"%")+'</td>'+
+          '<td style="text-align:right;color:'+((x.oi_change_1h_pct||0)>=0?"#3fb950":"#f85149")+'">'+
+            (x.oi_change_1h_pct==null?"—":(x.oi_change_1h_pct>0?"+":"")+x.oi_change_1h_pct.toFixed(1)+"%")+'</td>'+
+          '<td style="text-align:right;color:#9fb0c4">'+(x.smart_vs_dumb==null?"—":x.smart_vs_dumb.toFixed(2))+'</td>'+
+          '<td style="text-align:right;color:#9fb0c4">'+(x.funding_pct==null?"—":(100*x.funding_pct).toFixed(3)+"%")+'</td>'+
+          '<td style="text-align:right;color:#7c8b9d">'+(x.slippage_bps_5k==null?"—":x.slippage_bps_5k.toFixed(1))+'</td>'+
+          '<td class="why2" style="color:#8fa3b8">'+esc(why(r))+'</td></tr>';
       }).join("")+'</tbody></table>';
-  }catch(e){}
+  }catch(e){
+    if(bd) bd.innerHTML='<div class="panel"><div class="empty">advisor data unavailable</div></div>';
+  }
 }
+
 async function renderOpps(){
   var el=$("oppbox"); if(!el) return;
   try{
@@ -2494,24 +3396,128 @@ function sparkSVG(vals, w, h){
     '<polyline points="'+pts+'" fill="none" stroke="'+(up?'#3fb950':'#f85149')+
     '" stroke-width="1.3" stroke-linejoin="round"/></svg>';
 }
+async function renderExtSig(){
+  var box=$("extsig"); if(!box) return;
+  var d={};
+  try{ d=await (await fetch("/api/signals_ext",{cache:"no-store"})).json(); }catch(e){ return; }
+  var rows=d.rows||[];
+  if(!rows.length){ box.innerHTML='<div class="mk">extended signals warming up</div>'; return; }
+  var head='<div style="display:flex;gap:16px;margin-bottom:8px;font-size:10px;'+
+    'letter-spacing:.13em;text-transform:uppercase;color:#6b7c90">'+
+    '<span>extended signals — book, derivatives, flow</span>'+
+    '<span style="color:#3fb950">'+(rows.filter(function(r){return r.score>0;}).length)+' positive</span>'+
+    '<span style="color:#f85149">'+(rows.filter(function(r){return r.score<0;}).length)+' negative</span></div>';
+  var body=rows.map(function(r){
+    var sc=r.score||0, col=sc>15?"#3fb950":sc<-15?"#f85149":"#d29922";
+    var w=Math.min(100,Math.abs(sc));
+    return '<div class="extrow"><b onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+esc(r.symbol)+'</b>'+
+      '<span class="ebar"><i style="width:'+w+'%;background:'+col+';'+(sc<0?'margin-left:auto':'')+'"></i></span>'+
+      '<span style="text-align:right;color:'+col+';font-weight:700">'+(sc>0?'+':'')+sc.toFixed(1)+'</span>'+
+      '<span style="text-align:right;color:'+((r.book_imbalance||0)>=0?'#3fb950':'#f85149')+'">'+
+        ((r.book_imbalance||0)).toFixed(2)+'</span>'+
+      '<span style="text-align:right;color:#9fb0c4">'+((r.buy_ratio||0)*100).toFixed(0)+'%</span>'+
+      '<span style="text-align:right;color:'+((r.oi_change_1h_pct||0)>=0?'#3fb950':'#f85149')+'">'+
+        ((r.oi_change_1h_pct||0).toFixed(1))+'%</span>'+
+      '<span style="text-align:right;color:'+((r.smart_vs_dumb||1)>=1?'#3fb950':'#f85149')+'">'+
+        ((r.smart_vs_dumb||0)).toFixed(2)+'</span>'+
+      '<span style="text-align:right;color:#7c8b9d">'+((r.slippage_bps_5k||0)).toFixed(1)+'bp</span></div>';
+  }).join("");
+  box.innerHTML=head+'<div class="extrow" style="color:#59677a;font-size:9px"><span>symbol</span><span>score</span>'+
+    '<span style="text-align:right">score</span><span style="text-align:right">imbal</span>'+
+    '<span style="text-align:right">buy</span><span style="text-align:right">OI 1h</span>'+
+    '<span style="text-align:right">top/ret</span><span style="text-align:right">slip</span></div>'+body;
+}
+async function showAlert(sym, eid){
+  var d={};
+  try{ d=await (await fetch("/api/alert_detail?symbol="+encodeURIComponent(sym)+
+        "&event_id="+encodeURIComponent(eid||""),{cache:"no-store"})).json(); }catch(e){}
+  var a=d.alert||{}, sig=d.signals||{}, fc=d.forecast||{};
+  var reasons=(a.reasons||[]).map(function(r){ return '<li>'+esc(r)+'</li>'; }).join("");
+  var comps=Object.keys(a.components||{}).map(function(k){
+    var v=a.components[k];
+    return UI.kv(k, (typeof v==="number"? v.toFixed(2):String(v)),
+                 typeof v==="number" ? (v>=0?"#3fb950":"#f85149") : "#e6edf6");
+  }).join("");
+  var metrics=Object.keys(a.metrics||{}).map(function(k){
+    var v=a.metrics[k];
+    return UI.kv(k, typeof v==="object"? JSON.stringify(v).slice(0,60) : String(v));
+  }).join("");
+  var flowTbl=(d.flow||[]).length ? UI.table({key:"ad-flow", cols:[
+      {label:"window",align:"left"},{label:"net flow"},{label:"buy %"},{label:"change"}],
+      rows:(d.flow||[]).map(function(w){
+        return [w.window+"m", (w.net>=0?"+":"")+"$"+Math.abs(w.net/1000).toFixed(0)+"k",
+                (100*w.buy_ratio).toFixed(1)+"%",
+                (w.chg_pct==null?"—":(w.chg_pct>0?"+":"")+w.chg_pct.toFixed(2)+"%")]; })}) :
+    '<div class="mk">no candle data for this symbol yet</div>';
+  var body =
+    UI.panel("why this triggered", 
+      '<div style="font-size:12px;color:#c9d6e3;margin-bottom:8px">'+esc(a.summary||"—")+'</div>'+
+      '<ul style="margin:0 0 10px 18px;color:#9fb0c4;font-size:11.5px;line-height:1.6">'+reasons+'</ul>'+
+      '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">'+
+        '<div>'+UI.kv("detector",esc(a.detector||"—"))+UI.kv("kind",esc(a.kind||"—"))+
+          UI.kv("score",(a.score||0).toFixed(1), "#d29922")+
+          UI.kv("severity",esc(a.severity||"—"))+UI.kv("price",a.price==null?"—":a.price)+
+          UI.kv("time",UI.time(a.ts_ms))+'</div>'+
+        '<div>'+comps+'</div></div>', {note:"components are the score contributions"})+
+    UI.panel("market context",
+      '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px">'+
+      '<div>'+(sig.symbol? [
+          UI.kv("book imbalance",(sig.book_imbalance==null?"—":sig.book_imbalance.toFixed(2))),
+          UI.kv("taker buy",(sig.buy_ratio==null?"—":(100*sig.buy_ratio).toFixed(1)+"%")),
+          UI.kv("OI 1h",(sig.oi_change_1h_pct==null?"—":sig.oi_change_1h_pct.toFixed(2)+"%")),
+          UI.kv("top vs retail",(sig.smart_vs_dumb==null?"—":sig.smart_vs_dumb.toFixed(2)+"x")),
+          UI.kv("spread",(sig.spread_bps==null?"—":sig.spread_bps.toFixed(1)+"bp")),
+          UI.kv("flow confidence",(sig.flow_conf==null?"—":sig.flow_conf.toFixed(0)))
+        ].join("") : '<div class="mk">extended signals not covering this symbol</div>')+'</div>'+
+      '<div>'+(fc.prob!=null ? [
+          UI.kv("forecast probability",(100*fc.prob).toFixed(0)+"%"),
+          UI.kv("expected move",(fc.move_pct||0).toFixed(3)+"%"),
+          UI.kv("forecast action",esc(fc.action||"—"))
+        ].join("") : '<div class="mk">forecast unavailable</div>')+'</div></div>', {note:"what the models see right now"})+
+    UI.panel("money flow around the trigger", flowTbl, {note:"windows ending now"});
+  var m=$("modal");
+  $("sheet").innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
+    '<h3 style="margin:0">'+esc(sym)+' '+esc(a.kind||"")+'</h3>'+
+    '<span class="pill">'+(a.event_id||"").slice(0,8)+'</span>'+
+    '<span style="flex:1"></span><button class="tbtn" onclick="closeModal()">close</button></div>'+body;
+  if(m) m.classList.add("open");
+}
 async function renderSignals(){
   var box=$("signalsbody"); if(!box) return;
   var tick, alerts, votes;
   try{ tick=(await (await fetch("/api/universe800",{cache:"no-store"})).json()).tickers||[]; }catch(e){ tick=[]; }
+  // overlay the 1-second tick book so prices are live, not 120s cached
+  try{
+    var sy=tick.slice(0,30).map(function(x){return x.s;}).join(",");
+    var tkb=await (await fetch("/api/tick?syms="+sy,{cache:"no-store"})).json();
+    var live=tkb.p||{};
+    tick=tick.map(function(x){
+      if(live[x.s]!=null) return Object.assign({},x,{price:live[x.s]});
+      return x;
+    });
+    window.__TICKAGE=tkb.age_ms||0;
+  }catch(e){}
   var sparks=SPARKC;
   try{ alerts=(await (await fetch("/api/alerts?limit=200",{cache:"no-store"})).json()).alerts||[]; }catch(e){ alerts=[]; }
   try{ votes=(await (await fetch("/api/votes",{cache:"no-store"})).json()).signals||[]; }catch(e){ votes=[]; }
   var amap={}, vmap={};
   alerts.forEach(function(a){ if(a.symbol) amap[a.symbol]=a; });
   votes.forEach(function(v){ vmap[v.symbol]=(vmap[v.symbol]||0)+((v.direction||"").indexOf("BUY")>=0||(v.direction||"").indexOf("PUMP")>=0?1:-1); });
-  if($("signote")) $("signote").textContent=tick.length+" symbols · "+alerts.length+" alerts · "+votes.length+" votes";
+  if($("signote")){
+    var newest=alerts.length?Math.round((Date.now()-(alerts[0].ts_ms||0))/1000):null;
+    $("signote").textContent=tick.length+" symbols · "+alerts.length+" alerts"+
+      (newest!=null?(" (newest "+newest+"s)"):"")+" · "+votes.length+" votes · tick "+
+      (window.__TICKAGE||0)+"ms";
+  }
   var rows=tick.slice(0,40).map(function(t){
     var a=amap[t.s], v=vmap[t.s]||0, chg=t.c||0;
     var al=a?('<span style="color:'+(a.kind==="PUMP"?"#3fb950":"#f85149")+';font-weight:700">'+
-      a.kind+' '+Math.round(a.score||0)+'</span>'):'<span style="color:#33414f">—</span>';
+      a.kind+' '+Math.round(a.score||0)+' ▸</span>'):'<span style="color:#33414f">—</span>';
     var vc=v>0?"#3fb950":v<0?"#f85149":"#4d5d70";
-    return '<tr class="sigrow" style="cursor:pointer" onclick="drillChart(\''+esc(t.s)+'\',null)" '+
-      'title="open '+esc(t.s)+' chart">'+
+    var onclick = a ? ("showAlert('"+esc(t.s)+"','"+(a.event_id||"")+"')")
+                    : ("drillChart('"+esc(t.s)+"',null)");
+    var title = a ? "why this signal fired" : "open "+esc(t.s)+" chart";
+    return '<tr class="sigrow" style="cursor:pointer" onclick="'+onclick+'" title="'+title+'">'+
       '<td style="font-weight:600">'+esc(t.s)+'</td>'+
       '<td>'+metricBlock(t.s)+'</td>'+
       '<td>'+(t.price?Number(t.price).toPrecision(7):'—')+'</td>'+
@@ -2559,20 +3565,86 @@ async function renderTape(){
         '<td style="text-align:left;color:#7c8b9d">'+esc(x.why)+'</td></tr>';
     }).join("")+'</tbody></table>':'<div class="empty">no fills match</div>';
 }
+function advWhy(r, x){
+  var bits=[];
+  var im=x.book_imbalance, br=x.buy_ratio, oi=x.oi_change_1h_pct, sd=x.smart_vs_dumb;
+  if(im!=null) bits.push((im>0.15?"bids stacked":im<-0.15?"asks stacked":"book balanced")+" ("+(im>0?"+":"")+im.toFixed(2)+")");
+  if(br!=null) bits.push("takers "+(100*br).toFixed(0)+"% buying");
+  if(oi!=null) bits.push("OI "+(oi>0?"+":"")+oi.toFixed(1)+"% over 1h");
+  if(sd!=null) bits.push("top traders "+sd.toFixed(2)+"x retail");
+  if(x.funding_pct!=null) bits.push("funding "+(100*x.funding_pct).toFixed(3)+"%");
+  if(x.flow_conf!=null) bits.push("flow confidence "+(x.flow_conf>0?"+":"")+x.flow_conf.toFixed(0));
+  if(x.spread_bps!=null) bits.push("spread "+x.spread_bps.toFixed(1)+"bp");
+  if(x.slippage_bps_5k!=null) bits.push("$5k slippage "+x.slippage_bps_5k.toFixed(1)+"bp");
+  if(r.alert!=null) bits.push("alert score "+Number(r.alert).toFixed(2));
+  var lead=(r.why||"").split("·")[0].trim();
+  return (lead?lead+" — ":"")+bits.join(" · ");
+}
 async function dashAdv(){
   var el=$("dashadv"); if(!el) return;
   try{
     var d=await (await fetch("/api/opportunities",{cache:"no-store"})).json();
     var f=d.flagged||[], rows=(d.opportunities||[]).filter(function(r){return f.indexOf(r.symbol)>=0;});
-    el.innerHTML=rows.slice(0,6).map(function(r){
+    var ext={};
+    try{ var e=await (await fetch("/api/signals_ext",{cache:"no-store"})).json();
+         (e.rows||[]).forEach(function(r){ ext[r.symbol]=r; }); }catch(err){}
+    if(!rows.length){ el.innerHTML='<span class="hint">agent warming up…</span>'; return; }
+
+    // ---- headline visuals
+    var pumps=rows.filter(function(r){return (r.why||"").indexOf("PUMP")>=0;}).length;
+    var dumps=rows.length-pumps;
+    var avg=rows.reduce(function(a,r){return a+(r.score||0);},0)/rows.length;
+    var head='<div style="display:flex;gap:18px;align-items:center;margin-bottom:10px;flex-wrap:wrap">'+
+      '<div><div style="font-size:9px;letter-spacing:.12em;color:#5f7186">FLAGGED</div>'+
+        '<div style="font-size:18px;font-weight:700">'+rows.length+'</div></div>'+
+      '<div><div style="font-size:9px;letter-spacing:.12em;color:#5f7186">PUMP / DUMP</div>'+
+        '<div style="font-size:18px;font-weight:700"><span class="up">'+pumps+'</span>'+
+        '<span style="color:#3d4d5f"> / </span><span class="down">'+dumps+'</span></div></div>'+
+      '<div><div style="font-size:9px;letter-spacing:.12em;color:#5f7186">AVG SCORE</div>'+
+        '<div style="font-size:18px;font-weight:700;color:'+(avg>0.45?"#3fb950":"#d29922")+'">'+
+        avg.toFixed(2)+'</div></div>'+
+      '<div style="flex:1;min-width:180px"><div style="font-size:9px;letter-spacing:.12em;color:#5f7186;'+
+        'margin-bottom:4px">TAPE PRESSURE</div>'+
+        '<div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:#16202b">'+
+        '<i style="width:'+Math.round(100*pumps/rows.length)+'%;background:#3fb950"></i>'+
+        '<i style="flex:1;background:#f85149"></i></div></div></div>';
+
+    // ---- per-symbol visual rows
+    var cards=rows.slice(0,6).map(function(r){
+      var x=ext[r.symbol]||{};
       var col=r.score>0.45?"#3fb950":"#d29922";
-      return '<div class="advrow">'+
-        '<b style="cursor:pointer" onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+
-          esc(r.symbol)+'</b>'+
-        metricBlock(r.symbol)+
-        '<span class="reason">'+esc(r.why)+'</span>'+
-        '<span class="score" style="color:'+col+'">'+r.score.toFixed(2)+'</span></div>';
-    }).join("")||'<span class="hint">agent warming up…</span>';
+      var conf=x.flow_conf||0;
+      var chips=[
+        ["flow",conf,"#58a6ff"],
+        ["imbal",(x.book_imbalance||0)*100,"#a371f7"],
+        ["buy",((x.buy_ratio||0)-0.5)*200,"#3fb950"],
+        ["OI",(x.oi_change_1h_pct||0)*10,"#e3b341"]
+      ].map(function(c){
+        var v=Math.max(-100,Math.min(100,c[1]));
+        var w=Math.abs(v)/2;
+        return '<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px">'+
+          '<span style="font-size:8.5px;color:#5f7186;letter-spacing:.06em">'+c[0]+'</span>'+
+          '<span style="width:44px;height:5px;background:#16202b;border-radius:3px;display:flex;overflow:hidden">'+
+          '<i style="width:'+w+'%;background:'+c[2]+';'+(v<0?'margin-left:auto':'')+'"></i></span>'+
+          '<span style="font-size:9px;color:'+(v>=0?"#8fa3b8":"#8fa3b8")+'">'+Math.round(v)+'</span></span>';
+      }).join("");
+      var gauge='<span style="display:inline-flex;align-items:center;gap:6px">'+
+        '<span style="width:56px;height:6px;background:#16202b;border-radius:3px;display:flex;overflow:hidden">'+
+        '<i style="width:'+Math.round(r.score*100)+'%;background:'+col+'"></i></span>'+
+        '<b style="color:'+col+';font-size:11px">'+r.score.toFixed(2)+'</b></span>';
+      return '<div style="padding:7px 0;border-bottom:1px solid #131c26">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+          '<b class="tick" style="width:86px;cursor:pointer;color:#e6edf6" '+
+            'onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+esc(r.symbol)+'</b>'+
+          symbolSpark(r.symbol,104,22)+
+          gauge+
+          '<span style="flex:1;color:#7c8b9d;font-size:10.5px;overflow:hidden;'+
+          'text-overflow:ellipsis;white-space:nowrap">'+esc(r.why)+'</span></div>'+
+        '<div style="margin:5px 0 0 96px">'+chips+'</div>'+
+        '<div style="margin:6px 0 2px 96px;color:#8fa3b8;font-size:10.5px;line-height:1.45">'+
+          esc(advWhy(r,x))+'</div></div>';
+    }).join("");
+    el.innerHTML=head+cards;
   }catch(e){}
 }
 async function totalEquity(){
@@ -2636,6 +3708,7 @@ async function tick(){
   try{ d=await (await fetch("/api/all",{cache:"no-store"})).json(); }
   catch(e){ $("live").textContent="offline"; $("live").className="pill bad"; return; }
   const es=d.engines||[];
+  try{ renderAttrib(es); }catch(e){}
   try{
   const live=es.filter(e=>e.alive).length;
   $("live").textContent=live+"/"+es.length+" live";
@@ -2643,7 +3716,15 @@ async function tick(){
   $("clock").textContent=new Date().toLocaleTimeString(undefined,{hour12:false});
 
   const m=d.models;
-  $("models").textContent = m ? ("models: "+JSON.stringify(m.decisions||{})) : "models offline";
+  var nBooks=es.filter(function(e){return e.equity!=null;}).length;
+  var nOpen=es.reduce(function(a,e){return a+((e.positions||[]).length);},0);
+  try{
+    var ov=$("ovr");
+    if(ov){ fetch("/api/options",{cache:"no-store"}).then(function(r){return r.json();}).then(function(o){
+      ov.style.display = o.override_crazy ? "flex" : "none";
+    }).catch(function(){}); }
+  }catch(e){}
+  $("modelsbadge").textContent = nBooks+" models · "+nOpen+" open";
 
   // totals across engines
   const alive=es.filter(e=>e.alive&&e.equity!=null);
@@ -2671,6 +3752,13 @@ async function tick(){
   ];
   const placed=new Set();
   const card=(e)=>{
+    if(e.equity==null){
+      return `<div class="card off" title="this engine is not running">
+        <div class="top"><div><div class="name" style="color:${e.colour||'#5f7186'}">${esc(e.key)}</div>
+        <div class="label">${esc(e.label)}</div></div>
+        <div style="text-align:right"><span class="pill">idle</span></div></div>
+        <div class="rows"><span style="color:#59677a">not running · no book to report</span></div></div>`;
+    }
     const pos=(e.positions||[]).slice(0,5);
     const scanning=(PREV[e.key]!=null&&e.scans!=null&&e.scans>PREV[e.key]);
     if(e.scans!=null) PREV[e.key]=e.scans;
@@ -2798,6 +3886,12 @@ function drillChart(sym, eng){
   try{ closeModal(); }catch(e){}
   openChart(sym, eng||null);
 }
+function tsISO(ms){
+  if(!ms) return "—";
+  var d=new Date(ms);
+  return d.toTimeString().slice(0,8);
+}
+function tsFull(ms){ return ms?new Date(ms).toISOString():"—"; }
 function openDetail(key){
   const e=(LAST||[]).find(x=>x.key===key);
   if(!e) return;
@@ -2865,12 +3959,13 @@ function openDetail(key){
 
       <div class="hd"><h3>Open positions</h3><span class="count">${pos.length}</span></div>
       ${pos.length?`<table class="wide"><thead><tr>
-          <th>ticker</th><th>side</th><th>entry</th><th>now</th>
+          <th>ticker</th><th>side</th><th>entered</th><th>entry</th><th>now</th>
           <th>P&amp;L</th><th>peak</th><th>stop/trail</th><th>notional</th>
-          <th>risk $</th><th>held</th><th>conf</th><th style="text-align:left">why it is open</th>
+          <th>risk $</th><th>held</th><th>conf</th><th style="text-align:left">signals used</th>
         </tr></thead><tbody>${pos.map(p=>`<tr>
           <td class="tick" data-drill-sym=${esc(p.symbol)} data-sym="${esc(p.symbol)}" data-eng="${esc(e.key)}">${esc(p.symbol)}</td>
           <td><span class="side ${p.side==='buy'?'buy':'sell'}">${esc((p.side||'?').toUpperCase())}</span></td>
+          <td class="mini" title="${tsFull(p.entry_ms)}">${tsISO(p.entry_ms)}</td>
           <td>${p.entry==null?"—":Number(p.entry).toPrecision(8)}</td>
           <td>${p.price==null?"—":Number(p.price).toPrecision(8)}</td>
           <td class="${cls(p.gross_pct)}"><b>${pct(p.gross_pct)}</b></td>
@@ -2886,12 +3981,14 @@ function openDetail(key){
 
       <div class="hd"><h3>Trades</h3><span class="count">${trades.length}</span></div>
       ${trades.length?`<table class="wide"><thead><tr>
-          <th>ticker</th><th>side</th><th>entry</th><th>exit</th>
+          <th>ticker</th><th>side</th><th>entered</th><th>exited</th><th>entry</th><th>exit</th>
           <th>gross</th><th>net</th><th>peak</th><th>P&amp;L $</th>
-          <th>notional</th><th>reason</th><th>held</th>
+          <th>notional</th><th>reason</th><th>held</th><th style="text-align:left">signals used</th>
         </tr></thead><tbody>${trades.slice(0,40).map(t=>`<tr>
           <td class="tick" data-drill-sym=${esc(t.symbol)} data-sym="${esc(t.symbol)}" data-eng="${esc(e.key)}">${esc(t.symbol)}</td>
           <td><span class="side ${t.side==='buy'?'buy':'sell'}">${esc((t.side||'?').toUpperCase())}</span></td>
+          <td class="mini" title="${tsFull(t.entry_ms)}">${tsISO(t.entry_ms)}</td>
+          <td class="mini" title="${tsFull(t.exit_ms)}">${tsISO(t.exit_ms)}</td>
           <td>${t.entry==null?"—":Number(t.entry).toPrecision(8)}</td>
           <td>${t.exit==null?"—":Number(t.exit).toPrecision(8)}</td>
           <td class="mini">${pct(t.gross_pct)}</td>
@@ -2901,6 +3998,7 @@ function openDetail(key){
           <td class="mini">${t.notional==null?"—":"$"+money(t.notional)}</td>
           <td class="mini">${esc(t.reason||"—")}</td>
           <td class="mini">${t.held_s==null?"—":Math.round(t.held_s)+"s"}</td>
+          <td class="why2">${esc(t.why||"—")}</td>
         </tr>`).join("")}</tbody></table>`
         :'<div class="empty">no closed trades yet</div>'}
     </div>`;
@@ -2909,8 +4007,26 @@ function openDetail(key){
 
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape"){
-    closeChartModal(); closeModal(); closeChart();
-    const c=$("cctl"); if(c&&c.classList.contains("open")){ c.classList.remove("open"); refreshCtlBtn(); }
+    /* Escape always goes back one layer, in stacking order. */
+    const layers=[
+      ["chartbox",   function(){ closeChart(); }],
+      ["chartmodal", function(){ closeChartModal(); }],
+      ["modal",      function(){ closeModal(); }]
+    ];
+    for(const [id, close] of layers){
+      const el=$(id);
+      if(!el) continue;
+      const open = el.classList.contains("open") || getComputedStyle(el).display!=="none" ||
+                   el.style.display==="flex" || el.style.display==="block";
+      if(el.classList.contains("open")){ close(); e.preventDefault(); return; }
+    }
+    const c=$("cctl");
+    if(c && c.classList.contains("open")){ c.classList.remove("open"); refreshCtlBtn(); e.preventDefault(); return; }
+    /* nothing open: go back to the dashboard */
+    const active=["thinking","busview","moversview","marketlive","forecast","advisor","signals",
+                  "tape","models","opt","lb","control","review","why","health"]
+                 .find(k=>{ const el=$(k); return el && el.classList.contains("on"); });
+    if(active){ showTab("dash"); e.preventDefault(); return; }
     return;
   }
   if($("market")&&$("market").classList.contains("on")&&LASTROWS.length){
@@ -2949,6 +4065,19 @@ restoreSide();
 loadTickers(); setInterval(loadTickers,60000);
 tick(); setInterval(tick,2000);
 health(); setInterval(health,5000);
+var PAGE_BUILD=null;
+async function watchBuild(){
+  try{
+    var d=await (await fetch("/api/version",{cache:"no-store"})).json();
+    if(PAGE_BUILD===null){ PAGE_BUILD=d.build; return; }
+    if(d.build!==PAGE_BUILD){
+      var b=document.getElementById("stale");
+      if(b) b.style.display="flex";
+      if(!window.__reloading){ window.__reloading=true; setTimeout(function(){ location.reload(true); }, 2500); }
+    }
+  }catch(e){}
+}
+watchBuild(); setInterval(watchBuild,15000);
 beat(); setInterval(beat,5000);
 refreshTrading(); setInterval(refreshTrading,4000);
 tape(); setInterval(tape,1500);
@@ -2958,11 +4087,103 @@ totalEquity(); setInterval(totalEquity,4000);
 refreshSparks(); setInterval(refreshSparks,15000);
 refreshMetrics(); setInterval(refreshMetrics,15000);
 renderTape(); setInterval(function(){ if(document.getElementById("tape").classList.contains("on")) renderTape(); },1500);
-renderSignals(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderSignals(); },3000);
+renderSignals(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderSignals(); },1000);
 renderOpps(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderOpps(); },2000);
 renderAdvisor(); setInterval(function(){ if(document.getElementById("advisor").classList.contains("on")) renderAdvisor(); },2000);
+renderOptions();
+renderForecast(); setInterval(function(){ if(document.getElementById("forecast").classList.contains("on")) renderForecast(); },4000);
+renderMarketLive(); setInterval(function(){ if(document.getElementById("marketlive").classList.contains("on")) renderMarketLive(); },1000);
 renderPending(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderPending(); },1000);
+
+/* ================= SORTING (every table) ================= */
+window.__sortState = window.__sortState || {};
+window.__sortBusy = false;
+function tableKey(t){
+  var host=t.closest("[id]");
+  var heads=Array.prototype.map.call(t.tHead?t.tHead.rows[0].cells:[],function(c){
+    return (c.textContent||"").trim().slice(0,14);
+  }).join("|");
+  return (host?host.id:"body")+"::"+heads;
+}
+function cellValue(tr,i){
+  var c=tr.cells[i]; if(!c) return "";
+  var txt=(c.getAttribute("data-sort")||c.textContent||"").trim();
+  var num=parseFloat(txt.replace(/[$,%+]/g,""));
+  return isNaN(num)?txt.toLowerCase():num;
+}
+function sortTableBy(t,idx,dir){
+  var tb=t.tBodies[0]; if(!tb) return;
+  var rows=Array.prototype.slice.call(tb.rows);
+  rows.sort(function(a,b){
+    var x=cellValue(a,idx), y=cellValue(b,idx);
+    if(typeof x==="number"&&typeof y==="number") return dir*(x-y);
+    return dir*String(x).localeCompare(String(y));
+  });
+  rows.forEach(function(r){ tb.appendChild(r); });
+  Array.prototype.forEach.call(t.tHead.rows[0].cells,function(c,i){
+    c.classList.remove("sort-asc","sort-desc");
+    if(i===idx) c.classList.add(dir>0?"sort-asc":"sort-desc");
+  });
+}
+function applyAllSorts(){
+  if(window.__sortBusy) return;
+  window.__sortBusy=true;
+  try{
+    var tables=document.querySelectorAll("table");
+    for(var i=0;i<tables.length;i++){
+      var t=tables[i];
+      if(!t.tHead||!t.tBodies[0]) continue;
+      var k=tableKey(t), st=window.__sortState[k];
+      var ths=t.tHead.rows[0].cells;
+      for(var j=0;j<ths.length;j++){
+        if(!ths[j].classList.contains("sortable")) ths[j].classList.add("sortable");
+      }
+      if(st) sortTableBy(t,st.idx,st.dir);
+    }
+  }catch(e){}
+  window.__sortBusy=false;
+}
+document.addEventListener("click",function(e){
+  var th=e.target.closest("th"); if(!th) return;
+  var t=th.closest("table"); if(!t||!t.tHead) return;
+  var idx=Array.prototype.indexOf.call(th.parentNode.cells,th);
+  var k=tableKey(t);
+  var cur=window.__sortState[k];
+  var dir = (cur && cur.idx===idx) ? -cur.dir : (idx===0?1:-1);
+  window.__sortState[k]={idx:idx,dir:dir};
+  sortTableBy(t,idx,dir);
+  e.stopPropagation();
+},true);
+setInterval(applyAllSorts,700);
+
+/* ================= EVERY TICKER IS CLICKABLE ================= */
+function bindTicks(){
+  var els=document.querySelectorAll('.wrap td, .wrap b, .wrap span, .wrap div');
+  for(var i=0;i<els.length;i++){
+    var el=els[i];
+    if(el.children.length) continue;
+    if(el.__tk) continue;
+    var t=(el.textContent||"").trim();
+    if(!/^[A-Z0-9]{2,15}USDT$/.test(t)) continue;
+    el.__tk=1;
+    el.style.cursor="pointer";
+    el.title=t+" — click for the chart";
+    el.addEventListener("click",function(ev){
+      ev.stopPropagation();
+      var sym=this.textContent.trim();
+      if(typeof drillChart==="function") drillChart(sym,null); else openChart(sym);
+    });
+  }
+}
+setInterval(bindTicks,800);
 </script></body></html>"""
+
+try:
+    with open(os.path.join(HERE, "ui", "lib.js")) as _fh:
+        PAGE = PAGE.replace("__UI_LIB__", _fh.read())
+except Exception:
+    PAGE = PAGE.replace("__UI_LIB__", "window.UI=window.UI||{};")
+
 
 
 BINANCE = "https://api.binance.com"
@@ -2989,6 +4210,15 @@ def binance_klines(symbol, interval="5m", limit=200):
             "indicators": {}}
 
 
+def ui_lib():
+    """The shared component library, inlined into every page."""
+    try:
+        with open(os.path.join(HERE, "ui", "lib.js")) as fh:
+            return fh.read()
+    except Exception:
+        return "window.UI=window.UI||{};"
+
+
 class H(BaseHTTPRequestHandler):
     def _send(self, code, body, ctype):
         if isinstance(body, str):
@@ -3000,9 +4230,54 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _model_control(self):
+        import urllib.parse
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        model = (q.get("model", [""])[0] or "").strip()
+        act = (q.get("action", [""])[0] or "").strip()
+        path = os.path.join(HERE, "state", "disabled.json")
+        try:
+            cur = json.load(open(path))
+        except Exception:
+            cur = {"books": []}
+        books = [b for b in (cur.get("books") or []) if b]
+        if model and act == "stop" and model not in books:
+            books.append(model)
+        elif model and act == "start" and model in books:
+            books.remove(model)
+        with open(path + ".t", "w") as fh:
+            json.dump({"books": books, "ts": int(time.time() * 1000)}, fh)
+        os.replace(path + ".t", path)
+        return self._send(200, json.dumps({"ok": True, "disabled": books}),
+                          "application/json")
+
     def do_POST(self):
         import urllib.parse
         u = urllib.parse.urlparse(self.path)
+        if u.path.startswith("/api/opt/run"):
+            import urllib.parse
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            m = q.get("model", [""])[0]
+            try:
+                r = urllib.request.urlopen(urllib.request.Request(
+                    "http://127.0.0.1:8795/run?model=" + urllib.parse.quote(m), method="POST"),
+                    timeout=8).read()
+                return self._send(200, r, "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path.startswith("/api/opt/apply"):
+            import urllib.parse
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            m = q.get("model", [""])[0]
+            try:
+                r = urllib.request.urlopen(urllib.request.Request(
+                    "http://127.0.0.1:8795/apply?model=" + urllib.parse.quote(m), method="POST"),
+                    timeout=8).read()
+                return self._send(200, r, "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path.startswith("/api/model_control"):
+            return self._model_control()
         if u.path == "/api/trading":
             act = urllib.parse.parse_qs(u.query).get("action", [""])[0]
             if act == "start":
@@ -3240,6 +4515,8 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = self.path.split("?")[0]
+        if p in ("/app", "/app/", "/v2"):
+            return self._send(200, PAGE.replace("__UI_LIB__", ui_lib()), "text/html")
         if p in ("/", "/index.html"):
             return self._send(200, PAGE, "text/html")
         if p == "/api/klines":
@@ -3372,6 +4649,322 @@ class H(BaseHTTPRequestHandler):
                 n = int((q.get("n", ["24"])[0]) or 24)
                 return self._send(200, json.dumps({"series": sparklines(n)}),
                                   "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/version":
+            return self._send(200, json.dumps({"build": BUILD_TS, "pid": os.getpid()}),
+                              "application/json")
+        if p == "/api/selfcheck":
+            checks = []
+            def chk(name, url, need_key=None):
+                try:
+                    d = jget(url, timeout=10.0)
+                    ok = True
+                    if need_key and not (isinstance(d, dict) and d.get(need_key)):
+                        ok = False
+                    checks.append({"view": name, "ok": ok,
+                                   "detail": "ok" if ok else ("empty %s" % need_key)})
+                except Exception as exc:
+                    checks.append({"view": name, "ok": False, "detail": str(exc)[:90]})
+            base = "http://127.0.0.1:8799"
+            chk("Dashboard", base + "/api/all", "engines")
+            chk("Tape", base + "/api/tape", "fills")
+            chk("Signals", base + "/api/opportunities", "opportunities")
+            chk("Advisor", base + "/api/opportunities", "thoughts")
+            chk("Forecast", "http://127.0.0.1:8790/forecast?symbol=BTCUSDT&side=buy", "prob")
+            chk("Market live", base + "/api/universe800", "tickers")
+            chk("Models", base + "/api/all", "engines")
+            chk("Leaderboard", base + "/api/all", "engines")
+            chk("Optimiser", base + "/api/optimizer", "cycles")
+            chk("Why", base + "/api/signals?symbol=BTCUSDT", "alerts")
+            chk("Review", base + "/api/all", "engines")
+            chk("Control", base + "/api/all", "engines")
+            return self._send(200, json.dumps({"checks": checks}), "application/json")
+        if p == "/api/opt/jobs":
+            try:
+                return self._send(200, json.dumps(jget("http://127.0.0.1:8795/jobs", timeout=6)),
+                                  "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/bus":
+            import base64 as _b64
+            auth = "Basic " + _b64.b64encode(b"cryptalyst:cryptalyst").decode()
+            def rab(path):
+                req = urllib.request.Request("http://127.0.0.1:15672/api" + path,
+                                             headers={"Authorization": auth})
+                with urllib.request.urlopen(req, timeout=6) as r:
+                    return json.loads(r.read().decode())
+            try:
+                ov = rab("/overview")
+                queues = rab("/queues/%2F")
+                out = {"version": ov.get("rabbitmq_version"),
+                       "totals": ov.get("object_totals"),
+                       "queues": [{"name": q.get("name"),
+                                   "messages": q.get("messages"),
+                                   "consumers": q.get("consumers"),
+                                   "publish_rate": (q.get("message_stats", {}) or {}).get("publish_details", {}).get("rate"),
+                                   "deliver_rate": (q.get("message_stats", {}) or {}).get("deliver_get_details", {}).get("rate"),
+                                   "durable": q.get("durable")}
+                                  for q in queues]}
+                return self._send(200, json.dumps(out), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:140]}), "application/json")
+        if p == "/api/alert_detail":
+            import urllib.parse as _up
+            q = _up.parse_qs(_up.urlparse(self.path).query)
+            eid = q.get("event_id", [""])[0]
+            sym = q.get("symbol", [""])[0].upper()
+            out = {"event_id": eid, "symbol": sym}
+            try:
+                al = jget("http://127.0.0.1:8787/api/alerts?limit=300", timeout=8.0)
+                for a in al.get("alerts") or []:
+                    if (eid and a.get("event_id") == eid) or (sym and a.get("symbol") == sym):
+                        out["alert"] = a
+                        sym = a.get("symbol") or sym
+                        break
+            except Exception as exc:
+                out["alert_error"] = str(exc)[:100]
+            try:
+                fw = jget("http://127.0.0.1:8799/api/flowwindows?symbol=" + sym, timeout=15.0)
+                out["flow"] = fw.get("windows") or []
+            except Exception:
+                out["flow"] = []
+            try:
+                with open(os.path.join(HERE, "state", "signals.json")) as fh:
+                    for row in (json.load(fh).get("rows") or []):
+                        if row.get("symbol") == sym:
+                            out["signals"] = row
+                            break
+            except Exception:
+                pass
+            try:
+                out["forecast"] = jget(
+                    "http://127.0.0.1:8790/forecast?symbol=%s&side=buy&horizon=3600" % sym,
+                    timeout=10.0)
+            except Exception:
+                out["forecast"] = None
+            return self._send(200, json.dumps(out), "application/json")
+        if p == "/api/flowwindows":
+            import urllib.parse as _up
+            q = _up.parse_qs(_up.urlparse(self.path).query)
+            sym = (q.get("symbol", ["BTCUSDT"])[0] or "BTCUSDT").upper()
+            try:
+                d = jget("http://127.0.0.1:8796/klines?symbol=%s&interval=1m&limit=1440" % sym,
+                         timeout=12.0)
+                rows = d.get("klines") or []
+            except Exception:
+                rows = []
+            def agg(n):
+                win = rows[-n:]
+                if not win:
+                    return None
+                buy = sum((r.get("Q") or 0) for r in win)
+                total = sum((r.get("q") or 0) for r in win)
+                sell = max(0.0, total - buy)
+                hi = max((r.get("h") or 0) for r in win)
+                lo = min((r.get("l") or 0) for r in win)
+                closes = [r.get("c") or 0 for r in win]
+                vol = sum((r.get("v") or 0) for r in win)
+                return {"window": n, "net": round(buy - sell, 2),
+                        "buy": round(buy, 2), "sell": round(sell, 2),
+                        "buy_ratio": round(buy / total, 4) if total else 0.5,
+                        "range_pct": round(100 * (hi / lo - 1), 3) if lo else None,
+                        "chg_pct": round(100 * (closes[-1] / closes[0] - 1), 3) if closes and closes[0] else None,
+                        "volume": round(vol, 2),
+                        "delta": round(buy - sell, 2)}
+            out = {"symbol": sym,
+                   "windows": [w for w in (agg(5), agg(15), agg(60), agg(240), agg(1440)) if w],
+                   "ts": int(time.time() * 1000)}
+            return self._send(200, json.dumps(out), "application/json")
+        if p == "/api/thinking":
+            out = {"ts": int(time.time() * 1000), "sources": {}, "decisions": [],
+                   "blocks": {}, "signals": [], "books": {}}
+            def grab(url, t=6.0):
+                try:
+                    return jget(url, timeout=t)
+                except Exception:
+                    return None
+            md = grab("http://127.0.0.1:8796/health")
+            if md:
+                out["sources"]["market_data"] = {
+                    "status": md.get("stats", {}).get("status"),
+                    "msgs": md.get("stats", {}).get("msgs"),
+                    "series": md.get("kline_series"),
+                    "tickers": md.get("mini_tickers"),
+                    "prices": md.get("prices"),
+                    "violations": md.get("limits", {}).get("violations")}
+            bus = grab("http://127.0.0.1:8793/health")
+            if bus:
+                out["sources"]["signal_bus"] = {"cursor": bus.get("cursor"),
+                                                "buffered": bus.get("buffered")}
+            fc = grab("http://127.0.0.1:8790/health")
+            if fc:
+                out["sources"]["forecast"] = {"agents": len(fc.get("agents") or [])}
+            try:
+                with open(os.path.join(HERE, "state", "risk.json")) as fh:
+                    rj = json.load(fh)
+                dec = (rj.get("decisions") or [])[-60:]
+                out["decisions"] = dec[::-1]
+                for d in dec:
+                    if not d.get("allowed"):
+                        key = (d.get("reason") or "unknown").split("(")[0].strip()[:46]
+                        out["blocks"][key] = out["blocks"].get(key, 0) + 1
+            except Exception:
+                pass
+            try:
+                with open(os.path.join(HERE, "state", "signals.json")) as fh:
+                    sj = json.load(fh)
+                rows = sj.get("rows") or []
+                rows.sort(key=lambda r: -(r.get("flow_conf") or 0))
+                out["signals"] = [{"symbol": r.get("symbol"), "score": r.get("score"),
+                                   "flow_conf": r.get("flow_conf"),
+                                   "buy_ratio": r.get("buy_ratio")} for r in rows[:6]]
+            except Exception:
+                pass
+            try:
+                books = []
+                for fn in os.listdir(os.path.join(HERE, "state")):
+                    if fn.startswith("pack_") and fn.endswith(".json"):
+                        try:
+                            with open(os.path.join(HERE, "state", fn)) as fh:
+                                books.append(json.load(fh))
+                        except Exception:
+                            pass
+                out["books"] = {"count": len(books),
+                                "open": sum(len(b.get("positions") or []) for b in books),
+                                "closed": sum(b.get("trade_count") or 0 for b in books),
+                                "equity": sum(b.get("equity") or 0 for b in books)}
+            except Exception:
+                pass
+            try:
+                with open(os.path.join(HERE, "state", "review.json")) as fh:
+                    rv = json.load(fh)
+                out["review"] = {"stopped": rv.get("stopped") or [],
+                                 "every_s": rv.get("every_s"), "ts": rv.get("ts")}
+            except Exception:
+                pass
+            try:
+                out["options"] = {k: v for k, v in __import__("tactics").options(True).items()}
+            except Exception:
+                pass
+            return self._send(200, json.dumps(out), "application/json")
+        if p == "/api/review_state":
+            try:
+                with open(os.path.join(HERE, "state", "review.json")) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/risk":
+            try:
+                import risk as _R
+                out = {"snapshot": _R.snapshot(), "limits": _R.DEFAULTS}
+                try:
+                    with open(os.path.join(HERE, "state", "risk.json")) as fh:
+                        out["decisions"] = (json.load(fh).get("decisions") or [])[-40:]
+                except Exception:
+                    out["decisions"] = []
+                return self._send(200, json.dumps(out), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/signals_ext":
+            try:
+                with open(os.path.join(HERE, "state", "signals.json")) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/flows":
+            try:
+                q = urllib.parse.urlparse(self.path).query
+                d = jget("http://127.0.0.1:8796/flows" + ("?" + q if q else ""), timeout=45.0)
+                return self._send(200, json.dumps(d), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/movers":
+            try:
+                q = urllib.parse.urlparse(self.path).query
+                d = jget("http://127.0.0.1:8796/movers" + ("?" + q if q else ""), timeout=20.0)
+                return self._send(200, json.dumps(d), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/options":
+            import tactics as _T
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            if q:
+                for k, v in q.items():
+                    raw = v[0]
+                    cur = _T.options(True).get(k)
+                    if isinstance(cur, bool):
+                        val = raw.lower() in ("1", "true", "yes", "on")
+                    elif isinstance(cur, (int, float)):
+                        try:
+                            val = float(raw)
+                        except Exception:
+                            continue
+                    else:
+                        val = raw
+                    _T.set_option(k, val)
+            return self._send(200, json.dumps(_T.options(True)), "application/json")
+        if p == "/api/model_control":
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            model = (q.get("model", [""])[0] or "").strip()
+            act = (q.get("action", [""])[0] or "").strip()
+            path = os.path.join(HERE, "state", "disabled.json")
+            try:
+                cur = json.load(open(path))
+            except Exception:
+                cur = {"books": []}
+            books = [b for b in (cur.get("books") or []) if b]
+            if model and act == "stop" and model not in books:
+                books.append(model)
+            elif model and act == "start" and model in books:
+                books.remove(model)
+            with open(path + ".t", "w") as fh:
+                json.dump({"books": books, "ts": int(time.time() * 1000)}, fh)
+            os.replace(path + ".t", path)
+            return self._send(200, json.dumps({"ok": True, "disabled": books}),
+                              "application/json")
+        if p == "/api/forecast":
+            try:
+                q = urllib.parse.urlparse(self.path).query
+                d = jget("http://127.0.0.1:8790/forecast" + ("?" + q if q else ""), timeout=8.0)
+                return self._send(200, json.dumps(d), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/forecast_matrix":
+            import urllib.parse as _up
+            q = _up.parse_qs(_up.urlparse(self.path).query)
+            n = int(q.get("n", ["12"])[0])
+            syms, sides = [], {}
+            try:
+                for b in jget(base + "/api/all", timeout=8.0).get("engines") or []:
+                    for pos in (b.get("positions") or [])[:2]:
+                        s2 = pos.get("symbol")
+                        if s2 and s2 not in sides:
+                            sides[s2] = (pos.get("side") or "buy").lower()
+            except Exception:
+                pass
+            try:
+                with open(os.path.join(HERE, "state", "signals.json")) as fh:
+                    for row in (json.load(fh).get("rows") or [])[:n]:
+                        s2 = row.get("symbol")
+                        if s2 and s2 not in sides:
+                            sides[s2] = "buy" if (row.get("score") or 0) >= 0 else "sell"
+            except Exception:
+                pass
+            out = []
+            for sym, side in list(sides.items())[:n]:
+                try:
+                    f = jget("http://127.0.0.1:8790/forecast?symbol=%s&side=%s&horizon=3600"
+                             % (sym, side), timeout=12.0)
+                    out.append(f)
+                except Exception:
+                    continue
+            return self._send(200, json.dumps({"forecasts": out, "n": len(out)}),
+                              "application/json")
+        if p == "/api/forecast_state":
+            try:
+                d = jget("http://127.0.0.1:8790/state", timeout=6.0)
+                return self._send(200, json.dumps(d), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
         if p == "/api/opportunities":

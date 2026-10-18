@@ -7,3 +7,5 @@ scalp5/*.log
 *.tmp
 dist/*.bundle
 dist/trading-platform.patch
+scalp5/logs/
+scalp5/*.jsonl

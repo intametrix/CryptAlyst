@@ -1,8 +1,0 @@
-08:00:06  STATS MODELS -- PAPER ONLY | 5 fitted models | need 2 agreeing
-08:00:06  OLS slope/R2 · z-score · online logistic (SGD) · autocorrelation · squeeze breakout
-08:00:06  universe 7: BTCUSDT, ETHUSDT, ZECUSDT, SOLUSDT, NEARUSDT, XRPUSDT, BNBUSDT
-08:00:10  >>> SELL ZECUSDT      @ 1128.05     votes -3 [ols_trend,logistic,autocorr]
-08:00:10  >>> SELL SOLUSDT      @ 103.51      votes -3 [ols_trend,logistic,autocorr]
-08:00:10  >>> SELL ETHUSDT      @ 2411.24     votes -3 [ols_trend,logistic,autocorr]
-08:00:10  >>> SELL BTCUSDT      @ 81734.45    votes -2 [ols_trend,logistic]
-08:00:20  >>> SELL BNBUSDT      @ 719.41      votes -2 [ols_trend,logistic]

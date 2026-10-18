@@ -1,0 +1,134 @@
+{
+ "ts": 1792323670243,
+ "slow_s": 2.0,
+ "views": [
+  {
+   "view": "dash",
+   "body": "sections",
+   "size": 25248,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "thinking",
+   "body": "thbody",
+   "size": 64,
+   "shown": "none",
+   "errors": 0,
+   "ok": false
+  },
+  {
+   "view": "busview",
+   "body": "busbody",
+   "size": 60,
+   "shown": "none",
+   "errors": 0,
+   "ok": false
+  },
+  {
+   "view": "moversview",
+   "body": "movers",
+   "size": 7949,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "marketlive",
+   "body": "mlbody",
+   "size": 28281,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "forecast",
+   "body": "fcbody",
+   "size": 3222,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "advisor",
+   "body": "advboard",
+   "size": 17004,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "signals",
+   "body": "signalsbody",
+   "size": 46968,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "tape",
+   "body": "tapebody",
+   "size": 116770,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "models",
+   "body": "modelsbody",
+   "size": 16428,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "opt",
+   "body": "optbody",
+   "size": 3676,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "lb",
+   "body": "lbbody",
+   "size": 17438,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "control",
+   "body": "cbody",
+   "size": 4247,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "review",
+   "body": "rbody",
+   "size": 9296,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "why",
+   "body": "wbody",
+   "size": 7721,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "health",
+   "body": "healthbody",
+   "size": 3196,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  }
+ ]
+}

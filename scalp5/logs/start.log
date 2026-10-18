@@ -1,7 +1,0 @@
-starting paper trading
-  backend      started :8787
-  timeframes  skipped (set WITH_TIMEFRAMES=1 to enable)
-
-  dashboard    http://127.0.0.1:8799
-  chart        http://127.0.0.1:8799/chart
-  chart lab    http://127.0.0.1:8801/chart_simple.html

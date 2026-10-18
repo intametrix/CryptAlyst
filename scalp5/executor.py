@@ -17,9 +17,38 @@ trip, which is the point: it books the spread rather than donating it.
     python3 executor.py --risk 2.5 --lock 0.25
 """
 import argparse, json, os, time, urllib.request
+import tactics as T
+import risk
 
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 MASTER = "http://127.0.0.1:8799"; SPOT = "https://api.binance.com"; FEE = 0.001
+FC_API = "http://127.0.0.1:8790"
+BUS = "http://127.0.0.1:8793"
+_bus = {"cur": 0}
+
+
+def bus_alerts():
+    try:
+        d = jget(BUS + "/latest?since=%d" % _bus["cur"], 2)
+    except Exception:
+        return []
+    _bus["cur"] = d.get("cursor") or _bus["cur"]
+    return d.get("signals") or []
+FC_CACHE = {}
+
+
+def forecast(sym, side):
+    """The Go supervisor's blended view: probability, expected move, action."""
+    key = (sym, side)
+    hit = FC_CACHE.get(key)
+    if hit and time.time() - hit[0] < 3:
+        return hit[1]
+    try:
+        d = jget(FC_API + "/forecast?symbol=%s&side=%s&horizon=3600" % (sym, side), 5)
+    except Exception:
+        return None
+    FC_CACHE[key] = (time.time(), d)
+    return d
 TA_CACHE = {}          # symbol -> (ts, bars)
 TA_TTL = 12.0
 
@@ -96,7 +125,7 @@ def main():
     ap.add_argument("--clock", type=float, default=120)
     ap.add_argument("--max-pos", type=int, default=20)
     ap.add_argument("--min-score", type=float, default=0.20)
-    ap.add_argument("--min-alert", type=float, default=75.0,
+    ap.add_argument("--min-alert", type=float, default=60.0,
                     help="only PUMP/DUMP alerts at or above this confidence")
     ap.add_argument("--start", type=float, default=5000.0)
     a = ap.parse_args()
@@ -137,16 +166,25 @@ def main():
             for other in pos.values():
                 pass
             reason = None
-            if chg >= a.lock:
+            if chg >= max(a.lock, 0.45):
                 reason = "lock"
-            elif chg >= 0.30 and held >= 2.5:
+            elif chg >= 0.32 and held >= 2.5:
                 reason = "skim"
             elif p["peak"] >= a.trail_arm and chg <= p["peak"] - a.trail_gap:
                 reason = "trail"
-            elif chg <= -0.90:
-                reason = "hard_stop"
-            elif held >= max(a.clock, 300):
+
+            elif held >= max(a.clock, 900):
                 reason = "clock"
+            if reason is None and held > 20 and chg < 0:
+                # a loser is only closed when the agents agree it is dead
+                fc = forecast(sym, p["side"])
+                dead, n = T.consensus_dead(fc)
+                if dead:
+                    reason = "consensus_exit"
+            if reason is None and held > 5 and chg > 0:
+                fc = forecast(sym, p["side"])
+                if fc and (fc.get("prob") or 0) < 0.40:
+                    reason = "forecast_flip"
             if reason:
                 net = chg - 200 * FEE
                 equity += p["notional"] * net / 100
@@ -157,13 +195,22 @@ def main():
                                "notional": round(p["notional"], 2),
                                "entry_ms": int(p["t"] * 1000), "exit_ms": int(now * 1000),
                                "why": p["why"]})
+                T.grade(p.get("views"), net > 0)
                 pos.pop(sym, None)
                 print("%s  CLOSE %-11s %-4s %+6.3f%% net %+6.3f%% %s" %
                       (time.strftime("%H:%M:%S"), sym, p["side"], chg, net, reason), flush=True)
 
+        try:
+            kill = set(json.load(open(os.path.join(STATE, "disabled.json"))).get("books") or [])
+        except Exception:
+            kill = set()
+        if "executor" in kill:
+            px = px or {}
         # ---- entries straight off the advisor board
         for sym, r in sorted(board.items(), key=lambda kv: -kv[1]["score"]):
             if len(pos) >= a.max_pos:
+                break
+            if "executor" in kill:
                 break
             if sym in pos or r["score"] < a.min_score or not px.get(sym):
                 continue
@@ -175,14 +222,39 @@ def main():
                 continue                      # not a high-confidence pump/dump
             if "PUMP" in why: side = "buy"
             else: side = "sell"
-            conf, tawhy = ta_check(sym, side)
-            if conf < 2:
+            _book_eq = pos[0]["notional"] * 0 if False else 5000.0
+            _notional = min(_book_eq * a.risk / 100 * 40, _book_eq * 0.08)
+            _ok, _why = risk.allow(sym, side, _notional, 5000,
+                                   (fc or {}).get("move_pct") if 'fc' in dir() else None,
+                                   (T.ext_signals(sym) or {}).get("slippage_bps_5k"))
+            risk.record(sym, side, _ok, _why)
+            if not _ok:
                 continue
+            conf, tawhy = ta_check(sym, side)
+            tf, ta_against = T.ta_vote(sym, side)
+            if tf: conf += 1; tawhy += ", ta+%d" % tf
+            if ta_against >= 3: continue
+            if conf < T.min_confirmations(side):
+                continue          # fighting the BTC drift needs more evidence
+            fc = forecast(sym, side)
+            if fc:
+                ok, sc = T.ext_gate(sym, side)
+                if not ok:
+                    continue
+                o = T.options()
+                if fc and o.get("forecast_gate"):
+                    if (fc.get("prob") or 0) < float(o.get("forecast_min", 0.45)):
+                        continue
+                    if (fc.get("move_pct") or 0) < float(o.get("min_expected_move", 0.0)):
+                        continue          # the supervisor does not like this direction
+                pass
             risk_here = a.risk * (0.6 + 0.2 * min(conf, 4))
             notional = min(equity * (risk_here / 100) / (a.stop / 100), equity * 3)
             pos[sym] = {"side": side, "entry": px[sym], "t": now, "notional": notional,
                         "peak": 0.0, "conf": conf, "risk": round(risk_here, 2),
-                        "why": "TA%d[%s] · %s" % (conf, tawhy, r.get("why") or "")}
+                        "views": (fc or {}).get("views") or [],
+                        "why": "TA%d[%s] fcst %.2f · %s" % (
+                            conf, tawhy, (fc or {}).get("prob") or 0, r.get("why") or "")}
             opened += 1
             print("%s  OPEN  %-11s %-4s %.6g  TA%d risk %.1f%%  %s" %
                   (time.strftime("%H:%M:%S"), sym, side, px[sym], conf, risk_here, tawhy), flush=True)

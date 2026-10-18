@@ -103,7 +103,17 @@ PAGE = r"""<!doctype html>
         wheel: zoom time · shift+wheel: zoom price · double-click: reset<br>
         <b>trackpad</b> — two-finger: pan · pinch: zoom</div>
     </div>
-    <svg id="svg" viewBox="0 0 1200 470" preserveAspectRatio="none"></svg>
+    <div id="chartbar" style="position:relative">
+      <div style="position:absolute;left:8px;top:6px;z-index:5;display:flex;gap:6px;align-items:center">
+        <button class="chip" onclick="zoomX((PL+W-PR)/2,(S.c||DATA.length)*0.65)" title="zoom in (+)">+</button>
+        <button class="chip" onclick="zoomX((PL+W-PR)/2,(S.c||DATA.length)*1.55)" title="zoom out (−)">−</button>
+        <button class="chip" onclick="resetAll()" title="reset (0)">reset</button>
+        <button class="chip" onclick="zoomY(H/2,1)" title="reset price axis (y)">price</button>
+        <span class="hint" style="margin-left:8px">drag a box to zoom · shift-drag to pan · wheel zooms time · shift+wheel zooms price</span>
+      </div>
+      <svg id="svg" viewBox="0 0 1200 470" preserveAspectRatio="none"
+           style="width:100%;height:470px;display:block;touch-action:none;cursor:crosshair"></svg>
+    </div>
     <div class="legend" id="legend"></div>
     <div class="hint">drag a box to zoom both axes · measure tool draws Δ% / bars / time</div>
   </div>
@@ -495,6 +505,18 @@ function wire(){
     zoomX(viewX(e.clientX),(S.c||DATA.length)*(e.deltaY>0?1.12:0.89));
   },{passive:false});
   svg.addEventListener("dblclick",resetAll);
+  // cursor tells you which gesture you are about to perform
+  svg.addEventListener("pointermove",function(e){
+    if(G.pts.size) { svg.style.cursor = (G.mode==="pan") ? "grabbing" : "crosshair"; }
+    else { svg.style.cursor = e.shiftKey ? "grab" : "crosshair"; }
+  });
+  document.addEventListener("keydown",function(e){
+    if(!document.body.contains(svg)) return;
+    if(e.key==="+"||e.key==="="){ zoomX((PL+W-PR)/2,(S.c||DATA.length)*0.7); e.preventDefault(); }
+    else if(e.key==="-"){ zoomX((PL+W-PR)/2,(S.c||DATA.length)*1.4); e.preventDefault(); }
+    else if(e.key==="0"||e.key==="r"||e.key==="R"){ resetAll(); e.preventDefault(); }
+    else if(e.key==="y"||e.key==="Y"){ S.y=null; render(); e.preventDefault(); }
+  });
   document.addEventListener("keydown",function(e){
     if(e.key==="Escape"){ MEAS=null; closeCtl(); render(); }
   });
