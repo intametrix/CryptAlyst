@@ -39,6 +39,69 @@ _META = {"at": 0.0, "rows": {}}
 
 UNI800 = {"ts": 0, "rows": []}
 SPARK = {"ts": 0, "data": {}}
+METRIC_CACHE = {"ts": 0, "data": {}}
+METRIC_HIST = {}     # symbol -> {"price":[], "volume":[], "risk":[], "liquidity":[], "forecast":[]}
+METRIC_MAX = 40
+
+
+def metric_sample(n=30):
+    """One sample of the five metrics per liquid symbol, appended to a ring buffer."""
+    if METRIC_CACHE["data"] and (time.time() - METRIC_CACHE["ts"]) < 10:
+        return METRIC_CACHE["data"]
+    rows = universe800(800)[:n]
+    try:
+        votes = jget("http://127.0.0.1:8787/api/models/signals?limit=400", timeout=8).get("signals") or []
+    except Exception:
+        votes = []
+    fmap = {}
+    for v in votes:
+        sym = v.get("symbol")
+        if not sym:
+            continue
+        d = (v.get("direction") or "").upper()
+        fmap[sym] = fmap.get(sym, 0) + (1 if ("BUY" in d or "PUMP" in d) else -1)
+    def fetch(sym):
+        try:
+            return sym, jget("https://api.binance.com/api/v3/klines?symbol=%s&interval=1m&limit=60"
+                             % sym, timeout=6.0)
+        except Exception:
+            return sym, None
+
+    from concurrent.futures import ThreadPoolExecutor
+    syms = [r.get("s") for r in rows if r.get("s")]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        fetched = dict(pool.map(fetch, syms))
+
+    out = {}
+    for r in rows:
+        sym = r.get("s")
+        if not sym:
+            continue
+        d = fetched.get(sym)
+        if not d:
+            continue
+        cl = [float(x[4]) for x in d]
+        vol = [float(x[5]) for x in d]
+        if len(cl) < 20:
+            continue
+        trs = [max(float(d[i][2]) - float(d[i][3]),
+                   abs(float(d[i][2]) - float(d[i - 1][4])),
+                   abs(float(d[i][3]) - float(d[i - 1][4]))) for i in range(1, len(d))]
+        atr = sum(trs[-14:]) / max(1, len(trs[-14:]))
+        risk = 100 * atr / cl[-1] if cl[-1] else 0.0
+        liq = (r.get("v") or 0) / 1e6
+        h = METRIC_HIST.setdefault(sym, {"price": [], "volume": [], "risk": [],
+                                         "liquidity": [], "forecast": []})
+        h["price"].append(round(cl[-1], 8))
+        h["volume"].append(round(sum(vol[-15:]) / 15.0, 2))
+        h["risk"].append(round(risk, 4))
+        h["liquidity"].append(round(liq, 2))
+        h["forecast"].append(fmap.get(sym, 0))
+        for k in h:
+            h[k] = h[k][-METRIC_MAX:]
+        out[sym] = dict(h)
+    METRIC_CACHE["ts"], METRIC_CACHE["data"] = time.time(), out
+    return out
 
 
 def sparklines(n=24, interval="1m", limit=60):
@@ -156,6 +219,24 @@ def trading_loop_state():
         alive[name] = r.returncode == 0
     TRADING_STATE["alive"] = alive
     return TRADING_STATE
+
+
+def metric_loop(every=15.0, n=30):
+    """Sample the five metrics on a timer so sparkline history fills even with
+    nobody watching, and so the cache is always warm when the UI asks."""
+    import threading
+
+    def run():
+        while True:
+            try:
+                metric_sample(n)
+            except Exception:
+                pass
+            time.sleep(every)
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    return t
 
 
 def ticker_loop():
@@ -444,7 +525,7 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
  .section > h2{margin:0 0 10px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;
                color:var(--dim);display:flex;align-items:center;gap:10px}
  .section > h2:after{content:"";flex:1;height:1px;background:var(--line)}
- .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+ .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:var(--gap)}
  .card{min-height:0;max-height:520px;overflow:auto}
  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;
        padding:14px 16px;display:flex;flex-direction:column;min-width:0}
@@ -817,6 +898,33 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   .cmhead{display:flex;align-items:center;gap:12px;padding:9px 14px;background:#101923;
           border-bottom:1px solid #1b2836}
   .cmhead b{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#8494a8}
+  :root{--gap:14px;--pad:14px 16px;--r:10px}
+  .wrap{padding:18px 22px 40px;max-width:1680px}
+  .panel{background:#0f1620;border:1px solid #1b2632;border-radius:var(--r);padding:var(--pad);margin-bottom:var(--gap)}
+  .mhead{display:flex;align-items:center;gap:10px;margin:-2px 0 10px}
+  .mhead .sym{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#8fa3b8;font-weight:700}
+  .ctitle{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#6b7c90;margin-bottom:8px;font-weight:600}
+  .dashgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--gap);align-items:start;margin-bottom:var(--gap)}
+  @media(max-width:1200px){.dashgrid{grid-template-columns:minmax(0,1fr)}}
+  .totals{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:var(--gap)}
+  .kpi{background:#0f1620;border:1px solid #1b2632;border-radius:var(--r);padding:12px 14px}
+  .kpi .k{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#5f7186}
+  .kpi .v{font-family:var(--mono);font-size:19px;font-weight:700;margin-top:4px;color:#e6edf6}
+  .wide{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+  .wide th{text-align:right;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:#59677a;padding:0 8px 8px;font-weight:600;white-space:nowrap}
+  .wide td{padding:6px 8px;border-top:1px solid #16202b;vertical-align:middle}
+  .wide tbody tr:hover{background:#131d28}
+  .lbbar{height:5px;border-radius:3px;background:#16202b;overflow:hidden;display:block}
+  .lbbar i{display:block;height:100%}
+.mblock{display:flex;gap:4px;align-items:flex-end;overflow:hidden;width:186px}
+.mcell{display:flex;flex-direction:column;align-items:center;gap:1px;width:34px;flex:0 0 34px}
+.mlab{font-size:6.5px;color:#3d4d5f;letter-spacing:.06em}
+.advrow{display:grid;grid-template-columns:82px 186px minmax(0,1fr) 44px;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid #131c26}
+.advrow>span.reason{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7c8b9d}
+.advrow>span.score{text-align:right}
+.taperow{display:grid;grid-template-columns:54px 58px 64px 46px 96px minmax(0,1fr);gap:6px;align-items:center;padding:3px 0;border-bottom:1px solid #131c26}
+.taperow>span.reason{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#7c8b9d}
+@media(max-width:1400px){.advrow{grid-template-columns:80px minmax(0,1fr) 50px}.advrow .mblock{display:none}.taperow{grid-template-columns:52px 56px minmax(0,1fr) 46px 76px}}
 #rail{position:fixed;left:0;top:0;bottom:0;width:186px;background:linear-gradient(180deg,#0c1219,#0a0e13);
  border-right:1px solid #1c2836;display:flex;flex-direction:column;z-index:50}
 #rail-btn{}
@@ -893,19 +1001,21 @@ header{margin-left:186px}
 <div class="wrap">
   <div class="totals" id="totals" style="margin:0 -20px 0"></div>
   <div id="dash">
-    <div class="panel" style="margin-bottom:12px">
+    <div class="dashgrid">
+    <div class="panel" style="margin-bottom:0">
       <div class="mhead"><span class="sym">advisor</span>
         <span class="mk">what the agent is flagging now</span>
         <span style="flex:1"></span>
         <button class="tbtn" onclick="showTab('advisor')">open advisor</button></div>
       <div id="dashadv" style="font-family:var(--mono);font-size:11.5px"></div>
     </div>
-    <div class="panel" style="margin-bottom:12px">
+    <div class="panel" style="margin-bottom:0">
       <div class="mhead"><span class="sym">live tape</span>
         <span class="mk">every fill, newest first</span>
         <span style="flex:1"></span><span class="mk" id="tapen">—</span>
         <button class="tbtn" onclick="showTab('tape')" style="margin-left:8px">open full tape</button></div>
       <div id="tapestrip" style="max-height:190px;overflow:auto;font-family:var(--mono);font-size:11.5px"></div>
+    </div>
     </div>
     <div class="gctl">
       <div class="gtitle">Global controls
@@ -1093,7 +1203,8 @@ function renderControl(){
     if(!keys.length) return "";
     return '<div class="panel" style="margin-top:12px">'+
       '<div class="rchead"><span style="color:'+e.colour+'">'+esc(e.key)+'</span>'+
-      '<span class="mk">'+keys.length+' rules</span>'+
+      '<span style="margin-left:6px">'+engSpark(e.key,64,15)+'</span>'+
+      '<span class="mk" style="margin-left:8px">'+engSpark(e.key,70,15)+'</span>'+
       '<label style="margin-left:auto;display:flex;align-items:center;gap:7px;font-size:11px;color:#8494a8;cursor:pointer">'+
         '<input type="checkbox" '+(st.enabled===0?'':'checked')+
         ' onchange="setTrading(\''+esc(e.key)+'\',this.checked)" style="width:14px;height:14px;accent-color:#3fb950">'+
@@ -1638,7 +1749,8 @@ async function renderModels(){
   box.innerHTML=Object.keys(fams).map(function(f){
     return '<div class="panel" style="margin-bottom:12px">'+
       '<div class="ctitle">'+esc(f)+' models</div>'+
-      '<table class="wide" style="width:100%"><tbody>'+
+      '<table class="wide" style="width:100%"><thead><tr><th>model</th><th>book</th>'+
+      '<th>votes</th><th>split</th><th>parent</th></tr></thead><tbody>'+
       fams[f].map(function(m){
         var w=Math.round(100*(m.votes||0)/maxV);
         var col=m.family==="signal"?"#39d353":m.family==="statistical"?"#f778ba":"#58a6ff";
@@ -1647,6 +1759,7 @@ async function renderModels(){
           : '<span class="mk">votes</span>';
         return '<tr class="sigrow" style="cursor:pointer" onclick="drillEngine(\''+esc(m.parent)+'\')">'+
           '<td style="color:'+col+';font-family:var(--mono);width:170px">'+esc(m.name)+'</td>'+
+          '<td style="width:70px">'+engSpark(m.parent,64,15)+'</td>'+
           '<td style="width:45%"><div class="lbbar"><i style="width:'+w+'%;background:'+col+'"></i></div></td>'+
           '<td style="text-align:right;font-family:var(--mono);width:70px">'+(m.votes||0)+'</td>'+
           '<td style="text-align:right;width:150px">'+split+'</td>'+
@@ -1888,6 +2001,7 @@ function reviewCard(e){
      {label:"high 6%+",lo:6,hi:999,what:"volatility"}]);
   return `<div class="rcard">
     <div class="rchead"><span style="color:${e.colour}">${esc(e.key)}</span>
+      <span style="margin-left:8px">${engSpark(e.key,72,16)}</span>
       <span class="mk">${ts.length} closed</span>
       <span class="${(e.return_pct||0)>=0?'up':'down'}" style="margin-left:auto;font-family:var(--mono)">
         ${pctOr(e.return_pct)}</span></div>
@@ -2102,7 +2216,8 @@ async function renderWhy(){
   const withDec=trades.filter(t=>t.decision).length;
   $("wnote").textContent=`${trades.length} trades · ${withDec} with structured decisions`;
   $("wbody").innerHTML=`
-    <div class="section"><h2>Gate funnel — where candidates die</h2>
+    <div class="section"><h2>Gate funnel — where candidates die
+      <span style="margin-left:10px;vertical-align:middle">${symbolSpark(sym,90,18)}</span></h2>
       <div class="panel fgrid">${funnelView()}</div></div>
     <div class="section"><h2>Decision ribbon — ${esc(sym)}</h2>
       <div class="panel">${ribbon()}</div></div>
@@ -2247,6 +2362,8 @@ function tapeSort(col){
 }
 async function renderAdvisor(){
   var th=$("advthoughts"), bd=$("advboard"), note=$("advnote");
+  if(!Object.keys(SPARKC).length) await refreshSparks();
+  if(!Object.keys(METRICS).length) await refreshMetrics();
   try{
     var d=await (await fetch("/api/opportunities",{cache:"no-store"})).json();
     var ts=d.thoughts||[], rows=d.opportunities||[];
@@ -2258,7 +2375,9 @@ async function renderAdvisor(){
       return '<div style="display:grid;grid-template-columns:52px 1fr;gap:10px;padding:3px 0;'+
         'border-bottom:1px solid #131c26;font-family:var(--mono);font-size:11.5px">'+
         '<span style="color:'+c+';font-weight:700">'+esc(t.kind)+'</span>'+
-        '<span style="color:#9fb0c4">'+esc(t.text)+'</span></div>';
+        '<span style="color:#9fb0c4;display:flex;align-items:center;gap:8px">'+
+          (t.sym?symbolSpark(t.sym,56,14):'')+
+          '<span>'+esc(t.text)+'</span></span></div>';
     }).join("")||'<div class="hint">waiting for the first cycle…</div>';
     bd.innerHTML='<table class="wide" style="width:100%"><thead><tr><th>symbol</th><th>spark</th>'+
       '<th>score</th><th>alert</th><th>funding</th><th>oi</th><th>book</th>'+
@@ -2269,7 +2388,7 @@ async function renderAdvisor(){
         return '<tr'+(flagged?' style="background:#0f1a14"':'')+'>'+
           '<td style="font-weight:700;cursor:pointer" onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+
             esc(r.symbol)+'</td>'+
-          '<td>'+symbolSpark(r.symbol,60,16)+'</td>'+
+          '<td>'+metricBlock(r.symbol)+'</td>'+
           '<td style="color:'+(r.score>0.45?"#3fb950":r.score>0.3?"#d29922":"#58a6ff")+'">'+
             r.score.toFixed(3)+'</td>'+
           ['alert','funding','oi','imbal','move','depth'].map(function(k){
@@ -2319,18 +2438,51 @@ async function renderPending(){
     }).join("");
   }catch(e){ el.innerHTML=''; }
 }
-var SPARKC={};
+var SPARKC={}, METRICS={}, METRICS_TS=0;
+async function refreshMetrics(){
+  try{
+    var d=await (await fetch("/api/metrics?n=30",{cache:"no-store"})).json();
+    METRICS=d.series||{}; METRICS_TS=d.ts||Date.now();
+  }catch(e){}
+}
+function metricSpark(sym, metric, colour, w, h){
+  var m=METRICS[sym]||{}, vals=m[metric]||[];
+  if(vals.length<2) return '<span style="display:inline-block;width:'+(w||52)+'px;height:'+(h||11)+'px;border-bottom:1px solid #1a2430"></span>';
+  var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals), rng=(hi-lo)||1;
+  var pts=vals.map(function(v,i){
+    var x=(i/(vals.length-1))*(w||52);
+    var y=(h||11)-1-((v-lo)/rng)*((h||11)-2);
+    return x.toFixed(1)+','+y.toFixed(1);
+  }).join(" ");
+  return '<svg width="'+(w||52)+'" height="'+(h||11)+'" style="display:block">'+
+    '<polyline points="'+pts+'" fill="none" stroke="'+colour+'" stroke-width="1.1"/></svg>';
+}
+function metricBlock(sym){
+  var cols={price:"#58a6ff",volume:"#a371f7",risk:"#f85149",liquidity:"#3fb950",forecast:"#e3b341"};
+  var labels=[["price","PRICE"],["volume","VOL"],["risk","RISK"],["liquidity","LIQ"],["forecast","FCST"]];
+  return '<div class="mblock">'+labels.map(function(l){
+    return '<div class="mcell"><span class="mlab">'+l[1]+'</span>'+
+      metricSpark(sym,l[0],cols[l[0]],32,10)+'</div>';
+  }).join("")+'</div>';
+}
 async function refreshSparks(){
   try{
-    var d=await (await fetch("/api/sparklines?n=30",{cache:"no-store"})).json();
+    var d=await (await fetch("/api/sparklines?n=40",{cache:"no-store"})).json();
     SPARKC=d.series||{};
   }catch(e){}
+}
+function engSpark(key, w, h){
+  return sparkSVG((HIST[key]||[]).slice(-40), w||62, h||15);
 }
 function symbolSpark(sym, w, h){
   return sparkSVG(SPARKC[sym], w||64, h||16);
 }
 function sparkSVG(vals, w, h){
-  if(!vals || vals.length < 2) return '<span style="color:#33414f">—</span>';
+  if(!vals || vals.length < 2){
+    return '<span style="display:inline-block;width:'+(w||60)+'px;height:'+(h||16)+'px;'+
+      'border-bottom:1px solid #22303d;color:#33414f;font-size:9px;line-height:'+(h||16)+'px">'+
+      '</span>';
+  }
   var lo=Math.min.apply(null,vals), hi=Math.max.apply(null,vals), rng=(hi-lo)||1;
   var pts=vals.map(function(v,i){
     var x=(i/(vals.length-1))*w;
@@ -2361,7 +2513,7 @@ async function renderSignals(){
     return '<tr class="sigrow" style="cursor:pointer" onclick="drillChart(\''+esc(t.s)+'\',null)" '+
       'title="open '+esc(t.s)+' chart">'+
       '<td style="font-weight:600">'+esc(t.s)+'</td>'+
-      '<td>'+sparkSVG(sparks[t.s],72,18)+'</td>'+
+      '<td>'+metricBlock(t.s)+'</td>'+
       '<td>'+(t.price?Number(t.price).toPrecision(7):'—')+'</td>'+
       '<td class="'+(chg>=0?'up':'down')+'">'+(chg>=0?'+':'')+Number(chg).toFixed(2)+'%</td>'+
       '<td>'+(t.v?('$'+(t.v/1e6).toFixed(1)+'M'):'—')+'</td>'+
@@ -2414,9 +2566,12 @@ async function dashAdv(){
     var f=d.flagged||[], rows=(d.opportunities||[]).filter(function(r){return f.indexOf(r.symbol)>=0;});
     el.innerHTML=rows.slice(0,6).map(function(r){
       var col=r.score>0.45?"#3fb950":"#d29922";
-      return '<div style="display:grid;grid-template-columns:96px 1fr 70px;gap:10px;padding:2px 0">'+
-        '<b>'+esc(r.symbol)+'</b><span style="color:#7c8b9d">'+esc(r.why)+'</span>'+
-        '<span style="color:'+col+';text-align:right">'+r.score.toFixed(2)+'</span></div>';
+      return '<div class="advrow">'+
+        '<b style="cursor:pointer" onclick="drillChart(\''+esc(r.symbol)+'\',null)">'+
+          esc(r.symbol)+'</b>'+
+        metricBlock(r.symbol)+
+        '<span class="reason">'+esc(r.why)+'</span>'+
+        '<span class="score" style="color:'+col+'">'+r.score.toFixed(2)+'</span></div>';
     }).join("")||'<span class="hint">agent warming up…</span>';
   }catch(e){}
 }
@@ -2455,14 +2610,13 @@ async function tape(){
     document.getElementById("tapen").textContent=f.length?"last "+f[0].t:"—";
     el.innerHTML=f.map(function(x){
       var col=x.kind==="open"?(x.side==="BUY"?"#3fb950":"#f85149"):"#58a6ff";
-      return '<div style="display:grid;grid-template-columns:64px 78px 58px 92px 1fr;gap:8px;'+
-        'padding:3px 0;border-bottom:1px solid #131c26">'+
+      return '<div class="taperow">'+
         '<span style="color:#5f7186">'+x.t+'</span>'+
+        '<span>'+symbolSpark(x.sym,60,14)+'</span>'+
         '<span style="color:#8095ab">'+x.src+'</span>'+
         '<span style="color:'+col+';font-weight:700">'+x.side+'</span>'+
-        '<span>'+x.sym+'</span>'+
-        '<span style="color:#7c8b9d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
-          (x.kind==="close"?"● closed · ":"")+esc(x.why)+'</span></div>';
+        '<span style="cursor:pointer" onclick="drillChart(\''+x.sym+'\',null)">'+x.sym+'</span>'+
+        '<span class="reason">'+((x.kind==="close")?"● ":"")+esc(x.why)+'</span></div>';
     }).join("")||'<div class="hint">no fills yet</div>';
   }catch(e){}
 }
@@ -2494,7 +2648,7 @@ async function tick(){
   // totals across engines
   const alive=es.filter(e=>e.alive&&e.equity!=null);
   const eq=alive.reduce((a,e)=>a+(e.equity||0),0);
-  const base=alive.length*2000;
+  const base=alive.reduce((a,e)=>a+(e.start_equity||2000),0);
   const real=alive.reduce((a,e)=>a+(e.realised||0),0);
   const unreal=alive.reduce((a,e)=>a+(e.unrealised||0),0);
   const open=alive.reduce((a,e)=>a+(e.positions||[]).length,0);
@@ -2802,6 +2956,7 @@ dashAdv(); setInterval(dashAdv,3000);
 railStatus(); setInterval(railStatus,4000);
 totalEquity(); setInterval(totalEquity,4000);
 refreshSparks(); setInterval(refreshSparks,15000);
+refreshMetrics(); setInterval(refreshMetrics,15000);
 renderTape(); setInterval(function(){ if(document.getElementById("tape").classList.contains("on")) renderTape(); },1500);
 renderSignals(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderSignals(); },3000);
 renderOpps(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderOpps(); },2000);
@@ -3202,6 +3357,15 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(d), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/metrics":
+            try:
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                n = int((q.get("n", ["30"])[0]) or 30)
+                data = metric_sample(n)
+                return self._send(200, json.dumps({"series": data, "ts": int(time.time() * 1000)}),
+                                  "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)[:140]}), "application/json")
         if p == "/api/sparklines":
             try:
                 q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -3326,6 +3490,7 @@ def main():
                     help="127.0.0.1 = this machine only, 0.0.0.0 = reachable on the LAN")
     args = ap.parse_args()
     ticker_loop()
+    metric_loop(15.0, 30)
     httpd = ThreadingHTTPServer((args.host, args.port), H)
     print("dashboard on http://%s:%d" % (args.host, args.port), flush=True)
     print("MASTER dashboard: http://127.0.0.1:%d" % args.port, flush=True)
