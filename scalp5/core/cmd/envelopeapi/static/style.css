@@ -251,3 +251,8 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
 .ctx-btn{background:#0a121b;border:1px solid var(--line);color:var(--dim);border-radius:7px;
   padding:5px 10px;font-size:11px;cursor:pointer}
 .ctx-btn:hover{border-color:var(--accent);color:var(--fg)}
+
+.crumb.back{font-size:13px;line-height:1;padding:4px 9px;color:var(--fg);border:1px solid var(--line);
+  background:#0a121b;border-radius:7px}
+.crumb.back:hover:not(:disabled){border-color:var(--accent);background:#101a26}
+.crumb.back:disabled{opacity:.3;cursor:default}

@@ -168,6 +168,7 @@ async function select(id, quiet) {
     $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
   }
   updateTabs();
+  updateBackBtn();
   const picked2 = state.docs.find((x) => x.id === id);
   if (picked2) {
     $("crumbHere").textContent = `${picked2.key || picked2.topic} · ${picked2.topic}`;
@@ -863,6 +864,7 @@ function pushState() {
   if (restoring) return;
   viewStack.push(snapshotState());
   if (viewStack.length > 60) viewStack.shift();
+  updateBackBtn();
 }
 
 async function restoreState(snap) {
@@ -883,6 +885,7 @@ async function restoreState(snap) {
     if ($("exScroll")) $("exScroll").scrollLeft = snap.exScroll || 0;
   } finally {
     restoring = false;
+    updateBackBtn();
   }
 }
 
@@ -927,8 +930,11 @@ document.querySelectorAll(".tab").forEach((tab) => {
 
 // Escape is "back": it pops the view stack, and when there is nothing to pop it
 // clears the selected envelope.
-document.addEventListener("keydown", (ev) => {
-  if (ev.key !== "Escape") return;
+function canGoBack() {
+  return viewStack.length > 0 || state.sel != null;
+}
+
+function goBack() {
   if (viewStack.length) {
     restoreState(viewStack.pop());
   } else if (state.sel != null) {
@@ -936,8 +942,22 @@ document.addEventListener("keydown", (ev) => {
     state.journeyKey = "";
     renderRows();
     $("detail").innerHTML = '<div class="empty">select an envelope to see its anatomy</div>';
+    $("crumbHere").textContent = "nothing selected";
+    if (state.view !== "list") applyView("list");
+    updateBackBtn();
   }
+}
+
+function updateBackBtn() {
+  const b = $("backBtn");
+  if (b) b.disabled = !canGoBack();
+}
+
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape") { ev.preventDefault(); goBack(); }
 });
+
+if ($("backBtn")) $("backBtn").onclick = () => goBack();
 
 $("role").onchange = (e) => {
   state.role = e.target.value;

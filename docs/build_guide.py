@@ -170,7 +170,9 @@ p("The middle pane is a contextual surface. With nothing selected it is the live
   "the ones that read it, and buttons to the flow and the full trace.")
 p("The bar above it is a breadcrumb — FEED / symbol · topic — not a row of equal tabs. You do not choose a "
   "mode; the selection decides what is worth showing. The deeper views (flow, trace, why) open from the "
-  "context's buttons and return with Escape.")
+  "context's buttons.")
+p("The ← button at the left of the crumb bar is back. It is greyed out when there is nothing to go back to, "
+  "and it is the same action as Escape: one step, restoring the view and the envelope you had selected.")
 
 h("2.2  Resizing: every panel", 2)
 p("Three splitters: one between the filters and the list, one between the list and the detail pane, and one "
@@ -422,6 +424,7 @@ steps([
 brk()
 h("11  Keyboard and quick reference", 1)
 table(["Key or control", "Effect"], [
+    ["← (crumb bar)", "back one step — the same action as Escape"],
     ["Esc", "one step back: the previous view *and* the envelope selected in it; with no history it clears the selection"],
     ["Tab (browser)", "focus the next filter"],
     ["drag splitter", "resize the filters, the list, the detail pane or the timeline"],
