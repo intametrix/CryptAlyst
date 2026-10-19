@@ -168,6 +168,11 @@ async function select(id, quiet) {
     $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
   }
   updateTabs();
+  const picked2 = state.docs.find((x) => x.id === id);
+  if (picked2) {
+    $("crumbHere").textContent = `${picked2.key || picked2.topic} · ${picked2.topic}`;
+  }
+  if (state.view === "list") applyView("context");
 }
 
 /* renderDetail draws one envelope: the three members, the payload and the chain. */
@@ -408,6 +413,84 @@ $("play").onclick = () => {
 const STAGE_LABEL = ["market data", "advisories", "risk & alerts", "decisions", "other"];
 const LANE_LABEL = ["market", "advisories", "risk", "model", "other"];
 let exZoom = 1;
+
+/* The contextual surface: instead of choosing a mode, the selection decides what
+   is relevant — a decision shows why and what it read, an input shows what it fed. */
+async function renderContext() {
+  const box = $("context");
+  const d = state.docs.find((x) => x.id === state.sel);
+  if (!d) { box.innerHTML = ""; return; }
+  const isOutcome = /^model\./.test(d.topic) || d.topic === "risk.state";
+  const html = [];
+
+  // 1 · identity
+  html.push(`<div class="ctx">
+    <h3>${esc(d.topic)}</h3>
+    <div class="big">${esc(d.key || "multi-symbol")} <span class="muted">· ${esc(d.producer || "")} · ${fmtTime(d.ts)}</span></div>
+    <div class="muted">${esc(TOPIC_MEANING[d.topic] || "")}</div>
+  </div>`);
+
+  // 2 · verdict, when the envelope is a decision
+  if (d.topic === "model.decision") {
+    try {
+      const full = await (await fetch("/api/envelope/" + d.id, { cache: "no-store" })).json();
+      let p = full.payload; if (typeof p === "string") p = JSON.parse(p);
+      const inner = (p && p.data) ? p.data : p;
+      const ok = inner.allowed !== false;
+      html.push(`<div class="ctx">
+        <h3>verdict</h3>
+        <div><span class="verdict ${ok ? "yes" : "no"}">${ok ? "traded" : "refused"}</span>
+        <span class="muted">${esc(inner.reason || "ok")}</span></div>
+        <div class="muted" style="margin-top:6px">confidence ${esc(inner.confidence != null ? inner.confidence : "—")}</div>
+      </div>`);
+    } catch (e) {}
+  }
+
+  // 3 · what it read (outcomes) or what read it (inputs)
+  if (isOutcome) {
+    try {
+      const t = await (await fetch("/api/execution?id=" + d.id, { cache: "no-store" })).json();
+      const used = (t.nodes || []).filter((n) => n.age_ms >= 0 && !n.anchor).sort((a, b) => a.stage - b.stage);
+      html.push(`<div class="ctx">
+        <h3>what it read</h3>
+        ${used.length ? `<table><tr><th>stage</th><th>topic</th><th>age</th></tr>
+          ${used.map((n) => `<tr data-id="${n.id}"><td>${LANE_LABEL[n.stage] || n.stage}</td>
+            <td>${esc(n.topic)}</td><td>${Math.round(n.age_ms / 1000)}s</td></tr>`).join("")}</table>`
+          : `<div class="muted">no input envelopes for this symbol in the preceding window</div>`}
+        <div class="ctx-actions"><button class="ctx-btn" id="ctxTrace">open full trace →</button></div>
+      </div>`);
+    } catch (e) {}
+  } else if (d.key) {
+    try {
+      const later = (state.docs || []).filter((x) => x.key === d.key && x.ts > d.ts).slice(-6).reverse();
+      html.push(`<div class="ctx">
+        <h3>what read it next</h3>
+        ${later.length ? `<table><tr><th>topic</th><th>producer</th><th>when</th></tr>
+          ${later.map((n) => `<tr data-id="${n.id}"><td>${esc(n.topic)}</td>
+            <td>${esc(n.producer || "")}</td><td>${fmtTime(n.ts)}</td></tr>`).join("")}</table>`
+          : `<div class="muted">nothing downstream for this symbol yet</div>`}
+      </div>`);
+    } catch (e) {}
+  }
+
+  // 4 · ways out, contextual
+  html.push(`<div class="ctx">
+    <h3>explore</h3>
+    <div class="ctx-actions">
+      <button class="ctx-btn" id="ctxFlow">flow for ${esc(d.key || "all symbols")} →</button>
+      ${d.topic === "model.decision" || /^model\./.test(d.topic)
+        ? `<button class="ctx-btn" id="ctxWhy">why ${esc(d.key || "")} traded or not →</button>` : ""}
+    </div>
+  </div>`);
+
+  box.innerHTML = html.join("");
+  box.querySelectorAll("tr[data-id]").forEach((tr) => {
+    tr.onclick = () => select(Number(tr.dataset.id));
+  });
+  if ($("ctxTrace")) $("ctxTrace").onclick = () => setView("execution");
+  if ($("ctxFlow")) $("ctxFlow").onclick = () => setView("journey");
+  if ($("ctxWhy")) $("ctxWhy").onclick = () => { state.whyKey = d.key || ""; setView("why"); };
+}
 
 /* WHY: did the model trade, and if not, which rule stopped it. */
 async function renderWhy() {
@@ -718,10 +801,11 @@ function drawFlow(d) {
 
 /* Contextual tabs: a view is enabled when the selection can feed it. */
 function updateTabs() {
+  const execTab = document.querySelector('.tab[data-view="execution"]');
+  if (!execTab) return;   // the tab bar became breadcrumbs; chips are contextual now
   const d = state.docs.find((x) => x.id === state.sel);
   const topic = d ? d.topic : "";
   const isOutcome = /^model\./.test(topic) || topic === "risk.state";
-  const execTab = document.querySelector('.tab[data-view="execution"]');
   execTab.classList.toggle("disabled", !isOutcome);
   execTab.title = isOutcome ? "the inputs this outcome read" : "select a decision or a fill first";
   const whyTab = document.querySelector('.tab[data-view="why"]');
@@ -808,7 +892,10 @@ function applyView(view) {
   const rows = $("rows"), journey = $("journey"), panel = document.querySelector(".panel.list");
   const execution = $("execution");
   const why = $("why");
+  const context = $("context");
   rows.classList.toggle("hidden", view !== "list");
+  context.classList.toggle("hidden", view !== "context");
+  if (view === "context") renderContext();
   journey.classList.toggle("hidden", view !== "journey");
   execution.classList.toggle("hidden", view !== "execution");
   why.classList.toggle("hidden", view !== "why");
@@ -829,6 +916,10 @@ function setView(view, remember) {
   if (remember !== false) pushState();
   applyView(view);
 }
+
+document.querySelectorAll(".crumb").forEach((b) => {
+  b.onclick = () => { state.sel = null; renderRows(); applyView("list"); $("crumbHere").textContent = "nothing selected"; };
+});
 
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.onclick = () => setView(tab.dataset.view);

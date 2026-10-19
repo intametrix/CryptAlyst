@@ -89,18 +89,17 @@
   <div class="vsplit" id="vsplit1" title="drag to resize"></div>
 
   <section class="panel list">
-    <div class="tabs">
-      <button class="tab active" data-view="list">envelopes</button>
-      <button class="tab" data-view="journey">journey</button>
-      <button class="tab" data-view="execution">execution</button>
-      <button class="tab" data-view="why">why</button>
+    <div class="crumbs" id="crumbs">
+      <button class="crumb active" data-go="list">feed</button>
+      <span class="crumb-sep">/</span>
+      <span class="crumb-here" id="crumbHere">nothing selected</span>
       <span class="tab-hint">esc · back</span>
-      <span class="tab-key" id="journeyKey">key: —</span>
     </div>
     <div class="list-head">
       <span id="resultCount">—</span>
       <span class="hint">newest first · click to inspect</span>
     </div>
+    <div id="context" class="context hidden"></div>
     <div id="rows" class="rows"></div>
     <div id="why" class="why hidden">
       <div class="ex-head">

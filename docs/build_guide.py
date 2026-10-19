@@ -164,11 +164,13 @@ table(["Region", "What it is for"], [
     ["Right", "the anatomy of the selected envelope: meta, payload, references, chain."],
 ], widths=[1.2, 5.4], size=9)
 
-h("2.1  Four tabs in the middle", 2)
-p("ENVELOPES is a list, one row per message. JOURNEY is a flow diagram of how traffic moves through the "
-  "platform. EXECUTION shows what one outcome read, on a timeline. WHY shows decisions and refusals.")
-p("The tabs are contextual: EXECUTION only lights up when the selected envelope is an outcome (a model "
-  "decision, a fill, or risk state), because there is nothing to trace otherwise. The tab's tooltip says so.")
+h("2.1  Breadcrumbs, not modes", 2)
+p("The middle pane is a contextual surface. With nothing selected it is the live feed. Select an envelope and "
+  "it recomposes around that envelope: its identity, its verdict if it is a decision, the envelopes it read or "
+  "the ones that read it, and buttons to the flow and the full trace.")
+p("The bar above it is a breadcrumb — FEED / symbol · topic — not a row of equal tabs. You do not choose a "
+  "mode; the selection decides what is worth showing. The deeper views (flow, trace, why) open from the "
+  "context's buttons and return with Escape.")
 
 h("2.2  Resizing: every panel", 2)
 p("Three splitters: one between the filters and the list, one between the list and the detail pane, and one "
