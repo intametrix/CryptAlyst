@@ -2,7 +2,7 @@
 const $ = (id) => document.getElementById(id);
 const state = { plane: "", topic: "", key: "", producer: "", cid: "", q: "", docs: [], sel: null,
   live: true, role: "owner", from: 0, to: 0, buckets: [], playing: null, span: 0,
-  view: "list", journeyKey: "" };
+  view: "list", journeyKey: "", whyKey: "", whyEngine: "" };
 
 const TOPIC_MEANING = {
   "ticks": "batched price snapshot across streamed symbols",
@@ -162,6 +162,15 @@ async function select(id) {
   renderRows();
   try {
     const d = await (await fetch("/api/envelope/" + id + "?role=" + encodeURIComponent(state.role), { cache: "no-store" })).json();
+    renderDetail(d);
+  } catch (e) {
+    $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
+  }
+}
+
+/* renderDetail draws one envelope: the three members, the payload and the chain. */
+async function renderDetail(d) {
+  try {
     let payload = d.payload;
     let meta = d.meta || null;
     if (typeof payload === "string") { try { payload = JSON.parse(payload); } catch (e) {} }
@@ -374,6 +383,47 @@ const STAGE_LABEL = ["market data", "advisories", "risk & alerts", "decisions", 
 const LANE_LABEL = ["market", "advisories", "risk", "model", "other"];
 let exZoom = 1;
 
+/* WHY: did the model trade, and if not, which rule stopped it. */
+async function renderWhy() {
+  const params = new URLSearchParams();
+  if (state.whyKey) params.set("key", state.whyKey);
+  if (state.whyEngine) params.set("engine", state.whyEngine);
+  params.set("limit", "80");
+  const d = await (await fetch("/api/why?" + params.toString(), { cache: "no-store" })).json();
+  const allowed = d.allowed || 0, refused = d.refused || 0;
+  $("whyTitle").textContent = `why — ${allowed} traded · ${refused} refused` + (d.key ? " · " + d.key : "");
+  const reasons = d.reasons || [];
+  const max = Math.max(...reasons.map((r) => r.count), 1);
+  $("whyReasons").innerHTML = reasons.length
+    ? `<div style="font-size:9px;color:var(--faint);letter-spacing:.7px;text-transform:uppercase;margin-bottom:8px">why not</div>` +
+      reasons.slice(0, 10).map((r) => `
+        <div class="why-reason"><div class="lbl"><span>${esc(r.reason.split(":")[0])}</span><b>${r.count}</b></div>
+        <div class="bar" style="width:${Math.round((r.count / max) * 100)}%"></div></div>`).join("")
+    : `<div style="color:var(--faint);font-size:11px">no refusals in the scan</div>`;
+  const rows = d.decisions || [];
+  $("whyList").innerHTML = rows.length ? rows.map((x) => `
+    <div class="why-row" data-idx="${rows.indexOf(x)}">
+      <span class="t">${fmtTime(x.ts)}</span>
+      <span>${esc(x.key || "")}</span>
+      <span class="reason" title="${esc(x.reason || "")}">${esc(x.reason || "ok")}</span>
+      <span class="outcome ${x.allowed ? "yes" : "no"}">${x.allowed ? "traded" : "refused"}</span>
+      <span style="color:var(--faint)">${esc((x.engine || "").slice(0, 8))}</span>
+    </div>`).join("") : `<div class="empty" style="padding:24px">no decisions recorded</div>`;
+  $("whyList").querySelectorAll(".why-row").forEach((el) => {
+    const idx = Number(el.dataset.idx);
+    el.onclick = () => {
+      const row = rows[idx];
+      if (row && row.payload) {
+        renderDetail({ id: row.id, topic: row.topic || "model.decision", key: row.key,
+          ts: row.ts, plane: "model", producer: row.producer || row.engine,
+          version: 1, generation: 0, size: JSON.stringify(row.payload).length,
+          payload: row.payload, meta: row.meta, has_envelope: !!row.meta });
+      }
+    };
+    el.ondblclick = () => { renderExecution(); setView("execution"); };
+  });
+}
+
 /* The execution trace: one decision, the data it read, on a scrollable timeline. */
 async function renderExecution(idHint) {
   const id = idHint || state.sel;
@@ -463,6 +513,14 @@ function drawExecution(d) {
     tr.onclick = () => select(Number(tr.dataset.id));
   });
 }
+
+$("whyRun").onclick = () => {
+  state.whyKey = $("whyKey").value.trim();
+  state.whyEngine = $("whyEngine").value.trim();
+  renderWhy();
+};
+$("whyKey").onkeydown = (e) => { if (e.key === "Enter") $("whyRun").click(); };
+$("whyEngine").onkeydown = (e) => { if (e.key === "Enter") $("whyRun").click(); };
 
 document.querySelectorAll(".ex-controls .mini").forEach((b) => {
   b.onclick = () => {
@@ -618,12 +676,15 @@ function applyView(view) {
   state.view = view;
   const rows = $("rows"), journey = $("journey"), panel = document.querySelector(".panel.list");
   const execution = $("execution");
+  const why = $("why");
   rows.classList.toggle("hidden", view !== "list");
   journey.classList.toggle("hidden", view !== "journey");
   execution.classList.toggle("hidden", view !== "execution");
+  why.classList.toggle("hidden", view !== "why");
   panel.classList.toggle("journey-on", view !== "list");
   if (view === "journey") renderJourney();
   if (view === "execution") renderExecution();
+  if (view === "why") renderWhy();
 }
 
 function setView(view, remember) {

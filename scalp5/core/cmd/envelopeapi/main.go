@@ -992,6 +992,124 @@ func main() {
 		})
 	})
 
+	// scanTopic reads the lake for one topic, newest last. It is a cold path: the
+	// in-memory ring is dominated by market data, and a decision can be hours old.
+	scanTopic := func(topic string, limit int) []envelopeDoc {
+		files, _ := filepath.Glob(filepath.Join(*dir, "*.jsonl"))
+		if len(files) == 0 {
+			files, _ = filepath.Glob(filepath.Join(*dir, "seg-*.jsonl"))
+		}
+		sort.Sort(sort.Reverse(sort.StringSlice(files)))
+		var out []envelopeDoc
+		for _, f := range files {
+			fh, err := os.Open(f)
+			if err != nil {
+				continue
+			}
+			sc := bufio.NewScanner(fh)
+			sc.Buffer(make([]byte, 1<<20), 32<<20)
+			for sc.Scan() {
+				line := sc.Bytes()
+				if !strings.Contains(string(line), "\"topic\":\""+topic+"\"") {
+					continue
+				}
+				if d, ok := parse(line); ok && d.Topic == topic {
+					out = append(out, d)
+				}
+			}
+			fh.Close()
+			if len(out) >= limit*4 {
+				break
+			}
+		}
+		if len(out) > limit {
+			out = out[len(out)-limit:]
+		}
+		return out
+	}
+
+	// /api/why answers "why did this model trade, or not": the decisions recorded
+	// for a symbol, split into allowed and refused, with the reason tallied.
+	mux.HandleFunc("/api/why", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		key := q.Get("key")
+		engine := q.Get("engine")
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		if limit <= 0 || limit > 300 {
+			limit = 60
+		}
+		type decision struct {
+			ID         int             `json:"id"`
+			TS         int64           `json:"ts"`
+			Key        string          `json:"key"`
+			Engine     string          `json:"engine"`
+			Side       string          `json:"side"`
+			Allowed    bool            `json:"allowed"`
+			Reason     string          `json:"reason"`
+			Confidence float64         `json:"confidence"`
+			Payload    json.RawMessage `json:"payload,omitempty"`
+			Meta       json.RawMessage `json:"meta,omitempty"`
+			Topic      string          `json:"topic,omitempty"`
+			Producer   string          `json:"producer,omitempty"`
+		}
+		docs := scanTopic("model.decision", 400)
+		var rows []decision
+		reasons := map[string]int{}
+		allowedN, refusedN := 0, 0
+		for i := len(docs) - 1; i >= 0 && len(rows) < limit; i-- {
+			d := docs[i]
+			if d.Topic != "model.decision" {
+				continue
+			}
+			if key != "" && d.Key != key {
+				continue
+			}
+			var payload struct {
+				Data struct {
+					Engine     string  `json:"engine"`
+					Symbol     string  `json:"symbol"`
+					Side       string  `json:"side"`
+					Allowed    bool    `json:"allowed"`
+					Reason     string  `json:"reason"`
+					Confidence float64 `json:"confidence"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(d.Payload, &payload) != nil {
+				continue
+			}
+			pd := payload.Data
+			if engine != "" && !containsFold(pd.Engine, engine) && !containsFold(d.Producer, engine) {
+				continue
+			}
+			row := decision{ID: d.ID, TS: d.TS, Key: d.Key, Engine: pd.Engine, Side: pd.Side,
+				Allowed: pd.Allowed, Reason: pd.Reason, Confidence: pd.Confidence,
+				Payload: d.Payload, Meta: d.Meta, Topic: d.Topic, Producer: d.Producer}
+			if row.Engine == "" {
+				row.Engine = d.Producer
+			}
+			rows = append(rows, row)
+			if pd.Allowed {
+				allowedN++
+			} else {
+				refusedN++
+				reasons[pd.Reason]++
+			}
+		}
+		type reasonCount struct {
+			Reason string `json:"reason"`
+			Count  int    `json:"count"`
+		}
+		var tally []reasonCount
+		for reason, n := range reasons {
+			tally = append(tally, reasonCount{reason, n})
+		}
+		sort.Slice(tally, func(i, j int) bool { return tally[i].Count > tally[j].Count })
+		json.NewEncoder(w).Encode(map[string]any{
+			"key": key, "engine": engine, "decisions": rows,
+			"allowed": allowedN, "refused": refusedN, "reasons": tally,
+		})
+	})
+
 	// /api/timeline returns a stacked histogram across the retained window, which
 	// is what the scrubber draws and what a brush selects from.
 	mux.HandleFunc("/api/timeline", func(w http.ResponseWriter, r *http.Request) {

@@ -122,10 +122,11 @@ for line in [
     "5  The timeline: browsing history",
     "6  The journey: a flow diagram from a point",
     "7  The execution trace: what a model actually used",
-    "8  Roles and redaction",
-    "9  Three worked examples",
-    "10  Keyboard and quick reference",
-    "11  Troubleshooting",
+    "8  How and why a model traded — or did not",
+    "9  Roles and redaction",
+    "10  Three worked examples",
+    "11  Keyboard and quick reference",
+    "12  Troubleshooting",
 ]:
     p(line, size=9.5)
 
@@ -319,10 +320,45 @@ callout("This is the view for 'why did the model do that'. It shows the exact en
         "literal lineage instead of a time-ordered reading of the window.")
 
 brk()
-h("8  Roles and redaction", 1)
+h("8  How and why a model traded — or did not", 1)
+p("This is the question a reviewer actually asks. The WHY tab answers it directly: every decision the models "
+  "recorded, split into the trades they took and the trades they refused, with the rule that stopped them.")
+shot("g11-why.png", "Figure 10 — the WHY tab: reason tally on the left, decisions on the right, and the raw "
+                    "refusal envelope open beside them.")
+h("8.1  Reading the tab", 2)
+table(["Part", "What it tells you"], [
+    ["Header", "how many decisions the scan found: traded, refused, and the symbol if filtered"],
+    ["Why not (left)", "the refusal reasons, tallest first. 'stale signals' dominating means the feed is late, not that the model is picky"],
+    ["Decision rows", "time, symbol, reason as the model recorded it, outcome, engine"],
+    ["Right pane", "the raw decision envelope: data, meta, references — including allowed and reason verbatim"],
+    ["Filters", "symbol and engine; Enter runs the scan"],
+], widths=[1.5, 5.1], size=8.8)
+h("8.2  What a decision actually contains", 2)
+p("A model.decision payload is short on purpose. It carries the engine, the symbol and side, whether the "
+  "governor allowed it, the reason, and the confidence the model had. Everything else is in the envelope: "
+  "who produced it, when, and the correlation id that ties it to the rest of the chain.")
+table(["Field", "Example", "Why it matters"], [
+    ["engine", "alpha_rank", "which model made the call"],
+    ["symbol / side", "UNIUSDT · buy", "what it wanted to do"],
+    ["allowed", "false", "the governor's verdict"],
+    ["reason", "stale signals: 847s old (max 90s)", "the rule and the number that tripped it"],
+    ["confidence", "0", "the model's own conviction — 0 means none"],
+], widths=[1.1, 2.6, 2.9], size=8.6)
+h("8.3  From refusal to evidence in three clicks", 2)
+steps([
+    "Open WHY and find the refusal you care about — the reason is already visible in the row.",
+    "Click it: the right pane shows the raw envelope, so the reason is quoted from the record, not paraphrased.",
+    "Double-click it: the EXECUTION tab opens on that decision, with the inputs it read and how old each was.",
+])
+callout("A refusal is evidence, not noise. 'stale signals: 847s old' names the rule, the age and the limit, and "
+        "the envelope that says it is the one the platform stored. That is the difference between 'it did not "
+        "trade' and 'we cannot explain why it did not trade'.")
+
+brk()
+h("9  Roles and redaction", 1)
 p("The 'viewing as' selector in the header changes what you are allowed to see. It is a real filter applied "
   "on the server, not a cosmetic setting.")
-shot("g6-redaction.png", "Figure 10 — the same envelope viewed as a bystander: depth fields removed, and a red "
+shot("g6-redaction.png", "Figure 11 — the same envelope viewed as a bystander: depth fields removed, and a red "
                          "band naming exactly what was withheld.")
 table(["Role", "Sees", "Typical use"], [
     ["owner", "everything", "you are the operator"],
@@ -333,21 +369,21 @@ p("Every redaction is recorded in the envelope's meta as redacted_for and redact
   "part of the record rather than a silent edit. If someone asks what you were shown, the answer is in the "
   "message.")
 
-h("9  Three worked examples", 1)
-h("9.1  Why did we buy this?", 2)
+h("10  Three worked examples", 1)
+h("10.1  Why did we buy this?", 2)
 steps([
     "Filter symbol = BTCUSDT and plane = model.",
     "Open the model.decision row you care about.",
     "Switch to JOURNEY: the ring sits on the decision; read left for the advisories and market data.",
     "Note the correlation id from the meta pane — quote it in any discussion.",
 ])
-h("9.2  What happened at a specific minute?", 2)
+h("10.2  What happened at a specific minute?", 2)
 steps([
     "Drag the timeline across that minute.",
     "The list narrows to it; sort your reading by plane using the left panel.",
     "Watch for a gap rather than a quiet period: a gap means no producer, not no market.",
 ])
-h("9.3  Which model is producing decisions?", 2)
+h("10.3  Which model is producing decisions?", 2)
 steps([
     "Filter producer = books (or a specific engine) and topic = model.decision.",
     "Compare the generation numbers: a stall shows as a flat generation while others climb.",
@@ -355,7 +391,7 @@ steps([
 ])
 
 brk()
-h("10  Keyboard and quick reference", 1)
+h("11  Keyboard and quick reference", 1)
 table(["Key or control", "Effect"], [
     ["Esc", "back to the previous view; again to clear the selection"],
     ["Tab (browser)", "focus the next filter"],
@@ -363,7 +399,7 @@ table(["Key or control", "Effect"], [
     ["▶ play", "step the selected window forward"],
     ["reset", "clear every filter and return to live"],
 ], widths=[1.8, 4.8], size=9)
-h("10.1  What the colours mean", 2)
+h("11.1  What the colours mean", 2)
 table(["Colour", "Plane", "Typical topics"], [
     ["blue", "market", "ticks, market.price, market.depth, market.candle"],
     ["green", "intel", "intel.signal, intel.flow, intel.ta, intel.forecast"],
@@ -372,7 +408,7 @@ table(["Colour", "Plane", "Typical topics"], [
     ["grey", "system", "system.health, review.verdict"],
 ], widths=[0.9, 1.1, 4.6], size=9)
 
-h("11  Troubleshooting", 1)
+h("12  Troubleshooting", 1)
 table(["Symptom", "Likely cause", "What to do"], [
     ["List is empty", "nothing matches the filters", "press reset"],
     ["Count frozen at 20,000", "feed or recorder stopped", "check :8801/stats and :8796/health"],

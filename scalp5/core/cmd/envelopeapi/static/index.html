@@ -89,6 +89,7 @@
       <button class="tab active" data-view="list">envelopes</button>
       <button class="tab" data-view="journey">journey</button>
       <button class="tab" data-view="execution">execution</button>
+      <button class="tab" data-view="why">why</button>
       <span class="tab-hint">esc · back</span>
       <span class="tab-key" id="journeyKey">key: —</span>
     </div>
@@ -97,6 +98,20 @@
       <span class="hint">newest first · click to inspect</span>
     </div>
     <div id="rows" class="rows"></div>
+    <div id="why" class="why hidden">
+      <div class="ex-head">
+        <span class="ex-title" id="whyTitle">why — decisions and refusals</span>
+        <span class="ex-controls">
+          <input id="whyKey" placeholder="symbol" size="10"/>
+          <input id="whyEngine" placeholder="engine" size="10"/>
+          <button id="whyRun" class="mini">run</button>
+        </span>
+      </div>
+      <div class="why-body">
+        <div class="why-reasons" id="whyReasons"></div>
+        <div class="why-list" id="whyList"></div>
+      </div>
+    </div>
     <div id="execution" class="execution hidden">
       <div class="ex-head">
         <span id="exTitle" class="ex-title">execution trace</span>

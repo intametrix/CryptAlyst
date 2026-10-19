@@ -167,3 +167,23 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
 .ex-anchor rect{stroke:#e6eef8;stroke-width:2;stroke-dasharray:4 3}
 .ex-path{fill:none;stroke:#5b7ea6;stroke-width:1.5;stroke-dasharray:3 3;opacity:.8}
 .ex-tick{font-size:8.5px;fill:#4a5b70}
+
+.why{flex:1;display:flex;flex-direction:column;min-height:0}
+.why.hidden{display:none}
+.why-body{flex:1;display:grid;grid-template-columns:220px 1fr;min-height:0}
+.why-reasons{border-right:1px solid var(--line);padding:10px 12px;overflow:auto}
+.why-reason{margin-bottom:7px}
+.why-reason .lbl{display:flex;justify-content:space-between;font-size:9.5px;color:var(--dim);gap:6px}
+.why-reason .bar{height:5px;border-radius:3px;background:var(--risk);margin-top:3px;opacity:.75}
+.why-list{overflow:auto}
+.why-row{display:grid;grid-template-columns:64px 92px 1fr 46px 40px;gap:8px;align-items:center;
+  padding:6px 12px;border-bottom:1px solid #101a25;font-size:11px;cursor:pointer}
+.why-row:hover{background:#101a26}
+.why-row .t{color:var(--faint);font-family:ui-monospace,Menlo,monospace;font-size:10px}
+.why-row .reason{color:#b9cde4;font-family:ui-monospace,Menlo,monospace;font-size:10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.outcome{border-radius:999px;padding:1px 7px;font-size:9px;letter-spacing:.4px;text-transform:uppercase;text-align:center}
+.outcome.yes{background:rgba(55,201,139,.16);color:var(--intel)}
+.outcome.no{background:rgba(240,96,95,.16);color:var(--risk)}
+.why-row input,.why-reasons input{background:#0a121b;border:1px solid var(--line);color:var(--fg);
+  border-radius:7px;padding:4px 7px;font-size:11px}
