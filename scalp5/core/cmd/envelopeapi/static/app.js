@@ -173,7 +173,10 @@ async function select(id, quiet) {
   if (picked2) {
     $("crumbHere").textContent = `${picked2.key || picked2.topic} · ${picked2.topic}`;
   }
-  if (state.view === "list") applyView("context");
+  if (state.view === "list") {
+    applyView("context");
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+  }
 }
 
 /* renderDetail draws one envelope: the three members, the payload and the chain. */
@@ -414,6 +417,18 @@ $("play").onclick = () => {
 const STAGE_LABEL = ["market data", "advisories", "risk & alerts", "decisions", "other"];
 const LANE_LABEL = ["market", "advisories", "risk", "model", "other"];
 let exZoom = 1;
+
+/* Health: the services the Explorer depends on, probed through the API. */
+async function renderHealth() {
+  const d = await (await fetch("/api/health", { cache: "no-store" })).json();
+  const rows = d.services || [];
+  $("healthTitle").textContent = `service health — ${d.up}/${rows.length} up`;
+  $("healthBody").innerHTML = `
+    <table><tr><th>service</th><th>port</th><th>status</th><th>latency</th></tr>
+    ${rows.map((s) => `<tr><td>${esc(s.name)}</td><td>${s.port || ""}</td>
+      <td class="${s.up ? "" : "neg"}">${s.up ? "up" : "down"}</td>
+      <td>${s.ms} ms</td></tr>`).join("")}</table>`;
+}
 
 /* Books: the compliance officer's entry point. */
 async function renderBooks() {
@@ -1082,12 +1097,19 @@ function applyView(view) {
   const context = $("context");
   const gantt = $("gantt");
   const books = $("books");
+  const health = $("health");
+  gantt.classList.toggle("hidden", view !== "gantt");
   books.classList.toggle("hidden", view !== "books");
+  health.classList.toggle("hidden", view !== "health");
+  if (view === "gantt") renderGantt();
   if (view === "books") renderBooks();
+  if (view === "health") renderHealth();
   gantt.classList.toggle("hidden", view !== "gantt");
   if (view === "gantt") renderGantt();
   rows.classList.toggle("hidden", view !== "list");
   context.classList.toggle("hidden", view !== "context");
+  document.querySelectorAll(".tab").forEach((t) =>
+    t.classList.toggle("active", t.dataset.view === view && view !== "context"));
   if (view === "context") renderContext();
   journey.classList.toggle("hidden", view !== "journey");
   execution.classList.toggle("hidden", view !== "execution");
@@ -1100,15 +1122,18 @@ function applyView(view) {
 
 function setView(view, remember) {
   if (state.view === view) return;
-  if (view === "execution") {
-    const d = state.docs.find((x) => x.id === state.sel);
-    if (!d || !(/^model\./.test(d.topic) || d.topic === "risk.state")) {
-      return; // nothing to trace: the tab says why
-    }
-  }
+
   if (remember !== false) pushState();
   applyView(view);
 }
+
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.onclick = () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    tab.classList.add("active");
+    setView(tab.dataset.view);
+  };
+});
 
 document.querySelectorAll(".crumb").forEach((b) => {
   b.onclick = () => { state.sel = null; renderRows(); applyView("list"); $("crumbHere").textContent = "nothing selected"; };

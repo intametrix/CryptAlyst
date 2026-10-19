@@ -89,6 +89,15 @@
   <div class="vsplit" id="vsplit1" title="drag to resize"></div>
 
   <section class="panel list">
+    <div class="tabs" id="tabs">
+      <button class="tab active" data-view="list">envelopes</button>
+      <button class="tab" data-view="journey">journey</button>
+      <button class="tab" data-view="execution">execution</button>
+      <button class="tab" data-view="why">why</button>
+      <button class="tab" data-view="gantt">gantt</button>
+      <button class="tab" data-view="books">books</button>
+      <button class="tab" data-view="health">health</button>
+    </div>
     <div class="crumbs" id="crumbs">
       <button class="crumb back" id="backBtn" title="back (Esc)" disabled>←</button>
       <button class="crumb active" data-go="list">feed</button>
@@ -100,6 +109,11 @@
     <div class="list-head">
       <span id="resultCount">—</span>
       <span class="hint">newest first · click to inspect</span>
+    </div>
+    <div id="health" class="books hidden">
+      <div class="ex-head"><span class="ex-title" id="healthTitle">service health</span>
+        <span class="ex-controls"><button class="mini" id="healthRefresh">refresh</button></span></div>
+      <div id="healthBody" class="books-body"></div>
     </div>
     <div id="books" class="books hidden">
       <div class="ex-head"><span class="ex-title" id="booksTitle">books</span>

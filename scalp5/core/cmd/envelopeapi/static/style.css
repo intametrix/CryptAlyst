@@ -225,7 +225,8 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
 .jnode:hover rect,.ex-node:hover rect{filter:brightness(1.12)}
 @media (prefers-reduced-motion: reduce){*{transition:none !important}}
 
-.crumbs{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line)}
+.tabs{display:flex;gap:4px;padding:8px 12px 0;flex-wrap:wrap}
+.crumbs{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line)}
 .crumb{background:transparent;border:none;color:var(--accent);font-size:11px;letter-spacing:.5px;
   text-transform:uppercase;cursor:pointer;padding:3px 6px;border-radius:6px}
 .crumb:hover{background:#101a26}

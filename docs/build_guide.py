@@ -175,7 +175,22 @@ table(["Region", "What it is for"], [
     ["Right", "the anatomy of the selected envelope: meta, payload, references, chain."],
 ], widths=[1.2, 5.4], size=9)
 
-h("2.1  Breadcrumbs, not modes", 2)
+h("2.1  The tab bar", 2)
+p("Seven tabs, all permanent: ENVELOPES, JOURNEY, EXECUTION, WHY, GANTT, BOOKS, HEALTH. A tab is a view you "
+  "can always reach — nothing in the interface removes one because of what is selected.")
+shot("g24-tabs-health.png", "Figure 2 — the tab bar with HEALTH open: six services probed, with port, status "
+                            "and latency.")
+table(["Tab", "What it is for"], [
+    ["ENVELOPES", "the live feed, with filters"],
+    ["JOURNEY", "the platform as a flow: stages, volumes, correlations"],
+    ["EXECUTION", "one outcome's inputs on a scrollable timeline"],
+    ["WHY", "decisions and refusals, with the rule that stopped each one"],
+    ["GANTT", "spans: holding times, or input validity windows"],
+    ["BOOKS", "every engine, its trades and its refusals"],
+    ["HEALTH", "the services the Explorer depends on, probed live"],
+], widths=[1.2, 5.4], size=8.7)
+
+h("2.2  Breadcrumbs, not modes", 2)
 p("The middle pane is a contextual surface. With nothing selected it is the live feed. Select an envelope and "
   "it recomposes around that envelope: its identity, its verdict if it is a decision, the envelopes it read or "
   "the ones that read it, and buttons to the flow and the full trace.")
@@ -185,7 +200,7 @@ p("The bar above it is a breadcrumb — FEED / symbol · topic — not a row of 
 p("The ← button at the left of the crumb bar is back. It is greyed out when there is nothing to go back to, "
   "and it is the same action as Escape: one step, restoring the view and the envelope you had selected.")
 
-h("2.2  Resizing: every panel", 2)
+h("2.3  Resizing: every panel", 2)
 p("Three splitters: one between the filters and the list, one between the list and the detail pane, and one "
   "under the timeline. Drag any of them; double-click is not needed because the size persists in the browser, "
   "so the layout you set is the layout you get next time.")

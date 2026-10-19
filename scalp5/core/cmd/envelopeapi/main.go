@@ -1512,6 +1512,48 @@ this report is a rendering of recorded envelopes, not a reconstruction: every ro
 envelope id above.</div></body></html>`, hash.Sum64())
 	})
 
+	// /api/health probes the services the Explorer depends on, so a missing feed
+	// is visible as a down service rather than an empty list.
+	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		type probe struct {
+			Name string `json:"name"`
+			URL  string `json:"-"`
+			Port int    `json:"port"`
+		}
+		probes := []probe{
+			{"market data", "http://127.0.0.1:8796/health", 8796},
+			{"recorder", "http://127.0.0.1:8801/stats", 8801},
+			{"dashboard", "http://127.0.0.1:8799/api/all", 8799},
+			{"bus consumer", "http://127.0.0.1:8798/", 8798},
+			{"forecast", "http://127.0.0.1:8790/health", 8790},
+			{"explorer", "http://127.0.0.1:8802/api/stats", 8802},
+		}
+		type result struct {
+			Name string `json:"name"`
+			Port int    `json:"port"`
+			Up   bool   `json:"up"`
+			MS   int64  `json:"ms"`
+		}
+		client := http.Client{Timeout: 3 * time.Second}
+		var out []result
+		up := 0
+		for _, p := range probes {
+			start := time.Now()
+			resp, err := client.Get(p.URL)
+			res := result{Name: p.Name, Port: p.Port, MS: time.Since(start).Milliseconds()}
+			if err == nil {
+				res.Up = resp.StatusCode == 200
+				resp.Body.Close()
+			}
+			if res.Up {
+				up++
+			}
+			out = append(out, res)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"up": up, "services": out,
+			"ts": time.Now().UnixMilli()})
+	})
+
 	// /api/books lists the engines that have traded, with a one-line summary each.
 	mux.HandleFunc("/api/books", func(w http.ResponseWriter, r *http.Request) {
 		type row struct {
