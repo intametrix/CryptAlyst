@@ -24,7 +24,19 @@ h1{font-size:15px;margin:0;letter-spacing:.3px}
 .stat b{display:block;font-size:15px;font-variant-numeric:tabular-nums}
 .stat span{color:var(--faint);font-size:10px;text-transform:uppercase;letter-spacing:.6px}
 
-.grid{flex:1;display:grid;grid-template-columns:264px minmax(320px,1fr) minmax(420px,1.15fr);gap:12px;padding:12px;min-height:0}
+.grid{flex:1;display:grid;grid-template-columns:var(--c1,264px) 6px var(--c2,1fr) 6px var(--c3,1.15fr);
+  gap:0;padding:12px;min-height:0}
+.panel{min-width:0}
+.vsplit{width:6px;cursor:col-resize;align-self:stretch;position:relative}
+.vsplit::after{content:"";position:absolute;left:2px;top:50%;transform:translateY(-50%);width:2px;height:38px;
+  border-radius:2px;background:var(--line);transition:background .15s}
+.vsplit:hover::after{background:var(--accent)}
+.hsplit{height:6px;margin:0 12px;cursor:row-resize;position:relative;flex:none}
+.hsplit::after{content:"";position:absolute;left:50%;top:2px;transform:translateX(-50%);height:2px;width:46px;
+  border-radius:2px;background:var(--line)}
+.hsplit:hover::after{background:var(--accent)}
+body.resizing{cursor:col-resize;user-select:none}
+body.resizing.row{cursor:row-resize}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 .filters{padding:12px;gap:12px;overflow:auto}
 .field{display:flex;flex-direction:column;gap:6px}
@@ -202,3 +214,13 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
 .hop.operator{border-color:rgba(55,201,139,.35)}
 .hop.transformer{border-color:rgba(240,179,74,.35)}
 .hop-arrow{color:var(--faint);font-size:10px}
+
+.panel{transition:border-color .15s, box-shadow .15s}
+.panel:hover{border-color:#243546}
+.tabs{gap:4px}
+.tab{transition:background .12s,color .12s}
+.tab.disabled{opacity:.35;cursor:not-allowed}
+.row{transition:background .1s}
+.jnode rect,.ex-node rect{transition:filter .12s}
+.jnode:hover rect,.ex-node:hover rect{filter:brightness(1.12)}
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}

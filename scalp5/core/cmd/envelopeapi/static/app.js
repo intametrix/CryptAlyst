@@ -167,6 +167,7 @@ async function select(id, quiet) {
   } catch (e) {
     $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
   }
+  updateTabs();
 }
 
 /* renderDetail draws one envelope: the three members, the payload and the chain. */
@@ -664,6 +665,69 @@ function drawFlow(d) {
     + `<span style="margin-left:auto">${nodes.length} topics · ${totalCount.toLocaleString()} envelopes · ${links.length} links</span>`;
 }
 
+/* Resizable panels: widths live in CSS variables and persist per browser. */
+(function resizable() {
+  const grid = $("grid");
+  if (!grid) return;
+  const saved = JSON.parse(localStorage.getItem("ex.layout") || "{}");
+  if (saved.c1) grid.style.setProperty("--c1", saved.c1 + "px");
+  if (saved.c3) grid.style.setProperty("--c3", saved.c3 + "fr");
+  if (saved.timeline) $("timelineBar").style.height = saved.timeline + "px";
+
+  function drag(handle, axis, onMove, onDone) {
+    handle.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      document.body.classList.add("resizing");
+      if (axis === "row") document.body.classList.add("row");
+      const move = (ev) => onMove(ev);
+      const up = () => {
+        document.body.classList.remove("resizing", "row");
+        document.removeEventListener("mousemove", move);
+        document.removeEventListener("mouseup", up);
+        onDone();
+      };
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", up);
+    });
+  }
+
+  const persist = () => localStorage.setItem("ex.layout", JSON.stringify({
+    c1: parseInt(getComputedStyle(grid).gridTemplateColumns.split(" ")[0], 10),
+    c3: 1.15,
+    timeline: parseInt($("timelineBar").getBoundingClientRect().height, 10),
+  }));
+
+  drag($("vsplit1"), "col", (ev) => {
+    const rect = grid.getBoundingClientRect();
+    const w = Math.min(Math.max(160, ev.clientX - rect.left), rect.width * 0.45);
+    grid.style.setProperty("--c1", w + "px");
+  }, persist);
+
+  drag($("vsplit2"), "col", (ev) => {
+    const rect = grid.getBoundingClientRect();
+    const right = Math.min(Math.max(240, rect.right - ev.clientX), rect.width * 0.62);
+    grid.style.setProperty("--c3", right + "px");
+  }, persist);
+
+  drag($("hsplit"), "row", (ev) => {
+    const top = $("timelineBar").getBoundingClientRect().top;
+    const h = Math.min(Math.max(72, ev.clientY - top - 6), 320);
+    $("timelineBar").style.height = h + "px";
+  }, persist);
+})();
+
+/* Contextual tabs: a view is enabled when the selection can feed it. */
+function updateTabs() {
+  const d = state.docs.find((x) => x.id === state.sel);
+  const topic = d ? d.topic : "";
+  const isOutcome = /^model\./.test(topic) || topic === "risk.state";
+  const execTab = document.querySelector('.tab[data-view="execution"]');
+  execTab.classList.toggle("disabled", !isOutcome);
+  execTab.title = isOutcome ? "the inputs this outcome read" : "select a decision or a fill first";
+  const whyTab = document.querySelector('.tab[data-view="why"]');
+  whyTab.title = d && d.key ? "why " + d.key + " traded or not" : "all decisions";
+}
+
 /* wiring */
 document.querySelectorAll("#planeChips .chip").forEach((b) => {
   b.onclick = () => {
@@ -756,6 +820,12 @@ function applyView(view) {
 
 function setView(view, remember) {
   if (state.view === view) return;
+  if (view === "execution") {
+    const d = state.docs.find((x) => x.id === state.sel);
+    if (!d || !(/^model\./.test(d.topic) || d.topic === "risk.state")) {
+      return; // nothing to trace: the tab says why
+    }
+  }
   if (remember !== false) pushState();
   applyView(view);
 }
@@ -788,6 +858,6 @@ $("live").onclick = () => {
   $("live").textContent = state.live ? "live" : "paused";
 };
 
-loadStats(); loadTopics(); loadTimeline(); load(); connect();
+loadStats(); loadTopics(); loadTimeline(); load(); connect(); updateTabs();
 setInterval(loadTimeline, 5000);
 setInterval(loadStats, 5000);

@@ -164,9 +164,18 @@ table(["Region", "What it is for"], [
     ["Right", "the anatomy of the selected envelope: meta, payload, references, chain."],
 ], widths=[1.2, 5.4], size=9)
 
-h("2.1  Two tabs in the middle", 2)
+h("2.1  Four tabs in the middle", 2)
 p("ENVELOPES is a list, one row per message. JOURNEY is a flow diagram of how traffic moves through the "
-  "platform, from market data to advisories to decisions. Escape always takes you back to the previous view.")
+  "platform. EXECUTION shows what one outcome read, on a timeline. WHY shows decisions and refusals.")
+p("The tabs are contextual: EXECUTION only lights up when the selected envelope is an outcome (a model "
+  "decision, a fill, or risk state), because there is nothing to trace otherwise. The tab's tooltip says so.")
+
+h("2.2  Resizing: every panel", 2)
+p("Three splitters: one between the filters and the list, one between the list and the detail pane, and one "
+  "under the timeline. Drag any of them; double-click is not needed because the size persists in the browser, "
+  "so the layout you set is the layout you get next time.")
+shot("g15-layout.png", "Figure 2 — the filters pane dragged wider, a model decision selected, and the context "
+                       "strip showing the four interceptors that passed before the operator ran.")
 
 brk()
 h("3  Finding the message you want", 1)
@@ -411,8 +420,9 @@ steps([
 brk()
 h("11  Keyboard and quick reference", 1)
 table(["Key or control", "Effect"], [
-    ["Esc", "back: restores the previous view *and* the envelope that was selected; pressed with no history it clears the selection"],
+    ["Esc", "one step back: the previous view *and* the envelope selected in it; with no history it clears the selection"],
     ["Tab (browser)", "focus the next filter"],
+    ["drag splitter", "resize the filters, the list, the detail pane or the timeline"],
     ["live / paused", "follow new envelopes, or freeze the list"],
     ["▶ play", "step the selected window forward"],
     ["reset", "clear every filter and return to live"],
