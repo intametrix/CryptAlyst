@@ -258,7 +258,16 @@ func main() {
 				conn.Close()
 				break
 			}
-			handle(st, payload)
+			handle(st, func(topic, key string, body []byte) {
+				if !cl.Healthy() {
+					return
+				}
+				spec, ok := topics.Get(topic)
+				if !ok {
+					return
+				}
+				cl.PublishWithHeaders(spec.Exchange, spec.Name, meta(topic, "market", key), body)
+			}, payload)
 		}
 	}
 }
@@ -274,7 +283,7 @@ func mintCID() string {
 	return "cid-" + hex.EncodeToString(b)
 }
 
-func handle(st *marketdata.State, payload []byte) {
+func handle(st *marketdata.State, emit func(topic, key string, body []byte), payload []byte) {
 	var env struct {
 		Stream string          `json:"stream"`
 		Data   json.RawMessage `json:"data"`
@@ -350,18 +359,18 @@ func handle(st *marketdata.State, payload []byte) {
 		}
 		var k struct {
 			K struct {
-				T      int64  `json:"t"`
-				O      string `json:"o"`
-				H      string `json:"h"`
-				Low    string `json:"l"`
-				C      string `json:"c"`
-				LastID int64  `json:"L"`
-				FirstID int64 `json:"f"`
-				V  string `json:"v"`
-				Q  string `json:"q"`
-				Qb string `json:"Q"`
-				X  bool   `json:"x"`
-				S  string `json:"s"`
+				T       int64  `json:"t"`
+				O       string `json:"o"`
+				H       string `json:"h"`
+				Low     string `json:"l"`
+				C       string `json:"c"`
+				LastID  int64  `json:"L"`
+				FirstID int64  `json:"f"`
+				V       string `json:"v"`
+				Q       string `json:"q"`
+				Qb      string `json:"Q"`
+				X       bool   `json:"x"`
+				S       string `json:"s"`
 			} `json:"k"`
 		}
 		if err := json.Unmarshal(env.Data, &k); err != nil {
@@ -384,5 +393,13 @@ func handle(st *marketdata.State, payload []byte) {
 			iv = "15m"
 		}
 		st.OnKline(k.K.S, iv, marketdata.Kline{T: k.K.T, O: o, H: h, L: l, C: c, V: v, Q: q, Qb: qb}, k.K.X)
+		if k.K.X && emit != nil {
+			body, _ := json.Marshal(map[string]any{
+				"symbol": k.K.S, "interval": iv, "t": k.K.T,
+				"o": o, "h": h, "l": l, "c": c, "v": v, "q": q, "Q": qb,
+				"ts": time.Now().UnixMilli(),
+			})
+			emit("market.candle", k.K.S, body)
+		}
 	}
 }

@@ -372,6 +372,12 @@ async function renderJourney(anchorId) {
 
 function drawFlow(d) {
   const nodes = d.nodes || [], links = d.links || [];
+  const producersByTopic = {};
+  nodes.forEach((n) => {
+    producersByTopic[n.topic] = producersByTopic[n.topic] || new Set();
+    if (n.producer) producersByTopic[n.topic].add(n.producer);
+  });
+  const sharedTopics = new Set(Object.keys(producersByTopic).filter((t) => producersByTopic[t].size > 1));
   const anchorIds = new Set(nodes.filter((n) => n.id === d.anchor).map((n) => n.id));
   const svg = $("journeySvg");
   if (!nodes.length) {
@@ -417,7 +423,8 @@ function drawFlow(d) {
     const n = p.node;
     const fill = PLANE_COLOUR[n.plane] || "#888";
     const short = n.topic.replace("market.", "").replace("intel.", "").replace("model.", "");
-    const label = n.count > 1 ? `${short}  ${n.count.toLocaleString()}` : short;
+    const who = n.producer && sharedTopics.has(n.topic) ? " · " + n.producer : "";
+    const label = (n.count > 1 ? `${short}${who}  ${n.count.toLocaleString()}` : short + who);
     const span = fmtTime(n.first_ts) + "–" + fmtTime(n.last_ts);
     return `<g class="jnode" data-id="${n.id}">
       <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="6" fill="${fill}" opacity="0.92"/>

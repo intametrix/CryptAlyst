@@ -702,16 +702,17 @@ func main() {
 		}
 		stage := func(plane, topic string) int { return stageOf(topic) }
 		type fnode struct {
-			ID      int    `json:"id"`
-			Topic   string `json:"topic"`
-			Plane   string `json:"plane"`
-			Stage   int    `json:"stage"`
-			Count   int    `json:"count"`
-			Bytes   int    `json:"bytes"`
-			FirstTS int64  `json:"first_ts"`
-			LastTS  int64  `json:"last_ts"`
-			Key     string `json:"key"`
-			Anchor  bool   `json:"anchor,omitempty"`
+			ID       int    `json:"id"`
+			Topic    string `json:"topic"`
+			Plane    string `json:"plane"`
+			Stage    int    `json:"stage"`
+			Count    int    `json:"count"`
+			Bytes    int    `json:"bytes"`
+			FirstTS  int64  `json:"first_ts"`
+			LastTS   int64  `json:"last_ts"`
+			Key      string `json:"key"`
+			Producer string `json:"producer,omitempty"`
+			Anchor   bool   `json:"anchor,omitempty"`
 		}
 		type flink struct {
 			From  int `json:"from"`
@@ -719,8 +720,9 @@ func main() {
 			Count int `json:"count"`
 		}
 		type fkey struct {
-			stage int
-			topic string
+			stage    int
+			topic    string
+			producer string
 		}
 		nodes := map[fkey]*fnode{}
 		var order []fkey
@@ -734,10 +736,11 @@ func main() {
 				continue
 			}
 			picked = append(picked, d)
-			k := fkey{stage(d.Plane, d.Topic), d.Topic}
+			k := fkey{stage(d.Plane, d.Topic), d.Topic, d.Producer}
 			n, ok := nodes[k]
 			if !ok {
-				n = &fnode{Topic: d.Topic, Plane: d.Plane, Stage: k.stage, FirstTS: d.TS, LastTS: d.TS, Key: d.Key}
+				n = &fnode{Topic: d.Topic, Plane: d.Plane, Stage: k.stage, Producer: d.Producer,
+					FirstTS: d.TS, LastTS: d.TS, Key: d.Key}
 				nodes[k] = n
 				order = append(order, k)
 			}
@@ -773,8 +776,8 @@ func main() {
 				if sb <= sa {
 					continue
 				}
-				na := nodes[fkey{sa, a.Topic}]
-				nb := nodes[fkey{sb, b.Topic}]
+				na := nodes[fkey{sa, a.Topic, a.Producer}]
+				nb := nodes[fkey{sb, b.Topic, b.Producer}]
 				if na == nil || nb == nil {
 					continue
 				}
