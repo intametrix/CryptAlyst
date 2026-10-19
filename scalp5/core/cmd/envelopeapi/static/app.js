@@ -155,7 +155,8 @@ function metaField(meta, name) {
   return String(v);
 }
 
-async function select(id) {
+async function select(id, quiet) {
+  if (!quiet && state.sel !== id) pushState();
   state.sel = id;
   const picked = state.docs.find((x) => x.id === id);
   if (picked && picked.key) state.journeyKey = picked.key;
@@ -272,8 +273,10 @@ async function renderDetail(d) {
     } else {
       $("chain").textContent = "no key on this envelope";
     }
-    if (state.view === "journey") renderJourney(d.id);
-    if (state.view === "execution") renderExecution(d.id);
+    if (!restoring) {
+      if (state.view === "journey") renderJourney(d.id);
+      if (state.view === "execution") renderExecution(d.id);
+    }
   } catch (e) {
     $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
   }
@@ -691,7 +694,49 @@ $("reset").onclick = () => {
   document.querySelector('#planeChips .chip[data-plane=""]').classList.add("active");
   load();
 };
+// navigation history: every view change and every selection records what was on
+// screen, so Escape restores the last visible state rather than a guess
 const viewStack = [];
+let restoring = false;
+
+function snapshotState() {
+  return {
+    view: state.view,
+    sel: state.sel,
+    journeyKey: state.journeyKey,
+    whyKey: state.whyKey,
+    whyEngine: state.whyEngine,
+    rowsScroll: ($("rows") || {}).scrollTop || 0,
+    exScroll: ($("exScroll") || {}).scrollLeft || 0,
+  };
+}
+
+function pushState() {
+  if (restoring) return;
+  viewStack.push(snapshotState());
+  if (viewStack.length > 60) viewStack.shift();
+}
+
+async function restoreState(snap) {
+  restoring = true;
+  try {
+    state.journeyKey = snap.journeyKey;
+    state.whyKey = snap.whyKey;
+    state.whyEngine = snap.whyEngine;
+    state.sel = snap.sel;
+    if (snap.view !== state.view) applyView(snap.view);
+    renderRows();
+    if (snap.sel != null) {
+      await select(snap.sel, true);
+    } else {
+      $("detail").innerHTML = '<div class="empty">select an envelope to see its anatomy</div>';
+    }
+    if ($("rows")) $("rows").scrollTop = snap.rowsScroll || 0;
+    if ($("exScroll")) $("exScroll").scrollLeft = snap.exScroll || 0;
+  } finally {
+    restoring = false;
+  }
+}
 
 function applyView(view) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === view));
@@ -711,7 +756,7 @@ function applyView(view) {
 
 function setView(view, remember) {
   if (state.view === view) return;
-  if (remember !== false) viewStack.push(state.view);
+  if (remember !== false) pushState();
   applyView(view);
 }
 
@@ -724,10 +769,10 @@ document.querySelectorAll(".tab").forEach((tab) => {
 document.addEventListener("keydown", (ev) => {
   if (ev.key !== "Escape") return;
   if (viewStack.length) {
-    applyView(viewStack.pop());
+    restoreState(viewStack.pop());
   } else if (state.sel != null) {
     state.sel = null;
-    state.journeyKey = "";   // clearing the selection also releases the journey's key
+    state.journeyKey = "";
     renderRows();
     $("detail").innerHTML = '<div class="empty">select an envelope to see its anatomy</div>';
   }

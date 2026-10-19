@@ -294,7 +294,7 @@ table(["Action", "What happens"], [
     ["Click a box", "opens the newest envelope of that topic in the right-hand pane"],
     ["Double-click a box", "re-anchors the flow on that node and walks forward from it"],
     ["Select another envelope in the list", "re-anchors the flow there"],
-    ["Esc", "back to the previous view; pressed again it clears the selection"],
+    ["Esc", "back: returns to the previous view and the state you were in — selection, scroll and filters included"],
     ["Brush the timeline", "the flow uses that window too"],
 ], widths=[2.4, 4.2], size=9)
 h("6.4  A worked walk", 2)
@@ -411,7 +411,7 @@ steps([
 brk()
 h("11  Keyboard and quick reference", 1)
 table(["Key or control", "Effect"], [
-    ["Esc", "back to the previous view; again to clear the selection"],
+    ["Esc", "back: restores the previous view *and* the envelope that was selected; pressed with no history it clears the selection"],
     ["Tab (browser)", "focus the next filter"],
     ["live / paused", "follow new envelopes, or freeze the list"],
     ["▶ play", "step the selected window forward"],
