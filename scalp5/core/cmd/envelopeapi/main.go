@@ -153,6 +153,24 @@ func parse(line []byte) (envelopeDoc, bool) {
 	}
 	d := envelopeDoc{Topic: rec.Topic, Key: rec.Key, TS: rec.TS,
 		Payload: rec.Payload, Plane: planes[rec.Topic], Size: len(line)}
+	// an inner producer wins: it is the component that actually computed the data
+	var inner struct {
+		Producer string `json:"producer"`
+		CID      string `json:"cid"`
+		Data     struct {
+			Producer string `json:"producer"`
+		} `json:"data"`
+	}
+	innerProducer := ""
+	if json.Unmarshal(rec.Payload, &inner) == nil {
+		innerProducer = inner.Producer
+		if innerProducer == "" {
+			innerProducer = inner.Data.Producer
+		}
+		if inner.CID != "" {
+			d.CID = inner.CID
+		}
+	}
 	if len(rec.Envelope) > 0 {
 		var env struct {
 			Data json.RawMessage `json:"data"`
@@ -187,6 +205,11 @@ func parse(line []byte) (envelopeDoc, bool) {
 	}
 	if d.Plane == "" {
 		d.Plane = "unknown"
+	}
+	if innerProducer != "" {
+		// the payload's producer is the component that computed the data; the
+		// envelope default is only a fallback for producers that do not say
+		d.Producer = innerProducer
 	}
 	if d.Producer == "" {
 		d.Producer = defaultProducer[d.Topic]

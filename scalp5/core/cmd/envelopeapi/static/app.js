@@ -190,6 +190,19 @@ async function select(id) {
       ["bytes", fmtBytes(d.size)],
     ]).map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("");
 
+    // a Python producer publishes its own wrapper: {topic,key,producer,data,...}
+    const nested = payload && typeof payload === "object" && payload.data !== undefined &&
+      (payload.topic || payload.producer || payload.version !== undefined);
+    const inner = nested ? payload.data : payload;
+    const outer = nested ? payload : null;
+
+    const memberStrip = `
+      <div class="members">
+        <span class="member on"><b>data</b> ${nested ? "inner payload" : "payload"}</span>
+        <span class="member on"><b>meta</b> ${d.has_envelope ? "recorded" : "inferred"}</span>
+        <span class="member ${refs && refs.length ? "on" : "off"}"><b>refs</b> ${refs && refs.length ? refs.length : "none"}</span>
+      </div>`;
+
     $("detail").innerHTML = notice + `
       <div class="dhead">
         <div>
@@ -199,9 +212,18 @@ async function select(id) {
           <div class="sub" style="margin-top:5px;color:var(--dim)">${esc(TOPIC_MEANING[d.topic] || "")}</div>
         </div>
       </div>
+      ${memberStrip}
       <div class="section"><h3>Meta — provenance and freshness</h3><dl class="kv">${rows}</dl></div>
-      <div class="section"><h3>Data — the payload</h3><pre>${colourJSON(payload)}</pre></div>
-      ${refs && refs.length ? `<div class="section"><h3>References — what it was computed from</h3><pre>${colourJSON(refs)}</pre></div>` : ""}
+      <div class="section"><h3>Data — the payload</h3>
+        ${outer ? `<div class="sub">published as topic <b>${esc(outer.topic || d.topic)}</b>
+          by <b>${esc(outer.producer || d.producer)}</b>${outer.seq ? " · seq " + esc(outer.seq) : ""}</div>` : ""}
+        <pre>${colourJSON(nested ? inner : payload)}</pre></div>
+      <div class="section"><h3>References — what it was computed from</h3>
+        ${refs && refs.length
+          ? `<pre>${colourJSON(refs)}</pre>`
+          : `<div class="sub">none recorded — ${esc(d.producer || "this producer")} does not emit references yet.
+             A reference would name the topic, key, generation and correlation id of each input.</div>`}
+      </div>
       <div class="section"><h3>Chain — everything recorded for this key</h3><div id="chain" class="chain">loading…</div></div>`;
 
     if (d.key) {
@@ -518,6 +540,7 @@ document.addEventListener("keydown", (ev) => {
     applyView(viewStack.pop());
   } else if (state.sel != null) {
     state.sel = null;
+    state.journeyKey = "";   // clearing the selection also releases the journey's key
     renderRows();
     $("detail").innerHTML = '<div class="empty">select an envelope to see its anatomy</div>';
   }

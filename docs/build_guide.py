@@ -195,8 +195,22 @@ p("The green LIVE button means new envelopes are being prepended as they arrive.
 
 brk()
 h("4  Reading an envelope", 1)
-p("Click any row and the right-hand pane shows everything known about that message, in three parts.")
-h("4.1  Meta — provenance and freshness", 2)
+p("An envelope has three members and the right-hand pane shows all three, always: data, meta and "
+  "references. A strip at the top of the pane tells you at a glance which are present.")
+h("4.1  The three members", 2)
+table(["Member", "What it carries", "If it is missing"], [
+    ["data", "the payload for this topic", "never — a message with no data is refused"],
+    ["meta", "version, plane, producer, generation, correlation id, computed_at, recorded_at, bytes", "the pane says 'inferred'"],
+    ["refs", "topic, key, generation and correlation id of each input", "the pane says 'none' and explains what a reference would contain"],
+], widths=[0.8, 3.4, 2.4], size=8.8)
+p("References are the member that is usually empty today: the Python books do not emit them yet, so the pane "
+  "says 'none recorded' rather than hiding the section. That is deliberate — an absent reference is itself "
+  "information, and it should be visible rather than implied.")
+p("When a producer publishes its own wrapper (the Python books do: topic, producer, data, version, seq), the "
+  "pane unwraps it: the Data section shows the inner payload and names the topic and producer it was "
+  "published under.")
+
+h("4.2  Meta — provenance and freshness", 2)
 table(["Field", "Meaning", "Why it matters"], [
     ["version", "the envelope contract revision", "a reader refuses a revision it does not understand"],
     ["plane", "market, intel, model, control or system", "decides priority and how it is handled"],
@@ -207,11 +221,11 @@ table(["Field", "Meaning", "Why it matters"], [
     ["recorded_at", "when the recorder stored it", "the difference is transport and queue time"],
     ["bytes", "size on disk", "market data is bytes, and bytes have a budget"],
 ], widths=[1.1, 2.4, 3.1], size=8.6)
-h("4.2  Data — the payload", 2)
+h("4.3  Data — the payload", 2)
 p("The payload exactly as it travelled, syntax-coloured. It is never rewritten by the Explorer: what you "
   "see is what the recorder stored.")
 shot("g7-detail.png", "Figure 6 — one decision envelope: meta on top, payload in the middle, chain underneath.")
-h("4.3  Chain — what else happened for that symbol", 2)
+h("4.4  Chain — what else happened for that symbol", 2)
 p("Every envelope recorded for the same symbol, oldest first, with arrows. Click any step to jump to it. "
   "This is the quick way to walk a symbol's recent history without leaving the page.")
 callout("A message with no key (for example market.mini24h) has no chain. That is not a bug: it is a "
@@ -235,14 +249,15 @@ p("Two details worth knowing. The selection survives the histogram's own refresh
 brk()
 h("6  The journey: a flow diagram from a point", 1)
 p("This is the view to use when the question is 'how did this happen', rather than 'what is this message'.")
-shot("g4-flow.png", "Figure 4 — the whole platform as a flow: five stages, thirteen nodes, fourteen "
-                    "correlations. Box height is volume; ribbon width is how many correlations were observed.")
+shot("g4-flow.png", "Figure 4 — the whole platform as a flow: five stages and fifteen nodes, including each "
+                    "model that wrote a fill. Box height is volume; ribbon width is the number of "
+                    "correlations observed.")
 h("6.1  Two ways to open it", 2)
 table(["Way", "What you get"], [
     ["Select an envelope, then open JOURNEY", "the flow opens at that message: two minutes of lead-in, five minutes forward, on its symbol. The node containing it is ringed."],
     ["Open JOURNEY with nothing selected", "the last five minutes across all symbols — a live view of the platform's shape."],
 ], widths=[2.2, 4.4], size=9)
-shot("g5-anchored.png", "Figure 5 — the same diagram anchored on a decision envelope: the dashed ring marks "
+shot("g5-anchored.png", "Figure 5 — the same diagram anchored on a model.fill envelope: the dashed ring marks "
                         "where you came in, and the window runs forward from that moment.")
 h("6.2  Reading the diagram", 2)
 bullets([
@@ -251,6 +266,7 @@ bullets([
     "Box label is the topic and its count; the small line beneath is the time span those messages cover.",
     "Ribbon width is the number of observed correlations between the two topics.",
     "Colour is the plane: blue market, green intel, amber model, teal control, grey system.",
+    "Nodes are split by producer, so three models writing model.fill appear as three boxes, each labelled with its engine.",
     "The dashed ring marks the anchor — the message you came in on.",
 ])
 h("6.3  Moving around", 2)
