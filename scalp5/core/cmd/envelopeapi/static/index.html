@@ -92,6 +92,7 @@
     <div class="crumbs" id="crumbs">
       <button class="crumb back" id="backBtn" title="back (Esc)" disabled>←</button>
       <button class="crumb active" data-go="list">feed</button>
+      <button class="crumb" id="booksBtn">books</button>
       <span class="crumb-sep">/</span>
       <span class="crumb-here" id="crumbHere">nothing selected</span>
       <span class="tab-hint">esc · back</span>
@@ -99,6 +100,11 @@
     <div class="list-head">
       <span id="resultCount">—</span>
       <span class="hint">newest first · click to inspect</span>
+    </div>
+    <div id="books" class="books hidden">
+      <div class="ex-head"><span class="ex-title" id="booksTitle">books</span>
+        <span class="ex-controls"><button class="mini" id="booksRefresh">refresh</button></span></div>
+      <div id="booksBody" class="books-body"></div>
     </div>
     <div id="gantt" class="gantt hidden">
       <div class="ex-head">

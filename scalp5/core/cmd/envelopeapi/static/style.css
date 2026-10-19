@@ -266,3 +266,15 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
 .g-row-label{font-size:9px;fill:#8ea0b6;font-family:ui-monospace,Menlo,monospace}
 .g-tick{font-size:8.5px;fill:#4a5b70}
 .g-grid{stroke:#16202b}
+
+.books{flex:1;display:flex;flex-direction:column;min-height:0}
+.books.hidden{display:none}
+.books-body{flex:1;overflow:auto;padding:6px 12px}
+.book-card{display:grid;grid-template-columns:120px repeat(5,1fr);gap:8px;align-items:center;
+  padding:7px 8px;border-bottom:1px solid #101a25;font-size:11px;cursor:pointer}
+.book-card:hover{background:#101a26}
+.book-card .name{font-weight:600;color:var(--fg)}
+.book-card .num{font-variant-numeric:tabular-nums;color:var(--dim);text-align:right}
+.book-card .hdr{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint)}
+.book-detail{padding:14px 16px}
+.book-detail h3{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--faint);margin:16px 0 6px}

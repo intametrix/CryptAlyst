@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"hash/fnv"
+	"html/template"
 	"io"
 	"io/fs"
 	"log"
@@ -23,6 +25,62 @@ import (
 	"cryptalyst/core/internal/operator"
 )
 
+func safeDiv(a, b float64) float64 {
+	if b == 0 {
+		return 0
+	}
+	return a / b
+}
+
+func round2(v float64) float64 { return float64(int64(v*100+0.5)) / 100 }
+
+// bookTrade is one closed trade in a book report.
+type bookTrade struct {
+	ID       int     `json:"id"`
+	TS       int64   `json:"ts"`
+	Key      string  `json:"key"`
+	Side     string  `json:"side"`
+	Entry    float64 `json:"entry"`
+	Exit     float64 `json:"exit"`
+	HeldS    float64 `json:"held_s"`
+	NetPct   float64 `json:"net_pct"`
+	Reason   string  `json:"reason"`
+	Notional float64 `json:"notional"`
+}
+
+// reportRow is one line of a book report.
+type reportRow struct {
+	TS     int64
+	Key    string
+	Side   string
+	Entry  float64
+	Exit   float64
+	HeldS  float64
+	NetPct float64
+	Reason string
+	ID     int
+}
+
+func maxHeldTrades(trades []reportRow) float64 {
+	m := 0.0
+	for _, t := range trades {
+		if t.HeldS > m {
+			m = t.HeldS
+		}
+	}
+	return m
+}
+
+func maxHeld(trades []bookTrade) float64 {
+	m := 0.0
+	for _, t := range trades {
+		if t.HeldS > m {
+			m = t.HeldS
+		}
+	}
+	return round2(m)
+}
+
 // stageOf maps a topic to its column. Topics are authoritative because records
 // written before the plane fix still carry the old plane value.
 func stageOf(topic string) int {
@@ -37,6 +95,34 @@ func stageOf(topic string) int {
 		return 3
 	}
 	return 4
+}
+
+// scanned holds documents that were read from the lake for a query but are not
+// in the in-memory ring, so a case file or a detail view can still resolve them.
+var (
+	scannedMu sync.RWMutex
+	scanned   = map[int]envelopeDoc{}
+)
+
+func scannedID(d envelopeDoc) int {
+	h := fnv.New32a()
+	fmt.Fprintf(h, "%s|%d|%s", d.Topic, d.TS, d.CID)
+	return int(h.Sum32() & 0x7fffffff)
+}
+
+func rememberScanned(d envelopeDoc) envelopeDoc {
+	d.ID = scannedID(d)
+	scannedMu.Lock()
+	scanned[d.ID] = d
+	scannedMu.Unlock()
+	return d
+}
+
+func lookupScanned(id int) (envelopeDoc, bool) {
+	scannedMu.RLock()
+	defer scannedMu.RUnlock()
+	d, ok := scanned[id]
+	return d, ok
 }
 
 //go:embed static
@@ -513,8 +599,16 @@ func main() {
 	mux.HandleFunc("/api/envelope/", func(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.Atoi(strings.TrimPrefix(r.URL.Path, "/api/envelope/"))
 		role := r.URL.Query().Get("role")
-		for _, d := range st.snapshot() {
-			if d.ID == id {
+		findDoc := func(id int) (envelopeDoc, bool) {
+			for _, d := range st.snapshot() {
+				if d.ID == id {
+					return d, true
+				}
+			}
+			return lookupScanned(id)
+		}
+		if d, ok := findDoc(id); ok {
+			{
 				if redacted, removed := redactFor(role, d.Payload); len(removed) > 0 {
 					d.Payload = redacted
 					if d.Meta != nil {
@@ -1017,7 +1111,7 @@ func main() {
 					continue
 				}
 				if d, ok := parse(line); ok && d.Topic == topic {
-					out = append(out, d)
+					out = append(out, rememberScanned(d))
 				}
 			}
 			fh.Close()
@@ -1111,6 +1205,533 @@ func main() {
 			"key": key, "engine": engine, "decisions": rows,
 			"allowed": allowedN, "refused": refusedN, "reasons": tally,
 		})
+	})
+
+	// /api/case.html renders a printable case file for one decision or fill: the
+	// evidence a reviewer would attach to a report. The browser prints it to PDF.
+	mux.HandleFunc("/api/case.html", func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+		docs := st.snapshot()
+		var anchor *envelopeDoc
+		for i := range docs {
+			if docs[i].ID == id {
+				anchor = &docs[i]
+				break
+			}
+		}
+		if anchor == nil {
+			if d, ok := lookupScanned(id); ok {
+				anchor = &d
+			}
+		}
+		if anchor == nil {
+			http.Error(w, "not found", 404)
+			return
+		}
+		// the decision, its inputs, its references and its chain
+		var meta map[string]any
+		if len(anchor.Meta) > 0 {
+			json.Unmarshal(anchor.Meta, &meta)
+		}
+		var payload map[string]any
+		json.Unmarshal(anchor.Payload, &payload)
+		inner := payload
+		if d, ok := payload["data"].(map[string]any); ok {
+			inner = d
+		}
+		type inputRow struct {
+			Topic string
+			Age   float64
+			ID    int
+		}
+		var inputs []inputRow
+		for _, d := range docs {
+			if anchor.Key != "" && d.Key != anchor.Key {
+				continue
+			}
+			if d.TS > anchor.TS || anchor.TS-d.TS > 900000 {
+				continue
+			}
+			inputs = append(inputs, inputRow{Topic: d.Topic, Age: float64(anchor.TS-d.TS) / 1000, ID: d.ID})
+		}
+		sort.Slice(inputs, func(i, j int) bool { return inputs[i].Age < inputs[j].Age })
+		if len(inputs) > 12 {
+			inputs = inputs[:12]
+		}
+		esc := template.HTMLEscapeString
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, `<html><head><meta charset="utf-8"><title>Case file %s %s</title>
+<style>
+ body{font:11pt/1.45 -apple-system,Helvetica,Arial,sans-serif;color:#111;max-width:760px;margin:32px auto;padding:0 16px}
+ h1{font-size:18pt;margin:0 0 2px} .sub{color:#666;font-size:9.5pt;margin-bottom:18px}
+ h2{font-size:10pt;text-transform:uppercase;letter-spacing:.08em;color:#444;margin:22px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px}
+ table{width:100%%;border-collapse:collapse;font-size:9.5pt} td,th{text-align:left;padding:4px 6px;border-bottom:1px solid #eee}
+ th{color:#666;font-weight:600;font-size:8.5pt;text-transform:uppercase;letter-spacing:.05em}
+ .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:8.5pt;text-transform:uppercase;letter-spacing:.05em}
+ .yes{background:#e3f6ec;color:#12603a} .no{background:#fdeaea;color:#8a1f1f}
+ pre{background:#f7f8fa;border:1px solid #e6e8ec;border-radius:6px;padding:10px;font-size:8.5pt;overflow:auto}
+ .foot{margin-top:26px;border-top:1px solid #ddd;padding-top:8px;color:#666;font-size:8.5pt}
+ @media print{ body{margin:0} h2{page-break-after:avoid} }
+</style></head><body onload="window.print()">
+<h1>Case file — %s %s</h1>
+<div class="sub">decision %d · %s · generated %s</div>
+<h2>What happened</h2>
+<table>
+<tr><th>Topic</th><td>%s</td></tr>
+<tr><th>Symbol</th><td>%s</td></tr>
+<tr><th>Producer</th><td>%s</td></tr>
+<tr><th>Recorded</th><td>%s</td></tr>
+<tr><th>Correlation id</th><td>%s</td></tr>
+<tr><th>Generation</th><td>%v</td></tr>
+</table>`,
+			esc(anchor.Topic), esc(anchor.Key), esc(anchor.Topic), esc(anchor.Key), anchor.ID,
+			time.UnixMilli(anchor.TS).UTC().Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339),
+			esc(anchor.Topic), esc(anchor.Key), esc(anchor.Producer),
+			time.UnixMilli(anchor.TS).UTC().Format(time.RFC3339), esc(fmt.Sprint(meta["cid"])), meta["generation"])
+
+		if allowed, ok := inner["allowed"].(bool); ok {
+			class, word := "yes", "traded"
+			if !allowed {
+				class, word = "no", "refused"
+			}
+			fmt.Fprintf(w, `<h2>Verdict</h2><p><span class="pill %s">%s</span> &nbsp;%s</p>`,
+				class, word, esc(fmt.Sprint(inner["reason"])))
+		}
+		fmt.Fprintf(w, `<h2>What it read</h2>`)
+		if len(inputs) == 0 {
+			if refs, ok := meta["refs"].([]any); ok && len(refs) > 0 {
+				fmt.Fprint(w, `<p>The inputs are no longer in the in-memory window; the recorded references are:</p>`)
+				fmt.Fprint(w, `<table><tr><th>Topic</th><th>Age at decision</th><th>Derived</th></tr>`)
+				for _, rf := range refs {
+					rm, _ := rf.(map[string]any)
+					fmt.Fprintf(w, `<tr><td>%s</td><td>%v ms</td><td>%v</td></tr>`,
+						esc(fmt.Sprint(rm["topic"])), rm["age_ms"], rm["derived"])
+				}
+				fmt.Fprint(w, `</table>`)
+			} else {
+				fmt.Fprint(w, `<p>No input envelopes for this symbol in the preceding fifteen minutes.</p>`)
+			}
+		} else {
+			fmt.Fprint(w, `<table><tr><th>Topic</th><th>Age at decision</th><th>Envelope</th></tr>`)
+			for _, in := range inputs {
+				fmt.Fprintf(w, `<tr><td>%s</td><td>%.1f s</td><td>#%d</td></tr>`, esc(in.Topic), in.Age, in.ID)
+			}
+			fmt.Fprint(w, `</table>`)
+		}
+		if hops, ok := meta["hops"].([]any); ok && len(hops) > 0 {
+			fmt.Fprintf(w, `<h2>Pipeline</h2><table><tr><th>Stage</th><th>Name</th><th>Outcome</th><th>Detail</th></tr>`)
+			for _, h := range hops {
+				hm, _ := h.(map[string]any)
+				detail := ""
+				if v, ok := hm["detail"]; ok && v != nil {
+					detail = fmt.Sprint(v)
+				}
+				fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`,
+					esc(fmt.Sprint(hm["kind"])), esc(fmt.Sprint(hm["name"])),
+					esc(fmt.Sprint(hm["outcome"])), esc(detail))
+			}
+			fmt.Fprint(w, `</table>`)
+		}
+		if refs, ok := meta["refs"].([]any); ok && len(refs) > 0 {
+			fmt.Fprintf(w, `<h2>References</h2><table><tr><th>Topic</th><th>Age</th><th>Derived</th><th>Correlation id</th></tr>`)
+			for _, rf := range refs {
+				rm, _ := rf.(map[string]any)
+				fmt.Fprintf(w, `<tr><td>%s</td><td>%v ms</td><td>%v</td><td>%s</td></tr>`,
+					esc(fmt.Sprint(rm["topic"])), rm["age_ms"], rm["derived"], esc(fmt.Sprint(rm["cid"])))
+			}
+			fmt.Fprint(w, `</table>`)
+		}
+		raw, _ := json.MarshalIndent(anchor.Payload, "", "  ")
+		fmt.Fprintf(w, `<h2>Raw payload</h2><pre>%s</pre>`, esc(string(raw)))
+		fmt.Fprintf(w, `<div class="foot">Generated by The Envelope Explorer from the recorded lake. `+
+			`References marked derived were inferred by the recorder from the window, not declared by the producer.</div>`)
+		fmt.Fprint(w, `</body></html>`)
+	})
+
+	// /api/book.html is the regulatory report for one book: scope, summary, every
+	// trade, every refusal, exposure by symbol, the methodology and an attestation
+	// hash over the evidence.
+	mux.HandleFunc("/api/book.html", func(w http.ResponseWriter, r *http.Request) {
+		engine := r.URL.Query().Get("engine")
+		fromMS, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
+		toMS, _ := strconv.ParseInt(r.URL.Query().Get("to"), 10, 64)
+		if toMS == 0 {
+			toMS = time.Now().UnixMilli()
+		}
+		if fromMS == 0 {
+			fromMS = toMS - 24*3600*1000
+		}
+		type t = reportRow
+		var trades []t
+		var refusals []t
+		perSymbol := map[string]int{}
+		var netSum, heldSum, grossSum float64
+		for _, d := range scanTopic("model.fill", 1500) {
+			if d.TS < fromMS || d.TS > toMS {
+				continue
+			}
+			var p struct {
+				Data struct {
+					Engine   string  `json:"engine"`
+					Symbol   string  `json:"symbol"`
+					Side     string  `json:"side"`
+					Entry    float64 `json:"entry"`
+					Exit     float64 `json:"exit"`
+					HeldS    float64 `json:"held_s"`
+					NetPct   float64 `json:"net_pct"`
+					GrossPct float64 `json:"gross_pct"`
+					Reason   string  `json:"reason"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(d.Payload, &p) != nil {
+				continue
+			}
+			dd := p.Data
+			if engine != "" && !containsFold(dd.Engine, engine) && !containsFold(d.Producer, engine) {
+				continue
+			}
+			trades = append(trades, t{d.TS, dd.Symbol, dd.Side, dd.Entry, dd.Exit, dd.HeldS, dd.NetPct, dd.Reason, d.ID})
+			perSymbol[dd.Symbol]++
+			netSum += dd.NetPct
+			grossSum += dd.GrossPct
+			heldSum += dd.HeldS
+		}
+		for _, d := range scanTopic("model.decision", 1500) {
+			if d.TS < fromMS || d.TS > toMS {
+				continue
+			}
+			var p struct {
+				Data struct {
+					Engine  string `json:"engine"`
+					Allowed bool   `json:"allowed"`
+					Reason  string `json:"reason"`
+					Side    string `json:"side"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(d.Payload, &p) != nil || p.Data.Allowed {
+				continue
+			}
+			if engine != "" && !containsFold(p.Data.Engine, engine) && !containsFold(d.Producer, engine) {
+				continue
+			}
+			refusals = append(refusals, t{TS: d.TS, Key: d.Key, Side: p.Data.Side, Reason: p.Data.Reason, ID: d.ID})
+		}
+		sort.Slice(trades, func(i, j int) bool { return trades[i].TS < trades[j].TS })
+		sort.Slice(refusals, func(i, j int) bool { return refusals[i].TS < refusals[j].TS })
+		n := float64(len(trades))
+		esc := template.HTMLEscapeString
+		hash := fnv.New64a()
+		fmt.Fprintf(hash, "%s|%d|%d|%d", engine, fromMS, toMS, len(trades)+len(refusals))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fromStr := time.UnixMilli(fromMS).UTC().Format(time.RFC3339)
+		toStr := time.UnixMilli(toMS).UTC().Format(time.RFC3339)
+		nowStr := time.Now().UTC().Format(time.RFC3339)
+		hashVal := hash.Sum64()
+		head := fmt.Sprintf(`<html><head><meta charset="utf-8"><title>Regulatory book report</title><style>
+ body{font:10.5pt/1.45 -apple-system,Helvetica,Arial,sans-serif;color:#111;max-width:820px;margin:30px auto;padding:0 18px}
+ h1{font-size:19pt;margin:0} .sub{color:#555;font-size:9pt;margin:2px 0 16px}
+ h2{font-size:10pt;text-transform:uppercase;letter-spacing:.08em;color:#333;margin:20px 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px}
+ table{width:100%%;border-collapse:collapse;font-size:8.6pt} td,th{padding:3px 5px;border-bottom:1px solid #eee;text-align:left}
+ th{color:#666;font-size:8pt;text-transform:uppercase;letter-spacing:.05em}
+ .kv td:first-child{color:#666;width:38%%}
+ .neg{color:#a4232b} .pos{color:#12603a}
+ .foot{margin-top:24px;border-top:1px solid #ccc;padding-top:8px;color:#666;font-size:8pt}
+ @media print{body{margin:0} h2{page-break-after:avoid} tr{page-break-inside:avoid}}
+</style></head><body onload="window.print()">
+<h1>Regulatory book report — %s</h1>
+<div class="sub">window %s to %s · generated %s · case hash %x</div>
+
+<h2>1 · Scope</h2>
+<table class="kv">
+<tr><td>Book</td><td>%s</td></tr>
+<tr><td>Window</td><td>%s — %s</td></tr>
+<tr><td>Trades in scope</td><td>%d</td></tr>
+<tr><td>Refusals in scope</td><td>%d</td></tr>
+<tr><td>Instruments touched</td><td>%d</td></tr>
+<tr><td>Data source</td><td>recorded envelope lake; nothing reconstructed after the fact</td></tr>
+</table>`, esc(engine), fromStr, toStr, nowStr, hashVal,
+			esc(engine), fromStr, toStr, len(trades), len(refusals), len(perSymbol))
+		fmt.Fprint(w, head)
+
+		fmt.Fprintf(w, `<h2>2 · Summary</h2><table class="kv">
+<tr><td>Trades</td><td>%d</td></tr>
+<tr><td>Mean net per trade</td><td>%.3f%%</td></tr>
+<tr><td>Sum of net</td><td>%.3f%%</td></tr>
+<tr><td>Sum of gross</td><td>%.3f%%</td></tr>
+<tr><td>Mean holding time</td><td>%.0f s</td></tr>
+<tr><td>Longest hold</td><td>%.0f s</td></tr>
+<tr><td>Refusals</td><td>%d</td></tr>
+</table>`, len(trades), safeDiv(netSum, n), netSum, grossSum, safeDiv(heldSum, n), maxHeldTrades(trades), len(refusals))
+
+		fmt.Fprintf(w, `<h2>3 · Trades</h2><table><tr><th>#</th><th>time</th><th>instrument</th><th>side</th><th>entry</th><th>exit</th><th>held</th><th>net</th><th>reason</th><th>envelope</th></tr>`)
+		for i, tr := range trades {
+			cls := "pos"
+			if tr.NetPct < 0 {
+				cls = "neg"
+			}
+			fmt.Fprintf(w, `<tr><td>%d</td><td>%s</td><td>%s</td><td>%s</td><td>%.6g</td><td>%.6g</td><td>%.0fs</td><td class="%s">%.3f%%</td><td>%s</td><td>%d</td></tr>`,
+				i+1, time.UnixMilli(tr.TS).UTC().Format("15:04:05"), esc(tr.Key), esc(tr.Side),
+				tr.Entry, tr.Exit, tr.HeldS, cls, tr.NetPct, esc(tr.Reason), tr.ID)
+		}
+		fmt.Fprint(w, `</table>`)
+
+		if len(refusals) > 0 {
+			fmt.Fprintf(w, `<h2>4 · Refusals</h2><table><tr><th>time</th><th>instrument</th><th>side</th><th>rule</th><th>envelope</th></tr>`)
+			for _, rf := range refusals {
+				fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td></tr>`,
+					time.UnixMilli(rf.TS).UTC().Format("15:04:05"), esc(rf.Key), esc(rf.Side), esc(rf.Reason), rf.ID)
+			}
+			fmt.Fprint(w, `</table>`)
+		}
+		fmt.Fprintf(w, `<h2>5 · Exposure by instrument</h2><table><tr><th>instrument</th><th>trades</th></tr>`)
+		type kv struct {
+			k string
+			v int
+		}
+		var list []kv
+		for k, v := range perSymbol {
+			list = append(list, kv{k, v})
+		}
+		sort.Slice(list, func(i, j int) bool { return list[i].v > list[j].v })
+		for _, e := range list {
+			fmt.Fprintf(w, `<tr><td>%s</td><td>%d</td></tr>`, esc(e.k), e.v)
+		}
+		fmt.Fprint(w, `</table>`)
+
+		fmt.Fprintf(w, `<h2>6 · Methodology and lineage</h2>
+<p>Each trade above is a model.fill envelope recorded at the time of execution. Its decision, the inputs it
+read and the pipeline it passed are recorded alongside it and can be retrieved individually by envelope id.
+References marked <em>derived</em> in an individual case file were inferred by the recorder from the window at
+ingestion; references marked <em>declared</em> were emitted by the producing model.</p>
+<p>Holding time is measured from entry to exit in the recorded payload. Net return is the model's own net
+figure after fees, as recorded, not recomputed here. Refusals are decisions the governor declined, with the
+rule and the number that tripped it quoted verbatim.</p>`)
+
+		fmt.Fprintf(w, `<div class="foot">Generated by The Envelope Explorer from the recorded lake. Case hash %x —
+this report is a rendering of recorded envelopes, not a reconstruction: every row can be resolved to an
+envelope id above.</div></body></html>`, hash.Sum64())
+	})
+
+	// /api/books lists the engines that have traded, with a one-line summary each.
+	mux.HandleFunc("/api/books", func(w http.ResponseWriter, r *http.Request) {
+		type row struct {
+			Engine   string  `json:"engine"`
+			Trades   int     `json:"trades"`
+			NetSum   float64 `json:"net_sum"`
+			MeanNet  float64 `json:"mean_net"`
+			MeanHeld float64 `json:"mean_held"`
+			Refusals int     `json:"refusals"`
+		}
+		agg := map[string]*row{}
+		for _, d := range scanTopic("model.fill", 1500) {
+			var p struct {
+				Data struct {
+					Engine string  `json:"engine"`
+					NetPct float64 `json:"net_pct"`
+					HeldS  float64 `json:"held_s"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(d.Payload, &p) != nil || p.Data.Engine == "" {
+				continue
+			}
+			a := agg[p.Data.Engine]
+			if a == nil {
+				a = &row{Engine: p.Data.Engine}
+				agg[p.Data.Engine] = a
+			}
+			a.Trades++
+			a.NetSum += p.Data.NetPct
+			a.MeanHeld += p.Data.HeldS
+		}
+		for _, d := range scanTopic("model.decision", 1500) {
+			var p struct {
+				Data struct {
+					Engine  string `json:"engine"`
+					Allowed bool   `json:"allowed"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(d.Payload, &p) != nil || p.Data.Engine == "" || p.Data.Allowed {
+				continue
+			}
+			if a := agg[p.Data.Engine]; a != nil {
+				a.Refusals++
+			} else {
+				agg[p.Data.Engine] = &row{Engine: p.Data.Engine, Refusals: 1}
+			}
+		}
+		out := make([]*row, 0, len(agg))
+		for _, a := range agg {
+			if a.Trades > 0 {
+				a.MeanNet = safeDiv(a.NetSum, float64(a.Trades))
+				a.MeanHeld = safeDiv(a.MeanHeld, float64(a.Trades))
+			}
+			a.NetSum = round2(a.NetSum)
+			a.MeanNet = round2(a.MeanNet)
+			a.MeanHeld = round2(a.MeanHeld)
+			out = append(out, a)
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Trades > out[j].Trades })
+		json.NewEncoder(w).Encode(out)
+	})
+
+	// /api/book aggregates everything recorded for one engine: its trades, its
+	// refusals, holding times and per-symbol exposure. This is the view a compliance
+	// officer starts from when asked "how did this book trade".
+	mux.HandleFunc("/api/book", func(w http.ResponseWriter, r *http.Request) {
+		engine := r.URL.Query().Get("engine")
+		if engine == "" {
+			http.Error(w, "engine required", 400)
+			return
+		}
+		fromMS, _ := strconv.ParseInt(r.URL.Query().Get("from"), 10, 64)
+		toMS, _ := strconv.ParseInt(r.URL.Query().Get("to"), 10, 64)
+		if toMS == 0 {
+			toMS = time.Now().UnixMilli()
+		}
+		if fromMS == 0 {
+			fromMS = toMS - 24*3600*1000
+		}
+		type trade = bookTrade
+		type refusal struct {
+			ID     int    `json:"id"`
+			TS     int64  `json:"ts"`
+			Key    string `json:"key"`
+			Reason string `json:"reason"`
+		}
+		var trades []trade
+		var refusals []refusal
+		perSymbol := map[string]int{}
+		var gross, netSum, heldSum float64
+		for _, d := range scanTopic("model.fill", 1500) {
+			if d.TS < fromMS || d.TS > toMS {
+				continue
+			}
+			var p struct {
+				Data struct {
+					Engine   string  `json:"engine"`
+					Symbol   string  `json:"symbol"`
+					Side     string  `json:"side"`
+					Entry    float64 `json:"entry"`
+					Exit     float64 `json:"exit"`
+					HeldS    float64 `json:"held_s"`
+					NetPct   float64 `json:"net_pct"`
+					GrossPct float64 `json:"gross_pct"`
+					Reason   string  `json:"reason"`
+					Notional float64 `json:"notional"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(d.Payload, &p) != nil {
+				continue
+			}
+			dd := p.Data
+			if !containsFold(dd.Engine, engine) && !containsFold(d.Producer, engine) {
+				continue
+			}
+			trades = append(trades, trade{ID: d.ID, TS: d.TS, Key: dd.Symbol, Side: dd.Side,
+				Entry: dd.Entry, Exit: dd.Exit, HeldS: dd.HeldS, NetPct: dd.NetPct,
+				Reason: dd.Reason, Notional: dd.Notional})
+			perSymbol[dd.Symbol]++
+			gross += dd.GrossPct
+			netSum += dd.NetPct
+			heldSum += dd.HeldS
+		}
+		for _, d := range scanTopic("model.decision", 1500) {
+			if d.TS < fromMS || d.TS > toMS {
+				continue
+			}
+			var p struct {
+				Data struct {
+					Engine  string `json:"engine"`
+					Allowed bool   `json:"allowed"`
+					Reason  string `json:"reason"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(d.Payload, &p) != nil {
+				continue
+			}
+			if p.Data.Allowed || (!containsFold(p.Data.Engine, engine) && !containsFold(d.Producer, engine)) {
+				continue
+			}
+			refusals = append(refusals, refusal{ID: d.ID, TS: d.TS, Key: d.Key, Reason: p.Data.Reason})
+		}
+		sort.Slice(trades, func(i, j int) bool { return trades[i].TS > trades[j].TS })
+		sort.Slice(refusals, func(i, j int) bool { return refusals[i].TS > refusals[j].TS })
+		n := float64(len(trades))
+		summary := map[string]any{
+			"trades": len(trades), "refusals": len(refusals),
+			"gross_pct_sum": round2(gross), "net_pct_sum": round2(netSum),
+			"mean_net_pct": round2(safeDiv(netSum, n)), "mean_held_s": round2(safeDiv(heldSum, n)),
+			"max_held_s": maxHeld(trades), "symbols": len(perSymbol),
+			"from_ms": fromMS, "to_ms": toMS,
+		}
+		json.NewEncoder(w).Encode(map[string]any{"engine": engine, "summary": summary,
+			"trades": trades, "refusals": refusals, "per_symbol": perSymbol})
+	})
+
+	// /api/search finds candidates by symbol, engine, outcome and time window.
+	mux.HandleFunc("/api/search", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		symbol := q.Get("symbol")
+		engine := q.Get("engine")
+		outcome := q.Get("outcome") // traded | refused | any
+		fromMS, _ := strconv.ParseInt(q.Get("from"), 10, 64)
+		toMS, _ := strconv.ParseInt(q.Get("to"), 10, 64)
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		if limit <= 0 || limit > 200 {
+			limit = 50
+		}
+		if fromMS == 0 && toMS == 0 {
+			toMS = time.Now().UnixMilli()
+			fromMS = toMS - 6*3600*1000
+		}
+		type hit struct {
+			ID      int     `json:"id"`
+			TS      int64   `json:"ts"`
+			Key     string  `json:"key"`
+			Engine  string  `json:"engine"`
+			Side    string  `json:"side"`
+			Allowed bool    `json:"allowed"`
+			Reason  string  `json:"reason"`
+			Net     float64 `json:"net_pct,omitempty"`
+			Topic   string  `json:"topic"`
+		}
+		var hits []hit
+		for _, d := range scanTopic("model.decision", 2000) {
+			if d.TS < fromMS || d.TS > toMS {
+				continue
+			}
+			if symbol != "" && !containsFold(d.Key, symbol) {
+				continue
+			}
+			var p struct {
+				Data struct {
+					Engine string `json:"engine"`
+					Side   string `json:"side"`
+					Allow  bool   `json:"allowed"`
+					Reason string `json:"reason"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(d.Payload, &p) != nil {
+				continue
+			}
+			if engine != "" && !containsFold(p.Data.Engine, engine) && !containsFold(d.Producer, engine) {
+				continue
+			}
+			if outcome == "traded" && !p.Data.Allow {
+				continue
+			}
+			if outcome == "refused" && p.Data.Allow {
+				continue
+			}
+			hits = append(hits, hit{ID: d.ID, TS: d.TS, Key: d.Key, Engine: p.Data.Engine,
+				Side: p.Data.Side, Allowed: p.Data.Allow, Reason: p.Data.Reason, Topic: d.Topic})
+		}
+		sort.Slice(hits, func(i, j int) bool { return hits[i].TS > hits[j].TS })
+		if len(hits) > limit {
+			hits = hits[:limit]
+		}
+		json.NewEncoder(w).Encode(map[string]any{"count": len(hits), "hits": hits,
+			"from": fromMS, "to": toMS})
 	})
 
 	// /api/gantt returns horizontal spans: for one outcome, how long each input had

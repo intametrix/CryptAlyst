@@ -2,7 +2,7 @@
 const $ = (id) => document.getElementById(id);
 const state = { plane: "", topic: "", key: "", producer: "", cid: "", q: "", docs: [], sel: null,
   live: true, role: "owner", from: 0, to: 0, buckets: [], playing: null, span: 0,
-  view: "list", journeyKey: "", whyKey: "", whyEngine: "" };
+  view: "list", journeyKey: "", whyKey: "", whyEngine: "", whyHours: 6, whyOutcome: "any" };
 
 const TOPIC_MEANING = {
   "ticks": "batched price snapshot across streamed symbols",
@@ -415,6 +415,62 @@ const STAGE_LABEL = ["market data", "advisories", "risk & alerts", "decisions", 
 const LANE_LABEL = ["market", "advisories", "risk", "model", "other"];
 let exZoom = 1;
 
+/* Books: the compliance officer's entry point. */
+async function renderBooks() {
+  const d = await (await fetch("/api/books", { cache: "no-store" })).json();
+  const rows = d || [];
+  $("booksTitle").textContent = `books — ${rows.length} engines · ${rows.reduce((a, b) => a + b.trades, 0)} trades`;
+  $("booksBody").innerHTML = `
+    <div class="book-card"><span class="hdr">engine</span><span class="hdr num">trades</span>
+      <span class="hdr num">net sum</span><span class="hdr num">mean net</span>
+      <span class="hdr num">mean held</span><span class="hdr num">refusals</span></div>
+    ${rows.map((b) => `<div class="book-card" data-engine="${esc(b.engine)}">
+      <span class="name">${esc(b.engine)}</span>
+      <span class="num">${b.trades}</span>
+      <span class="num ${b.net_sum >= 0 ? "" : "neg"}">${b.net_sum >= 0 ? "+" : ""}${b.net_sum.toFixed(2)}%</span>
+      <span class="num">${b.mean_net >= 0 ? "+" : ""}${b.mean_net.toFixed(3)}%</span>
+      <span class="num">${Math.round(b.mean_held)}s</span>
+      <span class="num">${b.refusals}</span></div>`).join("")}`;
+  $("booksBody").querySelectorAll(".book-card[data-engine]").forEach((el) => {
+    el.onclick = () => openBook(el.dataset.engine);
+  });
+}
+
+async function openBook(engine) {
+  const d = await (await fetch("/api/book?engine=" + encodeURIComponent(engine), { cache: "no-store" })).json();
+  const s = d.summary || {};
+  $("booksTitle").textContent = `book — ${engine}`;
+  $("booksBody").innerHTML = `<div class="book-detail">
+    <div class="ctx-actions" style="margin-bottom:10px">
+      <button class="ctx-btn" id="bookReport">export regulatory report ↗</button>
+      <button class="ctx-btn" id="bookBack">← all books</button>
+    </div>
+    <table class="kv" style="width:auto">
+      <tr><td>Trades</td><td>${s.trades}</td></tr>
+      <tr><td>Refusals</td><td>${s.refusals}</td></tr>
+      <tr><td>Mean net</td><td>${s.mean_net_pct}%</td></tr>
+      <tr><td>Sum of net</td><td>${s.net_pct_sum}%</td></tr>
+      <tr><td>Mean held</td><td>${Math.round(s.mean_held_s)}s</td></tr>
+      <tr><td>Longest hold</td><td>${Math.round(s.max_held_s)}s</td></tr>
+      <tr><td>Instruments</td><td>${s.symbols}</td></tr>
+    </table>
+    <h3>trades</h3>
+    <table><tr><th>time</th><th>instrument</th><th>side</th><th>held</th><th>net</th><th>envelope</th></tr>
+      ${(d.trades || []).slice(0, 40).map((t) => `<tr data-id="${t.id}"><td>${fmtTime(t.ts)}</td>
+        <td>${esc(t.key)}</td><td>${esc(t.side)}</td><td>${Math.round(t.held_s)}s</td>
+        <td>${t.net_pct.toFixed(3)}%</td><td>${t.id}</td></tr>`).join("")}</table>
+    <h3>refusals</h3>
+    ${(d.refusals || []).length ? `<table><tr><th>time</th><th>instrument</th><th>rule</th></tr>
+      ${d.refusals.slice(0, 20).map((x) => `<tr><td>${fmtTime(x.ts)}</td><td>${esc(x.key)}</td>
+        <td>${esc(x.reason)}</td></tr>`).join("")}</table>` : `<div class="muted">none recorded</div>`}
+  </div>`;
+  $("bookReport").onclick = () => window.open("/api/book.html?engine=" + encodeURIComponent(engine), "_blank");
+  $("bookBack").onclick = renderBooks;
+  $("booksBody").querySelectorAll("tr[data-id]").forEach((tr) => {
+    tr.onclick = () => select(Number(tr.dataset.id));
+  });
+}
+
 /* The Gantt: horizontal spans. Positions show how long a trade was held; trace
    shows how long each input had been valid before the outcome read it. */
 let ganttMode = "positions";
@@ -595,6 +651,7 @@ async function renderContext() {
     <div class="ctx-actions">
       <button class="ctx-btn" id="ctxFlow">flow for ${esc(d.key || "all symbols")} →</button>
       <button class="ctx-btn" id="ctxGantt">gantt →</button>
+      <button class="ctx-btn" id="ctxCase">export case file ↗</button>
       ${d.topic === "model.decision" || /^model\./.test(d.topic)
         ? `<button class="ctx-btn" id="ctxWhy">why ${esc(d.key || "")} traded or not →</button>` : ""}
     </div>
@@ -607,6 +664,7 @@ async function renderContext() {
   if ($("ctxTrace")) $("ctxTrace").onclick = () => setView("execution");
   if ($("ctxFlow")) $("ctxFlow").onclick = () => setView("journey");
   if ($("ctxGantt")) $("ctxGantt").onclick = () => setView("gantt");
+  if ($("ctxCase")) $("ctxCase").onclick = () => window.open("/api/case.html?id=" + state.sel, "_blank");
   if ($("ctxWhy")) $("ctxWhy").onclick = () => { state.whyKey = d.key || ""; setView("why"); };
 }
 
@@ -615,9 +673,16 @@ async function renderWhy() {
   const params = new URLSearchParams();
   if (state.whyKey) params.set("key", state.whyKey);
   if (state.whyEngine) params.set("engine", state.whyEngine);
+  if (state.whyHours) params.set("from", String(Date.now() - state.whyHours * 3600 * 1000));
+  if (state.whyOutcome && state.whyOutcome !== "any") params.set("outcome", state.whyOutcome);
   params.set("limit", "80");
   const d = await (await fetch("/api/why?" + params.toString(), { cache: "no-store" })).json();
+  const search = await (await fetch("/api/search?" + params.toString(), { cache: "no-store" })).json();
   const allowed = d.allowed || 0, refused = d.refused || 0;
+  if (search && search.hits) {
+    d.decisions = search.hits.map((h) => ({ id: h.id, ts: h.ts, key: h.key, engine: h.engine,
+      allowed: h.allowed, reason: h.reason, confidence: 0, topic: h.topic }));
+  }
   $("whyTitle").textContent = `why — ${allowed} traded · ${refused} refused` + (d.key ? " · " + d.key : "");
   const reasons = d.reasons || [];
   const max = Math.max(...reasons.map((r) => r.count), 1);
@@ -744,6 +809,8 @@ function drawExecution(d) {
 $("whyRun").onclick = () => {
   state.whyKey = $("whyKey").value.trim();
   state.whyEngine = $("whyEngine").value.trim();
+  state.whyHours = Number($("whyHours").value);
+  state.whyOutcome = $("whyOutcome").value;
   renderWhy();
 };
 $("whyKey").onkeydown = (e) => { if (e.key === "Enter") $("whyRun").click(); };
@@ -1014,6 +1081,9 @@ function applyView(view) {
   const why = $("why");
   const context = $("context");
   const gantt = $("gantt");
+  const books = $("books");
+  books.classList.toggle("hidden", view !== "books");
+  if (view === "books") renderBooks();
   gantt.classList.toggle("hidden", view !== "gantt");
   if (view === "gantt") renderGantt();
   rows.classList.toggle("hidden", view !== "list");
@@ -1078,6 +1148,8 @@ document.addEventListener("keydown", (ev) => {
 });
 
 if ($("backBtn")) $("backBtn").onclick = () => goBack();
+if ($("booksBtn")) $("booksBtn").onclick = () => setView("books");
+if ($("booksRefresh")) $("booksRefresh").onclick = () => renderBooks();
 
 $("role").onchange = (e) => {
   state.role = e.target.value;
