@@ -1,0 +1,33 @@
+I'm building a Binance SPOT pump-and-dump ONSET detector in Python (asyncio). I want your best methodology. No need to write code or touch files — I want a dense technical design critique with concrete numbers.
+
+## Goal
+Signal the very BEGINNING of a sharp rise ("pump") and the mirror case (sharp drop, "dump") in a crypto pair. NOT after-the-fact confirmation. Target latency ~10 seconds. The user's own framing of what they want detected: "in the last 10 seconds suddenly a lot of volume is flowing".
+
+## Verified constraints
+- Binance spot, PUBLIC market data only (no API keys needed).
+- Universe: ~700 USDT-quoted pairs; realistically the 300-500 most liquid ones.
+- Combined websocket streams, up to 1024 streams per connection:
+  wss://stream.binance.com:9443/stream?streams=btcusdt@miniTicker/ethusdt@miniTicker/...
+- Per-symbol stream payloads I have confirmed work:
+  * @miniTicker, 1 msg/sec/symbol: {c close, o open24h, h high24h, l low24h, v base vol 24h, q quote vol 24h}
+  * @ticker, 1 msg/sec/symbol: same as miniTicker PLUS n = trade count, b/B best bid+qty, a/A best ask+qty, P = pct change
+  * @aggTrade, every aggregated trade: {p price, q qty, T trade time ms, m = "buyer is market maker"}. So m=false means the taker was a BUYER (aggressive buy), m=true means taker was a SELLER. Critical detail: m=false is a market BUY.
+  * @bookTicker: real-time best bid/ask, very high message rate.
+- REST: /api/v3/klines (supports 1s, 1m, ... intervals), /api/v3/ticker/24hr (all symbols, weight 80), /api/v3/ticker/price (all symbols, weight 4). Spot REST budget = 6000 weight/min. klines weight = 2.
+
+## My planned design (critique this hard)
+1. One combined @miniTicker connection for the tracked universe (~400 streams). Per symbol, maintain 1-second buckets of (price, cumulative 24h quote volume q). Then quote-volume flow over the last 10s = q_now - q_10s_ago (a delta of the rolling 24h counter). Compare that against a rolling baseline to get a "volume burst multiple" and a z-score.
+2. For symbols that pass a cheap volume+price-velocity gate, dynamically SUBSCRIBE on the same connection to that symbol's @aggTrade for a few minutes to measure taker buy/sell imbalance at sub-second resolution and confirm direction.
+3. Score, rank, alert.
+
+## Questions
+1. Best-performing robust feature set for ONSET detection at 10s resolution. Be concrete: exact feature definitions, normalization, windows.
+2. Baseline estimation. I only have 24h rolling counters, so I derive deltas. Which estimator is robust to (a) cold start, (b) previous spikes contaminating the baseline, (c) bursty/non-stationary volume? Compare EWMA vs rolling median vs quantiles, and give parameters.
+3. How to avoid the classic false positives: single-print wicks, thin books, wash trading on illiquid alts, news moves that simply continue, and "already pumped" coins where I'm late. Give concrete filters with numbers.
+4. Is ~10s latency actually achievable with this data, or is there a better latency/robustness tradeoff? Give the realistic detection-delay breakdown.
+5. Exactly how to use @aggTrade taker-side data: (a) to confirm direction, (b) to measure "aggressive buying onset". Which microstructure signals are worth adding — trade-arrival-rate acceleration, trade-size clustering, sweep/iceberg detection, signed-volume imbalance?
+6. How to detect the DUMP and the post-pump reversal symmetrically. Better as an independent event, or as the second leg of a tracked pump cycle?
+7. Concrete starting thresholds, and how to calibrate them without a labeled dataset. Can I build a cheap self-labeling loop from 1s/1m klines to estimate precision/recall?
+8. What am I missing? Order-book imbalance from bookTicker depth, spread widening, exchange listing/announcement effects, cross-pair lead-lag (e.g. does BTC lead alts), funding/liquidation effects.
+
+Give a prioritized design with specific numbers throughout. I care more about PRECISION and EARLY latency than about catching every move. Keep it dense and technical.
