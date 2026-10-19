@@ -219,7 +219,7 @@ async function select(id) {
     } else {
       $("chain").textContent = "no key on this envelope";
     }
-    if (state.view === "journey") renderJourney(d.key || state.journeyKey);
+    if (state.view === "journey") renderJourney(d.id);
   } catch (e) {
     $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
   }
@@ -351,20 +351,28 @@ const STAGE_LABEL = ["market data", "advisories", "risk & alerts", "decisions", 
 
 /* The flow view: stages as columns, topics as boxes sized by volume, links as
    ribbons whose width is the number of correlations observed. */
-async function renderJourney(keyHint) {
-  const key = keyHint || state.journeyKey || state.key || "";
+/* A journey starts at a point: the selected envelope becomes the anchor, the
+   window opens from its timestamp and runs forward on its symbol. */
+async function renderJourney(anchorId) {
   const params = new URLSearchParams();
-  if (key) params.set("key", key);
-  if (state.from) params.set("from", String(state.from));
-  if (state.to) params.set("to", String(state.to));
+  const anchor = anchorId || state.sel;
+  if (anchor) {
+    params.set("id", String(anchor));
+  } else {
+    if (state.journeyKey) params.set("key", state.journeyKey);
+    if (state.from) params.set("from", String(state.from));
+    if (state.to) params.set("to", String(state.to));
+  }
   const d = await (await fetch("/api/flow?" + params.toString(), { cache: "no-store" })).json();
-  state.journeyKey = key;
-  $("journeyKey").textContent = "key: " + (key || "all symbols");
+  state.journeyKey = d.key || "";
+  const stamp = anchor ? " · from " + fmtTime(d.from) : " · last 5 minutes";
+  $("journeyKey").textContent = "key: " + (d.key || "all symbols") + stamp;
   drawFlow(d);
 }
 
 function drawFlow(d) {
   const nodes = d.nodes || [], links = d.links || [];
+  const anchorIds = new Set(nodes.filter((n) => n.id === d.anchor).map((n) => n.id));
   const svg = $("journeySvg");
   if (!nodes.length) {
     svg.innerHTML = '<text x="450" y="320" text-anchor="middle" fill="#5a6b80" font-size="12">no traffic in this window</text>';
@@ -421,9 +429,21 @@ function drawFlow(d) {
   const stageSvg = stages.map((st, ci) =>
     `<text class="jstage" x="${padX + ci * colW + 14}" y="${padTop - 26}">${STAGE_LABEL[st]}</text>`).join("");
 
-  svg.innerHTML = stageSvg + linkSvg + nodeSvg;
+  // the anchor node — the point the journey starts from — is ringed
+  const anchorRing = Object.values(pos)
+    .filter((p) => p.node.anchor)
+    .map((p) => `<rect x="${p.x - 3}" y="${p.y - 3}" width="${p.w + 6}" height="${p.h + 6}"
+      rx="9" fill="none" stroke="#e6eef8" stroke-width="2" stroke-dasharray="5 3"/>`).join("");
+
+  svg.innerHTML = stageSvg + linkSvg + nodeSvg + anchorRing;
   svg.querySelectorAll(".jnode").forEach((el) => {
     el.onclick = () => select(Number(el.dataset.id));
+  });
+  svg.querySelectorAll(".jnode").forEach((el) => {
+    el.addEventListener("dblclick", (ev) => {
+      ev.stopPropagation();
+      renderJourney(Number(el.dataset.id));
+    });
   });
   const totalCount = nodes.reduce((a, n) => a + n.count, 0);
   $("journeyLegend").innerHTML = ["market", "intel", "model", "control", "system"].map((p) =>

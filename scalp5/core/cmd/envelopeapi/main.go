@@ -668,7 +668,28 @@ func main() {
 		key := q.Get("key")
 		fromMS, _ := strconv.ParseInt(q.Get("from"), 10, 64)
 		toMS, _ := strconv.ParseInt(q.Get("to"), 10, 64)
+		anchor, _ := strconv.Atoi(q.Get("id"))
+		horizon, _ := strconv.Atoi(q.Get("horizon_s"))
+		if horizon <= 0 || horizon > 3600 {
+			horizon = 300
+		}
 		docs := st.snapshot()
+		if anchor > 0 {
+			// a journey starts at a point: the window opens at the chosen envelope
+			// and runs forward, on that envelope's symbol when it has one
+			for _, d := range docs {
+				if d.ID == anchor {
+					// a little lead-in so the flow shows what fed the point as well
+					// as what followed it
+					fromMS = d.TS - 120000
+					toMS = d.TS + int64(horizon)*1000
+					if d.Key != "" {
+						key = d.Key
+					}
+					break
+				}
+			}
+		}
 		if fromMS == 0 && toMS == 0 {
 			// default window: the last thirty minutes of retained traffic
 			var newest int64
@@ -690,6 +711,7 @@ func main() {
 			FirstTS int64  `json:"first_ts"`
 			LastTS  int64  `json:"last_ts"`
 			Key     string `json:"key"`
+			Anchor  bool   `json:"anchor,omitempty"`
 		}
 		type flink struct {
 			From  int `json:"from"`
@@ -702,6 +724,7 @@ func main() {
 		}
 		nodes := map[fkey]*fnode{}
 		var order []fkey
+		var anchorKey *fkey
 		var picked []envelopeDoc
 		for _, d := range docs {
 			if d.TS < fromMS || d.TS > toMS {
@@ -717,6 +740,10 @@ func main() {
 				n = &fnode{Topic: d.Topic, Plane: d.Plane, Stage: k.stage, FirstTS: d.TS, LastTS: d.TS, Key: d.Key}
 				nodes[k] = n
 				order = append(order, k)
+			}
+			if anchor > 0 && d.ID == anchor {
+				k := k
+				anchorKey = &k
 			}
 			n.Count++
 			n.Bytes += d.Size
@@ -762,6 +789,9 @@ func main() {
 		}
 		outNodes := make([]fnode, 0, len(order))
 		for _, k := range order {
+			if anchorKey != nil && *anchorKey == k {
+				nodes[k].Anchor = true
+			}
 			outNodes = append(outNodes, *nodes[k])
 		}
 		sort.Slice(outNodes, func(i, j int) bool {
@@ -816,7 +846,7 @@ func main() {
 			outLinks = append(outLinks, flink{From: a.ID, To: b.ID, Count: n})
 		}
 		json.NewEncoder(w).Encode(map[string]any{
-			"from": fromMS, "to": toMS, "key": key,
+			"from": fromMS, "to": toMS, "key": key, "anchor": anchor,
 			"nodes": outNodes, "links": outLinks, "scanned": len(picked),
 		})
 	})
