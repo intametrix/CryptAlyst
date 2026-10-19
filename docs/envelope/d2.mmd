@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant MD as market_data
+  participant BUS as RabbitMQ
+  participant CALC as calculator
+  participant ENG as trading engine
+  MD->>BUS: envelope ticks generation 1
+  BUS-->>CALC: ticks
+  CALC->>CALC: compute flow and ATR
+  CALC->>BUS: envelope advisory refs ticks
+  BUS-->>ENG: advisory plus market data
+  ENG->>ENG: refuse if age exceeds limit
+  ENG->>BUS: envelope decision refs advisory

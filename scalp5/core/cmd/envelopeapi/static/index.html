@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>The Envelope Explorer — CryptAlyst</title>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="logo">◈</div>
+    <div>
+      <h1>The Envelope Explorer</h1>
+      <p>every message the platform emitted, with its provenance</p>
+    </div>
+  </div>
+  <div class="stats" id="stats"></div>
+  <label class="role">
+    <span>viewing as</span>
+    <select id="role">
+      <option value="owner">owner</option>
+      <option value="auditor">auditor</option>
+      <option value="bystander">bystander</option>
+    </select>
+  </label>
+</header>
+
+<section class="timeline" id="timelineBar">
+  <div class="tl-head">
+    <span class="tl-title">timeline</span>
+    <span class="tl-window" id="tlWindow">live · last 200</span>
+    <div class="tl-controls">
+      <button id="play" class="mini" title="play back the retained window">▶ play</button>
+      <button id="tlClear" class="mini" title="return to live">live</button>
+    </div>
+  </div>
+  <div class="tl-track" id="track">
+    <div class="tl-empty">no data yet</div>
+  </div>
+  <div class="tl-axis" id="axis"></div>
+</section>
+
+<main class="grid">
+  <aside class="panel filters">
+    <div class="field">
+      <label>Plane</label>
+      <div class="chips" id="planeChips">
+        <button class="chip plane all active" data-plane="">all</button>
+        <button class="chip plane market" data-plane="market">market</button>
+        <button class="chip plane intel" data-plane="intel">intel</button>
+        <button class="chip plane model" data-plane="model">model</button>
+        <button class="chip plane control" data-plane="control">control</button>
+        <button class="chip plane system" data-plane="system">system</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="topic">Topic</label>
+      <select id="topic"><option value="">all topics</option></select>
+    </div>
+    <div class="field">
+      <label for="key">Symbol / key</label>
+      <input id="key" placeholder="BTCUSDT" autocomplete="off"/>
+    </div>
+    <div class="field">
+      <label for="producer">Producer</label>
+      <input id="producer" placeholder="market_data, signals, tad…" autocomplete="off"/>
+    </div>
+    <div class="field">
+      <label for="cid">Correlation id</label>
+      <input id="cid" placeholder="cid-…" autocomplete="off"/>
+    </div>
+    <div class="field">
+      <label for="q">Contains</label>
+      <input id="q" placeholder="free text in payload or meta" autocomplete="off"/>
+    </div>
+    <div class="actions">
+      <button id="reset" class="ghost">reset</button>
+      <button id="live" class="toggle on">live</button>
+    </div>
+    <div class="field topics">
+      <label>By volume</label>
+      <div id="topicList" class="topic-list"></div>
+    </div>
+  </aside>
+
+  <section class="panel list">
+    <div class="tabs">
+      <button class="tab active" data-view="list">envelopes</button>
+      <button class="tab" data-view="journey">journey</button>
+      <span class="tab-key" id="journeyKey">key: —</span>
+    </div>
+    <div class="list-head">
+      <span id="resultCount">—</span>
+      <span class="hint">newest first · click to inspect</span>
+    </div>
+    <div id="rows" class="rows"></div>
+    <div id="journey" class="journey hidden">
+      <svg id="journeySvg" viewBox="0 0 900 640" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="journey-legend" id="journeyLegend"></div>
+    </div>
+  </section>
+
+  <section class="panel detail" id="detail">
+    <div class="empty">select an envelope to see its anatomy</div>
+  </section>
+</main>
+
+<footer class="status">
+  <span id="conn" class="dot"></span><span id="connText">connecting…</span>
+  <span class="spacer"></span>
+  <span id="foot"></span>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

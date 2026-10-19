@@ -77,32 +77,14 @@ def trading_halted():
     return False, ""
 
 
-TARGET_VOL_PCT = 0.60     # aim for roughly this ATR% per position
-
-
-def vol_target(notional, atr_pct, lo=0.3, hi=2.2):
-    """Scale size so risk is similar across symbols of different volatility."""
-    try:
-        a = float(atr_pct)
-    except Exception:
-        return notional
-    if a <= 0:
-        return notional
-    scale = max(lo, min(hi, TARGET_VOL_PCT / a))
-    return notional * scale
-
-
-def size_for(notional, confidence, atr_pct=None):
+def size_for(notional, confidence):
     """Flow confidence scales size: 0.5x when unconvinced, 1.5x when aligned."""
     c = max(-100, min(100, confidence or 0))
-    sized = notional * (0.5 + (c + 100) / 200.0)
-    if atr_pct is not None:
-        sized = vol_target(sized, atr_pct)
-    return sized
+    return notional * (0.5 + (c + 100) / 200.0)
 
 
 def allow(symbol, side, notional, book_equity, expected_move_pct=None, slippage_bps=None,
-          confidence=None, bar_age_s=None, signal_age_s=None):
+          confidence=None, bar_age_s=None, signal_age_s=None, book_positions=None):
     """Return (allowed, reason). Records the decision for the dashboard."""
     if notional <= 0:
         return False, "zero size"
@@ -126,15 +108,21 @@ def allow(symbol, side, notional, book_equity, expected_move_pct=None, slippage_
         return False, "gross exposure would exceed %.1fx" % DEFAULTS["max_gross_multiple"]
     if notional / max(book_equity, 1) > DEFAULTS["max_symbol_share"]:
         return False, "position above %.0f%% of the book" % (100 * DEFAULTS["max_symbol_share"])
-    same = st["longs"] if side == "buy" else st["shorts"]
+    # direction cap is per book: one model's positions must not block another's.
+    if book_positions is not None:
+        same = sum(1 for pos in book_positions
+                   if (pos.get("side") or "").lower() == side)
+    else:
+        same = st["longs"] if side == "buy" else st["shorts"]
     if same >= DEFAULTS["max_same_direction"]:
-        return False, "%d positions already %s" % (same, side)
-    if confidence is not None and abs(confidence) < 10:
-        return False, "money flow gives no confidence (%.0f)" % confidence
-    if confidence is not None and side == "buy" and confidence < -30:
-        return False, "flow opposes the long (%.0f)" % confidence
-    if confidence is not None and side == "sell" and confidence > 30:
-        return False, "flow opposes the short (%.0f)" % confidence
+        return False, "%d positions already %s in this book" % (same, side)
+    # The gate is about opposition, not enthusiasm. A neutral book (confidence
+    # near zero) is not evidence against a trade; flow leaning the other way is.
+    if confidence is not None:
+        if side == "buy" and confidence <= -10:
+            return False, "flow opposes the long (%.0f)" % confidence
+        if side == "sell" and confidence >= 10:
+            return False, "flow opposes the short (%.0f)" % confidence
     if expected_move_pct is not None:
         slip = (slippage_bps or 0) / 100.0
         cost = DEFAULTS["fee_pct"] + slip + DEFAULTS["cost_buffer_pct"]
@@ -142,6 +130,9 @@ def allow(symbol, side, notional, book_equity, expected_move_pct=None, slippage_
             return False, "edge %.3f%% below cost %.3f%% (fee %.2f + slip %.3f)" % (
                 expected_move_pct, cost, DEFAULTS["fee_pct"], slip)
     return True, "ok"
+
+
+_LAST_STATE_PUB = 0
 
 
 def record(symbol, side, allowed, reason):
@@ -154,10 +145,28 @@ def record(symbol, side, allowed, reason):
                            "reason": reason, "ts": int(time.time() * 1000)})
     d["decisions"] = d["decisions"][-200:]
     d["snapshot"] = snapshot()
+    try:
+        global _LAST_STATE_PUB
+        now_ms = int(time.time() * 1000)
+        if now_ms - _LAST_STATE_PUB > 2000:
+            _LAST_STATE_PUB = now_ms
+            from lib import bus as _bus
+            _bus.pub("risk.state", "ALL", {"snapshot": d["snapshot"], "ts": now_ms}, "risk")
+    except Exception:
+        pass
     os.makedirs(STATE, exist_ok=True)
-    with open(PATH + ".t", "w") as fh:
-        json.dump(d, fh)
-    os.replace(PATH + ".t", PATH)
+    # every process gets its own temp file: a shared name meant two engines
+    # flushing at once would consume each other's file and crash on the rename
+    tmp = "%s.%d.%d.t" % (PATH, os.getpid(), int(time.time() * 1000) % 100000)
+    try:
+        with open(tmp, "w") as fh:
+            json.dump(d, fh)
+        os.replace(tmp, PATH)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

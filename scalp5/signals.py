@@ -183,6 +183,34 @@ def deriv_signals(sym):
     return out
 
 
+def taker_ratio_from_bars(sym, n=30):
+    """Taker buy share from candle quote volumes we already have.
+
+    Q is taker-buy quote volume, q is total quote volume, so Q/q is how much of
+    the traded value was buyers lifting offers. Without this the confidence
+    calculation falls back to 0.5 and every trade is refused.
+    """
+    try:
+        import tactics as T
+        bars = T.bars(sym, "1m", n + 2) or []
+        if len(bars) < 5:
+            return None
+        buy = 0.0
+        tot = 0.0
+        for b in bars[-n:]:
+            q = b.get("q") or 0
+            Q = b.get("Q")
+            if not q or Q is None:
+                continue
+            buy += Q
+            tot += q
+        if tot <= 0:
+            return None
+        return max(0.0, min(1.0, buy / tot))
+    except Exception:
+        return None
+
+
 def flow_confidence(sig):
     """Money flow as a confidence measure, not just a direction.
 
@@ -192,7 +220,12 @@ def flow_confidence(sig):
       divergence  price falling while flow rises = accumulation
     Returns (confidence -100..100, components) where + means buyers in control.
     """
-    br = sig.get("taker_by_ratio") or 0.5
+    br = sig.get("taker_by_ratio")
+    if not br:
+        br = taker_ratio_from_bars(sig.get("symbol"))
+    if br is None:
+        br = 0.5
+    sig["taker_by_ratio"] = br
     series = sig.get("flow_series") or []
     level = max(-1.0, min(1.0, (br - 0.5) * 4))          # 40% buy share -> -0.4
     trend = 0.0
@@ -262,42 +295,34 @@ def main():
     ap.add_argument("--top", type=int, default=20)
     a = ap.parse_args()
     print("SIGNALS — %d names every %.0fs, publishing to RabbitMQ" % (a.top, a.every), flush=True)
-    try:
-        from rmq import Stomp
-        c = Stomp(); c.connect()
-    except Exception as exc:
-        c = None
-        print("rabbit unavailable: %r" % (exc,), flush=True)
     while True:
         try:
             mv = jget(MD + "/movers?limit=%d" % a.top, 20)
             syms = [x["s"] for x in mv.get("most_traded", [])]
+            # only analyse symbols we actually stream: anything else has no
+            # candles, so its taker ratio and confidence are unknowable
+            try:
+                live = set((jget(MD + "/streamprices", 8).get("p") or {}).keys())
+                if live:
+                    kept = [x for x in syms if x in live]
+                    if kept:
+                        syms = kept
+            except Exception:
+                pass
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=6) as pool:
                 rows = [r for r in pool.map(analyse, syms) if r]
-            bus_post = None
-            try:
-                import urllib.request as _u
-                bus_post = _u
-            except Exception:
-                pass
             for sig in rows:
                 if _bus:
                     try:
                         _bus.pub("intel.signal", sig.get("symbol"), sig, "signals")
-                    except Exception:
-                        pass
-                if c:
-                    try:
-                        c.publish("signals", sig)
-                    except Exception:
-                        pass
-                if bus_post:
-                    try:
-                        bus_post.urlopen(bus_post.Request(
-                            "http://127.0.0.1:8797/publish?topic=signals",
-                            data=json.dumps(sig).encode(), method="POST",
-                            headers={"Content-Type": "application/json"}), timeout=2).read()
+                        _bus.pub("intel.flow", sig.get("symbol"), {
+                            "symbol": sig.get("symbol"),
+                            "buy_ratio": sig.get("taker_by_ratio"),
+                            "flow_conf": sig.get("flow_conf"),
+                            "flow_series": (sig.get("flow_series") or [])[-10:],
+                            "score": sig.get("score"),
+                        }, "signals")
                     except Exception:
                         pass
             rows.sort(key=lambda r: r["score"], reverse=True)

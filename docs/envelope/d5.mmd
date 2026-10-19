@@ -1,0 +1,28 @@
+flowchart TB
+  MD["market_data<br/>plane = market"]
+  EX1["exchange md.*<br/>own queues"]
+  Q1["priority pool<br/>drop oldest"]
+  P1["pricing"]
+  P2["calculators"]
+  P3["recorder"]
+  MD --> EX1 --> Q1
+  Q1 --> P1
+  Q1 --> P2
+  Q1 --> P3
+  Q1 -.->|never blocks| P4["dashboard"]
+
+%% colour by role
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class MD c_control;
+class EX1 c_market;
+class Q1 c_neutral;
+class P1 c_neutral;
+class P2 c_intel;
+class P3 c_model;
+class P4 c_neutral;

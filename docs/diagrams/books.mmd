@@ -1,0 +1,11 @@
+stateDiagram-v2
+  [*] --> Flat
+  Flat --> Pending: signal fires, risk allows
+  Pending --> Open: maker fill
+  Pending --> Flat: no fill, cancel
+  Open --> Winning: mark > entry
+  Open --> Underwater: mark < entry
+  Winning --> Flat: lock, target, trail
+  Underwater --> Underwater: hold-losers rule
+  Underwater --> Flat: only if mark >= entry
+  Open --> Flat: clock exit (winner only)

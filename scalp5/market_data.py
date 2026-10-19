@@ -233,14 +233,104 @@ def on_kline(k):
                 series.append(row)
 
 
+def _flush_bus():
+    q = STATS.setdefault("_q", [])
+    while q:
+        item = q.pop(0)
+        try:
+            if item[0] == "price":
+                # per-tick publishes fed two durable queues nothing read, at ~700/s.
+                # the batched snapshot below carries every price instead.
+                pass
+            elif item[0] == "mini":
+                _bus.pub("market.mini24h", "ALL", {"count": item[1]}, "market_data")
+            elif item[0] == "candle":
+                sym, c, closed = item[1]
+                _bus.pub("market.candle", sym, {"iv": "1m", "c": c, "closed": closed}, "market_data")
+        except Exception:
+            pass
+
+
+def _publish_movers():
+    while True:
+        time.sleep(30)
+        try:
+            if not _bus:
+                continue
+            with LOCK:
+                snap = dict(PRICES)
+                mini = dict(MINI)
+            rows = []
+            for sym, m in mini.items():
+                px = snap.get(sym)
+                if px and m.get("pct") is not None:
+                    rows.append({"s": sym, "pct": round(m["pct"], 3), "qv": round(m.get("q") or 0, 2)})
+            rows.sort(key=lambda r: -r["pct"])
+            _bus.pub("intel.movers", "ALL",
+                     {"gainers": rows[:15], "losers": rows[-15:][::-1], "ts": int(time.time()*1000)},
+                     "market_data")
+        except Exception:
+            pass
+
+
 def _publish_prices():
     while True:
         time.sleep(0.25)
         try:
             with LOCK:
                 snap = dict(PRICES)
+            if _bus:
+                _flush_bus()
             if snap and _bus:
-                _bus.pub("market.price", "ALL", {"p": snap}, "market_data")
+                # one batched snapshot, four times a second, on the topic the UI reads
+                with LOCK:
+                    mini = {k: {"c": round(v["pct"], 3), "q": round(v["q"], 2)}
+                            for k, v in MINI.items() if k in snap}
+                payload = {"p": snap, "m": mini,
+                           "ts": int(time.time() * 1000),
+                           "msgs": STATS["msgs"]}
+                _bus.pub("market.price", "ALL", payload, "market_data")
+                _bus.pub("ticks", "ALL", payload, "market_data")
+
+        except Exception:
+            pass
+
+
+DEPTH = {}
+_LAST_DEPTH_PUB = {}
+
+
+def on_depth(d, stream=""):
+    """Five levels a side. Published at most once a second per symbol."""
+    STATS["n_depth"] = STATS.get("n_depth", 0) + 1
+    sym = d.get("s") or (stream.split("@")[0].upper() if stream else None)
+    bids = d.get("bids") or []
+    asks = d.get("asks") or []
+    if not sym or not bids or not asks:
+        return
+    try:
+        top_bid, top_ask = float(bids[0][0]), float(asks[0][0])
+    except Exception:
+        return
+    with LOCK:
+        DEPTH[sym] = {"bids": [[float(p), float(q)] for p, q in bids[:5]],
+                      "asks": [[float(p), float(q)] for p, q in asks[:5]],
+                      "ts": int(time.time() * 1000)}
+        now = time.time()
+        if now - _LAST_DEPTH_PUB.get(sym, 0) < 1.0:
+            return
+        _LAST_DEPTH_PUB[sym] = now
+        snap = DEPTH[sym]
+    if _bus:
+        try:
+            bid_q = sum(q for _, q in snap["bids"])
+            ask_q = sum(q for _, q in snap["asks"])
+            _bus.pub("market.depth", sym,
+                     {"symbol": sym, "bids": snap["bids"], "asks": snap["asks"],
+                      "spread_bps": round(10000 * (top_ask - top_bid) / top_bid, 3) if top_bid else 0,
+                      "bid_qty": round(bid_q, 6), "ask_qty": round(ask_q, 6),
+                      "imbalance": round((bid_q - ask_q) / (bid_q + ask_q), 4) if (bid_q + ask_q) else 0,
+                      "ts": snap["ts"]}, "market_data")
         except Exception:
             pass
 
@@ -299,6 +389,7 @@ def stream_loop():
         streams.append(s.lower() + "@kline_1m")
         streams.append(s.lower() + "@kline_15m")
         streams.append(s.lower() + "@bookTicker")
+        streams.append(s.lower() + "@depth5")
     url = WS_URL + "/".join(streams)
     while True:
         try:
@@ -322,17 +413,24 @@ def stream_loop():
                         on_kline(data.get("k") or {})
                     elif ev.endswith("@bookTicker"):
                         on_book(data)
+                    elif "@depth5" in ev:
+                        on_depth(data, ev)
+
                     STATS["msgs"] += 1
                     STATS["last_ms"] = int(time.time() * 1000)
                     if _bus:
+                        # never block the socket on a publisher
+                        STATS.setdefault("_q", [])
                         try:
-                            if ev == "!miniTicker@arr":
-                                _bus.pub("market.mini24h", "ALL", {"count": len(data or [])}, "market_data")
+                            if ev.endswith("@bookTicker"):
+                                STATS["_q"].append(("price", data))
+                            elif ev == "!miniTicker@arr":
+                                STATS["_q"].append(("mini", len(data or [])))
                             elif ev.endswith("@kline_1m"):
                                 kk = data.get("k") or {}
-                                _bus.pub("market.candle", kk.get("s"),
-                                         {"iv": "1m", "c": float(kk.get("c") or 0),
-                                          "closed": bool(kk.get("x"))}, "market_data")
+                                STATS["_q"].append(("candle", (kk.get("s"), float(kk.get("c") or 0), bool(kk.get("x")))))
+                            if len(STATS["_q"]) > 400:
+                                del STATS["_q"][:200]
                         except Exception:
                             pass
                 except Exception:
@@ -431,7 +529,8 @@ class H(BaseHTTPRequestHandler):
                     keep = set(want.split(","))
                     p = {k: v for k, v in p.items() if k in keep}
                 return self._send(200, {"p": p, "ts": STATS["last_ms"],
-                                        "msgs": STATS["msgs"], "status": STATS["status"]})
+                                        "msgs": STATS["msgs"], "status": STATS["status"],
+                                        "depth_events": STATS.get("n_depth", 0)})
             if u.path == "/price":
                 sym = q.get("symbol", ["BTCUSDT"])[0]
                 with LOCK:
@@ -477,6 +576,7 @@ def main():
         a.port, len(SYMBOLS), LIMITS.rules), flush=True)
     threading.Thread(target=stream_loop, daemon=True).start()
     threading.Thread(target=_publish_prices, daemon=True).start()
+    threading.Thread(target=_publish_movers, daemon=True).start()
     threading.Thread(target=seed_history, args=(list(SYMBOLS),), daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", a.port), H).serve_forever()
 

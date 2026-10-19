@@ -1,0 +1,20 @@
+flowchart TD
+  S["entry request"] --> Z{"notional > 0"}
+  Z -->|no| R0["refuse: zero size"]
+  Z -->|yes| A{"forecast age > 1200s<br/>or signal age > 90s"}
+  A -->|yes| R1["refuse: stale data"]
+  A -->|no| O{"override enabled"}
+  O -->|yes| ALLOW["allow: override"]
+  O -->|no| H{"trading halted"}
+  H -->|yes| R2["refuse: halted"]
+  H -->|no| G{"gross > 3.0x book"}
+  G -->|yes| R3["refuse: gross"]
+  G -->|no| P{"notional > 10% book"}
+  P -->|yes| R4["refuse: concentration"]
+  P -->|no| D{"same direction >= 12"}
+  D -->|yes| R5["refuse: direction cap"]
+  D -->|no| C{"confidence < 10"}
+  C -->|yes| R6["refuse: no flow confidence"]
+  C -->|no| E{"expected edge < cost floor"}
+  E -->|yes| R7["refuse: below cost"]
+  E -->|no| ALLOW

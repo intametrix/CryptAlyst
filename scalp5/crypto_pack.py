@@ -125,6 +125,10 @@ class Book:
         os.replace(p + ".t", p)
 
 
+def log(msg):
+    print("%s  %s" % (time.strftime("%H:%M:%S"), msg), flush=True)
+
+
 ALERT_MIN = 60.0
 BUS = "http://127.0.0.1:8793"
 _bus_cur = {"v": 0}
@@ -157,22 +161,10 @@ def alert_map():
             out[sym] = ("buy" if a["kind"] == "PUMP" else "sell", a.get("score") or 0)
         if out:
             return out
-    return {}      # the bus already polls the backend; never collect alerts twice
-    out = {}
-    for a in d.get("alerts") or []:
-        if a.get("kind") not in ("PUMP", "DUMP"):
-            continue
-        if (a.get("score") or 0) < ALERT_MIN:
-            continue
-        out[a["symbol"]] = ("buy" if a["kind"] == "PUMP" else "sell", a.get("score") or 0)
-    return out
+    return {}
 
 
-# retired after measurement: avg net -0.165%, win 43%. Not enabled in CFG above.
-RETIRED = {"breakout_vol"}
-
-
-BASKETS = {}          # model -> set of symbols, disjoint slices of the liquid list
+BASKETS = {}
 
 
 def build_baskets(symbols, per=8):
@@ -308,19 +300,20 @@ def main():
                 _ok, _why = risk.allow(sym, side, _notional, bk.equity,
                                        (fc or {}).get("move_pct"),
                                        (T.ext_signals(sym) or {}).get("slippage_bps_5k"),
-                                       bar_age_s=(fc or {}).get("bar_age_s"))
+                                       bar_age_s=(fc or {}).get("bar_age_s"),
+              book_positions=list(bk.pos.values()) if isinstance(getattr(bk, 'pos', None), dict) else None)
                 risk.record(sym, side, _ok, _why)
                 if not _ok:
                     continue
-                risk = T.risk_for(a.risk, conf)
+                risk_pct = T.risk_for(a.risk, conf)
                 q_px, q_prob, _qn = maker.quote(sym, side, _notional)
                 if q_px is None or q_prob < 0.30:
                     continue
                 bk.open(sym, side, q_px, "MAKER TA%d[%s] fcst %.2f %s" % (
-                    conf, why, (fc or {}).get("prob") or 0, name), risk,
+                    conf, why, (fc or {}).get("prob") or 0, name), risk_pct,
                     views=(fc or {}).get("views"))
                 print("%s  %-12s %-4s %-10s TA%d risk %.1f%% %s" %
-                      (time.strftime("%H:%M:%S"), name, side, sym, conf, risk, why), flush=True)
+                      (time.strftime("%H:%M:%S"), name, side, sym, conf, risk_pct, why), flush=True)
 
         for b in books.values(): b.dump()
         time.sleep(max(1.0, a.loop))

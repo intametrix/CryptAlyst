@@ -363,6 +363,8 @@ def main():
                     reason = "stop"
                 elif held >= float(T.options().get("clock_s", CLOCK)):
                     reason = "clock"
+                if reason and T.hold_loser(held, chg):
+                    reason = None      # hold losers for a day, by directive
                 if reason:
                     side_now = bk.pos[sym]["side"]
                     bk.close(sym, px[sym], chg, reason)
@@ -401,11 +403,14 @@ def main():
                     if side == "buy" and T.btc_regime() == "down":
                         continue
                 _notional = min(bk.equity * RISK / 100 * 40, bk.equity * 0.08)
+                if side == "sell":
+                    _notional *= 0.5      # unbounded tail: shorts carry half the size
                 _fc = forecast(sym, side) or {}
                 _ok, _why = risk.allow(sym, side, _notional, bk.equity,
                                        _fc.get("move_pct"),
                                        (T.ext_signals(sym) or {}).get("slippage_bps_5k"),
-                                       bar_age_s=_fc.get("bar_age_s"))
+                                       bar_age_s=_fc.get("bar_age_s"),
+              book_positions=list(bk.pos.values()) if isinstance(getattr(bk, 'pos', None), dict) else None)
                 risk.record(sym, side, _ok, _why)
                 if not _ok:
                     continue

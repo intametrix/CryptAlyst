@@ -23,8 +23,11 @@ def bars(sym, interval="1m", limit=60):
     d = jget(MARKET_DATA + "/klines?symbol=%s&interval=%s&limit=%d"
              % (sym, interval, limit)).get("klines") or []
     if d and isinstance(d[0], dict):
+        # keep the quote-volume fields: Q is taker-buy volume, q is the total,
+        # and Q/q is the only taker-aggression measure we get for free
         b = [{"t": int(r["t"]), "o": float(r["o"]), "h": float(r["h"]),
-              "l": float(r["l"]), "c": float(r["c"]), "v": float(r["v"])} for r in d]
+              "l": float(r["l"]), "c": float(r["c"]), "v": float(r["v"]),
+              "q": float(r.get("q") or 0), "Q": float(r.get("Q") or 0)} for r in d]
     else:
         b = [{"t": int(r[0]), "o": float(r[1]), "h": float(r[2]), "l": float(r[3]),
               "c": float(r[4]), "v": float(r[5])} for r in d]
@@ -87,12 +90,54 @@ def min_confirmations(side):
     ALLOW_COUNTER_TREND = True to allow it with 4 confirmations.
     """
     t = btc_regime()
-    allow = bool(options().get("allow_counter_trend"))
     if t == "up" and side == "sell":
-        return 4 if allow else 99
+        # a counter-trend short is allowed when the carry pays us and the book
+        # is not screaming squeeze (price up with open interest rising)
+        if not options().get("allow_counter_trend"):
+            return 99
+        try:
+            x = ext_signals() or {}
+            oi = x.get("oi_change_1h_pct")
+            f = x.get("funding_pct")
+            if f is not None and f < 0:
+                return 99                      # we would pay to hold it
+            if oi is not None and oi > 3.0:
+                return 99                      # squeeze setup, not a short
+        except Exception:
+            pass
+        return 4
     if t == "down" and side == "buy":
-        return 4 if allow else 99
+        return 4 if options().get("allow_counter_trend") else 99
     return 2          # trend-aligned entries stay easy
+
+
+def short_ok(sym):
+    """A short is only worth holding if the carry is not against us.
+
+    Positive funding means longs pay shorts. Negative funding means we pay to
+    hold the winning trade, which is the regime our shorts kept losing in.
+    """
+    try:
+        x = ext_signals(sym) or {}
+        f = x.get("funding_pct")
+        if f is None:
+            return True, "funding unknown"
+        if f < 0:
+            return False, "negative funding %.3f%% — shorts pay to hold" % (100 * f)
+        return True, "funding %+.3f%%" % (100 * f)
+    except Exception:
+        return True, "funding unavailable"
+
+
+# directive: a position is never closed at a loss. No time limit, no exceptions.
+HOLD_LOSERS_FOREVER = True
+
+
+def hold_loser(held_s, chg_pct):
+    """True whenever an exit would book negative PnL. Always, by directive."""
+    if HOLD_LOSERS_FOREVER:
+        return chg_pct < 0
+    return chg_pct < 0 and held_s < 24 * 3600
 
 
 def no_progress(chg, held, limit_s=120.0, min_chg=0.02):
@@ -220,115 +265,48 @@ def ta_signals():
 _EXT = {"ts": 0, "rows": {}}
 
 
-def ext_signals(sym=None):
-    """The extended signal set (book, derivatives, flow) written every 15s."""
-    now = time.time()
-    if now - _EXT["ts"] > 5:
+_INTEL = None
+
+
+def _intel():
+    global _INTEL
+    if _INTEL is None:
         try:
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state", "signals.json")
-            with open(path) as fh:
-                d = json.load(fh)
-            _EXT["rows"] = {r["symbol"]: r for r in d.get("rows") or []}
-            _EXT["ts"] = now
+            from lib import intel as _i
+            _i.Intel.instance().start()
+            _INTEL = _i
         except Exception:
-            pass
+            _INTEL = False
+    return _INTEL or None
+
+
+def ext_signals(sym=None):
+    """The extended signal set, read from the bus first, the file second."""
+    now = time.time()
+    if now - _EXT["ts"] > 2:
+        lib = _intel()
+        rows = None
+        if lib is not None:
+            try:
+                rows = lib.all()
+            except Exception:
+                rows = None
+        if rows:
+            _EXT["rows"] = rows
+            _EXT["source"] = "bus"
+        else:
+            try:
+                path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    "state", "signals.json")
+                with open(path) as fh:
+                    d = json.load(fh)
+                _EXT["rows"] = {r["symbol"]: r for r in d.get("rows") or []}
+                _EXT["source"] = "file"
+            except Exception:
+                pass
+        _EXT["ts"] = now
     if sym is None:
         return _EXT["rows"]
     return _EXT["rows"].get(sym)
 
 
-def ext_gate(sym, side):
-    """(allowed, score) - block trades the extended signals strongly oppose."""
-    s = ext_signals(sym)
-    if not s:
-        return True, 0.0
-    sc = s.get("score") or 0.0
-    if side == "buy" and sc <= -35:
-        return False, sc
-    if side == "sell" and sc >= 35:
-        return False, sc
-    return True, sc
-
-
-def ta_vote(sym, side):
-    """Net TA stream support for this direction: (n_for, n_against)."""
-    for_ = against = 0
-    for sig in TA_LIVE.get(sym, []):
-        if sig.get("side") == side:
-            for_ += 1
-        elif sig.get("side") in ("buy", "sell"):
-            against += 1
-    return for_, against
-
-
-def post(url, payload, timeout=4.0):
-    try:
-        import urllib.request as _u
-        req = _u.Request(url, data=json.dumps(payload).encode(),
-                         headers={"Content-Type": "application/json"})
-        _u.urlopen(req, timeout=timeout).read()
-        return True
-    except Exception:
-        return False
-
-
-def consensus_dead(fc, against=0.45, need=3, blend_below=0.42):
-    """True only when several independent agents agree the thesis is dead.
-
-    A losing trade is not closed because price dipped; it is closed when the
-    forecast supervisor's blend AND a majority of its agents turn against it.
-    """
-    if not fc:
-        return False, 0
-    views = fc.get("views") or []
-    n_against = sum(1 for v in views if (v.get("prob") or 0.5) < against)
-    blend = fc.get("prob") or 0.5
-    dead = (blend <= blend_below and n_against >= need)
-    return dead, n_against
-
-
-def grade(views, made_money):
-    """Report each agent's call back to the supervisor so it can reweight."""
-    if not views:
-        return
-    for v in views:
-        prob = v.get("prob") or 0.5
-        called_long = prob >= 0.5
-        correct = (called_long == bool(made_money))
-        post(FC_API + "/grade", {"agent": v.get("agent"), "hit": correct})
-
-
-def risk_for(base, conf):
-    """Conviction sizing: more confirmations, more capital."""
-    return round(base * (0.6 + 0.2 * min(conf, 4)), 3)
-
-
-def exit_reason(chg, peak, lock, trail_arm, trail_gap, stop, held, clock,
-                skim=None, skim_after=2.5, hard_stop=None, opposing=False):
-    """Asymmetric policy: skim winners fast, give losers room.
-
-    winners : skim once chg >= skim and held >= skim_after, or the full lock
-    losers  : no stop until hard_stop; if an opposing signal appears, re-measure
-              and close; otherwise run to the clock
-    """
-    if opposing and chg < 0:
-        return "signal_flip"
-    if chg >= lock:
-        return "lock"
-    if skim is not None and chg >= skim and held >= skim_after:
-        return "skim"
-    if peak >= trail_arm and chg <= peak - trail_gap:
-        return "trail"
-    if hard_stop is not None:
-        if chg <= -hard_stop:
-            return "hard_stop"
-    elif chg <= -stop:
-        return "stop"
-    if held >= clock:
-        return "clock"
-    return None
-    if chg >= lock: return "lock"
-    if peak >= trail_arm and chg <= peak - trail_gap: return "trail"
-    if chg <= -stop: return "stop"
-    if held >= clock: return "clock"
-    return None

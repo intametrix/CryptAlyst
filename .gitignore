@@ -19,3 +19,20 @@ scalp5/tad/tad
 scalp5/bridge/cleared_at
 scalp5/turtle_sessions.jsonl
 binance-turtle/ledger/
+
+# Go build artefacts (rebuild with `go build -o bin/<name> ./cmd/<name>`)
+scalp5/core/bin/
+
+# generated training data: rebuild with ./scripts/dataset.sh
+scalp5/datasets/
+
+# runtime logs and streams in subdirectories
+scalp5/**/*.log
+scalp5/**/*.jsonl
+
+# document QA artefacts: rebuild with the build scripts
+docs/preview-*/
+docs/*_checks*.json
+docs/checks.json
+docs/env_checks.json
+docs/env2.json

@@ -47,6 +47,7 @@ type forecast struct {
 	MovePct    float64 `json:"move_pct"`
 	Confidence float64 `json:"confidence"`
 	Action     string  `json:"action"` // enter | hold | take_profit | liquidate
+	Resolution string  `json:"resolution"`
 	Views      []view  `json:"views"`
 	Price      float64 `json:"price"`
 	BarAgeSec  float64 `json:"bar_age_s"`
@@ -65,16 +66,17 @@ type cached struct {
 	bars []bar
 }
 
-func fetch(symbol string) ([]bar, error) {
+// fetchAt reads bars at one resolution.
+func fetchAt(symbol, interval string, limit int) ([]bar, error) {
 	mu.Lock()
-	if c, ok := cache[symbol]; ok && time.Since(c.at) < 8*time.Second {
+	if c, ok := cache[interval+":"+symbol]; ok && time.Since(c.at) < 8*time.Second {
 		mu.Unlock()
 		return c.bars, nil
 	}
 	mu.Unlock()
 
-	u := fmt.Sprintf("http://127.0.0.1:8796/klines?symbol=%s&interval=15m&limit=200",
-		url.QueryEscape(symbol))
+	u := fmt.Sprintf("http://127.0.0.1:8796/klines?symbol=%s&interval=%s&limit=%d",
+		url.QueryEscape(symbol), interval, limit)
 	resp, err := client.Get(u)
 	if err != nil {
 		return nil, err
@@ -106,7 +108,7 @@ func fetch(symbol string) ([]bar, error) {
 	}
 	_ = strconv.Itoa
 	mu.Lock()
-	cache[symbol] = cached{at: time.Now(), bars: out}
+	cache[interval+":"+symbol] = cached{at: time.Now(), bars: out}
 	mu.Unlock()
 	return out, nil
 }
@@ -362,12 +364,26 @@ func agentPressure(bs []bar, side string) view {
 // ---- supervisor ---------------------------------------------------------
 
 func blend(symbol, side string, horizon int) (forecast, error) {
-	bs, err := fetch(symbol)
-	if err != nil {
-		return forecast{}, err
-	}
-	if len(bs) < 40 {
-		return forecast{}, fmt.Errorf("not enough bars")
+	bs, err := fetchAt(symbol, "15m", 200)
+	resolution := "15m"
+	if err != nil || len(bs) < 40 {
+		// a young process has few 15m bars; 1m bars carry the same information at
+		// a finer step, and the horizon is scaled to match
+		alt, aerr := fetchAt(symbol, "1m", 200)
+		if aerr != nil {
+			if err != nil {
+				return forecast{}, err
+			}
+			return forecast{}, aerr
+		}
+		if len(alt) < 40 {
+			return forecast{}, fmt.Errorf("not enough bars")
+		}
+		bs, resolution = alt, "1m"
+		horizon = horizon / 15
+		if horizon < 1 {
+			horizon = 1
+		}
 	}
 	vs := []view{
 		agentMomentum(bs, side),
@@ -407,7 +423,7 @@ func blend(symbol, side string, horizon int) (forecast, error) {
 	f := forecast{
 		Symbol: symbol, Side: side, HorizonSec: horizon,
 		Prob: psum / wsum, MovePct: msum / mw, Confidence: csum / wsum,
-		Views: vs, Price: bs[len(bs)-1].C,
+		Views: vs, Price: bs[len(bs)-1].C, Resolution: resolution,
 		BarAgeSec: time.Since(time.UnixMilli(bs[len(bs)-1].T)).Seconds(),
 		TS:        time.Now().UnixMilli(),
 	}
@@ -425,10 +441,58 @@ func blend(symbol, side string, horizon int) (forecast, error) {
 	return f, nil
 }
 
+// publishLoop keeps intel.forecast moving without anyone asking for it: walk the
+// streamed symbols, blend, publish. One symbol per tick so the loop never blocks
+// the HTTP handlers.
+func publishLoop(every time.Duration) {
+	last := 0
+	for {
+		syms := streamedSymbols()
+		if len(syms) == 0 {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		sym := syms[last%len(syms)]
+		last++
+		for _, side := range []string{"buy", "sell"} {
+			f, err := blend(sym, side, 3600)
+			if err != nil {
+				continue
+			}
+			if body, err := json.Marshal(f); err == nil {
+				publish("intel", "intel.forecast", body)
+			}
+		}
+		time.Sleep(every)
+	}
+}
+
+// streamedSymbols asks our own feed which symbols have live data.
+func streamedSymbols() []string {
+	r, err := http.Get("http://127.0.0.1:8796/streamprices")
+	if err != nil {
+		return nil
+	}
+	defer r.Body.Close()
+	var payload struct {
+		P map[string]float64 `json:"p"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(payload.P))
+	for sym := range payload.P {
+		out = append(out, sym)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8790", "listen address")
 	flag.Parse()
 	log.SetFlags(log.Ltime)
+	go publishLoop(1500 * time.Millisecond)
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -457,6 +521,11 @@ func main() {
 			return
 		}
 		json.NewEncoder(w).Encode(f)
+		go func(fc forecast) {
+			if body, err := json.Marshal(fc); err == nil {
+				publish("intel", "intel.forecast", body)
+			}
+		}(f)
 	})
 
 	mux.HandleFunc("/views", func(w http.ResponseWriter, r *http.Request) {
@@ -467,7 +536,7 @@ func main() {
 			json.NewEncoder(w).Encode(map[string]string{"error": "symbol required"})
 			return
 		}
-		bs, err := fetch(sym)
+		bs, err := fetchAt(sym, "15m", 200)
 		if err != nil {
 			log.Printf("views fetch error: %v", err)
 			w.WriteHeader(502)

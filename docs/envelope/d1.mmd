@@ -1,0 +1,31 @@
+flowchart TB
+  subgraph E["THE ENVELOPE — fixed shape"]
+    D["data<br/>the payload"]
+    M["meta<br/>version · count · generation<br/>computing · computed_at · compute_ms"]
+    R["references<br/>where to ask · what it hashes to · what shape it claims"]
+  end
+  subgraph Around["the engine bay — grows forever"]
+    O["operators<br/>what can be done"]
+    I["interceptors<br/>what is allowed"]
+    T["transformers<br/>what it looks like"]
+  end
+  O --> E
+  I --> E
+  T --> E
+  E --> S["stores<br/>any of them"]
+
+%% colour by role
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class D c_neutral;
+class M c_intel;
+class R c_neutral;
+class O c_neutral;
+class I c_neutral;
+class T c_neutral;
+class S c_store;

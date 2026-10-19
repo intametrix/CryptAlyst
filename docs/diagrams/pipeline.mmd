@@ -1,0 +1,26 @@
+sequenceDiagram
+  participant MD as market_data
+  participant RMQ as RabbitMQ
+  participant IC as intel cache
+  participant M as model
+  participant RG as risk governor
+  participant MK as maker
+  participant BK as book
+  MD->>RMQ: ticks (4/s, all prices)
+  MD->>RMQ: market.depth (per symbol, 1/s)
+  SIG->>RMQ: intel.signal + intel.flow (10s)
+  RMQ-->>IC: subscribe (queue per topic)
+  M->>IC: get(symbol)
+  IC-->>M: score, flow_conf, ta, forecast
+  M->>RG: allow(sym, side, notional, ages)
+  alt refused
+    RG-->>M: reason (stale, cost, cap)
+    M->>RMQ: model.decision refused
+  else allowed
+    RG-->>M: allowed
+    M->>MK: quote(sym, side, notional)
+    MK-->>M: price, fill probability
+    M->>BK: open position
+    M->>RMQ: model.decision allowed
+  end
+  BK->>RMQ: model.fill on close

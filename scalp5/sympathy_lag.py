@@ -23,6 +23,8 @@ import os
 import time
 import urllib.request
 
+MASTER = "http://127.0.0.1:8799"
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state")
 BACKEND = "http://127.0.0.1:8787"

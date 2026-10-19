@@ -1,0 +1,27 @@
+flowchart LR
+  A["actor<br/>human · service · agent"] --> I["interceptor<br/>authenticate"]
+  I --> G["authority gate<br/>role and scope"]
+  G -->|refused| L["ledger<br/>refusal with rule"]
+  G -->|permitted| O["operator<br/>the work"]
+  O --> E["envelope<br/>result plus cid"]
+  E --> R["redaction<br/>per role"]
+  R --> C["caller"]
+  O --> L2["ledger<br/>step appended"]
+
+%% colour by role
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class A c_neutral;
+class I c_control;
+class G c_control;
+class L c_risk;
+class O c_neutral;
+class E c_control;
+class R c_control;
+class C c_neutral;
+class L2 c_neutral;

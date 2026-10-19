@@ -180,7 +180,8 @@ def main():
                     notional = risk.size_for(base, conf)
                     ok, why = risk.allow(sym, side, notional, bk.equity,
                                          (sig.get("score") or 0) / 100.0,
-                                         sig.get("slippage_bps_5k"), confidence=conf)
+                                         sig.get("slippage_bps_5k"), confidence=conf,
+              book_positions=list(bk.pos.values()) if isinstance(getattr(bk, 'pos', None), dict) else None)
                     risk.record(sym, side, ok, why)
                     if not ok:
                         continue

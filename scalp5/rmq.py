@@ -5,7 +5,7 @@ RabbitMQ ships a STOMP plugin, which is a text protocol over TCP, so we can use
 it from stdlib Python. Publishes to a topic exchange; consumes with a
 subscription id so the same connection can fan out to many SSE clients.
 """
-import socket, threading, time, json
+import json, socket, threading, time, uuid
 
 HOST, PORT = "127.0.0.1", 61613
 LOGIN, PASSCODE = "cryptalyst", "cryptalyst"
@@ -73,7 +73,7 @@ class Stomp:
                 h = self.handlers.get(sid)
                 if h:
                     try:
-                        h(headers.get("destination", ""), body)
+                        h(headers, body)
                     except Exception:
                         pass
             elif cmd == "ERROR":
@@ -89,8 +89,27 @@ class Stomp:
                 "content-type": "application/json",
                 "content-length": str(len(body))}, body))
 
+    def subscribe_queue(self, queue, handler):
+        """Subscribe to a queue by name (competing consumer semantics)."""
+        sid = "q-" + queue + "-" + uuid.uuid4().hex[:8]
+        self.handlers[sid] = handler
+        with self.lock:
+            self.sock.sendall(self._frame("SUBSCRIBE", {
+                "destination": "/queue/" + queue, "id": sid, "ack": "auto"}))
+        return sid
+
+    def subscribe_topic(self, topic, exchange, handler):
+        """Subscribe to a routing key on a named exchange."""
+        sid = "sub-" + exchange + "-" + topic + "-" + uuid.uuid4().hex[:8]
+        self.handlers[sid] = handler
+        with self.lock:
+            self.sock.sendall(self._frame("SUBSCRIBE", {
+                "destination": "/exchange/" + exchange + "/" + topic,
+                "id": sid, "ack": "auto"}))
+        return sid
+
     def subscribe(self, topic, handler, sid=None):
-        sid = sid or ("sub-" + topic + "-" + str(int(time.time() * 1000)))
+        sid = sid or ("sub-" + topic + "-" + uuid.uuid4().hex[:8])
         self.handlers[sid] = handler
         with self.lock:
             self.sock.sendall(self._frame("SUBSCRIBE", {

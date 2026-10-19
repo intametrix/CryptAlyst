@@ -91,6 +91,20 @@ class Chrome:
         return path
 
     # ---- waiting helpers: never judge mid-render
+    def wait_for(self, expr, predicate, timeout=25.0):
+        """Poll until predicate(value) is true. Used to wait for real content."""
+        t0 = time.time()
+        val = None
+        while time.time() - t0 < timeout:
+            val = self.js(expr)
+            try:
+                if predicate(val):
+                    return val
+            except Exception:
+                pass
+            time.sleep(0.25)
+        return val
+
     def wait_stable(self, expr, quiet=1.2, timeout=12.0):
         """Wait until expr stops changing for `quiet` seconds."""
         t0 = time.time()
@@ -120,7 +134,7 @@ def main():
     c.wait_stable("document.body.innerText.length")
 
     report = []
-    print("%-11s %-8s %-7s %-6s %s" % ("view", "content", "stable", "ms", "notes"))
+    print("%-11s %-8s %-7s %-7s %s" % ("view", "content", "stable", "ms", "notes"))
     for tab in TABS:
         t0 = time.time()
         c.js("document.getElementById('nav-%s').click()" % tab)
@@ -132,14 +146,17 @@ def main():
                 "control": "cbody", "review": "rbody", "why": "wbody",
                 "health": "healthbody"}.get(tab, tab + "body")
         expr = "(function(){var e=document.getElementById('%s');return e?e.innerHTML.length:-1})()" % body
-        size = c.wait_stable(expr)
+        # wait for actual content, not merely for the placeholder to stop changing
+        size = c.wait_for(expr, lambda v: isinstance(v, (int, float)) and v > 400, timeout=20.0)
+        size = c.wait_stable(expr, quiet=0.8, timeout=6.0)
+        first_ms = (time.time() - t0) * 1000
         shown = c.js("(function(){var e=document.getElementById('%s');return e?getComputedStyle(e).display:'missing'})()" % tab)
         errors = c.js("(window.__errs||[]).length")
         c.shot(os.path.join(a.shots, "%s.png" % tab))
         ok = isinstance(size, (int, float)) and size > 200 and shown not in ("none", "missing") and (errors or 0) == 0
         report.append({"view": tab, "body": body, "size": size, "shown": shown,
                        "errors": errors, "ok": ok})
-        print("%-11s %-8s %-7s %-6d %s" % (tab, size, shown, (time.time() - t0) * 1000,
+        print("%-11s %-8s %-7s %-7d %s" % (tab, size, shown, first_ms,
                                            "" if ok else "NEEDS ATTENTION"))
 
     passed = sum(1 for r in report if r["ok"])

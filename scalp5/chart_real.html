@@ -107,6 +107,7 @@
           <span style="flex:1"></span>
           <span id="flowarrow" style="color:#58a6ff">▸</span>
         </div>
+        <div style="display:flex;gap:6px;padding:0 12px 6px;flex-wrap:wrap" id="flowwin"></div>
         <div id="flows" style="display:none;padding:0 12px 12px"></div>
       </div>
       <div class="hint">drag = zoom box · drag price scale = zoom price · drag time scale = zoom time ·
@@ -755,9 +756,9 @@ function props(){
         return '<option value="'+o[0]+'"'+(String(current)===String(o[0])?' selected':'')+'>'+o[1]+'</option>';
       }).join("")+'</select></label>';
   };
-  var chk=function(label,on,fn){
+  var chk=function(label,on,handler){
     return '<label class="prow2" style="cursor:pointer"><span>'+label+'</span>'+
-      '<input type="checkbox" '+(on?'checked':'')+' onchange="'+fn+'(this.checked)" '+
+      '<input type="checkbox" '+(on?'checked':'')+' onchange="'+handler+'" '+
       'style="accent-color:#3fb950">'+'</label>';
   };
   html+='<div class="pg"><div class="pgt">edit</div>'+
@@ -783,11 +784,11 @@ function props(){
   html+='<div class="pg"><div class="pgt">overlays · '+on.length+'/'+LAYER_META.length+'</div>'+
         LAYER_META.map(function(m){
           return chk('<i class="swatch" style="background:'+m.colour+'"></i>'+m.label, OV[m.id],
-                     "function(v){setLayer('"+m.id+"',v)}");
+                     "setLayer(&quot;"+m.id+"&quot;, this.checked)");
         }).join("")+'</div>';
   html+='<div class="pg"><div class="pgt">chart properties</div>'+
         PROP_META.map(function(m){
-          return chk(m.label, P[m.id], "function(v){setProp('"+m.id+"',v)}");
+          return chk(m.label, P[m.id], "setProp(&quot;"+m.id+"&quot;, this.checked)");
         }).join("")+'</div>';
   html+='<div class="pg"><div class="pgt">tools</div>'+
         row("measure",MEAS?"drawn":"off")+
@@ -968,22 +969,42 @@ function zoomBar(f){
   S.s=Math.max(0,Math.min(n-S.c,Math.round(centre-S.c/2)));
   render();
 }
-var FLOW_OPEN=false, FLOW_T=null;
+var FLOW_OPEN=false, FLOW_T=null, FLOW_W=[1,5,15,60,240,1440];
+var FLOW_CHOICES=[[1,"1 min"],[5,"5 min"],[15,"15 min"],[30,"30 min"],[60,"1 hour"],
+                  [240,"4 hours"],[720,"12 hours"],[1440,"1 day"],[10080,"1 week"]];
+function flowWindows(){
+  var box=$("flowwin"); if(!box) return;
+  box.innerHTML='<span class="hint" style="margin-right:4px">windows</span>'+
+    FLOW_CHOICES.map(function(c){
+      var on=FLOW_W.indexOf(c[0])>=0;
+      return '<button class="chip'+(on?" on":"")+'" onclick="toggleFlowWindow('+c[0]+')">'+c[1]+'</button>';
+    }).join("");
+}
+function toggleFlowWindow(m){
+  var i=FLOW_W.indexOf(m);
+  if(i>=0){ if(FLOW_W.length>1) FLOW_W.splice(i,1); }
+  else { FLOW_W.push(m); FLOW_W.sort(function(a,b){return a-b;}); }
+  flowWindows(); loadFlows();
+}
 function toggleFlows(){
   FLOW_OPEN=!FLOW_OPEN;
   $("flows").style.display = FLOW_OPEN ? "" : "none";
   $("flowarrow").textContent = FLOW_OPEN ? "▾" : "▸";
-  if(FLOW_OPEN){ loadFlows(); if(!FLOW_T) FLOW_T=setInterval(loadFlows, 5000); }
+  if(FLOW_OPEN){ flowWindows(); loadFlows(); if(!FLOW_T) FLOW_T=setInterval(loadFlows, 5000); }
 }
 function loadFlows(){
   if(!FLOW_OPEN) return;
-  fetch("/api/flowwindows?symbol="+encodeURIComponent(S.sym), {cache:"no-store"})
+  var _sym = (typeof SYM!=="undefined" && SYM) ? SYM
+             : ((typeof S!=="undefined" && S.sym) ? S.sym : "BTCUSDT");
+  fetch("/api/flowwindows?symbol="+encodeURIComponent(_sym)+"&windows="+FLOW_W.join(","),
+        {cache:"no-store"})
     .then(function(r){ return r.json(); })
     .then(function(d){
       var rows=d.windows||[];
       if(!rows.length){ $("flows").innerHTML='<div class="hint">no flow data yet</div>'; return; }
       var max=Math.max.apply(null, rows.map(function(r){return Math.abs(r.net);}))||1;
-      var name={5:"5 min",15:"15 min",60:"1 hour",240:"4 hours",1440:"24 hours"};
+      var name={1:"1 min",5:"5 min",15:"15 min",30:"30 min",60:"1 hour",240:"4 hours",
+                720:"12 hours",1440:"1 day",10080:"1 week"};
       var html="<table class=\"wide\"><thead><tr><th style=\"text-align:left\">window</th>"+
         "<th>net flow</th><th style=\"text-align:left\">pressure</th><th>buy %</th>"+
         "<th>change</th><th>range</th><th>volume</th></tr></thead><tbody>";

@@ -38,7 +38,8 @@ class Feed:
         self._handlers.append(fn)
 
     # ---- adapters
-    def _on_message(self, destination, body):
+    def _on_message(self, headers, body):
+        destination = headers.get("destination", "") if isinstance(headers, dict) else str(headers)
         try:
             payload = json.loads(body.decode() if isinstance(body, bytes) else body)
         except Exception:
@@ -67,44 +68,41 @@ class Feed:
         threading.Thread(target=self._run, daemon=True).start()
         return self
 
-    def _run_sse(self):
-        """Push from the event bus over SSE: one long-lived request, no polling."""
-        import urllib.request
-        url = "http://127.0.0.1:8797/subscribe?topics=signals,ticks"
-        while True:
-            try:
-                req = urllib.request.Request(url, headers={"Accept": "text/event-stream"})
-                with urllib.request.urlopen(req, timeout=None) as r:
-                    self.connected = True
-                    for raw in r:
-                        line = raw.decode("utf-8", "replace").strip()
-                        if not line.startswith("data:"):
-                            continue
-                        try:
-                            env = json.loads(line[5:].strip())
-                        except Exception:
-                            continue
-                        self._on_message("/exchange/market/" + (env.get("topic") or "signals"),
-                                         json.dumps(env.get("data") or {}).encode())
-            except Exception:
-                self.connected = False
-                time.sleep(3)
-
     def _run(self):
-        threading.Thread(target=self._run_sse, daemon=True).start()
-        from rmq import Stomp
+        """One transport: lib.bus. No SSE, no direct STOMP."""
+        import time as _t
+        from lib import bus
         while True:
             try:
-                c = Stomp()
-                c.connect()
-                c.subscribe("signals", self._on_message)
-                c.subscribe("ticks", self._on_message)
+                bus.sub("intel.signal", self._signal_env)
+                bus.sub("ticks", self._ticks_env)
                 self.connected = True
-                while True:                 # reader thread does the work
-                    time.sleep(5)
+                while True:
+                    _t.sleep(10)
             except Exception:
                 self.connected = False
-                time.sleep(5)
+                _t.sleep(3)
+
+    def _signal_env(self, env):
+        payload = env.data if isinstance(env.data, dict) else {}
+        sym = payload.get("symbol")
+        if not sym:
+            return
+        with self._lock:
+            self.signals[sym] = payload
+            self.counts["signals"] += 1
+            for fn in self._handlers:
+                try:
+                    fn(payload)
+                except Exception:
+                    pass
+
+    def _ticks_env(self, env):
+        payload = env.data if isinstance(env.data, dict) else {}
+        with self._lock:
+            for sym, px in (payload.get("p") or {}).items():
+                self.ticks[sym] = px
+            self.counts["ticks"] += 1
 
     # ---- readers
     def latest(self):

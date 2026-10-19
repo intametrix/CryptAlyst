@@ -1,0 +1,43 @@
+graph TB
+  subgraph Feeds["Market data"]
+    MD["market_data :8796<br/>161 websocket streams"]
+  end
+  subgraph Bus["RabbitMQ :61613"]
+    EX["exchanges: market intel model risk<br/>system alert exec review"]
+    Q["19 durable queues + consumers"]
+    EX --> Q
+  end
+  subgraph Intel["Intelligence"]
+    SIG["signals.py<br/>20-field signal set"]
+    TAD["tad (Go) :8792<br/>TA conditions"]
+    FC["forecast (Go) :8790<br/>7 agents"]
+  end
+  subgraph Models["Models — 27 books"]
+    M1["alpha_rank"]
+    M2["alpha_signals 10"]
+    M3["models10 10"]
+    M4["crypto_pack 4"]
+    M5["hft movers grid"]
+    M6["executor skim_pump curve_rider"]
+  end
+  subgraph Control["Risk and execution"]
+    RISK["risk governor"]
+    MAKER["maker quotes"]
+  end
+  subgraph UI["Presentation"]
+    MAS["master :8799<br/>dashboard + SSE"]
+    RAB["RabbitMQ UI :15672"]
+    BC["bus_consumer :8798"]
+  end
+  MD -->|ticks depth candles| Bus
+  SIG --> Bus
+  TAD --> Bus
+  FC --> Bus
+  Bus -->|intel.*| Models
+  Bus -->|ticks| Models
+  Models -->|decision fill pnl| Bus
+  Models --> RISK
+  RISK --> MAKER
+  Bus --> MAS
+  Bus --> BC
+  MAS -->|/stream SSE| Browser["browser"]

@@ -22,6 +22,20 @@ def jget(u, t=8.0):
         return json.loads(r.read().decode())
 
 
+def publish_verdict(books):
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.dirname(_o.path.abspath(__file__)))
+        from lib import bus as _bus
+        for b in books:
+            _bus.pub("review.verdict", b.get("engine") or "?",
+                     {"engine": b.get("engine"), "action": b.get("action"),
+                      "why": b.get("why"), "return_pct": b.get("return_pct")},
+                     "portfolio_review")
+    except Exception:
+        pass
+
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--every", type=float, default=10.0)
     ap.add_argument("--dry", action="store_true")

@@ -84,6 +84,8 @@ def main():
             held = time.time() - p["t"]
             reason = ("tp" if chg >= a.tp else "sl" if chg <= -a.sl else
                       "clock" if held >= a.hold else None)
+            if reason and T.hold_loser(held, chg):
+                reason = None
             if reason:
                 net = chg - FEE
                 bk.equity += p["notional"] * net / 100
@@ -117,7 +119,8 @@ def main():
                 continue
             side = "buy" if kind == "PUMP" else "sell"
             notional = min(bk.equity * a.risk / 100 * 40, bk.equity * 0.08)
-            ok, why = risk.allow(sym, side, notional, bk.equity, confidence=0.0)
+            ok, why = risk.allow(sym, side, notional, bk.equity, confidence=0.0,
+              book_positions=list(bk.pos.values()) if isinstance(getattr(bk, 'pos', None), dict) else None)
             risk.record(sym, side, ok, why)
             if not ok:
                 continue

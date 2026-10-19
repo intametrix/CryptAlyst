@@ -25,6 +25,16 @@ def jget(u, t=4.0):
         return json.loads(r.read().decode())
 
 
+def publish_alert(a):
+    try:
+        import sys as _s, os as _o
+        _s.path.insert(0, _o.path.dirname(_o.path.abspath(__file__)))
+        from lib import bus as _bus
+        _bus.pub("alert.pumpdump", a.get("symbol") or "ALL", a, "signal_bus")
+    except Exception:
+        pass
+
+
 def poll(limit=60):
     global CURSOR
     while True:
@@ -39,6 +49,7 @@ def poll(limit=60):
                 a["cursor"] = CURSOR
                 a["received_ms"] = int(time.time() * 1000)
                 SIGNALS.append(a)
+                publish_alert(a)
             if len(SIGNALS) > 800:
                 del SIGNALS[:-800]
             if len(SEEN) > 4000:

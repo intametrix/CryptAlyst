@@ -1,0 +1,26 @@
+graph LR
+  subgraph Inputs
+    P["prices 4/s"]
+    D["depth 1/s"]
+    S["signals 10s"]
+    T["TA 5s"]
+    F["forecast 300ms"]
+  end
+  subgraph Intel
+    IC["intel cache<br/>latest per symbol"]
+  end
+  subgraph Decision
+    RANK["cross-sectional rank"]
+    GATE["risk governor"]
+  end
+  subgraph Action
+    Q["maker quote"]
+    B["book update"]
+    EV["model.fill"]
+  end
+  P --> IC
+  D --> IC
+  S --> IC
+  T --> IC
+  F --> IC
+  IC --> RANK --> GATE --> Q --> B --> EV

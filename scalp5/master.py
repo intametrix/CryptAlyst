@@ -17,7 +17,9 @@ Anything offline is shown as offline rather than silently dropped.
 import argparse
 import json
 import os
+import queue
 import sys
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -75,10 +77,9 @@ def metric_sample(n=30):
         fmap[sym] = fmap.get(sym, 0) + (1 if ("BUY" in d or "PUMP" in d) else -1)
     def fetch(sym):
         try:
-            d = jget("http://127.0.0.1:8796/klines?symbol=%s&interval=1m&limit=60"
-                     % sym, timeout=8.0).get("klines") or []
-            out = [(float(x["c"]) if isinstance(x, dict) else float(x[4])) for x in d]
-            return sym, out or None
+            rows = jget("http://127.0.0.1:8796/klines?symbol=%s&interval=1m&limit=60"
+                        % sym, timeout=8.0).get("klines") or []
+            return sym, rows or None
         except Exception:
             return sym, None
 
@@ -95,13 +96,16 @@ def metric_sample(n=30):
         d = fetched.get(sym)
         if not d:
             continue
-        cl = [float(x[4]) for x in d]
-        vol = [float(x[5]) for x in d]
+        def col(row, key, idx):
+            return float(row[key]) if isinstance(row, dict) else float(row[idx])
+        cl = [col(x, "c", 4) for x in d]
+        vol = [col(x, "v", 5) for x in d]
         if len(cl) < 20:
             continue
-        trs = [max(float(d[i][2]) - float(d[i][3]),
-                   abs(float(d[i][2]) - float(d[i - 1][4])),
-                   abs(float(d[i][3]) - float(d[i - 1][4]))) for i in range(1, len(d))]
+        trs = [max(col(d[i], "h", 2) - col(d[i], "l", 3),
+                   abs(col(d[i], "h", 2) - col(d[i - 1], "c", 4)),
+                   abs(col(d[i], "l", 3) - col(d[i - 1], "c", 4)))
+               for i in range(1, len(d))]
         atr = sum(trs[-14:]) / max(1, len(trs[-14:]))
         risk = 100 * atr / cl[-1] if cl[-1] else 0.0
         liq = (r.get("v") or 0) / 1e6
@@ -144,6 +148,9 @@ def sparklines(n=24, interval="1m", limit=60):
                 out[sym] = series
     SPARK["ts"], SPARK["data"] = time.time(), out
     return out
+
+
+SYMBOLS = {"rows": [], "ts": 0}      # cache for all_symbols()
 
 
 def all_symbols():
@@ -377,6 +384,101 @@ def fetch(paths, base="http://127.0.0.1"):
     return out
 
 
+class StreamHub:
+    """Fan-out to browser clients, fed by lib.bus subscriptions.
+
+    The page used to read an in-memory bus. It now subscribes to RabbitMQ via
+    lib.bus and re-serves the envelopes as server-sent events.
+    """
+
+    TOPICS = ["ticks", "market.price", "intel.signal", "signals", "model.fill",
+              "model.pnl", "model.decision", "intel.forecast", "intel.ta",
+              "intel.flow", "system.health", "market.depth", "market.mini24h"]
+
+    def __init__(self):
+        self.clients = set()
+        self.lock = threading.Lock()
+        self.started = False
+        self.count = 0
+        self.subscribed = []
+
+    def register(self):
+        q = queue.Queue(maxsize=500)
+        with self.lock:
+            self.clients.add(q)
+        return q
+
+    def unregister(self, q):
+        with self.lock:
+            self.clients.discard(q)
+
+    def push(self, payload):
+        with self.lock:
+            dead = []
+            for q in self.clients:
+                try:
+                    q.put_nowait(payload)
+                except Exception:
+                    dead.append(q)
+            for q in dead:
+                self.clients.discard(q)
+        self.count += 1
+
+    def start(self):
+        if self.started:
+            return
+        self.started = True
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self):
+        from lib import bus
+        while True:
+            try:
+                for topic in self.TOPICS:
+                    def handler(env, topic=topic):
+                        self.push({"topic": topic, "data": env.data})
+                    bus.sub(topic, handler)
+                self.subscribed = list(self.TOPICS)
+                print("stream hub subscribed to %d topics via RabbitMQ"
+                      % len(self.TOPICS), flush=True)
+                while True:
+                    time.sleep(30)
+            except Exception as exc:
+                print("stream hub reconnecting: %r" % (exc,), flush=True)
+                time.sleep(3)
+
+
+HUB = StreamHub()
+
+
+COUNTERS = os.path.join(HERE, "state", "counters.json")
+
+
+def closed_high_water(live):
+    """Total closed trades ever seen. Monotonic by construction.
+
+    Books get archived and reset; the count of closed trades must not follow them
+    down, so we keep a high-water mark and only ever raise it.
+    """
+    hw = 0
+    try:
+        with open(COUNTERS) as fh:
+            hw = int(json.load(fh).get("closed_hw") or 0)
+    except Exception:
+        hw = 0
+    n = max(hw, int(live or 0))
+    if n != hw:
+        try:
+            os.makedirs(os.path.dirname(COUNTERS), exist_ok=True)
+            tmp = "%s.%d.t" % (COUNTERS, os.getpid())
+            with open(tmp, "w") as fh:
+                json.dump({"closed_hw": n, "ts": int(time.time() * 1000)}, fh)
+            os.replace(tmp, COUNTERS)
+        except Exception:
+            pass
+    return n
+
+
 def collect():
     engines = []
 
@@ -523,7 +625,10 @@ def collect():
     except Exception:
         models = None
 
-    return {"ts": int(time.time() * 1000), "engines": engines, "models": models}
+    live_closed = sum((e.get("closed") or 0) for e in engines if e.get("equity") is not None)
+    return {"ts": int(time.time() * 1000), "engines": engines, "models": models,
+            "totals": {"closed": closed_high_water(live_closed),
+                       "closed_live": live_closed}}
 
 
 PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -678,6 +783,8 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   #forecast{display:none}
   #forecast.on{display:block}
   #health{display:none}
+  #books{display:none}
+  #books.on{display:block}
   #health.on{display:block}
   #busview{display:none}
   #busview.on{display:block}
@@ -1034,16 +1141,17 @@ table th.sort-desc:after{content:" \25BC";font-size:8px;color:#58a6ff}
 .mltable th:nth-child(7),.mltable td:nth-child(7){width:84px}
 .mltable tbody tr:hover{background:#131d28}
 .mltable .sym{font-weight:700;color:#c9d6e3;cursor:pointer;letter-spacing:.02em}
-.mltable .px{text-align:right;font-weight:600;color:#e6edf6;position:relative}
+.mltable .px{text-align:right;font-weight:600;color:#e6edf6;position:relative;
+  font-variant-numeric:tabular-nums;
+  transition:background-color .85s cubic-bezier(.22,.61,.36,1),color .85s ease-out;
+  border-radius:3px;padding-left:4px;padding-right:4px}
 .mltable .chg{text-align:right;font-weight:600}
 .mltable .liq{text-align:right;color:#7c8b9d}
 .mltable .vol{text-align:right;color:#58a6ff}
 .mltable .age{text-align:right;font-size:10px;color:#59677a}
 .mltable .spark{width:96px}
-.flash-up{animation:cellup 1.1s ease-out}
-.flash-down{animation:celldown 1.1s ease-out}
-@keyframes cellup{0%{background:#123a24;color:#7ee787}100%{background:transparent}}
-@keyframes celldown{0%{background:#3a1616;color:#ff9a92}100%{background:transparent}}
+.px.up-tint{background-color:#123a24;color:#7ee787}
+.px.down-tint{background-color:#3a1616;color:#ff9a92}
 .liqbar{height:3px;background:#16202b;border-radius:2px;margin-top:3px;overflow:hidden}
 .liqbar i{display:block;height:100%;background:#3d6a94}
 #rail{position:fixed;left:0;top:0;bottom:0;width:186px;background:linear-gradient(180deg,#0c1219,#0a0e13);
@@ -1107,6 +1215,8 @@ header{margin-left:186px}
   <button id="railbtn" onclick="toggleRail()" title="collapse / expand">☰</button></div>
   <nav>
     <a onclick="showTab('dash')" id="nav-dash" class="nav on"><i>▦</i><span>Dashboard</span></a>
+    <a onclick="showTab('thinking')" id="nav-thinking" class="nav"><i>◍</i><span>Thinking</span></a>
+    <a onclick="showTab('busview')" id="nav-busview" class="nav"><i>⇄</i><span>Message bus</span></a>
     <a onclick="showTab('tape')" id="nav-tape" class="nav"><i>≡</i><span>Tape</span></a>
     <a onclick="showTab('signals')" id="nav-signals" class="nav"><i>◎</i><span>Signals</span></a>
     <a onclick="showTab('advisor')" id="nav-advisor" class="nav"><i>◉</i><span>Advisor</span></a>
@@ -1120,6 +1230,7 @@ header{margin-left:186px}
     <a onclick="showTab('why')" id="nav-why" class="nav"><i>?</i><span>Why</span></a>
     <a onclick="showTab('review')" id="nav-review" class="nav"><i>◫</i><span>Review</span></a>
     <a onclick="showTab('control')" id="nav-control" class="nav"><i>⏻</i><span>TA Analysis</span></a>
+    <a onclick="showTab('books')" id="nav-books" class="nav"><i>▤</i><span>Books</span></a>
     <a onclick="showTab('health')" id="nav-health" class="nav"><i>✚</i><span>Health</span></a>
   </nav>
   <div class="rfoot" style="flex-direction:column;gap:6px">
@@ -1190,6 +1301,13 @@ header{margin-left:186px}
     <iframe id="chartframe" src="/chart"
             style="width:100%;height:calc(100vh - 130px);min-height:520px;border:0;
                    border-radius:12px;display:block;background:#0b0f14"></iframe>
+  </div>
+  <div id="books">
+    <div class="mhead"><span class="sym">Books</span>
+      <span class="mk">every model's own account · click a book to open it</span>
+      <span style="flex:1"></span><span class="mk" id="booksnote">—</span></div>
+    <div id="bookshead"></div>
+    <div id="booksgrid"></div>
   </div>
   <div id="health">
     <div class="mhead"><span class="sym">Dashboard health</span>
@@ -1486,24 +1604,48 @@ async function renderBus(){
   try{ d=await (await fetch("/api/bus",{cache:"no-store"})).json(); }catch(e){
     box.innerHTML=UI.panel("message bus", '<div class="empty">broker unreachable</div>'); return; }
   if(d.error){ box.innerHTML=UI.panel("message bus", '<div class="empty">'+UI.esc(d.error)+'</div>'); return; }
+
   var t=d.totals||{};
-  var stats=[UI.stat("broker", "RabbitMQ "+UI.esc(d.version||""), "#a371f7"),
-             UI.stat("queues", t.queues||0),
-             UI.stat("consumers", t.consumers||0, (t.consumers?"#3fb950":"#f85149")),
-             UI.stat("connections", t.connections||0)].join("");
-  var rows=(d.queues||[]).sort(function(a,b){return (b.messages||0)-(a.messages||0);}).map(function(q){
-    var rate=q.publish_rate==null?0:q.publish_rate;
-    return [UI.esc(q.name), q.messages==null?0:q.messages,
-            rate?rate.toFixed(2)+"/s":"—",
-            q.consumers?UI.pill(q.consumers+" consumer"+(q.consumers>1?"s":""),"ok"):UI.pill("no consumer","warn"),
-            q.durable?UI.pill("durable","mute"):UI.pill("transient","mute")];
+  var qs=(d.queues||[]).filter(function(q){ return q.name.indexOf("stomp-")!==0; });
+  function sum(f){ return qs.reduce(function(a,q){ return a+(f(q)||0); },0); }
+  var inRate=sum(function(q){ return q.publish_rate; });
+  var outRate=sum(function(q){ return q.deliver_rate; });
+  var backlog=sum(function(q){ return q.messages; });
+  var stalled=qs.filter(function(q){ return !q.consumers; });
+  var legacy=qs.filter(function(q){ return q.name.indexOf("q.")===0 ? false : true; });
+
+  var stats=[UI.stat("broker","RabbitMQ "+UI.esc(d.version||""),"#a371f7"),
+             UI.stat("queues", qs.length),
+             UI.stat("in/s", inRate.toFixed(1), inRate?"#3fb950":"#f85149"),
+             UI.stat("out/s", outRate.toFixed(1), outRate?"#3fb950":"#f85149"),
+             UI.stat("backlog", backlog, backlog>1000?"#f85149":"#9fb0c4"),
+             UI.stat("unconsumed", stalled.length, stalled.length?"#f85149":"#3fb950")].join("");
+
+  var rows=qs.slice().sort(function(a,b){ return (b.publish_rate||0)-(a.publish_rate||0); }).map(function(q){
+    var pin=q.publish_rate||0, pout=q.deliver_rate||0;
+    var fam=q.name.indexOf("q.")===0?"topic":"legacy";
+    return [UI.esc(q.name), fam, (q.messages||0),
+            pin?pin.toFixed(2):"—", pout?pout.toFixed(2):"—",
+            q.consumers?UI.pill(String(q.consumers),"ok"):UI.pill("none","bad")];
   });
-  box.innerHTML=UI.panel("broker", '<div style="display:flex;gap:26px;flex-wrap:wrap">'+stats+'</div>',
-      {note:"management :15672"})+
+
+  box.innerHTML = UI.panel("broker", '<div style="display:flex;gap:26px;flex-wrap:wrap">'+stats+'</div>',
+      {note:"management :15672 · in/s is publish, out/s is delivery"})+
     '<div style="margin-top:12px">'+UI.panel("queues",
-      UI.table({key:"bus-queues", cols:[{label:"queue",align:"left"},{label:"messages"},
-        {label:"publish"},{label:"consumers",align:"left"},{label:"type",align:"left"}], rows:rows}),
-      {note:"queues with no consumer are collecting and will be trimmed by policy"})+'</div>';
+      UI.table({key:"bus-queues",
+        cols:[{label:"queue",align:"left"},{label:"family",align:"left"},{label:"backlog"},
+              {label:"in/s"},{label:"out/s"},{label:"consumers",align:"left"}],
+        rows:rows}),
+      {note:"backlog 0 with in/s≈out/s means the queue is being drained as fast as it fills"})+'</div>'+
+    UI.panel("topics", (function(){
+      var tp=[];
+      return UI.table({key:"bus-topics",
+        cols:[{label:"topic",align:"left"},{label:"queue",align:"left"},{label:"in/s"},{label:"out/s"}],
+        rows:qs.filter(function(q){return q.name.indexOf("q.")===0;}).map(function(q){
+          return [UI.esc(q.name.slice(2)), UI.esc(q.name),
+                  (q.publish_rate||0).toFixed(2), (q.deliver_rate||0).toFixed(2)];
+        })});
+    })(), {note:legacy.length+" legacy queue"+(legacy.length===1?"":"s")+" also drained"});
 }
 function normalisePanels(){
   /* any panel stranded inside a collapsed container is hoisted to .wrap */
@@ -1521,7 +1663,7 @@ function showTab(which){
   try{ var cb=$("chartbox"); if(cb) cb.classList.remove("open"); }catch(e){}
   try{ window.scrollTo(0,0); document.documentElement.scrollLeft=0; document.body.scrollLeft=0; }catch(e){}
   ["dash","market","why","review","control","lb","opt","models","tape","signals","advisor",
-   "forecast","thinking","busview","moversview","marketlive","health"].forEach(function(k){
+   "forecast","thinking","busview","moversview","marketlive","books","health"].forEach(function(k){
     var el=$(k); if(!el) return;
     if(k==="dash"){
       el.classList.toggle("off", which!=="dash");
@@ -1553,7 +1695,8 @@ function showTab(which){
   try{ if(which==="busview") renderBus(); }catch(e){ tabErr("busview",e); }
   try{ if(which==="thinking") renderThinking(); }catch(e){ tabErr("thinking",e); }
   try{ if(which==="moversview"){ renderMovers(); renderFlow(); } }catch(e){ tabErr("moversview",e); }
-  try{ if(which==="marketlive"){ renderMarketLive(); mlStream(); } else { mlStop(); } }catch(e){ tabErr("marketlive",e); }
+  try{ if(which==="marketlive"){ renderMarketLive(); } mlStream(); }catch(e){ tabErr("marketlive",e); }
+  try{ if(which==="books") renderBooks(); }catch(e){ tabErr("books",e); }
   try{ if(which==="health") renderHealth(); }catch(e){ tabErr("health",e); }
 }
 
@@ -2048,6 +2191,111 @@ async function optApply(m){
 }
 
 
+async function renderBooks(){
+  var head=$("bookshead"), grid=$("booksgrid"), note=$("booksnote");
+  if(!grid) return;
+  var d={};
+  try{ d=await (await fetch("/api/books",{cache:"no-store"})).json(); }catch(e){}
+  var books=d.books||[];
+  if(!books.length){ grid.innerHTML='<div class="panel"><div class="empty">no books yet</div></div>'; return; }
+  if(note) note.textContent=books.length+" books · "+d.open+" open positions · "+d.closed+" closed trades";
+
+  var active=books.filter(function(b){ return b.trades>0 || b.open>0; }).length;
+  var flat=books.length-active;
+  head.innerHTML='<div class="panel" style="padding:12px 14px;margin-bottom:12px">'+
+    '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center">'+
+    UI.stat("combined equity","$"+Number(d.equity||0).toLocaleString(undefined,{maximumFractionDigits:0}))+
+    UI.stat("return",(d.return_pct>=0?"+":"")+Number(d.return_pct||0).toFixed(3)+"%", (d.return_pct>=0?"#3fb950":"#f85149"))+
+    UI.stat("books", books.length)+
+    UI.stat("books trading", active, "#58a6ff")+
+    UI.stat("books idle", flat, "#7c8b9d")+
+    UI.stat("open positions", d.open||0)+
+    UI.stat("closed trades", d.closed||0)+
+    '</div>'+
+    '<div class="mk" style="margin-top:6px">'+books.length+' books each start at $'+
+      Number(books[0].start||5000).toLocaleString()+' · '+(d.open||0)+
+      ' positions open across them · '+(d.closed||0)+' trades closed in total</div>'+
+    '</div>';
+
+  books.sort(function(a,b){ return b.return_pct-a.return_pct; });
+  grid.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">'+
+    books.map(function(b){
+      var col=b.return_pct>0?"#3fb950":b.return_pct<0?"#f85149":"#7c8b9d";
+      var curve=b.curve||[];
+      var spark="";
+      if(curve.length>1){
+        var lo=Math.min.apply(null,curve.concat([0])), hi=Math.max.apply(null,curve.concat([0]));
+        var rng=(hi-lo)||1;
+        spark='<svg width="100%" height="34" viewBox="0 0 200 34" preserveAspectRatio="none" style="display:block">'+
+          '<line x1="0" y1="'+(34-(0-lo)/rng*34).toFixed(1)+'" x2="200" y2="'+(34-(0-lo)/rng*34).toFixed(1)+'" stroke="#22303e" stroke-dasharray="2 3"/>'+
+          '<polyline fill="none" stroke="'+col+'" stroke-width="1.6" points="'+
+            curve.map(function(v,i){ return (i/(curve.length-1)*200).toFixed(1)+","+(34-(v-lo)/rng*34).toFixed(1); }).join(" ")+'"/>'+
+          '</svg>';
+      }
+      var pos=(b.positions||[]).slice(0,3).map(function(p){
+        return '<div style="display:flex;gap:6px;font-family:var(--mono);font-size:10.5px;color:#8095ab">'+
+          '<b style="color:'+(p.side==="buy"?"#3fb950":"#f85149")+'">'+esc((p.side||"").toUpperCase())+'</b>'+
+          '<span>'+esc(p.symbol)+'</span><span style="flex:1"></span>'+
+          '<span>$'+Number(p.notional||0).toFixed(0)+'</span></div>';
+      }).join("");
+      var more=b.open-(b.positions||[]).length;
+      return '<div class="panel" style="padding:12px 14px;cursor:pointer" onclick="openBook(\''+esc(b.engine)+'\')">'+
+        '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">'+
+          '<b style="font-size:13px">'+esc(b.engine)+'</b>'+
+          '<span class="mk">'+b.trades+' closed · '+b.open+' open</span>'+
+          '<span style="flex:1"></span>'+
+          '<b style="color:'+col+';font-size:14px">'+(b.return_pct>0?"+":"")+Number(b.return_pct).toFixed(2)+'%</b>'+
+        '</div>'+
+        spark+
+        '<div style="display:flex;gap:12px;margin-top:6px;font-family:var(--mono);font-size:11px">'+
+          '<span style="color:#9fb0c4">$'+Number(b.equity).toLocaleString(undefined,{maximumFractionDigits:0})+'</span>'+
+          '<span style="color:#7c8b9d">win '+Number(b.win_pct).toFixed(0)+'%</span>'+
+          '<span style="color:'+(b.avg_net>=0?"#3fb950":"#f85149")+'">avg '+Number(b.avg_net).toFixed(3)+'%</span>'+
+        '</div>'+
+        (pos?'<div style="margin-top:8px;border-top:1px solid #111a24;padding-top:6px">'+pos+
+             (more>0?'<div class="mk">+' + more + ' more</div>':'')+'</div>':'')+
+      '</div>';
+    }).join("")+'</div>';
+}
+
+async function openBook(engine){
+  var d={};
+  try{ d=await (await fetch("/api/books",{cache:"no-store"})).json(); }catch(e){}
+  var b=(d.books||[]).find(function(x){ return x.engine===engine; });
+  if(!b) return;
+  var col=b.return_pct>=0?"#3fb950":"#f85149";
+  var pos=(b.positions||[]).map(function(p){
+    return UI.table({key:"bk-pos",cols:[{label:"symbol",align:"left"},{label:"side"},{label:"entry"},{label:"notional"}],
+      rows:[]}); }).join("");
+  var posTable=(b.positions||[]).length? UI.table({key:"bkpos",
+      cols:[{label:"symbol",align:"left"},{label:"side"},{label:"entry",align:"right"},{label:"notional",align:"right"}],
+      rows:(b.positions||[]).map(function(p){
+        return [esc(p.symbol), '<span style="color:'+(p.side==="buy"?"#3fb950":"#f85149")+'">'+esc((p.side||"").toUpperCase())+'</span>',
+                p.entry==null?"—":String(p.entry), "$"+Number(p.notional||0).toFixed(0)]; })}) :
+    '<div class="mk">flat — no open positions</div>';
+  var tTable=(b.recent||[]).length? UI.table({key:"bktrades",
+      cols:[{label:"symbol",align:"left"},{label:"side"},{label:"net %",align:"right"},{label:"reason",align:"left"},{label:"held",align:"right"}],
+      rows:(b.recent||[]).map(function(t){
+        var c=(t.net_pct||0)>=0?"#3fb950":"#f85149";
+        return [esc(t.symbol), esc((t.side||"").toUpperCase()),
+                '<span style="color:'+c+'">'+((t.net_pct||0)>0?"+":"")+Number(t.net_pct||0).toFixed(3)+'</span>',
+                esc(t.reason||"—"), Math.round(t.held_s||0)+"s"]; })}) :
+    '<div class="mk">no closes yet</div>';
+  $("sheet").innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
+    '<h3 style="margin:0">'+esc(engine)+'</h3>'+
+    '<b style="color:'+col+'">'+(b.return_pct>0?"+":"")+Number(b.return_pct).toFixed(2)+'%</b>'+
+    '<span class="mk">$'+Number(b.equity).toLocaleString(undefined,{maximumFractionDigits:0})+' of $'+Number(b.start).toLocaleString()+'</span>'+
+    '<span style="flex:1"></span><button class="tbtn" onclick="closeModal()">close</button></div>'+
+    UI.panel("book", '<div style="display:flex;gap:26px">'+
+      UI.stat("closed", b.trades)+UI.stat("open", b.open)+
+      UI.stat("win rate", Number(b.win_pct).toFixed(0)+"%", b.win_pct>=50?"#3fb950":"#f85149")+
+      UI.stat("avg net", (b.avg_net>0?"+":"")+Number(b.avg_net).toFixed(3)+"%", b.avg_net>=0?"#3fb950":"#f85149")+
+      '</div>')+
+    UI.panel("open positions", posTable)+
+    UI.panel("recent closes", tTable);
+  $("modal").classList.add("open");
+}
+
 async function renderHealth(){
   var el=$("healthbody"); if(!el) return;
   el.innerHTML='<div class="hint">checking every view…</div>';
@@ -2097,7 +2345,7 @@ async function setOpt(k,v){
   try{ await fetch("/api/options?"+encodeURIComponent(k)+"="+encodeURIComponent(v),{cache:"no-store"}); }catch(e){}
   renderReviewCountdown(); setInterval(renderReviewCountdown,1000);
 normalisePanels();
-renderThinking(); setInterval(function(){ if(document.getElementById("thinking") && document.getElementById("thinking").classList.contains("on")) renderThinking(); },4000);
+renderThinking();
 renderOptions();
 }
 async function renderThinking(){
@@ -2135,14 +2383,15 @@ async function renderThinking(){
 
   // what it likes
   var likes=(d.signals||[]).map(function(s){
-    var c=(s.flow_conf||0)>=0?"#3fb950":"#f85149";
+    var _fc=Number(s.flow_conf)||0;
+    var c=_fc>=0?"#3fb950":"#f85149";
     return '<div style="display:grid;grid-template-columns:82px 1fr 56px;gap:8px;align-items:center;'+
       'font-family:var(--mono);font-size:11px;padding:3px 0;border-bottom:1px solid #131c26">'+
       '<b style="cursor:pointer" onclick="drillChart(\''+esc(s.symbol)+'\',null)">'+esc(s.symbol)+'</b>'+
       '<span style="height:5px;background:#16202b;border-radius:3px;overflow:hidden;display:flex">'+
-      '<i style="width:'+Math.min(100,Math.abs(s.flow_conf||0))+'%;background:'+c+';'+
-      ((s.flow_conf||0)<0?'margin-left:auto':'')+'"></i></span>'+
-      '<span style="text-align:right;color:'+c+'">'+((s.flow_conf>0?'+':'')+(s.flow_conf||0)).toFixed(0)+'</span></div>';
+      '<i style="width:'+Math.min(100,Math.abs(_fc))+'%;background:'+c+';'+
+      (_fc<0?'margin-left:auto':'')+'"></i></span>'+
+      '<span style="text-align:right;color:'+c+'">'+((Number(s.flow_conf)||0)>0?'+':'')+Number(s.flow_conf||0).toFixed(0)+'</span></div>';
   }).join("") || '<div class="mk">signals warming up</div>';
 
   // the narrative
@@ -2203,6 +2452,62 @@ async function renderReviewCountdown(){
     '<span class="mk">at risk:</span>'+chips+
     '<span class="mk">stopped: '+(stopped.length?esc(stopped.join(", ")):"none")+'</span></div>';
 }
+async function openModel(key){
+  var d={};
+  try{ d=await (await fetch("/api/model?engine="+encodeURIComponent(key),{cache:"no-store"})).json(); }catch(e){}
+  var m=d.meta||{}, b=d.book||{}, log=d.log||[];
+  var col=(b.return_pct||0)>=0?"#3fb950":"#f85149";
+  var math=(m.math||[]).map(function(line){
+    return '<div style="font-family:var(--mono);font-size:10.5px;color:#c9d6e3;background:#0b1119;'+
+      'border-left:2px solid #24313e;padding:3px 8px;margin-bottom:3px;white-space:pre-wrap">'+esc(line)+'</div>';
+  }).join("") || '<div class="mk">no formulas registered for this engine</div>';
+  var params=Object.keys(m.params||{}).map(function(k){
+    return UI.kv(k, String(m.params[k]));
+  }).join("") || '<div class="mk">no parameters recorded</div>';
+  var pos=(b.positions||[]).length? UI.table({key:"mdl-pos",
+      cols:[{label:"symbol",align:"left"},{label:"side"},{label:"entry",align:"right"},{label:"notional",align:"right"}],
+      rows:(b.positions||[]).slice(0,12).map(function(q){
+        return [esc(q.symbol), '<span style="color:'+(q.side==="buy"?"#3fb950":"#f85149")+'">'+
+                esc((q.side||"").toUpperCase())+'</span>',
+                q.entry==null?"—":String(q.entry), "$"+Number(q.notional||0).toFixed(0)];})}) :
+    '<div class="mk">flat</div>';
+  var tr=(b.trades||[]).slice().reverse().slice(0,12).map(function(t){
+    var c=(t.net_pct||0)>=0?"#3fb950":"#f85149";
+    return [esc(t.symbol), esc((t.side||"").toUpperCase()),
+            '<span style="color:'+c+'">'+((t.net_pct||0)>0?"+":"")+Number(t.net_pct||0).toFixed(3)+'</span>',
+            esc(t.reason||"—"), Math.round(t.held_s||0)+"s"];
+  });
+  var trades=tr.length? UI.table({key:"mdl-tr",
+      cols:[{label:"symbol",align:"left"},{label:"side"},{label:"net %",align:"right"},
+            {label:"reason",align:"left"},{label:"held",align:"right"}], rows:tr}) :
+    '<div class="mk">no closed trades yet</div>';
+  var logHtml=log.length? '<div style="font-family:var(--mono);font-size:10px;line-height:1.5;'+
+      'background:#080d13;border:1px solid #16202b;border-radius:6px;padding:8px;max-height:320px;overflow:auto">'+
+      log.map(function(l){
+        var c = /CLOSE/.test(l) ? "#3fb950" : /OPEN/.test(l) ? "#58a6ff" :
+                /error|Error|Traceback/.test(l) ? "#f85149" : "#7c8b9d";
+        return '<div style="color:'+c+';white-space:pre-wrap">'+esc(l)+'</div>';
+      }).join("")+'</div>' : '<div class="mk">no log file yet</div>';
+  var stats=[UI.stat("equity","$"+Number(b.equity||0).toFixed(0)),
+             UI.stat("return",(b.return_pct>0?"+":"")+Number(b.return_pct||0).toFixed(2)+"%", col),
+             UI.stat("closed", b.closed||0),
+             UI.stat("open",(b.positions||[]).length)].join("");
+  $("sheet").innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'+
+    '<h3 style="margin:0">'+esc(m.name||key)+'</h3>'+
+    '<span class="pill">'+esc(m.family||"book")+'</span>'+
+    '<span style="flex:1"></span><button class="tbtn" onclick="closeModal()">close</button></div>'+
+    '<div class="panel" style="padding:12px 14px;margin-bottom:10px"><div style="display:flex;gap:26px;flex-wrap:wrap">'+
+      stats+'</div><div style="margin-top:8px;color:#c9d6e3;font-size:11.5px;line-height:1.6">'+
+      esc(m.summary||"")+'</div></div>'+
+    UI.panel("how it works — the maths in the code", math, {note:"each line is a rule the engine evaluates"})+
+    UI.panel("parameters in force", '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">'+
+      params+'</div>')+
+    UI.panel("open positions", pos)+
+    UI.panel("recent closes", trades)+
+    UI.panel("log", logHtml, {note:"tail of the engine's own log file"});
+  $("modal").classList.add("open");
+}
+
 async function renderModels(){
   var box=$("modelsbody"), note=$("mn");
   if(!box) return;
@@ -2219,7 +2524,7 @@ async function renderModels(){
     var wr=n?(100*wins/n).toFixed(0)+"%":"—";
     var off=disabled.indexOf(e.key)>=0;
     var ret=e.return_pct||0;
-    return '<tr class="sigrow" style="cursor:pointer" onclick="openDetail(\''+esc(e.key)+'\')">'+
+    return '<tr class="sigrow" style="cursor:pointer" onclick="openModel(\''+esc(e.key)+'\')">'+
       '<td style="color:'+(e.colour||'#c9d6e3')+';font-weight:700">'+esc(e.key)+'</td>'+
       '<td>'+engSpark(e.key,70,15)+'</td>'+
       '<td style="text-align:right">$'+money(e.equity)+'</td>'+
@@ -2964,33 +3269,155 @@ function tapeSort(col){
   else { TAPESORT.k=col; TAPESORT.dir=(col==="t"||col==="why")?-1:1; }
   renderTape();
 }
+function paintHealth(h){
+  var chip=$("hz");
+  if(chip){
+    var ok=h.up===h.total;
+    chip.textContent="health "+(ok?"✓":(h.up+"/"+h.total));
+    chip.style.color=ok?"#3fb950":"#f85149";
+    chip.title=(h.services||[]).map(function(r){ return r.name+" "+r.ms+"ms"+(r.up?"":" DOWN"); }).join(" · ");
+  }
+  var box=$("healthbody");
+  if(box && document.getElementById("health") && document.getElementById("health").classList.contains("on")){
+    box.innerHTML=(h.services||[]).map(function(r){
+      return '<div style="display:grid;grid-template-columns:140px 70px 90px 1fr;gap:10px;align-items:center;'+
+        'font-family:var(--mono);font-size:11.5px;padding:3px 0;border-bottom:1px solid #131c26">'+
+        '<b>'+esc(r.name)+'</b>'+
+        '<span style="color:'+(r.up?"#3fb950":"#f85149")+'">'+(r.up?"up":"DOWN")+'</span>'+
+        '<span style="color:#7c8b9d">'+r.ms+'ms</span>'+
+        '<span style="color:#59677a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+          esc(String(r.detail||"").slice(0,90))+'</span></div>';
+    }).join("")+
+    '<div class="mk" style="margin-top:8px" id="healthts">updated '+
+      new Date(h.ts).toLocaleTimeString()+' · '+h.up+'/'+h.total+' up · worst '+h.worst_ms+'ms</div>';
+  }
+}
+
+var BUS_RENDER={};
+function busRender(view, fn, gap){
+  gap = gap || 900;
+  var now = Date.now();
+  var last = BUS_RENDER[view] || 0;
+  if(now - last < gap){
+    if(BUS_RENDER["t:"+view]) return;
+    BUS_RENDER["t:"+view] = setTimeout(function(){
+      delete BUS_RENDER["t:"+view];
+      var el=document.getElementById(view);
+      if(el && el.classList.contains("on")){ BUS_RENDER[view]=Date.now(); try{ fn(); }catch(e){} }
+    }, gap - (now - last));
+    return;
+  }
+  var el=document.getElementById(view);
+  if(!el || !el.classList.contains("on")) return;
+  BUS_RENDER[view]=now;
+  try{ fn(); }catch(e){}
+}
+
+function updateAttrCells(row, sg){
+  var put=function(sel, txt, colour){
+    var c=row.querySelector(sel);
+    if(!c) return;
+    c.textContent=txt;
+    if(colour) c.style.color=colour;
+  };
+  if(sg.spread_bps!=null) put(".spread", Number(sg.spread_bps).toFixed(1), "#9fb0c4");
+  if(sg.buy_ratio!=null) put(".buy", (100*sg.buy_ratio).toFixed(0)+"%",
+                                  sg.buy_ratio>=0.5?"#3fb950":"#f85149");
+  if(sg.oi_change_1h_pct!=null) put(".oi",
+      (sg.oi_change_1h_pct>0?"+":"")+Number(sg.oi_change_1h_pct).toFixed(1)+"%",
+      sg.oi_change_1h_pct>=0?"#3fb950":"#f85149");
+  if(sg.funding_pct!=null) put(".fund", (100*sg.funding_pct).toFixed(3)+"%", "#9fb0c4");
+  if(sg.score!=null) put(".score", (sg.score>0?"+":"")+Number(sg.score).toFixed(1),
+                          sg.score>=0?"#3fb950":"#f85149");
+}
+function fadePrice(cell, up){
+  if(!cell) return;
+  cell.classList.remove("up-tint","down-tint");
+  void cell.offsetWidth;                       /* restart the transition cleanly */
+  cell.classList.add(up?"up-tint":"down-tint");
+  clearTimeout(cell.__fade);
+  cell.__fade=setTimeout(function(){
+    cell.classList.remove("up-tint","down-tint");   /* CSS eases back to normal */
+  }, 90);
+}
 var ML_PREV={}, ML_LAST={}, ML_TICKAGE=0, ML_LIVE={}, ML_ES=null, ML_HITS=0;
-var ML_SERIES={}, ML_METRICS={}, ML_SERIES_TS=0;
+var ML_SERIES={}, ML_METRICS={}, ML_SERIES_TS=0, ML_SIG="", ML_MINI={};
 function mlStream(){
   if(ML_ES || typeof EventSource==="undefined") return;
   try{
-    ML_ES=new EventSource("http://127.0.0.1:8797/subscribe?topics=ticks");
+    ML_ES=new EventSource("/stream");
     ML_ES.onmessage=function(ev){
       try{
-        var d=JSON.parse(ev.data);
-        d=d.data||d;                     // bus envelope {seq,topic,data}
-        ML_LIVE=d.p||ML_LIVE; ML_TICKAGE=0; ML_HITS++;
+        var env=JSON.parse(ev.data);
+        var topic=env.topic||"ticks";
+        var d=env.data||env;
+        var guard=0;
+        while(d && d.data && d.p===undefined && d.symbol===undefined && guard++<3){ d=d.data; }
+        if(topic==="model.fill" || topic==="model.pnl"){
+          busRender("books", renderBooks, 400);
+          busRender("tape", renderTape, 800);
+          busRender("review", renderReview, 1500);
+          return;
+        }
+        if(topic==="system.health" && d.services){
+          try{ paintHealth(d); }catch(e){}
+          return;
+        }
+        if(topic==="model.decision"){
+          busRender("thinking", renderThinking, 1500);
+          busRender("why", renderWhy, 2000);
+          return;
+        }
+        if(topic==="intel.forecast"){
+          busRender("forecast", renderForecast, 1500);
+          return;
+        }
+        if(topic==="signals" || topic==="intel.signal"){
+          busRender("signals", renderSignals, 1200);
+          busRender("advisor", renderAdvisor, 1500);
+          busRender("metrics", refreshMetrics, 5000);
+          busRender("forecast", renderForecast, 4000);
+          if(!d.p && !d.symbol){ /* nothing more */ } else { return; }
+        }
+        if(d.symbol && (topic==="intel.signal" || d.symbol)){
+          var sg=d.symbol?d:(d.data||{});
+          if(sg && sg.symbol){
+            var row=document.querySelector('#mlbody tr[data-sym="'+sg.symbol+'"]');
+            if(row) updateAttrCells(row, sg);
+          }
+          return;
+        }
+        if(d.p){ ML_LIVE=d.p; }
+        if(d.m){ ML_MINI=d.m; }
+        ML_TICKAGE=0; ML_HITS++;
         var rows=document.querySelectorAll("#mlbody tbody tr");
+        if(!rows.length && document.getElementById("marketlive") &&
+           document.getElementById("marketlive").classList.contains("on")){
+          try{ renderMarketLive(); }catch(e){}
+          rows=document.querySelectorAll("#mlbody tbody tr");
+        }
         for(var i=0;i<rows.length;i++){
-          var tr=rows[i], sym=tr.getAttribute("data-sym"), px=ML_LIVE[sym];
-          if(!px) continue;
-          var cell=tr.querySelector(".px");
-          if(!cell || cell.getAttribute("data-px")===String(px)) continue;
-          var prev=parseFloat(cell.getAttribute("data-prev")||px);
-          cell.setAttribute("data-prev",String(px));
-          cell.setAttribute("data-px",String(px));
-          cell.textContent=px.toPrecision(7);
-          var up=px>prev;
-          cell.classList.remove("flash-up","flash-down");
-          void cell.offsetWidth;
-          cell.classList.add(up?"flash-up":"flash-down");
-          cell.addEventListener("animationend",function(){this.classList.remove("flash-up","flash-down");},{once:true});
-          ML_LAST[sym]=Date.now();
+          var tr=rows[i], sym=tr.getAttribute("data-sym");
+          var px=ML_LIVE[sym];
+          if(px!=null){
+            var cell=tr.querySelector(".px");
+            if(cell && cell.getAttribute("data-px")!==String(px)){
+              var prev=parseFloat(cell.getAttribute("data-prev")||px);
+              cell.setAttribute("data-prev",String(px));
+              cell.setAttribute("data-px",String(px));
+              cell.textContent=Number(px).toPrecision(7);
+              if(px!==prev) fadePrice(cell, px>prev);
+              ML_LAST[sym]=Date.now();
+            }
+          }
+          var mm=ML_MINI[sym];
+          if(mm){
+            var chg=tr.querySelector(".chg");
+            if(chg){ chg.textContent=(mm.c>=0?"+":"")+Number(mm.c).toFixed(2)+"%";
+                     chg.style.color=mm.c>=0?"#3fb950":"#f85149"; }
+            var liq=tr.querySelector(".liq");
+            if(liq && mm.q) liq.textContent="$"+(mm.q/1e6).toFixed(1)+"M";
+          }
         }
       }catch(e){}
     };
@@ -3074,12 +3501,41 @@ async function renderMarketLive(){
   if($("mlage")) $("mlage").textContent=ML_HITS+" stream pushes · "+new Date().toISOString().slice(0,19)+"Z";
   if($("mlcount")) $("mlcount").textContent=px.length+" symbols · "+Object.keys(sp).length+" series";
   var now=Date.now();
+  var sig=px.map(function(t){return t.s;}).join(",");
+  if(sig===ML_SIG && document.querySelector("#mlbody tbody tr")){
+    px.forEach(function(t){
+      var tr=document.querySelector('#mlbody tr[data-sym="'+t.s+'"]');
+      if(!tr) return;
+      var cell=tr.querySelector(".px");
+      if(!cell || t.price==null) return;
+      var prevPx=parseFloat(cell.getAttribute("data-px")||t.price);
+      if(String(t.price)!==cell.getAttribute("data-px")){
+        cell.setAttribute("data-px",String(t.price));
+        cell.textContent=Number(t.price).toPrecision(7);
+        if(t.price!==prevPx) fadePrice(cell, t.price>prevPx);
+      }
+      var chgCell=tr.children[3];
+      if(chgCell && t.c!=null){
+        chgCell.textContent=(t.c>=0?"+":"")+Number(t.c).toFixed(2)+"%";
+        chgCell.style.color=t.c>=0?"#3fb950":"#f85149";
+      }
+      var ageCell=tr.children[tr.children.length-1];
+      if(ageCell){
+        var last=ML_LAST[t.s];
+        var ago=last?Math.max(0,Math.round((Date.now()-last)/1000)):null;
+        ageCell.textContent=(ago==null?"—":(ago===0?"now":ago+"s"));
+        ageCell.style.color=(ago!=null&&ago<3)?"#3fb950":"#59677a";
+      }
+    });
+    return;
+  }
+  ML_SIG=sig;
   var rows=px.map(function(t){
     var sym=t.s, prev=ML_PREV[sym], up=false, changed=false;
     if(prev!=null && t.price!=null && t.price!==prev){ changed=true; up=t.price>prev; ML_LAST[sym]=now; }
     var ago=ML_LAST[sym]?Math.max(0,Math.round((now-ML_LAST[sym])/1000)):null;
     if(t.price!=null) ML_PREV[sym]=t.price;
-    var flash=(changed?(up?" flash-up":" flash-down"):"");
+    var flash="";   /* fade is applied after paint, not baked into the markup */
     var chg=t.c||0;
     return '<tr data-sym="'+esc(sym)+'">'+
       '<td class="sym" onclick="drillChart(\''+esc(sym)+'\',null)">'+esc(sym)+'</td>'+
@@ -3090,15 +3546,15 @@ async function renderMarketLive(){
       '<td class="liq">'+(t.v?("$"+(t.v/1e6).toFixed(1)+"M"):"—")+
         '<span class="liqbar"><i style="width:'+Math.round(100*(t.v||0)/maxLiq)+'%"></i></span></td>'+
       '<td class="vol">'+((mt[sym]&&mt[sym].volume&&mt[sym].volume.length)?mt[sym].volume[mt[sym].volume.length-1].toFixed(0):"—")+'</td>'+
-      '<td style="text-align:right;color:#7c8b9d">'+(t.n?t.n.toLocaleString():"—")+'</td>'+
-      '<td style="text-align:right;color:#e3b341">'+((mt[sym]&&mt[sym].risk&&mt[sym].risk.length)?mt[sym].risk[mt[sym].risk.length-1].toFixed(3)+"%":"—")+'</td>'+
-      '<td style="text-align:right;color:#9fb0c4">'+((X[sym]&&X[sym].spread_bps!=null)?X[sym].spread_bps.toFixed(1):"—")+'</td>'+
-      '<td style="text-align:right;color:'+(((X[sym]||{}).buy_ratio||0.5)>=0.5?"#3fb950":"#f85149")+'">'+
+      '<td class="trades" style="text-align:right;color:#7c8b9d">'+(t.n?t.n.toLocaleString():"—")+'</td>'+
+      '<td class="volat" style="text-align:right;color:#e3b341">'+((mt[sym]&&mt[sym].risk&&mt[sym].risk.length)?mt[sym].risk[mt[sym].risk.length-1].toFixed(3)+"%":"—")+'</td>'+
+      '<td class="spread" style="text-align:right;color:#9fb0c4">'+((X[sym]&&X[sym].spread_bps!=null)?X[sym].spread_bps.toFixed(1):"—")+'</td>'+
+      '<td class="buy" style="text-align:right;color:'+(((X[sym]||{}).buy_ratio||0.5)>=0.5?"#3fb950":"#f85149")+'">'+
         ((X[sym]&&X[sym].buy_ratio!=null)?(100*X[sym].buy_ratio).toFixed(0)+"%":"—")+'</td>'+
-      '<td style="text-align:right;color:'+(((X[sym]||{}).oi_change_1h_pct||0)>=0?"#3fb950":"#f85149")+'">'+
+      '<td class="oi" style="text-align:right;color:'+(((X[sym]||{}).oi_change_1h_pct||0)>=0?"#3fb950":"#f85149")+'">'+
         ((X[sym]&&X[sym].oi_change_1h_pct!=null)?(X[sym].oi_change_1h_pct>0?"+":"")+X[sym].oi_change_1h_pct.toFixed(1)+"%":"—")+'</td>'+
-      '<td style="text-align:right;color:#9fb0c4">'+((X[sym]&&X[sym].funding_pct!=null)?(100*X[sym].funding_pct).toFixed(3)+"%":"—")+'</td>'+
-      '<td style="text-align:right;color:'+(((X[sym]||{}).score||0)>=0?"#3fb950":"#f85149")+'">'+
+      '<td class="fund" style="text-align:right;color:#9fb0c4">'+((X[sym]&&X[sym].funding_pct!=null)?(100*X[sym].funding_pct).toFixed(3)+"%":"—")+'</td>'+
+      '<td class="score" style="text-align:right;color:'+(((X[sym]||{}).score||0)>=0?"#3fb950":"#f85149")+'">'+
         ((X[sym]&&X[sym].score!=null)?(X[sym].score>0?"+":"")+X[sym].score.toFixed(1):"—")+'</td>'+
       '<td class="age" style="color:'+(ago!=null&&ago<3?"#3fb950":"#59677a")+'">'+
         (ago==null?"—":(ago===0?"now":ago+"s"))+'</td></tr>';
@@ -3733,7 +4189,7 @@ async function tick(){
   const real=alive.reduce((a,e)=>a+(e.realised||0),0);
   const unreal=alive.reduce((a,e)=>a+(e.unrealised||0),0);
   const open=alive.reduce((a,e)=>a+(e.positions||[]).length,0);
-  const closed=alive.reduce((a,e)=>a+(e.closed||0),0);
+  const closed=(d.totals&&d.totals.closed)||alive.reduce((a,e)=>a+(e.closed||0),0);
   $("totals").innerHTML=[
     ["combined equity","$"+money(eq)],
     ["combined return",pct(base?100*(eq/base-1):null)],
@@ -4085,14 +4541,16 @@ dashAdv(); setInterval(dashAdv,3000);
 railStatus(); setInterval(railStatus,4000);
 totalEquity(); setInterval(totalEquity,4000);
 refreshSparks(); setInterval(refreshSparks,15000);
-refreshMetrics(); setInterval(refreshMetrics,15000);
+refreshMetrics();
 renderTape(); setInterval(function(){ if(document.getElementById("tape").classList.contains("on")) renderTape(); },1500);
 renderSignals(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderSignals(); },1000);
-renderOpps(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderOpps(); },2000);
+renderOpps();
 renderAdvisor(); setInterval(function(){ if(document.getElementById("advisor").classList.contains("on")) renderAdvisor(); },2000);
 renderOptions();
 renderForecast(); setInterval(function(){ if(document.getElementById("forecast").classList.contains("on")) renderForecast(); },4000);
-renderMarketLive(); setInterval(function(){ if(document.getElementById("marketlive").classList.contains("on")) renderMarketLive(); },1000);
+renderThinking(); setInterval(function(){ if(document.getElementById("thinking") && document.getElementById("thinking").classList.contains("on")) renderThinking(); },4000);
+renderMarketLive(); mlStream();
+setInterval(function(){ if(document.getElementById("marketlive").classList.contains("on")) renderMarketLive(); },1000);
 renderPending(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderPending(); },1000);
 
 /* ================= SORTING (every table) ================= */
@@ -4686,6 +5144,53 @@ class H(BaseHTTPRequestHandler):
                                   "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/model":
+            import urllib.parse as _up
+            q = _up.parse_qs(_up.urlparse(self.path).query)
+            key = (q.get("engine", [""])[0] or "").lower()
+            book = None
+            try:
+                with open(os.path.join(HERE, "state", "pack_%s.json" % key)) as fh:
+                    b = json.load(fh)
+                book = {"equity": b.get("equity"), "start": b.get("start_equity"),
+                        "closed": b.get("trade_count") or len(b.get("trades") or []),
+                        "positions": b.get("positions") or [],
+                        "trades": (b.get("trades") or [])[-40:],
+                        "return_pct": round(100 * ((b.get("equity") or 0) /
+                                                   (b.get("start_equity") or 1) - 1), 3)}
+            except Exception:
+                book = None
+            try:
+                with open(os.path.join(HERE, "state", "trading.json")) as fh:
+                    profile = json.load(fh)
+            except Exception:
+                profile = None
+            try:
+                import models_meta
+                meta = models_meta.for_engine(key, book, profile)
+            except Exception as exc:
+                meta = {"key": key, "error": str(exc)[:120]}
+            log_lines = []
+            for cand in ("sup_%s.log" % key, "%s.log" % key):
+                path = os.path.join(HERE, "logs", cand)
+                if os.path.exists(path):
+                    try:
+                        with open(path, "rb") as fh:
+                            fh.seek(0, os.SEEK_END)
+                            size = fh.tell()
+                            fh.seek(max(0, size - 6000))
+                            log_lines = fh.read().decode("utf-8", "replace").splitlines()[-40:]
+                        break
+                    except Exception:
+                        pass
+            out = {"meta": meta, "book": book, "log": log_lines}
+            return self._send(200, json.dumps(out), "application/json")
+        if p == "/api/intel":
+            try:
+                from lib import intel as _intel
+                return self._send(200, json.dumps(_intel.snapshot()), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
         if p == "/api/bus":
             import base64 as _b64
             auth = "Basic " + _b64.b64encode(b"cryptalyst:cryptalyst").decode()
@@ -4754,6 +5259,12 @@ class H(BaseHTTPRequestHandler):
                 rows = d.get("klines") or []
             except Exception:
                 rows = []
+            try:
+                wins = [int(x) for x in (q.get("windows", ["1,5,15,60,240,1440"])[0] or "").split(",") if x.strip()]
+            except Exception:
+                wins = [1, 5, 15, 60, 240, 1440]
+            wins = sorted(set(w for w in wins if 1 <= w <= 20160))[:8]
+
             def agg(n):
                 win = rows[-n:]
                 if not win:
@@ -4773,7 +5284,7 @@ class H(BaseHTTPRequestHandler):
                         "volume": round(vol, 2),
                         "delta": round(buy - sell, 2)}
             out = {"symbol": sym,
-                   "windows": [w for w in (agg(5), agg(15), agg(60), agg(240), agg(1440)) if w],
+                   "windows": [w for w in (agg(n) for n in wins) if w],
                    "ts": int(time.time() * 1000)}
             return self._send(200, json.dumps(out), "application/json")
         if p == "/api/thinking":
@@ -4973,6 +5484,75 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, fh.read(), "application/json")
             except Exception:
                 return self._send(200, json.dumps({"opportunities": []}), "application/json")
+        if p in ("/stream", "/stream/"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            HUB.start()
+            q = HUB.register()
+            try:
+                while True:
+                    try:
+                        item = q.get(timeout=10)
+                    except Exception:
+                        self.wfile.write(b": ping\n\n"); self.wfile.flush(); continue
+                    self.wfile.write(("data: " + json.dumps(item) + "\n\n").encode())
+                    self.wfile.flush()
+            except Exception:
+                pass
+            finally:
+                HUB.unregister(q)
+            return
+        if p == "/api/books":
+            out = []
+            try:
+                files = [f for f in os.listdir(os.path.join(HERE, "state"))
+                         if f.startswith("pack_") and f.endswith(".json")]
+            except Exception:
+                files = []
+            for fn in sorted(files):
+                try:
+                    with open(os.path.join(HERE, "state", fn)) as fh:
+                        b = json.load(fh)
+                except Exception:
+                    continue
+                trades = b.get("trades") or []
+                start = b.get("start_equity") or 5000
+                eq = b.get("equity") or start
+                wins = sum(1 for t in trades if (t.get("net_pct") or 0) > 0)
+                curve, run = [], 0.0
+                for t in trades[-60:]:
+                    run += (t.get("net_pct") or 0)
+                    curve.append(round(run, 4))
+                out.append({
+                    "engine": b.get("engine"),
+                    "equity": round(eq, 2), "start": round(start, 2),
+                    "return_pct": round(100 * (eq / start - 1), 3) if start else 0,
+                    "trades": len(trades), "win_pct": round(100 * wins / len(trades), 1) if trades else 0,
+                    "avg_net": round(sum((t.get("net_pct") or 0) for t in trades) / len(trades), 4) if trades else 0,
+                    "open": len(b.get("positions") or []),
+                    "positions": [{"symbol": q.get("symbol"), "side": q.get("side"),
+                                   "entry": q.get("entry"), "notional": q.get("notional"),
+                                   "mark": q.get("mark")} for q in (b.get("positions") or [])[:20]],
+                    "recent": [{"symbol": t.get("symbol"), "side": t.get("side"),
+                                "net_pct": t.get("net_pct"), "reason": t.get("reason"),
+                                "held_s": t.get("held_s"), "exit_ms": t.get("exit_ms")}
+                               for t in trades[-8:]][::-1],
+                    "curve": curve,
+                    "ts": b.get("ts")})
+            total = sum(r["equity"] for r in out)
+            start_total = sum(r["start"] for r in out) or 1
+            return self._send(200, json.dumps({
+                "books": out, "equity": round(total, 2), "start": round(start_total, 2),
+                "return_pct": round(100 * (total / start_total - 1), 3),
+                "open": sum(r["open"] for r in out),
+                "closed": sum(r["trades"] for r in out),
+                "up": sum(1 for r in out if r["return_pct"] > 0),
+                "down": sum(1 for r in out if r["return_pct"] < 0),
+                "ts": int(time.time() * 1000)}), "application/json")
         if p == "/api/pending":
             try:
                 with open(os.path.join(HERE, "state", "pending.json")) as fh:

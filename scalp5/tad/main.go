@@ -263,11 +263,28 @@ func loop(every time.Duration) {
 		if len(symbols) == 0 {
 			loadSymbols()
 		}
-		var all []sig
+		var all []sig = make([]sig, 0)
 		for _, s := range symbols {
-			all = append(all, analyse(s)...)
+			live := analyseNoDedupe(s)
+			if live == nil {
+				live = []sig{}
+			}
+			all = append(all, live...)
+			// one message per symbol per cycle, even with nothing firing: the
+			// models need to know *when* it was checked, not only when it tripped
+			if body, err := json.Marshal(map[string]any{"symbol": s,
+				"signals": live, "count": len(live),
+				"ts": time.Now().UnixMilli()}); err == nil {
+				publish("intel", "intel.ta", body)
+			}
 		}
 		if len(all) > 0 {
+			for _, one := range all {
+				if body, err := json.Marshal(map[string]any{"signal": one,
+					"ts": time.Now().UnixMilli()}); err == nil {
+					publish("intel", "intel.ta", body)
+				}
+			}
 			mu.Lock()
 			prev, _ := cur.Load().([]sig)
 			prev = append(prev, all...)
@@ -329,7 +346,16 @@ func main() {
 			w.WriteHeader(400)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"symbol": sym, "signals": analyseNoDedupe(sym)})
+		sigs := analyseNoDedupe(sym)
+		json.NewEncoder(w).Encode(map[string]any{"symbol": sym, "signals": sigs})
+		go func(sym string, sigs []sig) {
+			for _, one := range sigs {
+				if body, err := json.Marshal(map[string]any{"symbol": sym, "signal": one,
+					"ts": time.Now().UnixMilli()}); err == nil {
+					publish("intel", "intel.ta", body)
+				}
+			}
+		}(sym, sigs)
 	})
 	log.Printf("tad on http://%s scanning %s", *addr, *every)
 	log.Fatal(http.ListenAndServe(*addr, mux))

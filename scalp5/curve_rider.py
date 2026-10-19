@@ -111,14 +111,22 @@ def main():
                       "notional": notional, "peak": 0.0,
                       "why": "curve %s slope %+.3f%% · %s move %+.3f%%" % (side, slope, best, bestmove)}
             log("OPEN  %-10s %-4s %.6g  curve %+.3f%%" % (best, side, px, slope))
-            time.sleep(a.hold)                       # the ride
-            px2 = float(jget(SPOT + "/api/v3/ticker/price?symbol=" + best, 5)["price"])
-            chg = (px2 / px - 1) * 100 if side == "buy" else (1 - px / px2) * 100
-            net = chg - FEE
+            # the ride: keep going while the position is losing, by directive
+            px2 = px
+            chg = 0.0
+            net = -FEE
+            while True:
+                time.sleep(a.hold)
+                px2 = float(jget(SPOT + "/api/v3/ticker/price?symbol=" + best, 5)["price"])
+                chg = (px2 / px - 1) * 100 if side == "buy" else (1 - px / px2) * 100
+                net = chg - FEE
+                if net >= 0:
+                    break
+                log("HOLD  %-10s %-4s net %+6.3f%% — under water, holding" % (best, side, net))
             bk.equity += notional * net / 100
             bk.trades.append({"symbol": best, "side": side, "entry": px, "exit": px2,
                               "gross_pct": chg, "net_pct": net, "peak_pct": max(0.0, chg),
-                              "reason": "ride", "held_s": a.hold,
+                              "reason": "ride", "held_s": round(time.time() - bk.pos["t"], 1),
                               "entry_ms": int(bk.pos["t"] * 1000), "exit_ms": int(time.time() * 1000),
                               "notional": notional, "pnl_usd": notional * net / 100,
                               "why": bk.pos["why"]})

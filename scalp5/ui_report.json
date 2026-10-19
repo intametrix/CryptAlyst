@@ -1,11 +1,11 @@
 {
- "ts": 1792323670243,
- "slow_s": 2.0,
+ "ts": 1792396229501,
+ "slow_s": 1.0,
  "views": [
   {
    "view": "dash",
    "body": "sections",
-   "size": 25248,
+   "size": 99414,
    "shown": "block",
    "errors": 0,
    "ok": true
@@ -13,31 +13,31 @@
   {
    "view": "thinking",
    "body": "thbody",
-   "size": 64,
-   "shown": "none",
-   "errors": 0,
-   "ok": false
-  },
-  {
-   "view": "busview",
-   "body": "busbody",
-   "size": 60,
-   "shown": "none",
-   "errors": 0,
-   "ok": false
-  },
-  {
-   "view": "moversview",
-   "body": "movers",
-   "size": 7949,
+   "size": 15271,
    "shown": "block",
    "errors": 0,
    "ok": true
   },
   {
+   "view": "busview",
+   "body": "busbody",
+   "size": 17536,
+   "shown": "block",
+   "errors": 0,
+   "ok": true
+  },
+  {
+   "view": "moversview",
+   "body": "movers",
+   "size": 0,
+   "shown": "block",
+   "errors": 0,
+   "ok": false
+  },
+  {
    "view": "marketlive",
    "body": "mlbody",
-   "size": 28281,
+   "size": 545,
    "shown": "block",
    "errors": 0,
    "ok": true
@@ -45,23 +45,23 @@
   {
    "view": "forecast",
    "body": "fcbody",
-   "size": 3222,
+   "size": 70,
    "shown": "block",
    "errors": 0,
-   "ok": true
+   "ok": false
   },
   {
    "view": "advisor",
    "body": "advboard",
-   "size": 17004,
+   "size": 74,
    "shown": "block",
    "errors": 0,
-   "ok": true
+   "ok": false
   },
   {
    "view": "signals",
    "body": "signalsbody",
-   "size": 46968,
+   "size": 47051,
    "shown": "block",
    "errors": 0,
    "ok": true
@@ -69,31 +69,31 @@
   {
    "view": "tape",
    "body": "tapebody",
-   "size": 116770,
+   "size": 39,
    "shown": "block",
    "errors": 0,
-   "ok": true
+   "ok": false
   },
   {
    "view": "models",
    "body": "modelsbody",
-   "size": 16428,
+   "size": 61,
    "shown": "block",
    "errors": 0,
-   "ok": true
+   "ok": false
   },
   {
    "view": "opt",
    "body": "optbody",
-   "size": 3676,
+   "size": 0,
    "shown": "block",
    "errors": 0,
-   "ok": true
+   "ok": false
   },
   {
    "view": "lb",
    "body": "lbbody",
-   "size": 17438,
+   "size": 71225,
    "shown": "block",
    "errors": 0,
    "ok": true
@@ -101,7 +101,7 @@
   {
    "view": "control",
    "body": "cbody",
-   "size": 4247,
+   "size": 74033,
    "shown": "block",
    "errors": 0,
    "ok": true
@@ -109,7 +109,7 @@
   {
    "view": "review",
    "body": "rbody",
-   "size": 9296,
+   "size": 10006,
    "shown": "block",
    "errors": 0,
    "ok": true
@@ -117,15 +117,15 @@
   {
    "view": "why",
    "body": "wbody",
-   "size": 7721,
+   "size": 0,
    "shown": "block",
    "errors": 0,
-   "ok": true
+   "ok": false
   },
   {
    "view": "health",
    "body": "healthbody",
-   "size": 3196,
+   "size": 2742,
    "shown": "block",
    "errors": 0,
    "ok": true

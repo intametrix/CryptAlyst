@@ -1,0 +1,36 @@
+flowchart LR
+  subgraph Idea["the idea"]
+    A["one shape"]
+    B["append provenance"]
+    C["refer not copy"]
+    D["refuse before work"]
+  end
+  subgraph Need["what trading needs"]
+    N1["priority"]
+    N2["audit"]
+    N3["replay"]
+    N4["freshness"]
+  end
+  A --> N1
+  A --> N4
+  B --> N2
+  C --> N2
+  C --> N3
+  D --> N1
+
+%% colour by role
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class A c_neutral;
+class B c_neutral;
+class C c_neutral;
+class D c_risk;
+class N1 c_neutral;
+class N2 c_neutral;
+class N3 c_control;
+class N4 c_neutral;

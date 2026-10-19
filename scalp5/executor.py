@@ -175,6 +175,8 @@ def main():
 
             elif held >= max(a.clock, 900):
                 reason = "clock"
+            if reason and T.hold_loser(held, chg):
+                reason = None      # hold losers for a day, by directive
             if reason is None and held > 20 and chg < 0:
                 # a loser is only closed when the agents agree it is dead
                 fc = forecast(sym, p["side"])
@@ -224,9 +226,12 @@ def main():
             else: side = "sell"
             _book_eq = pos[0]["notional"] * 0 if False else 5000.0
             _notional = min(_book_eq * a.risk / 100 * 40, _book_eq * 0.08)
+            if side == "sell":
+                _notional *= 0.5          # unbounded tail: shorts carry half the size
             _ok, _why = risk.allow(sym, side, _notional, 5000,
                                    (fc or {}).get("move_pct") if 'fc' in dir() else None,
-                                   (T.ext_signals(sym) or {}).get("slippage_bps_5k"))
+                                   (T.ext_signals(sym) or {}).get("slippage_bps_5k"),
+              book_positions=list(pos.values()) if isinstance(pos, dict) else None)
             risk.record(sym, side, _ok, _why)
             if not _ok:
                 continue
@@ -250,6 +255,8 @@ def main():
                 pass
             risk_here = a.risk * (0.6 + 0.2 * min(conf, 4))
             notional = min(equity * (risk_here / 100) / (a.stop / 100), equity * 3)
+            if side == "sell":
+                notional *= 0.5
             pos[sym] = {"side": side, "entry": px[sym], "t": now, "notional": notional,
                         "peak": 0.0, "conf": conf, "risk": round(risk_here, 2),
                         "views": (fc or {}).get("views") or [],

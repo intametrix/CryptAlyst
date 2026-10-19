@@ -17,6 +17,7 @@ sys.path.insert(0, HERE)
 import maker, risk, tactics as T
 from lib import features
 from lib.feed import Feed
+from lib import bus as _bus
 from lib import emit
 
 STATE = os.path.join(HERE, "state")
@@ -65,8 +66,6 @@ def main():
     ap.add_argument("--lock", type=float, default=1.0)
     ap.add_argument("--stop", type=float, default=1.5)
     ap.add_argument("--clock", type=float, default=3600)
-    ap.add_argument("--no-progress", type=float, default=120.0,
-                    help="close a losing trade that has not progressed by this many seconds")
     a = ap.parse_args()
 
     feed = Feed.instance().start()
@@ -93,11 +92,18 @@ def main():
             chg = (px / p["entry"] - 1) * 100 if p["side"] == "buy" else (1 - px / p["entry"]) * 100
             held = time.time() - p["t"]
             reason = ("lock" if chg >= a.lock else "stop" if chg <= -a.stop else
-                      "no_progress" if (chg < 0.02 and held >= a.no_progress) else
                       "clock" if held >= a.clock else None)
+            if reason and T.hold_loser(held, chg):
+                reason = None      # hold losers for a day, by directive
             if reason:
                 net = chg - 0.04
                 bk.equity += p["notional"] * net / 100
+                try:
+                    _bus.pub("model.pnl", sym, {"engine": BOOK, "equity": round(bk.equity, 2),
+                                                "net_pct": round(net, 4), "symbol": sym},
+                             BOOK)
+                except Exception:
+                    pass
                 bk.trades.append({"symbol": sym, "side": p["side"], "entry": p["entry"],
                                   "exit": px, "gross_pct": chg, "net_pct": net,
                                   "peak_pct": max(0.0, chg), "reason": reason, "held_s": held,
@@ -113,6 +119,14 @@ def main():
                 bk.pos.pop(sym)
         write(bk)
 
+        if _bus:
+            try:
+                _bus.pub("model.rank", "xsec",
+                         {"top": [{"symbol": sym, "score": round(sc, 3)} for sym, sc in ranked[:8]],
+                          "bottom": [{"symbol": sym, "score": round(sc, 3)} for sym, sc in ranked[-8:]],
+                          "ts": int(time.time() * 1000)}, BOOK)
+            except Exception:
+                pass
         # ---- targets: strongest longs, weakest shorts
         wanted = []
         for sym, sc in ranked[:a.top_n]:
@@ -120,6 +134,15 @@ def main():
                 wanted.append((sym, "buy", sc))
         for sym, sc in ranked[-a.top_n:]:
             if sc <= -a.min_score:
+                if sc > -0.60:              # only the bottom of the cross-section
+                    continue
+                ok_s, why_s = T.short_ok(sym)
+                if not ok_s:
+                    try:
+                        risk.record(sym, "sell", False, why_s)
+                    except Exception:
+                        pass
+                    continue
                 wanted.append((sym, "sell", sc))
 
         for sym, side, sc in wanted:
@@ -127,11 +150,12 @@ def main():
                 continue
             base = min(bk.equity * a.risk / 100 * 40, bk.equity * 0.08)
             conf = (feed.for_symbol(sym) or {}).get("flow_conf") or 0
-            notional = risk.size_for(base, conf, T.atr_pct(sym))
+            notional = risk.size_for(base, conf)
             _sig = feed.for_symbol(sym) or {}
             _age = (time.time() * 1000 - (_sig.get("ts") or 0)) / 1000.0 if _sig else None
             ok, why = risk.allow(sym, side, notional, bk.equity, confidence=conf,
-                                 signal_age_s=_age)
+                                 signal_age_s=_age,
+              book_positions=list(bk.pos.values()))
             risk.record(sym, side, ok, why)
             try:
                 emit.decision(BOOK, sym, side, ok, why, conf)

@@ -11,7 +11,7 @@ difference between them is how much time a trade is allowed to develop.
     t1m  : 1m bars, 20-bar channel, 60s maximum hold
     t2m  : 1m bars, 20-bar channel, 120s maximum hold
 
-Each has its own server page on :8798, so one job runs all five engines and
+Each has its own server page on :8794, so one job runs all five engines and
 their dashboard.
 
 PAPER ONLY. No keys, no orders.
@@ -367,7 +367,7 @@ def main():
                     help="cap notional at this multiple of equity")
     ap.add_argument("--fee", type=float, default=0.001)
     ap.add_argument("--equity", type=float, default=2000.0)
-    ap.add_argument("--port", type=int, default=8798)
+    ap.add_argument("--port", type=int, default=8794)  # 8798 belongs to the Go bus consumer
     args = ap.parse_args()
 
     syms = universe(args.universe, args.min_volume)
