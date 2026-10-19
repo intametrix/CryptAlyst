@@ -88,6 +88,7 @@
     <div class="tabs">
       <button class="tab active" data-view="list">envelopes</button>
       <button class="tab" data-view="journey">journey</button>
+      <button class="tab" data-view="execution">execution</button>
       <span class="tab-hint">esc · back</span>
       <span class="tab-key" id="journeyKey">key: —</span>
     </div>
@@ -96,6 +97,19 @@
       <span class="hint">newest first · click to inspect</span>
     </div>
     <div id="rows" class="rows"></div>
+    <div id="execution" class="execution hidden">
+      <div class="ex-head">
+        <span id="exTitle" class="ex-title">execution trace</span>
+        <span class="ex-controls">
+          <button class="mini" data-zoom="1">1×</button>
+          <button class="mini" data-zoom="2">2×</button>
+          <button class="mini" data-zoom="4">4×</button>
+          <span class="ex-hint">scroll horizontally ↔</span>
+        </span>
+      </div>
+      <div class="ex-scroll" id="exScroll"><svg id="exSvg" height="300"></svg></div>
+      <div class="ex-used" id="exUsed"></div>
+    </div>
     <div id="journey" class="journey hidden">
       <svg id="journeySvg" viewBox="0 0 900 640" preserveAspectRatio="xMidYMid meet"></svg>
       <div class="journey-legend" id="journeyLegend"></div>

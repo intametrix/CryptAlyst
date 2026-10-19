@@ -242,6 +242,7 @@ async function select(id) {
       $("chain").textContent = "no key on this envelope";
     }
     if (state.view === "journey") renderJourney(d.id);
+    if (state.view === "execution") renderExecution(d.id);
   } catch (e) {
     $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
   }
@@ -370,6 +371,106 @@ $("play").onclick = () => {
 };
 
 const STAGE_LABEL = ["market data", "advisories", "risk & alerts", "decisions", "other"];
+const LANE_LABEL = ["market", "advisories", "risk", "model", "other"];
+let exZoom = 1;
+
+/* The execution trace: one decision, the data it read, on a scrollable timeline. */
+async function renderExecution(idHint) {
+  const id = idHint || state.sel;
+  if (!id) {
+    $("exTitle").textContent = "execution trace — select a message first";
+    $("exSvg").innerHTML = "";
+    $("exUsed").innerHTML = "";
+    return;
+  }
+  const d = await (await fetch("/api/execution?id=" + id, { cache: "no-store" })).json();
+  if (!d || !d.nodes) return;
+  $("exTitle").textContent = `${d.topic} · ${d.key || "all symbols"} · ${d.nodes.length} nodes · window ${Math.round((d.to - d.from) / 1000)}s`;
+  drawExecution(d);
+}
+
+function drawExecution(d) {
+  const nodes = d.nodes || [], path = new Set(d.path || []);
+  const svg = $("exSvg");
+  const lanes = 5, laneH = 46, padL = 86, padT = 18;
+  const span = Math.max(1, d.to - d.from);
+  const pxPerSec = 4 * exZoom;
+  const width = Math.min(12000, Math.max(900, Math.round((span / 1000) * pxPerSec) + padL + 40));
+  const H = padT + lanes * laneH + 28;
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", H);
+  svg.setAttribute("viewBox", `0 0 ${width} ${H}`);
+  const x = (ts) => padL + ((ts - d.from) / span) * (width - padL - 40);
+  const laneY = (stage) => padT + stage * laneH + laneH / 2;
+
+  let out = "";
+  for (let i = 0; i < lanes; i++) {
+    out += `<rect class="ex-lane" x="${padL - 8}" y="${padT + i * laneH + 6}" width="${width - padL - 24}" height="${laneH - 14}" rx="6"/>`;
+    out += `<text class="ex-lane-label" x="10" y="${padT + i * laneH + laneH / 2 + 3}">${LANE_LABEL[i]}</text>`;
+  }
+  // time ticks every 30 s of the window
+  const step = Math.max(15000, Math.round(span / 12));
+  for (let t = d.from; t <= d.to; t += step) {
+    const tx = x(t);
+    out += `<line x1="${tx}" y1="${padT}" x2="${tx}" y2="${padT + lanes * laneH}" stroke="#16202b"/>`;
+    out += `<text class="ex-tick" x="${tx + 3}" y="${H - 8}">${fmtTime(t)}</text>`;
+  }
+  // the path: a polyline through the chosen nodes in reading order
+  const ordered = nodes.filter((n) => path.has(n.id)).sort((a, b) => a.ts - b.ts);
+  if (ordered.length > 1) {
+    const pts = ordered.map((n) => `${x(n.ts)},${laneY(n.stage)}`).join(" ");
+    out += `<polyline class="ex-path" points="${pts}"/>`;
+  }
+  nodes.forEach((n) => {
+    const colour = PLANE_COLOUR[n.plane] || "#888";
+    const w = Math.min(150, 40 + n.topic.length * 4.6);
+    const short = n.topic.replace("market.", "").replace("intel.", "").replace("model.", "");
+    const age = n.age_ms >= 0 ? `−${Math.round(n.age_ms / 1000)}s` : `+${Math.round(-n.age_ms / 1000)}s`;
+    out += `<g class="ex-node ${n.anchor ? "ex-anchor" : ""}" data-id="${n.id}">
+      <rect x="${x(n.ts)}" y="${laneY(n.stage) - 11}" width="${w}" height="22" fill="${colour}" opacity="0.92"/>
+      <text x="${x(n.ts) + 5}" y="${laneY(n.stage) + 3}">${esc(short)} ${age}</text>
+    </g>`;
+  });
+  // a vertical marker at the anchor, and the scroll brought to it: an execution
+  // trace is read at the moment of execution, not at the start of the window
+  const anchorNode = nodes.find((n) => n.anchor);
+  if (anchorNode) {
+    const ax = x(anchorNode.ts);
+    out += `<line x1="${ax}" y1="${padT - 6}" x2="${ax}" y2="${padT + lanes * laneH}" stroke="#e6eef8" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.8"/>`;
+  }
+  svg.innerHTML = out;
+  svg.querySelectorAll(".ex-node").forEach((el) => {
+    el.onclick = () => select(Number(el.dataset.id));
+  });
+  const scroll = $("exScroll");
+  if (anchorNode) {
+    const ax = x(anchorNode.ts);
+    scroll.scrollLeft = Math.max(0, ax - scroll.clientWidth * 0.62);
+  }
+
+  // what the anchor used, with age at the moment of execution
+  const used = nodes.filter((n) => n.age_ms >= 0 && !n.anchor).sort((a, b) => a.stage - b.stage);
+  $("exUsed").innerHTML = `<table>
+    <tr><th>stage</th><th>topic</th><th>producer</th><th>age at execution</th><th>bytes</th></tr>
+    ${used.map((n) => `<tr data-id="${n.id}">
+      <td>${LANE_LABEL[n.stage] || n.stage}</td>
+      <td>${esc(n.topic)}</td>
+      <td>${esc(n.producer || "")}</td>
+      <td>${Math.round(n.age_ms / 1000)}s</td>
+      <td>${n.size} B</td></tr>`).join("")}
+  </table>`;
+  $("exUsed").querySelectorAll("tr[data-id]").forEach((tr) => {
+    tr.onclick = () => select(Number(tr.dataset.id));
+  });
+}
+
+document.querySelectorAll(".ex-controls .mini").forEach((b) => {
+  b.onclick = () => {
+    exZoom = Number(b.dataset.zoom);
+    document.querySelectorAll(".ex-controls .mini").forEach((x) => x.classList.toggle("on", x === b));
+    renderExecution();
+  };
+});
 
 /* The flow view: stages as columns, topics as boxes sized by volume, links as
    ribbons whose width is the number of correlations observed. */
@@ -516,10 +617,13 @@ function applyView(view) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === view));
   state.view = view;
   const rows = $("rows"), journey = $("journey"), panel = document.querySelector(".panel.list");
+  const execution = $("execution");
   rows.classList.toggle("hidden", view !== "list");
   journey.classList.toggle("hidden", view !== "journey");
-  panel.classList.toggle("journey-on", view === "journey");
+  execution.classList.toggle("hidden", view !== "execution");
+  panel.classList.toggle("journey-on", view !== "list");
   if (view === "journey") renderJourney();
+  if (view === "execution") renderExecution();
 }
 
 function setView(view, remember) {

@@ -877,6 +877,121 @@ func main() {
 		})
 	})
 
+	// /api/execution builds the trace a model's execution was made from: the
+	// market data and advisories it read, the risk state it passed, and the fill
+	// that followed. Nodes are ordered by time and laid out by stage.
+	mux.HandleFunc("/api/execution", func(w http.ResponseWriter, r *http.Request) {
+		id, _ := strconv.Atoi(r.URL.Query().Get("id"))
+		window, _ := strconv.Atoi(r.URL.Query().Get("window_s"))
+		if window <= 0 || window > 7200 {
+			window = 900
+		}
+		docs := st.snapshot()
+		var anchor *envelopeDoc
+		for i := range docs {
+			if docs[i].ID == id {
+				anchor = &docs[i]
+				break
+			}
+		}
+		if anchor == nil {
+			http.Error(w, "not found", 404)
+			return
+		}
+		from := anchor.TS - int64(window)*1000
+		to := anchor.TS + 120000
+		type xnode struct {
+			ID       int    `json:"id"`
+			Topic    string `json:"topic"`
+			Plane    string `json:"plane"`
+			Stage    int    `json:"stage"`
+			TS       int64  `json:"ts"`
+			Producer string `json:"producer"`
+			Size     int    `json:"size"`
+			AgeMS    int64  `json:"age_ms"`
+			Anchor   bool   `json:"anchor,omitempty"`
+			Chosen   bool   `json:"chosen,omitempty"`
+		}
+		// candidate: the newest envelope of each stage+topic that the anchor could
+		// have read, and the earliest that followed it
+		type pick struct{ node xnode }
+		before := map[string]pick{}
+		after := map[string]pick{}
+		for _, d := range docs {
+			if anchor.Key != "" && d.Key != anchor.Key {
+				continue
+			}
+			if d.TS < from || d.TS > to {
+				continue
+			}
+			st := stageOf(d.Topic)
+			k := d.Topic
+			n := xnode{ID: d.ID, Topic: d.Topic, Plane: d.Plane, Stage: st, TS: d.TS,
+				Producer: d.Producer, Size: d.Size, AgeMS: anchor.TS - d.TS}
+			if d.TS <= anchor.TS {
+				if cur, ok := before[k]; !ok || n.TS > cur.node.TS {
+					before[k] = pick{n}
+				}
+			} else {
+				if cur, ok := after[k]; !ok || n.TS < cur.node.TS {
+					after[k] = pick{n}
+				}
+			}
+		}
+		var nodes []xnode
+		for _, p := range before {
+			n := p.node
+			n.Chosen = true
+			nodes = append(nodes, n)
+		}
+		for topic, p := range after {
+			// only outcomes are interesting after the anchor; a later advisory is a
+			// different decision, not an input to this one
+			if !strings.HasPrefix(topic, "model.") {
+				continue
+			}
+			n := p.node
+			nodes = append(nodes, n)
+		}
+		sort.Slice(nodes, func(i, j int) bool { return nodes[i].TS < nodes[j].TS })
+		// the anchor itself is always shown, even if it was not chosen above
+		found := false
+		for i := range nodes {
+			if nodes[i].ID == anchor.ID {
+				nodes[i].Anchor = true
+				found = true
+			}
+		}
+		if !found {
+			nodes = append(nodes, xnode{ID: anchor.ID, Topic: anchor.Topic, Plane: anchor.Plane,
+				Stage: stageOf(anchor.Topic), TS: anchor.TS, Producer: anchor.Producer,
+				Size: anchor.Size, AgeMS: 0, Anchor: true, Chosen: true})
+			sort.Slice(nodes, func(i, j int) bool { return nodes[i].TS < nodes[j].TS })
+		}
+		// the path: one node per stage, nearest before the anchor where possible
+		// the path is the reading order: stage by stage, earliest first
+		ordered := append([]xnode(nil), nodes...)
+		sort.Slice(ordered, func(i, j int) bool {
+			if ordered[i].Stage != ordered[j].Stage {
+				return ordered[i].Stage < ordered[j].Stage
+			}
+			return ordered[i].TS < ordered[j].TS
+		})
+		var path []int
+		lastStage := -1
+		for _, n := range ordered {
+			if n.Stage == lastStage {
+				continue
+			}
+			path = append(path, n.ID)
+			lastStage = n.Stage
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"anchor": anchor.ID, "key": anchor.Key, "topic": anchor.Topic,
+			"from": from, "to": to, "nodes": nodes, "path": path, "window_s": window,
+		})
+	})
+
 	// /api/timeline returns a stacked histogram across the retained window, which
 	// is what the scrubber draws and what a brush selects from.
 	mux.HandleFunc("/api/timeline", func(w http.ResponseWriter, r *http.Request) {

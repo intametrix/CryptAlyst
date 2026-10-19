@@ -121,10 +121,11 @@ for line in [
     "4  Reading an envelope",
     "5  The timeline: browsing history",
     "6  The journey: a flow diagram from a point",
-    "7  Roles and redaction",
-    "8  Three worked examples",
-    "9  Keyboard and quick reference",
-    "10  Troubleshooting",
+    "7  The execution trace: what a model actually used",
+    "8  Roles and redaction",
+    "9  Three worked examples",
+    "10  Keyboard and quick reference",
+    "11  Troubleshooting",
 ]:
     p(line, size=9.5)
 
@@ -289,10 +290,39 @@ callout("Honest caveat: ribbons are temporal correlations — 'next stage for th
         "the same diagram becomes literal lineage with no interpretation required.")
 
 brk()
-h("7  Roles and redaction", 1)
+h("7  The execution trace: what a model actually used", 1)
+p("The journey answers 'how does traffic flow'. The execution trace answers a narrower and more useful "
+  "question: for this one fill, which raw envelopes did the model read, in what order, and how old were they "
+  "when it acted?")
+shot("g10-execution.png", "Figure 9 — the execution trace for one model.fill: lanes by stage, nodes placed in "
+                          "time, the dashed line marking the moment of execution, and the inputs listed "
+                          "beneath with the age each had when the model acted.")
+h("7.1  How to read it", 2)
+table(["Element", "Meaning"], [
+    ["Lanes", "one row per stage: market, advisories, risk, model, other"],
+    ["Node", "one envelope. The label is the topic and how old it was at execution (−1s means one second before the fill)"],
+    ["Dashed vertical line", "the moment of execution — the anchor envelope"],
+    ["Dotted path", "the reading order: stage by stage through the chosen envelopes"],
+    ["1× / 2× / 4×", "zoom. The canvas scrolls horizontally, so a fifteen-minute window stays readable"],
+    ["Table beneath", "the inputs the anchor used: stage, topic, producer, age at execution, bytes"],
+], widths=[1.5, 5.1], size=8.8)
+h("7.2  Working through an execution", 2)
+steps([
+    "Open the EXECUTION tab with a fill selected (filter topic = model.fill to find one).",
+    "The view scrolls itself to the moment of execution and marks it with a dashed line.",
+    "Read left to right: market data first, then the advisories, then anything that followed the fill.",
+    "Click any node to see its raw envelope in the right-hand pane — data, meta and references.",
+    "Use the table beneath to compare ages: a decision made on a 600-second-old candle is a different decision from one made on a 2-second-old candle.",
+])
+callout("This is the view for 'why did the model do that'. It shows the exact envelopes, their ages, and their "
+        "producers — not a summary of them. When books start emitting references, the dotted path becomes "
+        "literal lineage instead of a time-ordered reading of the window.")
+
+brk()
+h("8  Roles and redaction", 1)
 p("The 'viewing as' selector in the header changes what you are allowed to see. It is a real filter applied "
   "on the server, not a cosmetic setting.")
-shot("g6-redaction.png", "Figure 9 — the same envelope viewed as a bystander: depth fields removed, and a red "
+shot("g6-redaction.png", "Figure 10 — the same envelope viewed as a bystander: depth fields removed, and a red "
                          "band naming exactly what was withheld.")
 table(["Role", "Sees", "Typical use"], [
     ["owner", "everything", "you are the operator"],
@@ -303,21 +333,21 @@ p("Every redaction is recorded in the envelope's meta as redacted_for and redact
   "part of the record rather than a silent edit. If someone asks what you were shown, the answer is in the "
   "message.")
 
-h("8  Three worked examples", 1)
-h("8.1  Why did we buy this?", 2)
+h("9  Three worked examples", 1)
+h("9.1  Why did we buy this?", 2)
 steps([
     "Filter symbol = BTCUSDT and plane = model.",
     "Open the model.decision row you care about.",
     "Switch to JOURNEY: the ring sits on the decision; read left for the advisories and market data.",
     "Note the correlation id from the meta pane — quote it in any discussion.",
 ])
-h("8.2  What happened at a specific minute?", 2)
+h("9.2  What happened at a specific minute?", 2)
 steps([
     "Drag the timeline across that minute.",
     "The list narrows to it; sort your reading by plane using the left panel.",
     "Watch for a gap rather than a quiet period: a gap means no producer, not no market.",
 ])
-h("8.3  Which model is producing decisions?", 2)
+h("9.3  Which model is producing decisions?", 2)
 steps([
     "Filter producer = books (or a specific engine) and topic = model.decision.",
     "Compare the generation numbers: a stall shows as a flat generation while others climb.",
@@ -325,7 +355,7 @@ steps([
 ])
 
 brk()
-h("9  Keyboard and quick reference", 1)
+h("10  Keyboard and quick reference", 1)
 table(["Key or control", "Effect"], [
     ["Esc", "back to the previous view; again to clear the selection"],
     ["Tab (browser)", "focus the next filter"],
@@ -333,7 +363,7 @@ table(["Key or control", "Effect"], [
     ["▶ play", "step the selected window forward"],
     ["reset", "clear every filter and return to live"],
 ], widths=[1.8, 4.8], size=9)
-h("9.1  What the colours mean", 2)
+h("10.1  What the colours mean", 2)
 table(["Colour", "Plane", "Typical topics"], [
     ["blue", "market", "ticks, market.price, market.depth, market.candle"],
     ["green", "intel", "intel.signal, intel.flow, intel.ta, intel.forecast"],
@@ -342,7 +372,7 @@ table(["Colour", "Plane", "Typical topics"], [
     ["grey", "system", "system.health, review.verdict"],
 ], widths=[0.9, 1.1, 4.6], size=9)
 
-h("10  Troubleshooting", 1)
+h("11  Troubleshooting", 1)
 table(["Symptom", "Likely cause", "What to do"], [
     ["List is empty", "nothing matches the filters", "press reset"],
     ["Count frozen at 20,000", "feed or recorder stopped", "check :8801/stats and :8796/health"],
