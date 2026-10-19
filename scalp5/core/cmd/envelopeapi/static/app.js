@@ -463,15 +463,37 @@ async function renderContext() {
     } catch (e) {}
   } else if (d.key) {
     try {
-      const later = (state.docs || []).filter((x) => x.key === d.key && x.ts > d.ts).slice(-6).reverse();
-      html.push(`<div class="ctx">
-        <h3>what read it next</h3>
-        ${later.length ? `<table><tr><th>topic</th><th>producer</th><th>when</th></tr>
-          ${later.map((n) => `<tr data-id="${n.id}"><td>${esc(n.topic)}</td>
-            <td>${esc(n.producer || "")}</td><td>${fmtTime(n.ts)}</td></tr>`).join("")}</table>`
-          : `<div class="muted">nothing downstream for this symbol yet</div>`}
-      </div>`);
+      const later = (state.docs || []).filter((x) => x.key === d.key && x.ts > d.ts).slice(0, 6).reverse();
+      if (later.length) {
+        html.push(`<div class="ctx">
+          <h3>what read it next</h3>
+          <table><tr><th>topic</th><th>producer</th><th>when</th></tr>
+            ${later.map((n) => `<tr data-id="${n.id}"><td>${esc(n.topic)}</td>
+              <td>${esc(n.producer || "")}</td><td>${fmtTime(n.ts)}</td></tr>`).join("")}</table>
+        </div>`);
+      } else {
+        // nothing downstream yet: show where this message sits in its own chain
+        const chain = await (await fetch("/api/trace?key=" + encodeURIComponent(d.key), { cache: "no-store" })).json();
+        const before = (chain.chain || []).filter((x) => x.ts < d.ts).slice(-6);
+        html.push(`<div class="ctx">
+          <h3>chain — what led here</h3>
+          ${before.length ? `<table><tr><th>topic</th><th>producer</th><th>when</th></tr>
+            ${before.map((n) => `<tr data-id="${n.id}"><td>${esc(n.topic)}</td>
+              <td>${esc(n.producer || "")}</td><td>${fmtTime(n.ts)}</td></tr>`).join("")}</table>`
+            : `<div class="muted">this is the first envelope recorded for ${esc(d.key)}</div>`}
+          <div class="muted" style="margin-top:8px">nothing downstream yet — this message has not been read by a model in the window</div>
+        </div>`);
+      }
     } catch (e) {}
+  }
+
+  // multi-symbol snapshots have no chain; explain what they are instead of an empty page
+  if (!d.key) {
+    html.push(`<div class="ctx">
+      <h3>this message carries no single symbol</h3>
+      <div class="muted">${esc(d.topic)} is a snapshot across every streamed symbol, so there is no per-symbol
+      chain to walk. Open the flow to see where it sits in the pipeline.</div>
+    </div>`);
   }
 
   // 4 · ways out, contextual

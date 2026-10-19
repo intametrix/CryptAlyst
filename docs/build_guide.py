@@ -182,6 +182,37 @@ shot("g15-layout.png", "Figure 2 — the filters pane dragged wider, a model dec
                        "strip showing the four interceptors that passed before the operator ran.")
 
 brk()
+h("2.3  What the surface decides", 2)
+p("The surface is a set of rules, not a template. Given a selection it asks what kind of thing it is holding "
+  "and composes accordingly.")
+table(["The selection", "What the surface shows"], [
+    ["nothing", "the live feed and the timeline"],
+    ["a decision (model.decision)", "its verdict: traded or refused, the reason verbatim, the confidence"],
+    ["an outcome (a fill, a ranking)", "what it read, by stage, with the age of each input at execution"],
+    ["an input with downstream traffic", "what read it next, in time order"],
+    ["an input with no downstream", "the chain it belongs to, and a plain statement that nothing has read it yet"],
+    ["a multi-symbol snapshot", "an explanation that it carries every symbol, so it has no per-symbol chain"],
+], widths=[1.9, 4.7], size=8.8)
+shot("g18-chain-context.png", "Figure 3 — an input with no downstream: the surface shows the chain that led to "
+                              "it and says plainly that no model has read it in the window.")
+callout("The rule the surface follows: never show an empty panel. If there is no downstream traffic, show "
+        "upstream; if there is no chain, say why — a multi-symbol snapshot has none by construction.")
+
+h("2.4  Testing the surface", 2)
+p("Six checks that exercise the rules above. Each takes seconds and each has an observable outcome, so a "
+  "regression shows up as a wrong panel rather than a vague feeling that the UI is off.")
+table(["#", "Do this", "Expect"], [
+    ["1", "open the Explorer with nothing selected", "feed plus timeline; no detail, no chain"],
+    ["2", "select a market.depth row", "chain of that symbol, and the note that nothing downstream yet"],
+    ["3", "select a model.decision row (WHY, then the row)", "verdict block with traded/refused and the reason"],
+    ["4", "select a model.fill row", "what it read, with per-stage ages in seconds"],
+    ["5", "press ← or Escape", "the previous envelope and view come back, not a blank pane"],
+    ["6", "drag both splitters, then reload", "the layout is exactly as you left it"],
+], widths=[0.4, 2.6, 3.6], size=8.6)
+p("If a check fails, the cause is usually data rather than layout: the decisions are rare, the in-memory window "
+  "covers the last 20,000 envelopes, and a symbol with no traffic will legitimately have nothing to show.")
+
+brk()
 h("3  Finding the message you want", 1)
 p("Filters combine: each one narrows the list further. The count above the list tells you how many matched.")
 shot("g2-filter.png", "Figure 2 — the plane filter set to intel. Every row shows a green 'INTEL' pill and the "
@@ -222,7 +253,7 @@ p("References come in two kinds, and the pane always says which: **declared** by
   "by the recorder. The books do not declare their inputs yet, so the recorder attaches, for every model "
   "decision, the newest envelope of each input topic for that symbol in the preceding five minutes — and marks "
   "each one derived, with its age. A reference is never silently presented as declared when it is inferred.")
-shot("g14-refs.png", "Figure 6 — a decision with three derived references: market.depth at 0.2 s, intel.signal "
+shot("g14-refs.png", "Figure 7 — a decision with three derived references: market.depth at 0.2 s, intel.signal "
                      "and intel.flow at 1.8 s. The refs member shows 3, and the section names its own provenance.")
 p("When a producer publishes its own wrapper (the Python books do: topic, producer, data, version, seq), the "
   "pane unwraps it: the Data section shows the inner payload and names the topic and producer it was "
@@ -248,7 +279,7 @@ p("Every envelope carries the stages it passed through: the interceptors that ch
   "produced it, and the transformers that changed its shape. This is the ATLAS pipeline made visible on the "
   "packet itself rather than in a log beside it. A refusal is recorded as an envelope too, so 'why not' is a "
   "packet you can open rather than a line you have to find.")
-shot("g13-pipeline.png", "Figure 7 — the pipeline strip: four interceptors, the operator, and two transformers, "
+shot("g13-pipeline.png", "Figure 8 — the pipeline strip: four interceptors, the operator, and two transformers, "
                          "each with its outcome. The last one is the view-time redaction applied for this role.")
 table(["Stage", "What ran", "What the chip means"], [
     ["interceptor", "authority, keying, correlation, freshness", "a pass means the rule was satisfied; a refusal names the rule and the number"],
