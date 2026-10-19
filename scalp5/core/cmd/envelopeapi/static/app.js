@@ -349,72 +349,86 @@ $("play").onclick = () => {
 
 const STAGE_LABEL = ["market data", "advisories", "risk & alerts", "decisions", "other"];
 
+/* The flow view: stages as columns, topics as boxes sized by volume, links as
+   ribbons whose width is the number of correlations observed. */
 async function renderJourney(keyHint) {
-  // with no key the server picks the symbol whose traffic spans the most stages,
-  // which is the journey worth looking at; an explicit key always wins
   const key = keyHint || state.journeyKey || state.key || "";
-  const url = "/api/journey?limit=120" + (key ? "&key=" + encodeURIComponent(key) : "");
-  const d = await (await fetch(url, { cache: "no-store" })).json();
-  state.journeyKey = d.key || key;
-  $("journeyKey").textContent = "key: " + (d.key || key || "—");
-  drawJourney(d);
+  const params = new URLSearchParams();
+  if (key) params.set("key", key);
+  if (state.from) params.set("from", String(state.from));
+  if (state.to) params.set("to", String(state.to));
+  const d = await (await fetch("/api/flow?" + params.toString(), { cache: "no-store" })).json();
+  state.journeyKey = key;
+  $("journeyKey").textContent = "key: " + (key || "all symbols");
+  drawFlow(d);
 }
 
-function drawJourney(d) {
-  const nodes = d.nodes || [], edges = d.edges || [];
+function drawFlow(d) {
+  const nodes = d.nodes || [], links = d.links || [];
   const svg = $("journeySvg");
   if (!nodes.length) {
-    svg.innerHTML = '<text x="450" y="320" text-anchor="middle" fill="#5a6b80" font-size="12">no envelopes for this key</text>';
+    svg.innerHTML = '<text x="450" y="320" text-anchor="middle" fill="#5a6b80" font-size="12">no traffic in this window</text>';
     return;
   }
-  const W = 900, H = 640, padX = 40, padY = 60;
-  const stages = [0, 1, 2, 3, 4];
+  const W = 900, H = 640, padX = 34, padTop = 58, padBottom = 34;
+  const stages = [...new Set(nodes.map((n) => n.stage))].sort((a, b) => a - b);
+  const colW = (W - padX * 2) / stages.length;
+  const maxCount = Math.max(...nodes.map((n) => n.count), 1);
+
+  // height by volume, then normalise so each column fits the canvas
   const byStage = {};
-  stages.forEach((s) => (byStage[s] = nodes.filter((n) => n.stage === s)));
-  const used = stages.filter((s) => byStage[s].length);
-  const colW = (W - padX * 2) / Math.max(used.length, 1);
+  stages.forEach((st) => (byStage[st] = nodes.filter((n) => n.stage === st)));
   const pos = {};
-  used.forEach((stage, ci) => {
-    const list = byStage[stage].slice().sort((a, b) => a.ts - b.ts);
-    const rowH = Math.min(64, (H - padY * 2) / Math.max(list.length, 1));
-    list.forEach((n, ri) => {
-      pos[n.id] = {
-        x: padX + ci * colW + 20,
-        y: padY + ri * rowH + rowH / 2,
-        w: colW - 60,
-        h: Math.max(30, rowH - 10),
-        node: n,
-      };
+  stages.forEach((st, ci) => {
+    const list = byStage[st];
+    const heights = list.map((n) => 34 + 120 * Math.sqrt(n.count / maxCount));
+    const total = heights.reduce((a, b) => a + b, 0) + 18 * (list.length - 1);
+    const usable = H - padTop - padBottom;
+    const scale = total > usable ? usable / total : 1;
+    let y = padTop + (usable - total * scale) / 2;
+    list.forEach((n, i) => {
+      const h = heights[i] * scale;
+      pos[n.id] = { x: padX + ci * colW + 14, y, w: colW - 46, h, node: n };
+      y += h + 18 * scale;
     });
   });
-  const edgeSvg = edges.filter((e) => pos[e.from] && pos[e.to]).map((e) => {
-    const a = pos[e.from], b = pos[e.to];
+
+  const linkSvg = links.filter((l) => pos[l.from] && pos[l.to]).map((l) => {
+    const a = pos[l.from], b = pos[l.to];
     const x1 = a.x + a.w, y1 = a.y + a.h / 2;
     const x2 = b.x, y2 = b.y + b.h / 2;
-    const mx = (x1 + x2) / 2;
-    return `<path class="jedge" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`;
+    const mx = x1 + (x2 - x1) * 0.45;
+    const width = 1 + 3.2 * Math.log10(1 + l.count);
+    const colour = PLANE_COLOUR[a.node.plane] || "#4f9bff";
+    return `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"
+      fill="none" stroke="${colour}" stroke-width="${width.toFixed(1)}"
+      stroke-opacity="0.42" stroke-linecap="round"><title>${l.count} correlated</title></path>`;
   }).join("");
+
   const nodeSvg = Object.values(pos).map((p) => {
     const n = p.node;
     const fill = PLANE_COLOUR[n.plane] || "#888";
     const short = n.topic.replace("market.", "").replace("intel.", "").replace("model.", "");
-    const label = (n.count && n.count > 1) ? `${short} ×${n.count}` : short;
-    const span = n.count > 1 ? `${fmtTime(n.first_ts)}–${fmtTime(n.last_ts)}` : fmtTime(n.ts);
+    const label = n.count > 1 ? `${short}  ${n.count.toLocaleString()}` : short;
+    const span = fmtTime(n.first_ts) + "–" + fmtTime(n.last_ts);
     return `<g class="jnode" data-id="${n.id}">
-      <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${fill}" opacity="0.92" rx="6"/>
-      <text x="${p.x + 8}" y="${p.y + p.h / 2 - 1}" font-size="9.5" font-weight="600" fill="#06121f">${esc(label)}</text>
-      <text x="${p.x + 8}" y="${p.y + p.h / 2 + 9}" font-size="7.5" fill="#12283d" opacity="0.75">${esc(span)}</text>
+      <rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" rx="6" fill="${fill}" opacity="0.92"/>
+      <text x="${p.x + 9}" y="${p.y + p.h / 2 - 2}" font-size="10" font-weight="600" fill="#06121f">${esc(label)}</text>
+      <text x="${p.x + 9}" y="${p.y + p.h / 2 + 10}" font-size="7.5" fill="#12283d" opacity="0.8">${esc(span)}</text>
     </g>`;
   }).join("");
-  const stageSvg = used.map((stage, ci) =>
-    `<text class="jstage" x="${padX + ci * colW + 20}" y="${padY - 22}">${STAGE_LABEL[stage]}</text>`).join("");
-  svg.innerHTML = stageSvg + edgeSvg + nodeSvg;
+
+  const stageSvg = stages.map((st, ci) =>
+    `<text class="jstage" x="${padX + ci * colW + 14}" y="${padTop - 26}">${STAGE_LABEL[st]}</text>`).join("");
+
+  svg.innerHTML = stageSvg + linkSvg + nodeSvg;
   svg.querySelectorAll(".jnode").forEach((el) => {
     el.onclick = () => select(Number(el.dataset.id));
   });
+  const totalCount = nodes.reduce((a, n) => a + n.count, 0);
   $("journeyLegend").innerHTML = ["market", "intel", "model", "control", "system"].map((p) =>
     `<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${PLANE_COLOUR[p]};margin-right:5px"></span>${p}</span>`).join("")
-    + `<span style="margin-left:auto">${nodes.length} envelopes · ${edges.length} links</span>`;
+    + `<span style="margin-left:auto">${nodes.length} topics · ${totalCount.toLocaleString()} envelopes · ${links.length} links</span>`;
 }
 
 /* wiring */

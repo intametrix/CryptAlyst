@@ -111,7 +111,7 @@ func (c *counters) snapshot() map[string]any {
 	return map[string]any{
 		"received": recv, "written": atomic.LoadInt64(&c.written),
 		"refused": atomic.LoadInt64(&c.refused),
-		"errors": atomic.LoadInt64(&c.errors), "by_topic": by,
+		"errors":  atomic.LoadInt64(&c.errors), "by_topic": by,
 		"elapsed_s": int(elapsed), "rate_per_s": fmt.Sprintf("%.1f", rate),
 		"last_msg_ms": atomic.LoadInt64(&c.lastMsgMs),
 	}
@@ -308,11 +308,18 @@ func staleLimit(topic string) time.Duration {
 // fromHeaders rebuilds the envelope the producer described. The producer owns
 // provenance; the recorder validates it rather than inventing it.
 func fromHeaders(spec topics.Topic, m stomp.Message) envelope.Envelope[json.RawMessage] {
+	// the exchange decides the plane: health is not intelligence, and an alert
+	// is control traffic, not an advisory
 	plane := envelope.PlaneIntel
-	if spec.Exchange == "market" {
+	switch spec.Exchange {
+	case "market":
 		plane = envelope.PlaneMarket
-	} else if spec.Exchange == "model" {
+	case "model":
 		plane = envelope.PlaneModel
+	case "system", "review":
+		plane = "system"
+	case "risk", "exec", "alert":
+		plane = envelope.PlaneControl
 	}
 	h := m.Headers
 	if p := h["plane"]; p != "" {

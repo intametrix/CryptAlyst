@@ -23,6 +23,22 @@ import (
 	"cryptalyst/core/internal/operator"
 )
 
+// stageOf maps a topic to its column. Topics are authoritative because records
+// written before the plane fix still carry the old plane value.
+func stageOf(topic string) int {
+	switch {
+	case strings.HasPrefix(topic, "market.") || topic == "ticks":
+		return 0
+	case strings.HasPrefix(topic, "intel."):
+		return 1
+	case topic == "alert.pumpdump" || topic == "risk.state" || topic == "exec.quote":
+		return 2
+	case strings.HasPrefix(topic, "model."):
+		return 3
+	}
+	return 4
+}
+
 //go:embed static
 var staticFS embed.FS
 
@@ -506,19 +522,7 @@ func main() {
 		if limit <= 0 || limit > 400 {
 			limit = 120
 		}
-		stage := func(plane, topic string) int {
-			switch {
-			case plane == "market":
-				return 0
-			case plane == "intel":
-				return 1
-			case topic == "risk.state" || topic == "alert.pumpdump":
-				return 2
-			case plane == "model":
-				return 3
-			}
-			return 4
-		}
+		stage := func(plane, topic string) int { return stageOf(topic) }
 		type node struct {
 			ID       int    `json:"id"`
 			Topic    string `json:"topic"`
@@ -654,6 +658,167 @@ func main() {
 			}
 		}
 		json.NewEncoder(w).Encode(map[string]any{"key": key, "nodes": nodes, "edges": edges})
+	})
+
+	// /api/flow renders the platform as a flow diagram: nodes are stage+topic with
+	// the volume behind them, links are counted correlations between an envelope and
+	// the next stage that consumed its symbol.
+	mux.HandleFunc("/api/flow", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		key := q.Get("key")
+		fromMS, _ := strconv.ParseInt(q.Get("from"), 10, 64)
+		toMS, _ := strconv.ParseInt(q.Get("to"), 10, 64)
+		docs := st.snapshot()
+		if fromMS == 0 && toMS == 0 {
+			// default window: the last thirty minutes of retained traffic
+			var newest int64
+			for _, d := range docs {
+				if d.TS > newest {
+					newest = d.TS
+				}
+			}
+			fromMS, toMS = newest-30*60*1000, newest
+		}
+		stage := func(plane, topic string) int { return stageOf(topic) }
+		type fnode struct {
+			ID      int    `json:"id"`
+			Topic   string `json:"topic"`
+			Plane   string `json:"plane"`
+			Stage   int    `json:"stage"`
+			Count   int    `json:"count"`
+			Bytes   int    `json:"bytes"`
+			FirstTS int64  `json:"first_ts"`
+			LastTS  int64  `json:"last_ts"`
+			Key     string `json:"key"`
+		}
+		type flink struct {
+			From  int `json:"from"`
+			To    int `json:"to"`
+			Count int `json:"count"`
+		}
+		type fkey struct {
+			stage int
+			topic string
+		}
+		nodes := map[fkey]*fnode{}
+		var order []fkey
+		var picked []envelopeDoc
+		for _, d := range docs {
+			if d.TS < fromMS || d.TS > toMS {
+				continue
+			}
+			if key != "" && d.Key != key {
+				continue
+			}
+			picked = append(picked, d)
+			k := fkey{stage(d.Plane, d.Topic), d.Topic}
+			n, ok := nodes[k]
+			if !ok {
+				n = &fnode{Topic: d.Topic, Plane: d.Plane, Stage: k.stage, FirstTS: d.TS, LastTS: d.TS, Key: d.Key}
+				nodes[k] = n
+				order = append(order, k)
+			}
+			n.Count++
+			n.Bytes += d.Size
+			if d.TS < n.FirstTS {
+				n.FirstTS = d.TS
+			}
+			if d.TS > n.LastTS {
+				n.LastTS, n.ID = d.TS, d.ID
+			}
+		}
+		// count links: each envelope connects to the next stage for the same key
+		links := map[[2]int]*flink{}
+		sorted := append([]envelopeDoc(nil), picked...)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i].TS < sorted[j].TS })
+		for i := range sorted {
+			a := sorted[i]
+			sa := stage(a.Plane, a.Topic)
+			if sa >= 4 {
+				continue
+			}
+			for j := i + 1; j < len(sorted) && sorted[j].TS-a.TS < 120000; j++ {
+				b := sorted[j]
+				if b.Key != a.Key || b.Key == "" {
+					continue
+				}
+				sb := stage(b.Plane, b.Topic)
+				if sb <= sa {
+					continue
+				}
+				na := nodes[fkey{sa, a.Topic}]
+				nb := nodes[fkey{sb, b.Topic}]
+				if na == nil || nb == nil {
+					continue
+				}
+				l := links[[2]int{na.Stage*1000 + na.ID, nb.Stage*1000 + nb.ID}]
+				if l == nil {
+					l = &flink{From: na.ID, To: nb.ID}
+					links[[2]int{na.Stage*1000 + na.ID, nb.Stage*1000 + nb.ID}] = l
+				}
+				l.Count++
+				break
+			}
+		}
+		outNodes := make([]fnode, 0, len(order))
+		for _, k := range order {
+			outNodes = append(outNodes, *nodes[k])
+		}
+		sort.Slice(outNodes, func(i, j int) bool {
+			if outNodes[i].Stage != outNodes[j].Stage {
+				return outNodes[i].Stage < outNodes[j].Stage
+			}
+			return outNodes[i].Count > outNodes[j].Count
+		})
+		var stageList []int
+		for _, n := range outNodes {
+			found := false
+			for _, st := range stageList {
+				if st == n.Stage {
+					found = true
+					break
+				}
+			}
+			if !found {
+				stageList = append(stageList, n.Stage)
+			}
+		}
+		sort.Ints(stageList)
+		outLinks := make([]flink, 0, len(links))
+		seen := map[[2]int]bool{}
+		for k, l := range links {
+			seen[k] = true
+			outLinks = append(outLinks, *l)
+		}
+		// stage-to-stage fallback: the heaviest node of each column to the heaviest
+		// of the next, so a column is never orphaned when correlation is sparse
+		for i := 0; i+1 < len(stageList); i++ {
+			heavy := func(st int) *fnode {
+				var best *fnode
+				for _, n := range nodes {
+					if n.Stage == st && (best == nil || n.Count > best.Count) {
+						best = n
+					}
+				}
+				return best
+			}
+			a, b := heavy(stageList[i]), heavy(stageList[i+1])
+			if a == nil || b == nil {
+				continue
+			}
+			if seen[[2]int{a.Stage*1000 + a.ID, b.Stage*1000 + b.ID}] {
+				continue
+			}
+			n := a.Count
+			if b.Count < n {
+				n = b.Count
+			}
+			outLinks = append(outLinks, flink{From: a.ID, To: b.ID, Count: n})
+		}
+		json.NewEncoder(w).Encode(map[string]any{
+			"from": fromMS, "to": toMS, "key": key,
+			"nodes": outNodes, "links": outLinks, "scanned": len(picked),
+		})
 	})
 
 	// /api/timeline returns a stacked histogram across the retained window, which
