@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"cryptalyst/core/internal/busadmin"
 	"cryptalyst/core/internal/correlation"
 	"cryptalyst/core/internal/envelope"
 	"cryptalyst/core/internal/lake"
@@ -144,6 +145,11 @@ func main() {
 	for _, t := range topics.All {
 		topic := t.Name
 		spec := t
+		// the recorder owns its own queue: sharing q.<topic> with another consumer
+		// would load-balance messages instead of delivering them to both
+		if err := busadmin.Ensure("q.rec."+spec.Name, spec.Name, spec.Exchange); err != nil {
+			log.Printf("topology %-18s %v", spec.Name, err)
+		}
 		go func() {
 			for {
 				cl := stomp.New(*addr, "cryptalyst", "cryptalyst")
@@ -151,25 +157,66 @@ func main() {
 					time.Sleep(2 * time.Second)
 					continue
 				}
-				if err := cl.SubscribeQueue("q."+topic, func(m stomp.Message) {
+				if err := cl.SubscribeQueue("q.rec."+topic, func(m stomp.Message) {
 					env := fromHeaders(spec, m)
-					// consume-side policy: authority, keying, correlation, freshness
-					checked, ierr := envelope.Chain(env,
-						envelope.Authorised(spec.Producers),
-						envelope.RequireKey(keyedTopic(spec.Name)),
-						envelope.EnsureCID(correlation.Mint),
-						envelope.MaxAge(staleLimit(spec.Name)),
-					)
-					if ierr != nil {
+					// consume-side policy, run one interceptor at a time so each hop
+					// lands on the envelope as evidence
+					type rule struct {
+						name string
+						fn   envelope.Interceptor
+					}
+					rules := []rule{
+						{"authority", envelope.Authorised(spec.Producers)},
+						{"keying", envelope.RequireKey(keyedTopic(spec.Name))},
+						{"correlation", envelope.EnsureCID(correlation.Mint)},
+						{"freshness", envelope.MaxAge(staleLimit(spec.Name))},
+					}
+					refused := false
+					for _, r := range rules {
+						start := time.Now()
+						next, ierr := r.fn(env)
+						hop := envelope.Hop{Kind: "interceptor", Name: r.name, Outcome: "pass",
+							MS: time.Since(start).Microseconds()}
+						if ierr != nil {
+							hop.Outcome = "refuse"
+							hop.Detail = ierr.Error()
+							refused = true
+						}
+						env = next.WithHop(hop)
+						if refused {
+							break
+						}
+					}
+					if strings.HasPrefix(spec.Name, "model.") && env.Meta.Key != "" {
+						// the producer did not declare its inputs, so the recorder says
+						// what they were, marked as derived rather than declared
+						env.Meta.Refs = append(env.Meta.Refs, derivedRefs(env.Meta.Key, time.Now().UnixMilli())...)
+					}
+					rememberRef(env)
+					env = env.WithHop(envelope.Hop{Kind: "operator", Name: spec.Producers[0],
+						Outcome: "pass", Detail: "produced " + spec.Name})
+					env = env.WithHop(envelope.Hop{Kind: "transformer", Name: "record",
+						Outcome: "pass", Detail: "stored once in the lake"})
+					if refused {
+						// a refusal is recorded too: "why not" is evidence
 						atomic.AddInt64(&ctr.refused, 1)
 						atomic.AddInt64(&ctr.received, 1)
+						env.Meta.Extra = map[string]string{"refused": "true"}
 						if refusedSeen[spec.Name] < 3 {
 							refusedSeen[spec.Name]++
-							log.Printf("REFUSED %-18s %v", spec.Name, ierr)
+							log.Printf("REFUSED %-18s %s", spec.Name, lastDetail(env.Meta.Hops))
+						}
+						rememberRef(env)
+						wrapped, _ := json.Marshal(env)
+						rec := lake.Record{Topic: spec.Name, Key: env.Meta.Key,
+							TS: time.Now().UnixMilli(), Payload: m.Body, Envelope: wrapped}
+						if err := lk.Write(rec); err == nil {
+							if line, mErr := json.Marshal(rec); mErr == nil {
+								fan.send(line)
+							}
 						}
 						return
 					}
-					env = checked
 					wrapped, _ := json.Marshal(env)
 					rec := lake.Record{
 						Topic:    topic,
@@ -284,6 +331,63 @@ var (
 	refusedMu   sync.Mutex
 	refusedSeen = map[string]int{}
 )
+
+// latestRef is the most recent envelope of one topic for one symbol.
+type latestRef struct {
+	Topic      string
+	Key        string
+	Generation uint64
+	CID        string
+	TS         int64
+}
+
+var (
+	refMu     sync.RWMutex
+	refIndex  = map[string]map[string]latestRef{} // key -> topic -> ref
+	refTopics = []string{"market.candle", "ticks", "market.depth",
+		"intel.signal", "intel.flow", "intel.ta", "intel.forecast"}
+)
+
+func rememberRef(env envelope.Envelope[json.RawMessage]) {
+	if env.Meta.Key == "" {
+		return
+	}
+	refMu.Lock()
+	defer refMu.Unlock()
+	if refIndex[env.Meta.Key] == nil {
+		refIndex[env.Meta.Key] = map[string]latestRef{}
+	}
+	refIndex[env.Meta.Key][env.Meta.Topic] = latestRef{
+		Topic: env.Meta.Topic, Key: env.Meta.Key, Generation: env.Meta.Generation,
+		CID: env.Meta.CID, TS: time.Now().UnixMilli(),
+	}
+}
+
+// derivedRefs returns the inputs a decision most likely read: the newest envelope
+// of each input topic for its symbol at the moment it arrived.
+func derivedRefs(key string, at int64) []envelope.Ref {
+	refMu.RLock()
+	defer refMu.RUnlock()
+	var out []envelope.Ref
+	for _, topic := range refTopics {
+		r, ok := refIndex[key][topic]
+		if !ok || at-r.TS > 300000 {
+			continue
+		}
+		out = append(out, envelope.Ref{Topic: r.Topic, Key: r.Key,
+			Generation: r.Generation, CID: r.CID, Derived: true, AgeMS: at - r.TS})
+	}
+	return out
+}
+
+// lastDetail returns the refusal text of the final hop, for the log line.
+func lastDetail(hops []envelope.Hop) string {
+	if len(hops) == 0 {
+		return ""
+	}
+	h := hops[len(hops)-1]
+	return h.Name + ": " + h.Detail
+}
 
 // keyedTopic reports whether a topic's messages must carry a symbol.
 func keyedTopic(topic string) bool {

@@ -187,9 +187,9 @@ p("Filters match case-insensitively and apply to the symbol, producer, correlati
 h("3.1  When nothing matches", 2)
 p("An empty list is information. The header count drops to zero, the list says so plainly, and the timeline "
   "above it keeps filling — which tells you the feed is alive and the filters are the reason you see nothing.")
-shot("g8-empty.png", "Figure 7 — a symbol filter that matches nothing: 0 envelopes, while the timeline keeps "
+shot("g8-empty.png", "Figure 8 — a symbol filter that matches nothing: 0 envelopes, while the timeline keeps "
                      "receiving traffic.")
-shot("g9-producer.png", "Figure 8 — filtering by producer: every row is a message that component wrote.")
+shot("g9-producer.png", "Figure 9 — filtering by producer: every row is a message that component wrote.")
 h("3.2  Live versus paused", 2)
 p("The green LIVE button means new envelopes are being prepended as they arrive. Set to PAUSED to freeze "
   "the list while you read. Selecting a time range on the timeline also pauses it, because you are no longer "
@@ -205,9 +205,12 @@ table(["Member", "What it carries", "If it is missing"], [
     ["meta", "version, plane, producer, generation, correlation id, computed_at, recorded_at, bytes", "the pane says 'inferred'"],
     ["refs", "topic, key, generation and correlation id of each input", "the pane says 'none' and explains what a reference would contain"],
 ], widths=[0.8, 3.4, 2.4], size=8.8)
-p("References are the member that is usually empty today: the Python books do not emit them yet, so the pane "
-  "says 'none recorded' rather than hiding the section. That is deliberate — an absent reference is itself "
-  "information, and it should be visible rather than implied.")
+p("References come in two kinds, and the pane always says which: **declared** by the producer, or **derived** "
+  "by the recorder. The books do not declare their inputs yet, so the recorder attaches, for every model "
+  "decision, the newest envelope of each input topic for that symbol in the preceding five minutes — and marks "
+  "each one derived, with its age. A reference is never silently presented as declared when it is inferred.")
+shot("g14-refs.png", "Figure 6 — a decision with three derived references: market.depth at 0.2 s, intel.signal "
+                     "and intel.flow at 1.8 s. The refs member shows 3, and the section names its own provenance.")
 p("When a producer publishes its own wrapper (the Python books do: topic, producer, data, version, seq), the "
   "pane unwraps it: the Data section shows the inner payload and names the topic and producer it was "
   "published under.")
@@ -227,7 +230,22 @@ h("4.3  Data — the payload", 2)
 p("The payload exactly as it travelled, syntax-coloured. It is never rewritten by the Explorer: what you "
   "see is what the recorder stored.")
 shot("g7-detail.png", "Figure 6 — one decision envelope: meta on top, payload in the middle, chain underneath.")
-h("4.4  Chain — what else happened for that symbol", 2)
+h("4.4  Pipeline — interceptors, operator, transformer", 2)
+p("Every envelope carries the stages it passed through: the interceptors that checked it, the operator that "
+  "produced it, and the transformers that changed its shape. This is the ATLAS pipeline made visible on the "
+  "packet itself rather than in a log beside it. A refusal is recorded as an envelope too, so 'why not' is a "
+  "packet you can open rather than a line you have to find.")
+shot("g13-pipeline.png", "Figure 7 — the pipeline strip: four interceptors, the operator, and two transformers, "
+                         "each with its outcome. The last one is the view-time redaction applied for this role.")
+table(["Stage", "What ran", "What the chip means"], [
+    ["interceptor", "authority, keying, correlation, freshness", "a pass means the rule was satisfied; a refusal names the rule and the number"],
+    ["operator", "the producer (market_data, signals, a model)", "the capability that produced this payload"],
+    ["transformer", "record, redact", "a change of shape: stored once, or redacted for the viewing role"],
+], widths=[1.1, 2.6, 2.9], size=8.6)
+p("Outcome colours: green pass, red refuse, amber modify. Hover any chip for its detail — for a refusal that is "
+  "the exact text the governor recorded, for a transformer it is what changed.")
+
+h("4.5  Chain — what else happened for that symbol", 2)
 p("Every envelope recorded for the same symbol, oldest first, with arrows. Click any step to jump to it. "
   "This is the quick way to walk a symbol's recent history without leaving the page.")
 callout("A message with no key (for example market.mini24h) has no chain. That is not a bug: it is a "
@@ -295,7 +313,7 @@ h("7  The execution trace: what a model actually used", 1)
 p("The journey answers 'how does traffic flow'. The execution trace answers a narrower and more useful "
   "question: for this one fill, which raw envelopes did the model read, in what order, and how old were they "
   "when it acted?")
-shot("g10-execution.png", "Figure 9 — the execution trace for one model.fill: lanes by stage, nodes placed in "
+shot("g10-execution.png", "Figure 10 — the execution trace for one model.fill: lanes by stage, nodes placed in "
                           "time, the dashed line marking the moment of execution, and the inputs listed "
                           "beneath with the age each had when the model acted.")
 h("7.1  How to read it", 2)
@@ -323,7 +341,7 @@ brk()
 h("8  How and why a model traded — or did not", 1)
 p("This is the question a reviewer actually asks. The WHY tab answers it directly: every decision the models "
   "recorded, split into the trades they took and the trades they refused, with the rule that stopped them.")
-shot("g11-why.png", "Figure 10 — the WHY tab: reason tally on the left, decisions on the right, and the raw "
+shot("g11-why.png", "Figure 11 — the WHY tab: reason tally on the left, decisions on the right, and the raw "
                     "refusal envelope open beside them.")
 h("8.1  Reading the tab", 2)
 table(["Part", "What it tells you"], [
@@ -358,7 +376,7 @@ brk()
 h("9  Roles and redaction", 1)
 p("The 'viewing as' selector in the header changes what you are allowed to see. It is a real filter applied "
   "on the server, not a cosmetic setting.")
-shot("g6-redaction.png", "Figure 11 — the same envelope viewed as a bystander: depth fields removed, and a red "
+shot("g6-redaction.png", "Figure 12 — the same envelope viewed as a bystander: depth fields removed, and a red "
                          "band naming exactly what was withheld.")
 table(["Role", "Sees", "Typical use"], [
     ["owner", "everything", "you are the operator"],

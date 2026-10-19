@@ -57,6 +57,7 @@ type envelopeDoc struct {
 	Payload  json.RawMessage `json:"payload"`
 	Meta     json.RawMessage `json:"meta"`
 	Refs     json.RawMessage `json:"refs,omitempty"`
+	Hops     json.RawMessage `json:"hops,omitempty"`
 	HasEnv   bool            `json:"has_envelope"`
 }
 
@@ -187,6 +188,7 @@ func parse(line []byte) (envelopeDoc, bool) {
 				Generation uint64          `json:"generation"`
 				Key        string          `json:"key"`
 				Refs       json.RawMessage `json:"refs"`
+				Hops       json.RawMessage `json:"hops"`
 			}
 			if json.Unmarshal(env.Meta, &m) == nil {
 				if m.Plane != "" {
@@ -197,6 +199,7 @@ func parse(line []byte) (envelopeDoc, bool) {
 				d.Version = m.Version
 				d.Gen = m.Generation
 				d.Refs = m.Refs
+				d.Hops = m.Hops
 				if d.Key == "" {
 					d.Key = m.Key
 				}

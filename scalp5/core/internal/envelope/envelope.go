@@ -28,12 +28,27 @@ const (
 	PlaneControl Plane = "control"
 )
 
+// Hop is one stage an envelope passed through: an interceptor that checked it,
+// an operator that produced it, or a transformer that changed its shape. The
+// pipeline is part of the record, not a log line beside it.
+type Hop struct {
+	Kind    string `json:"kind"`    // interceptor | operator | transformer
+	Name    string `json:"name"`    // the rule or capability
+	Outcome string `json:"outcome"` // pass | refuse | modify
+	Detail  string `json:"detail,omitempty"`
+	MS      int64  `json:"ms,omitempty"`
+}
+
 // Ref points at another envelope without copying it.
 type Ref struct {
 	Topic      string `json:"topic"`
 	Key        string `json:"key"`
 	Generation uint64 `json:"generation,omitempty"`
 	CID        string `json:"cid,omitempty"`
+	// Derived marks a reference the recorder inferred from the window rather than
+	// one the producer declared. Consumers must treat the two differently.
+	Derived bool  `json:"derived,omitempty"`
+	AgeMS   int64 `json:"age_ms,omitempty"`
 }
 
 // Meta describes provenance and freshness. Extensible by design.
@@ -53,6 +68,7 @@ type Meta struct {
 	CID        string            `json:"cid,omitempty"`
 	ParentCID  string            `json:"parent_cid,omitempty"`
 	Refs       []Ref             `json:"refs,omitempty"`
+	Hops       []Hop             `json:"hops,omitempty"`
 	Extra      map[string]string `json:"extra,omitempty"`
 }
 
@@ -127,6 +143,13 @@ func Pipe[T any](env Envelope[T], ts ...Transformer[T]) Envelope[T] {
 		}
 	}
 	return env
+}
+
+// WithHop appends one pipeline stage, which is how the journey through
+// interceptors, operators and transformers becomes visible on the envelope.
+func (e Envelope[T]) WithHop(h Hop) Envelope[T] {
+	e.Meta.Hops = append(e.Meta.Hops, h)
+	return e
 }
 
 // WithRef appends a reference, which is how provenance accumulates.

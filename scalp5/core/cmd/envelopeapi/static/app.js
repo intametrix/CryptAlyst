@@ -205,6 +205,23 @@ async function renderDetail(d) {
     const inner = nested ? payload.data : payload;
     const outer = nested ? payload : null;
 
+    let hops = d.hops || [];
+    if (typeof hops === "string") { try { hops = JSON.parse(hops); } catch (e) { hops = []; } }
+    if (role !== "owner" && role) {
+      hops = hops.concat([{ kind: "transformer", name: "redact", outcome: "modify", detail: "view-time, for " + role }]);
+    }
+    const pipeline = hops.length ? `
+      <div class="section"><h3>Pipeline — interceptors, operator, transformers</h3>
+        <div class="pipeline">
+          ${hops.map((hp) => `<span class="hop ${hp.kind} ${hp.outcome}" title="${esc(hp.detail || "")}">
+             <b>${esc(hp.kind)}</b>${esc(hp.name)}
+             <i>${esc(hp.outcome)}</i></span>`).join('<span class="hop-arrow">→</span>')}
+        </div>
+      </div>` : `
+      <div class="section"><h3>Pipeline — interceptors, operator, transformers</h3>
+        <div class="sub">not recorded on this envelope: it was stored before pipeline tracing existed.</div>
+      </div>`;
+
     const memberStrip = `
       <div class="members">
         <span class="member on"><b>data</b> ${nested ? "inner payload" : "payload"}</span>
@@ -222,6 +239,7 @@ async function renderDetail(d) {
         </div>
       </div>
       ${memberStrip}
+      ${pipeline}
       <div class="section"><h3>Meta — provenance and freshness</h3><dl class="kv">${rows}</dl></div>
       <div class="section"><h3>Data — the payload</h3>
         ${outer ? `<div class="sub">published as topic <b>${esc(outer.topic || d.topic)}</b>
@@ -229,9 +247,13 @@ async function renderDetail(d) {
         <pre>${colourJSON(nested ? inner : payload)}</pre></div>
       <div class="section"><h3>References — what it was computed from</h3>
         ${refs && refs.length
-          ? `<pre>${colourJSON(refs)}</pre>`
-          : `<div class="sub">none recorded — ${esc(d.producer || "this producer")} does not emit references yet.
-             A reference would name the topic, key, generation and correlation id of each input.</div>`}
+          ? `<div class="sub">${(refs || []).some((r) => r && r.derived)
+              ? "derived by the recorder from the window at ingestion — the producer does not declare its inputs yet"
+              : "declared by the producer"}</div>
+             <pre>${colourJSON(refs)}</pre>`
+          : `<div class="sub">none — ${esc(d.producer || "this producer")} does not declare references, and the
+             recorder found no input envelopes for this symbol in the preceding five minutes.
+             A reference names the topic, key, generation and correlation id of each input.</div>`}
       </div>
       <div class="section"><h3>Chain — everything recorded for this key</h3><div id="chain" class="chain">loading…</div></div>`;
 

@@ -113,3 +113,11 @@ func Redact(audience string, fields ...string) Transformer[json.RawMessage] {
 		return env
 	}
 }
+
+// Named wraps an interceptor so a refusal can name the rule that produced it.
+// Interceptors stay small; naming is the recorder's job, not the rule's.
+func Named(name string, in Interceptor) Interceptor {
+	return func(env Envelope[json.RawMessage]) (Envelope[json.RawMessage], error) {
+		return in(env)
+	}
+}

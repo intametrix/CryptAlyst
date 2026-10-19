@@ -187,3 +187,18 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
 .outcome.no{background:rgba(240,96,95,.16);color:var(--risk)}
 .why-row input,.why-reasons input{background:#0a121b;border:1px solid var(--line);color:var(--fg);
   border-radius:7px;padding:4px 7px;font-size:11px}
+
+.pipeline{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.hop{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;
+  padding:4px 10px;font-size:10px;color:var(--fg);background:#0b1420}
+.hop b{font-weight:600;font-size:8.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--faint)}
+.hop i{font-style:normal;font-size:8.5px;text-transform:uppercase;letter-spacing:.4px;
+  padding:1px 5px;border-radius:999px;background:#17222f;color:var(--faint)}
+.hop.pass i{background:rgba(55,201,139,.16);color:var(--intel)}
+.hop.refuse{border-color:rgba(240,96,95,.5)}
+.hop.refuse i{background:rgba(240,96,95,.18);color:var(--risk)}
+.hop.modify i{background:rgba(240,179,74,.18);color:var(--model)}
+.hop.interceptor{border-color:rgba(79,155,255,.35)}
+.hop.operator{border-color:rgba(55,201,139,.35)}
+.hop.transformer{border-color:rgba(240,179,74,.35)}
+.hop-arrow{color:var(--faint);font-size:10px}
