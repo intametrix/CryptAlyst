@@ -481,17 +481,39 @@ $("reset").onclick = () => {
   document.querySelector('#planeChips .chip[data-plane=""]').classList.add("active");
   load();
 };
+const viewStack = [];
+
+function applyView(view) {
+  document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === view));
+  state.view = view;
+  const rows = $("rows"), journey = $("journey"), panel = document.querySelector(".panel.list");
+  rows.classList.toggle("hidden", view !== "list");
+  journey.classList.toggle("hidden", view !== "journey");
+  panel.classList.toggle("journey-on", view === "journey");
+  if (view === "journey") renderJourney();
+}
+
+function setView(view, remember) {
+  if (state.view === view) return;
+  if (remember !== false) viewStack.push(state.view);
+  applyView(view);
+}
+
 document.querySelectorAll(".tab").forEach((tab) => {
-  tab.onclick = () => {
-    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-    tab.classList.add("active");
-    state.view = tab.dataset.view;
-    const rows = $("rows"), journey = $("journey"), panel = document.querySelector(".panel.list");
-    rows.classList.toggle("hidden", state.view !== "list");
-    journey.classList.toggle("hidden", state.view !== "journey");
-    panel.classList.toggle("journey-on", state.view === "journey");
-    if (state.view === "journey") renderJourney();
-  };
+  tab.onclick = () => setView(tab.dataset.view);
+});
+
+// Escape is "back": it pops the view stack, and when there is nothing to pop it
+// clears the selected envelope.
+document.addEventListener("keydown", (ev) => {
+  if (ev.key !== "Escape") return;
+  if (viewStack.length) {
+    applyView(viewStack.pop());
+  } else if (state.sel != null) {
+    state.sel = null;
+    renderRows();
+    $("detail").innerHTML = '<div class="empty">select an envelope to see its anatomy</div>';
+  }
 });
 
 $("role").onchange = (e) => {

@@ -134,3 +134,5 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
 .jnode:hover rect{stroke:#fff;stroke-width:2}
 .jstage{font-size:10px;letter-spacing:1px;text-transform:uppercase;fill:#5a6b80}
 .jedge{fill:none;stroke:#2b4a68;stroke-width:1;opacity:.55}
+
+.tab-hint{margin-left:auto;margin-right:10px;font-size:10px;color:var(--faint);letter-spacing:.4px}
