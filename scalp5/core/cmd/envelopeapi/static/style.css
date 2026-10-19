@@ -256,3 +256,13 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
   background:#0a121b;border-radius:7px}
 .crumb.back:hover:not(:disabled){border-color:var(--accent);background:#101a26}
 .crumb.back:disabled{opacity:.3;cursor:default}
+
+.gantt{flex:1;display:flex;flex-direction:column;min-height:0}
+.gantt.hidden{display:none}
+.g-bar{cursor:pointer}
+.g-bar rect{stroke-width:1.5;rx:4}
+.g-bar:hover rect{stroke:#fff;stroke-width:2}
+.g-label{font-size:9px;fill:#0b1420}
+.g-row-label{font-size:9px;fill:#8ea0b6;font-family:ui-monospace,Menlo,monospace}
+.g-tick{font-size:8.5px;fill:#4a5b70}
+.g-grid{stroke:#16202b}

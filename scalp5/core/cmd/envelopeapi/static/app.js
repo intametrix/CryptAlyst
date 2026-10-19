@@ -415,6 +415,99 @@ const STAGE_LABEL = ["market data", "advisories", "risk & alerts", "decisions", 
 const LANE_LABEL = ["market", "advisories", "risk", "model", "other"];
 let exZoom = 1;
 
+/* The Gantt: horizontal spans. Positions show how long a trade was held; trace
+   shows how long each input had been valid before the outcome read it. */
+let ganttMode = "positions";
+
+async function renderGantt() {
+  const params = new URLSearchParams({ mode: ganttMode });
+  if (ganttMode === "trace") {
+    if (state.sel == null) {
+      $("ganttTitle").textContent = "gantt — select an outcome to see its inputs";
+      $("ganttSvg").innerHTML = "";
+      $("ganttLegend").innerHTML = "";
+      return;
+    }
+    params.set("id", String(state.sel));
+  } else {
+    params.set("limit", "40");
+  }
+  const d = await (await fetch("/api/gantt?" + params.toString(), { cache: "no-store" })).json();
+  drawGantt(d);
+}
+
+function drawGantt(d) {
+  const rows = d.rows || [];
+  const svg = $("ganttSvg");
+  if (!rows.length) {
+    svg.innerHTML = '<text x="420" y="150" fill="#5a6b80" font-size="12">nothing to plot in this mode</text>';
+    $("ganttTitle").textContent = "gantt — no data";
+    return;
+  }
+  const padL = 128, padT = 26, padB = 26, rowH = 22;
+  const t0 = Math.min(...rows.map((r) => r.start));
+  const t1 = Math.max(...rows.map((r) => r.end));
+  const span = Math.max(1000, t1 - t0);
+  // scale so a typical bar is readable: the median duration gets ~120 px
+  const durations = rows.map((r) => Math.max(1, r.end - r.start)).sort((a, b) => a - b);
+  const median = durations[Math.floor(durations.length / 2)] || 60000;
+  const pxPerSec = Math.min(0.4, Math.max(0.004, 120000 / median / 1000));
+  const width = Math.min(14000, Math.max(900, Math.round((span / 1000) * pxPerSec) + padL + 40));
+  const H = padT + rows.length * rowH + padB;
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", H);
+  svg.setAttribute("viewBox", `0 0 ${width} ${H}`);
+  const x = (ts) => padL + ((ts - t0) / span) * (width - padL - 40);
+
+  let out = "";
+  const step = Math.max(5000, Math.round(span / 10));
+  for (let t = t0; t <= t1; t += step) {
+    out += `<line class="g-grid" x1="${x(t)}" y1="${padT - 10}" x2="${x(t)}" y2="${padT + rows.length * rowH}"/>`;
+    out += `<text class="g-tick" x="${x(t) + 3}" y="${H - 8}">${fmtTime(t)}</text>`;
+  }
+  rows.forEach((r, i) => {
+    const y = padT + i * rowH;
+    const colour = PLANE_COLOUR["market"] && r.stage === 0 ? PLANE_COLOUR.market
+      : r.stage === 1 ? PLANE_COLOUR.intel : r.stage === 2 ? PLANE_COLOUR.control : PLANE_COLOUR.model;
+    const x0 = x(r.start), x1 = Math.max(x0 + 2, x(r.end));
+    const label = r.label.length > 12 ? r.label.slice(0, 12) : r.label;
+    out += `<text class="g-row-label" x="8" y="${y + 13}">${esc(label)}</text>`;
+    out += `<g class="g-bar" data-id="${r.id}">
+      <rect x="${x0}" y="${y + 3}" width="${x1 - x0}" height="${rowH - 8}" fill="${colour}" opacity="0.9"/>
+      <text class="g-label" x="${x0 + 4}" y="${y + 14}">${esc((r.producer || "").slice(0, 10))}</text>
+    </g>`;
+  });
+  svg.innerHTML = out;
+  svg.querySelectorAll(".g-bar").forEach((el) => {
+    el.onclick = () => select(Number(el.dataset.id));
+  });
+  const total = rows.length;
+  const held = d.mode === "positions"
+    ? rows.reduce((a, r) => a + (r.end - r.start), 0) / rows.length / 1000
+    : 0;
+  $("ganttTitle").textContent = d.mode === "positions"
+    ? `positions — ${total} trades · mean hold ${held.toFixed(0)}s`
+    : `trace — ${total} inputs leading to ${d.topic || ""} ${d.key || ""}`;
+  $("ganttLegend").innerHTML = d.mode === "positions"
+    ? `<table><tr><th>symbol</th><th>engine</th><th>held</th><th>net</th></tr>
+        ${rows.slice(0, 12).map((r) => `<tr data-id="${r.id}"><td>${esc(r.label)}</td><td>${esc(r.producer)}</td>
+        <td>${Math.round((r.end - r.start) / 1000)}s</td><td>${(r.value || 0).toFixed(2)}%</td></tr>`).join("")}</table>`
+    : `<table><tr><th>input</th><th>producer</th><th>valid for</th></tr>
+        ${rows.slice(0, 12).map((r) => `<tr data-id="${r.id}"><td>${esc(r.topic)}</td><td>${esc(r.producer)}</td>
+        <td>${Math.round((r.end - r.start) / 1000)}s</td></tr>`).join("")}</table>`;
+  $("ganttLegend").querySelectorAll("tr[data-id]").forEach((tr) => {
+    tr.onclick = () => select(Number(tr.dataset.id));
+  });
+}
+
+document.querySelectorAll("[data-gmode]").forEach((b) => {
+  b.onclick = () => {
+    ganttMode = b.dataset.gmode;
+    document.querySelectorAll("[data-gmode]").forEach((x) => x.classList.toggle("on", x === b));
+    renderGantt();
+  };
+});
+
 /* The contextual surface: instead of choosing a mode, the selection decides what
    is relevant — a decision shows why and what it read, an input shows what it fed. */
 async function renderContext() {
@@ -501,6 +594,7 @@ async function renderContext() {
     <h3>explore</h3>
     <div class="ctx-actions">
       <button class="ctx-btn" id="ctxFlow">flow for ${esc(d.key || "all symbols")} →</button>
+      <button class="ctx-btn" id="ctxGantt">gantt →</button>
       ${d.topic === "model.decision" || /^model\./.test(d.topic)
         ? `<button class="ctx-btn" id="ctxWhy">why ${esc(d.key || "")} traded or not →</button>` : ""}
     </div>
@@ -512,6 +606,7 @@ async function renderContext() {
   });
   if ($("ctxTrace")) $("ctxTrace").onclick = () => setView("execution");
   if ($("ctxFlow")) $("ctxFlow").onclick = () => setView("journey");
+  if ($("ctxGantt")) $("ctxGantt").onclick = () => setView("gantt");
   if ($("ctxWhy")) $("ctxWhy").onclick = () => { state.whyKey = d.key || ""; setView("why"); };
 }
 
@@ -918,6 +1013,9 @@ function applyView(view) {
   const execution = $("execution");
   const why = $("why");
   const context = $("context");
+  const gantt = $("gantt");
+  gantt.classList.toggle("hidden", view !== "gantt");
+  if (view === "gantt") renderGantt();
   rows.classList.toggle("hidden", view !== "list");
   context.classList.toggle("hidden", view !== "context");
   if (view === "context") renderContext();

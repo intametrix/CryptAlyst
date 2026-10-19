@@ -100,6 +100,18 @@
       <span id="resultCount">—</span>
       <span class="hint">newest first · click to inspect</span>
     </div>
+    <div id="gantt" class="gantt hidden">
+      <div class="ex-head">
+        <span class="ex-title" id="ganttTitle">gantt</span>
+        <span class="ex-controls">
+          <button class="mini on" data-gmode="positions">positions</button>
+          <button class="mini" data-gmode="trace">trace</button>
+          <span class="ex-hint">scroll ↔</span>
+        </span>
+      </div>
+      <div class="ex-scroll" id="ganttScroll"><svg id="ganttSvg" height="320"></svg></div>
+      <div class="ex-used" id="ganttLegend"></div>
+    </div>
     <div id="context" class="context hidden"></div>
     <div id="rows" class="rows"></div>
     <div id="why" class="why hidden">

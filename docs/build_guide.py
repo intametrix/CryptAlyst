@@ -369,7 +369,20 @@ table(["Element", "Meaning"], [
     ["1× / 2× / 4×", "zoom. The canvas scrolls horizontally, so a fifteen-minute window stays readable"],
     ["Table beneath", "the inputs the anchor used: stage, topic, producer, age at execution, bytes"],
 ], widths=[1.5, 5.1], size=8.8)
-h("7.2  Working through an execution", 2)
+h("7.2  The Gantt: spans at a glance", 2)
+p("The Gantt draws each span as a horizontal bar on one time axis. Open it from the context's gantt button. "
+  "It has two modes, and they answer different questions.")
+shot("g19-gantt.png", "Figure 12 — positions mode: each bar is one trade from entry to exit, with the engine "
+                      "labelled on the bar and the table beneath giving held time and net.")
+table(["Mode", "Bars are", "Answers"], [
+    ["positions", "one trade per row, from entry to exit, for the last 40 fills", "which trades were held far longer than intended, and what they returned"],
+    ["trace", "one input per row, from when it was computed to when the outcome read it", "which inputs were already stale when they were used"],
+], widths=[1.1, 3.1, 2.4], size=8.7)
+p("Bars are coloured by stage and labelled with the producer; the table under the chart is the same data as "
+  "numbers. Click any bar to open that envelope. The horizontal scale is set from the median bar, so a single "
+  "very long hold stretches the axis rather than flattening every other bar into a hairline — scroll to follow it.")
+
+h("7.3  Working through an execution", 2)
 steps([
     "Open the EXECUTION tab with a fill selected (filter topic = model.fill to find one).",
     "The view scrolls itself to the moment of execution and marks it with a dashed line.",

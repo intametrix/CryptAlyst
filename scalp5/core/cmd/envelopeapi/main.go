@@ -1113,6 +1113,104 @@ func main() {
 		})
 	})
 
+	// /api/gantt returns horizontal spans: for one outcome, how long each input had
+	// been valid before it was read; or with mode=positions, how long each trade was
+	// held. A Gantt makes staleness and holding time visible at a glance.
+	mux.HandleFunc("/api/gantt", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		mode := q.Get("mode")
+		type row struct {
+			ID       int     `json:"id"`
+			Label    string  `json:"label"`
+			Topic    string  `json:"topic"`
+			Producer string  `json:"producer"`
+			Stage    int     `json:"stage"`
+			Start    int64   `json:"start"`
+			End      int64   `json:"end"`
+			Kind     string  `json:"kind"`
+			Detail   string  `json:"detail,omitempty"`
+			Value    float64 `json:"value,omitempty"`
+		}
+		if mode == "positions" {
+			limit, _ := strconv.Atoi(q.Get("limit"))
+			if limit <= 0 || limit > 200 {
+				limit = 40
+			}
+			docs := scanTopic("model.fill", limit)
+			var rows []row
+			for _, d := range docs {
+				var p struct {
+					Data struct {
+						Engine  string  `json:"engine"`
+						Symbol  string  `json:"symbol"`
+						Side    string  `json:"side"`
+						EntryMS int64   `json:"entry_ms"`
+						ExitMS  int64   `json:"exit_ms"`
+						HeldS   float64 `json:"held_s"`
+						NetPct  float64 `json:"net_pct"`
+					} `json:"data"`
+				}
+				if json.Unmarshal(d.Payload, &p) != nil {
+					continue
+				}
+				dd := p.Data
+				start, end := dd.EntryMS, dd.ExitMS
+				if start == 0 || end == 0 || end < start {
+					continue
+				}
+				rows = append(rows, row{ID: d.ID, Label: dd.Symbol, Topic: "model.fill",
+					Producer: dd.Engine, Stage: 3, Start: start, End: end,
+					Kind: strings.ToLower(dd.Side), Value: dd.NetPct,
+					Detail: fmt.Sprintf("%s %s · %.2f%% net · %.1fs", dd.Engine, dd.Side, dd.NetPct, dd.HeldS)})
+			}
+			json.NewEncoder(w).Encode(map[string]any{"mode": "positions", "rows": rows})
+			return
+		}
+		id, _ := strconv.Atoi(q.Get("id"))
+		docs := st.snapshot()
+		var anchor *envelopeDoc
+		for i := range docs {
+			if docs[i].ID == id {
+				anchor = &docs[i]
+				break
+			}
+		}
+		if anchor == nil {
+			http.Error(w, "not found", 404)
+			return
+		}
+		// each input as a bar from when it was computed to when the outcome read it
+		exec, _ := func() (map[string]any, error) { return nil, nil }()
+		_ = exec
+		var rows []row
+		for _, d := range docs {
+			if anchor.Key != "" && d.Key != anchor.Key {
+				continue
+			}
+			if d.TS > anchor.TS || anchor.TS-d.TS > 900000 {
+				continue
+			}
+			start := d.TS
+			var m struct {
+				ComputedAt *time.Time `json:"computed_at"`
+			}
+			if len(d.Meta) > 0 && json.Unmarshal(d.Meta, &m) == nil && m.ComputedAt != nil {
+				start = m.ComputedAt.UnixMilli()
+			}
+			rows = append(rows, row{ID: d.ID, Label: d.Topic, Topic: d.Topic, Producer: d.Producer,
+				Stage: stageOf(d.Topic), Start: start, End: anchor.TS, Kind: "input",
+				Detail: fmt.Sprintf("%s · %s", d.Topic, d.Producer)})
+		}
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].Stage != rows[j].Stage {
+				return rows[i].Stage < rows[j].Stage
+			}
+			return rows[i].Start < rows[j].Start
+		})
+		json.NewEncoder(w).Encode(map[string]any{"mode": "trace", "anchor": anchor.ID,
+			"key": anchor.Key, "topic": anchor.Topic, "rows": rows})
+	})
+
 	// /api/timeline returns a stacked histogram across the retained window, which
 	// is what the scrubber draws and what a brush selects from.
 	mux.HandleFunc("/api/timeline", func(w http.ResponseWriter, r *http.Request) {
