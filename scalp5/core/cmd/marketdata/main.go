@@ -231,6 +231,22 @@ func main() {
 	mux.HandleFunc("/api/v3/ticker/24hr", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(st.Movers(1000, 0)["most_traded"])
 	})
+	// /depth is what the models read to judge book pressure: the same payload the
+	// bus carries, served on demand for one symbol.
+	mux.HandleFunc("/depth", func(w http.ResponseWriter, r *http.Request) {
+		sym := strings.ToUpper(r.URL.Query().Get("symbol"))
+		if sym == "" {
+			http.Error(w, "symbol required", 400)
+			return
+		}
+		body := st.DepthPayload(sym)
+		if body == nil {
+			http.Error(w, "no depth for "+sym, 404)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(body)
+	})
 	mux.HandleFunc("/movers", func(w http.ResponseWriter, r *http.Request) {
 		limit := 12
 		fmt.Sscanf(r.URL.Query().Get("limit"), "%d", &limit)

@@ -379,6 +379,184 @@ func loadFile(path string, st *store) int {
 	return n
 }
 
+// scanFileBackwards returns up to need envelopes of one topic, reading from the
+// end of the file. It gives up after maxScan bytes so a query can never turn into
+// a full-journal read.
+func scanFileBackwards(path string, needle []byte, topic string, need int) []envelopeDoc {
+	const chunk = 4 << 20
+	const maxScan = 256 << 20
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil || info.Size() == 0 {
+		return nil
+	}
+
+	var found []envelopeDoc
+	offset := info.Size()
+	var carry []byte
+	read := int64(0)
+	for offset > 0 && len(found) < need && read < maxScan {
+		size := int64(chunk)
+		if offset < size {
+			size = offset
+		}
+		offset -= size
+		read += size
+		buf := make([]byte, size)
+		if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
+			break
+		}
+		buf = append(buf, carry...)
+		lines := bytes.Split(buf, []byte("\n"))
+		// the first line may be partial unless we reached the start of the file
+		carry = nil
+		if offset > 0 {
+			carry = lines[0]
+			lines = lines[1:]
+		}
+		for i := len(lines) - 1; i >= 0 && len(found) < need; i-- {
+			line := lines[i]
+			if len(line) == 0 || !bytes.Contains(line, needle) {
+				continue
+			}
+			if d, ok := parse(line); ok && d.Topic == topic {
+				found = append(found, rememberScanned(d))
+			}
+		}
+	}
+	return found
+}
+
+// ---------------------------------------------------------------- lake index
+// The lake is 7 GB and grows at ~600 KB/s, so searching backwards from the end
+// only reaches the last few minutes. An index of line offsets per topic is built
+// once in the background and extended as the recorder appends, which makes a cold
+// query a handful of reads instead of a scan.
+
+type offEntry struct {
+	file string
+	off  int64
+	len  int32
+}
+
+var (
+	idxMu    sync.RWMutex
+	idxTopic = map[string][]offEntry{}
+	idxSize  = map[string]int64{}
+	idxReady = false
+)
+
+func indexOneLine(line []byte, file string, off int64) {
+	// topic is cheap to pull out without a full decode
+	i := bytes.Index(line, []byte("\"topic\":\""))
+	if i < 0 {
+		return
+	}
+	rest := line[i+9:]
+	j := bytes.IndexByte(rest, '"')
+	if j <= 0 {
+		return
+	}
+	topic := string(rest[:j])
+	idxTopic[topic] = append(idxTopic[topic], offEntry{file: file, off: off, len: int32(len(line))})
+	// keep the index bounded: only the newest entries of a noisy topic matter
+	if n := len(idxTopic[topic]); n > 30000 {
+		idxTopic[topic] = append([]offEntry(nil), idxTopic[topic][n-20000:]...)
+	}
+}
+
+// indexFiles walks every journal, remembering where each topic's lines live.
+// Unparsed offsets are enough: the query reads and decodes only the lines it needs.
+func indexFiles(dir string) {
+	files, _ := filepath.Glob(filepath.Join(dir, "*.jsonl"))
+	sort.Strings(files)
+	for _, f := range files {
+		fh, err := os.Open(f)
+		if err != nil {
+			continue
+		}
+		info, err := fh.Stat()
+		if err != nil {
+			fh.Close()
+			continue
+		}
+		idxMu.Lock()
+		start := idxSize[f]
+		idxMu.Unlock()
+		if start >= info.Size() {
+			fh.Close()
+			continue
+		}
+		if _, err := fh.Seek(start, io.SeekStart); err != nil {
+			fh.Close()
+			continue
+		}
+		rd := bufio.NewReaderSize(fh, 1<<20)
+		off := start
+		for {
+			line, err := rd.ReadBytes('\n')
+			if len(line) > 0 {
+				idxMu.Lock()
+				indexOneLine(line, f, off)
+				idxMu.Unlock()
+				off += int64(len(line))
+			}
+			if err != nil {
+				break
+			}
+		}
+		idxMu.Lock()
+		idxSize[f] = off
+		idxMu.Unlock()
+		fh.Close()
+	}
+	idxMu.Lock()
+	idxReady = true
+	idxMu.Unlock()
+}
+
+func indexCount(topic string) int {
+	idxMu.RLock()
+	defer idxMu.RUnlock()
+	return len(idxTopic[topic])
+}
+
+// scanIndexed reads the newest `limit` envelopes of a topic using the index.
+func scanIndexed(topic string, limit int) []envelopeDoc {
+	idxMu.RLock()
+	entries := idxTopic[topic]
+	ready := idxReady
+	if n := len(entries); n > limit {
+		entries = entries[n-limit:]
+	}
+	out := make([]envelopeDoc, 0, len(entries))
+	for _, e := range entries {
+		if d, ok := readAt(e); ok && d.Topic == topic {
+			out = append(out, rememberScanned(d))
+		}
+	}
+	idxMu.RUnlock()
+	_ = ready
+	return out
+}
+
+func readAt(e offEntry) (envelopeDoc, bool) {
+	fh, err := os.Open(e.file)
+	if err != nil {
+		return envelopeDoc{}, false
+	}
+	defer fh.Close()
+	buf := make([]byte, e.len)
+	if _, err := fh.ReadAt(buf, e.off); err != nil && err != io.EOF {
+		return envelopeDoc{}, false
+	}
+	return parse(bytes.TrimSpace(buf))
+}
+
 // followRecorder subscribes to the recorder's SSE feed. This is the preferred
 // live path: the recorder is the only process that consumes the bus.
 func followRecorder(url string, st *store) {
@@ -504,6 +682,7 @@ func main() {
 		liveFromRecorder = true
 	}
 	if liveFromRecorder {
+		go indexFiles(*dir)
 		go followRecorder(*recorder, st)
 		log.Printf("live updates from the recorder (%s)", *recorder)
 	} else if newest != "" {
@@ -1121,38 +1300,33 @@ func main() {
 		})
 	})
 
-	// scanTopic reads the lake for one topic, newest last. It is a cold path: the
-	// in-memory ring is dominated by market data, and a decision can be hours old.
+	// scanTopic reads the lake for one topic, newest first. The lake is 7 GB and
+	// growing, so it reads backwards from the end of each file and stops as soon
+	// as it has enough: a cold query costs a few megabytes, not the whole journal.
 	scanTopic := func(topic string, limit int) []envelopeDoc {
+		// keep the index current with whatever the recorder appended since it was built
+		if indexCount(topic) > 0 || idxReady {
+			indexFiles(*dir)
+			if docs := scanIndexed(topic, limit); len(docs) > 0 {
+				return docs
+			}
+		}
 		files, _ := filepath.Glob(filepath.Join(*dir, "*.jsonl"))
 		if len(files) == 0 {
 			files, _ = filepath.Glob(filepath.Join(*dir, "seg-*.jsonl"))
 		}
 		sort.Sort(sort.Reverse(sort.StringSlice(files)))
-		var out []envelopeDoc
+		needle := []byte("\"topic\":\"" + topic + "\"")
+		out := make([]envelopeDoc, 0, limit)
 		for _, f := range files {
-			fh, err := os.Open(f)
-			if err != nil {
-				continue
-			}
-			sc := bufio.NewScanner(fh)
-			sc.Buffer(make([]byte, 1<<20), 32<<20)
-			for sc.Scan() {
-				line := sc.Bytes()
-				if !strings.Contains(string(line), "\"topic\":\""+topic+"\"") {
-					continue
-				}
-				if d, ok := parse(line); ok && d.Topic == topic {
-					out = append(out, rememberScanned(d))
-				}
-			}
-			fh.Close()
-			if len(out) >= limit*4 {
+			if len(out) >= limit {
 				break
 			}
+			out = append(out, scanFileBackwards(f, needle, topic, limit-len(out))...)
 		}
-		if len(out) > limit {
-			out = out[len(out)-limit:]
+		// scanned newest-first; hand back in time order
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
 		}
 		return out
 	}
