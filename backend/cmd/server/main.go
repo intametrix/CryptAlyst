@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -69,6 +70,7 @@ type options struct {
 	longOnly        bool
 	disableScreen   bool
 	disableSurvey   bool
+	dataDir         string
 	alertHistory    string
 	ledgerPath      string
 	ledgerHorizon   time.Duration
@@ -78,6 +80,49 @@ type options struct {
 func main() {
 	log.SetFlags(log.Ltime)
 	opt := parseFlags()
+
+	// Anchor the durable stores. Explicit per-store flags win; everything left
+	// at its default resolves under -data-dir, so alerts, the ledger, the
+	// turtle session log and the calibration model always land in one known
+	// place regardless of where the binary is launched from. Legacy files from
+	// the pre-data-dir era are imported once (copied, never moved, never
+	// overwritten) so no existing data is stranded.
+	explicit := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { explicit[f.Name] = true })
+	paths := resolveStorePaths(opt.dataDir, []storeSpec{
+		{name: "alerts", flagName: "alert-history", defaultVal: "alerts.jsonl", current: opt.alertHistory},
+		{name: "ledger", flagName: "ledger", defaultVal: "ledger.jsonl", current: opt.ledgerPath},
+		{name: "turtle", flagName: "turtle-log", defaultVal: "turtle_sessions.jsonl", current: opt.turtleLog},
+		{name: "calibration", flagName: "calibration", defaultVal: "calibration.json", current: opt.calibrationPath},
+	}, explicit)
+	opt.alertHistory, opt.ledgerPath = paths["alerts"], paths["ledger"]
+	opt.turtleLog, opt.calibrationPath = paths["turtle"], paths["calibration"]
+
+	if opt.dataDir != "" {
+		if err := os.MkdirAll(opt.dataDir, 0o755); err != nil {
+			log.Printf("data: creating %s failed: %v", opt.dataDir, err)
+		}
+	}
+	for _, s := range []struct{ name, legacy string }{
+		{"alerts", "alerts.jsonl"},
+		{"ledger", "ledger.jsonl"},
+		{"turtle", "turtle_sessions.jsonl"},
+		{"calibration", "calibration.json"},
+	} {
+		p := paths[s.name]
+		if p == "" {
+			continue
+		}
+		if ok, err := importLegacyStore(p, s.legacy); err != nil {
+			log.Printf("data: importing legacy %s failed: %v", s.legacy, err)
+		} else if ok {
+			log.Printf("data: imported legacy %s -> %s (original left in place)", s.legacy, p)
+		}
+		if abs, err := filepath.Abs(p); err == nil {
+			p = abs
+		}
+		log.Printf("data: %s -> %s", s.name, p)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -460,6 +505,8 @@ func parseFlags() options {
 	flag.BoolVar(&o.disableSurvey, "no-survey", false, "disable the periodic Turtle survey")
 	flag.StringVar(&o.alertHistory, "alert-history", "alerts.jsonl",
 		"JSONL file for durable alert history (chart markers); empty disables")
+	flag.StringVar(&o.dataDir, "data-dir", "./data",
+		"directory anchoring the durable stores; overridden per store by the flags below")
 	flag.StringVar(&o.ledgerPath, "ledger", "ledger.jsonl",
 		"JSONL prediction ledger for the offline learner; empty disables")
 	flag.StringVar(&o.turtleLog, "turtle-log", "turtle_sessions.jsonl",

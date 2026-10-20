@@ -72,6 +72,10 @@ backend/alerts.jsonl
 backend/ledger.jsonl
 backend/calibration.json
 backend/bin/
+# The durable stores are anchored here by -data-dir (default ./data);
+# see backend/cmd/server/datastore.go. The tracked backend/turtle_sessions.jsonl
+# is the committed Oct-16 baseline; runtime appends continue in data/.
+/data/
 .comms/*.jsonl
 .comms/*.log
 .comms/*.polled

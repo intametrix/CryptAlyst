@@ -456,3 +456,35 @@ in an awaiting-human state rather than re-enabling. Codified as Rule A6 in
 `AGENTS.md`, binding the agents immediately even where the code lag: no
 agent re-enables a model, and every agent-performed disable is followed by
 a written post-mortem.
+
+
+---
+
+## Entry 10 — The data dir anchors the stores; legacy imports itself
+
+**The ask:** fix the launch-directory wart — the four durable stores
+defaulted to bare file names, so their location was a function of where the
+binary happened to be started, silently splitting one logical dataset.
+
+**What landed.** A `-data-dir` flag (default `./data`) anchors every store
+left at its flag default; an explicit per-store flag still wins, including
+an explicit empty value, which disables that store and stays empty. At
+startup the server logs each store's resolved absolute path — visibility
+instead of assumption — and imports pre-anchor legacy files from the launch
+directory once: copied, never moved, never overwritten, so the no-data-
+forgotten rule survives the migration itself. Regression tests cover the
+resolution rules (default anchors, explicit wins, empty disables, empty data
+dir preserves history) and the import (copies once, refuses to overwrite,
+no-ops without a legacy file).
+
+**Verified live, not just in tests.** Booted the binary from the repo root:
+the log showed all four stores resolved under `data/` with absolute paths,
+and the legacy turtle session log was imported into `data/turtle_sessions.
+jsonl` — 4,310 records, byte-identical to the original, which was left in
+place. `/api/health` answered; the server was stopped and confirmed dead.
+`data/` is gitignored; the tracked `backend/turtle_sessions.jsonl` remains
+as the committed Oct-16 baseline while runtime appends continue in `data/`.
+
+**The decision worth keeping.** Copy-not-move for legacy import mirrors the
+append-only discipline of the stores themselves: a migration that deletes
+its source is one crash away from being a data-loss event.

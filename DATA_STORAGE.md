@@ -10,10 +10,16 @@ so nothing is rotated, truncated, or compacted anywhere.
 
 ## 1. The Go service (`backend/`, module `pumpdump`) — the new stack
 
-Four durable stores, all configured by flag with **defaults relative to the
-launch directory** — where the data lands depends on where the binary is
-started from. That is a known wart, recorded here so it gets fixed
-deliberately, not by accident.
+Four durable stores. Since the `-data-dir` anchoring (default `./data`),
+every store left at its flag default resolves under the data directory, so
+the data lands in one known place no matter where the binary is launched
+from; an explicit per-store flag still wins. At startup the server logs each
+store's resolved absolute path and imports pre-anchor legacy files from the
+launch directory once — copied, never moved, never overwritten. The four
+store flags remain: `-alert-history`, `-ledger`, `-turtle-log`,
+`-calibration`. (Before the anchoring the defaults were bare file names
+relative to the launch directory, which is why the committed baseline sits
+at `backend/turtle_sessions.jsonl`.)
 
 ### alerts.jsonl — durable alert history
 - Flag: `-alert-history` (default `alerts.jsonl`). One JSON object per line,
