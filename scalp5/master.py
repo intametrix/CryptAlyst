@@ -272,7 +272,12 @@ def reset_books():
     archive = os.path.join(HERE, "state", "archive_stop_" + stamp)
     os.makedirs(archive, exist_ok=True)
     reset = 0
-    for path in glob.glob(os.path.join(HERE, "state", "pack_*.json")):
+    # packs and the per-strategy records both hold positions and equity
+    patterns = ("pack_*.json", "strategy_*.json", "edge_*.json", "slow_*.json", "alpha_*.json")
+    paths = []
+    for pat in patterns:
+        paths.extend(glob.glob(os.path.join(HERE, "state", pat)))
+    for path in paths:
         try:
             with open(path) as fh:
                 book = json.load(fh)
