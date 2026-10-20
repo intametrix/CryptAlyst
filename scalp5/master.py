@@ -778,7 +778,11 @@ def collect():
             with open(fp) as fh:
                 d = json.load(fh)
             eng_name = d.get("engine")
-            if not _running(eng_name):
+            # a book is alive if its process runs, or if it is still writing its
+            # pack: several engines write a pack per strategy, so the file name is
+            # not the process name. A stopped book stops updating.
+            fresh = (time.time() - os.path.getmtime(fp)) < 90
+            if not (_running(eng_name) or fresh):
                 continue
             engines.append({
                 "key": eng_name, "label": d.get("basis", "crypto strategy"),
@@ -805,9 +809,8 @@ def collect():
     except Exception:
         models = None
 
-    # one rule for every source of engine state: if no process is running, it is
-    # not a book on this dashboard. History lives in the books view, not here.
-    engines = [e for e in engines if _running(e.get("key"))]
+    # a book with no equity is a placeholder, not a book
+    engines = [e for e in engines if (e.get("equity") or 0) > 0]
 
     live_closed = sum((e.get("closed") or 0) for e in engines if e.get("equity") is not None)
     return {"ts": int(time.time() * 1000), "engines": engines, "models": models,
