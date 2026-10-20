@@ -16,7 +16,6 @@
  *   node scripts/smoke.mjs   (which builds this with Vite, then runs it)
  */
 import { renderToStaticMarkup } from 'react-dom/server';
-import { px } from '../src/format';
 import { createElement, type ReactElement } from 'react';
 import type { AlertMsg, FlowMsg, ScreenMsg, StatusMsg, SurveyMsg, SymbolDetailMsg } from '../src/types';
 
@@ -100,17 +99,15 @@ import { ScreenTable } from '../src/components/ScreenTable';
 import { SurveyPanel } from '../src/components/SurveyPanel';
 import { StatStrip } from '../src/components/StatStrip';
 import { Header } from '../src/components/Header';
-import { ChartPanel } from '../src/components/ChartPanel';
+import { ChartPopup } from '../src/components/chart/ChartPopup';
 import { ChartOverlay } from '../src/components/ChartOverlay';
 import { SymbolDrilldown } from '../src/components/SymbolDrilldown';
 import { FlowSplit } from '../src/components/FlowSplit';
-import { OutlookStrip } from '../src/components/OutlookStrip';
-import { parseOutlook } from '../src/hooks/useOutlook';
 import { parseCanon, CANON_FALLBACK } from '../src/colors';
 import { EventGlyph } from '../src/components/EventGlyph';
 import { AlertCard, AlertDetails } from '../src/components/AlertCard';
 import { toMarkers } from '../src/chartData';
-import { LIVE_FLOW_SPLIT, LIVE_OUTLOOK, LIVE_KLINES_ALERTS, LIVE_COLORS } from './livePayloads';
+import { LIVE_FLOW_SPLIT, LIVE_KLINES_ALERTS, LIVE_COLORS } from './livePayloads';
 import { TooltipViewer } from '../src/components/TooltipViewer';
 import { HeatProvider } from '../src/heatContext';
 import { HeatBorder } from '../src/components/HeatBorder';
@@ -320,12 +317,28 @@ const headerHtml = render(
 
 const all = [alertHtml, flowHtml, screenHtml, surveyHtml, statHtml, headerHtml].join('\n');
 
-// The whole dashboard, including the chart panel and both providers.
+// The whole dashboard, including the chart popup and both providers.
+// ChartPopup is what the app mounts inside ChartOverlay since the dead
+// ChartPanel tree was deleted (commit 2d1aac3).
+const chartPopup = (
+  <ChartPopup
+    symbol="OSMOUSDT"
+    interval="1h"
+    tools={null}
+    onIntervalChange={noop}
+    presets={[]}
+    onZoomPreset={noop}
+    onResetZoom={noop}
+    activePreset={null}
+    presetPending={false}
+    onClose={noop}
+  />
+);
 const dashboard = render(
   <HeatProvider seedUrl={null}>
     <SelectionProvider seedSymbol="OSMOUSDT">
       <div>
-        <ChartPanel symbol="OSMOUSDT" interval="1h" tools={null} onIntervalChange={noop} />
+        {chartPopup}
         <StatStrip stats={{ total: 0, pumps: 0, dumps: 0, reversals: 0, critical: 0 }} status={null} tools={null} />
       </div>
     </SelectionProvider>
@@ -515,11 +528,15 @@ ok('the disconnected pill still renders', render(h(Header, {
   paused: true, tools: null, heatCount: 0, onResetLayout: noop, onReloadTools: noop, toolsFallback: false,
 })).includes('disconnected'));
 
-// Chart panel pieces the brief asks for.
-ok('interval chips are interactive buttons', dashboard.includes('aria-pressed') && dashboard.includes('>1h<'));
-ok('indicator chips exist and start in a known state', (dashboard.match(/chip-toggle/g) ?? []).length >= 8);
-ok('the chart panel offers a chart area', dashboard.includes('chart-host'));
-ok('the chart panel shows a symbol prompt or status', dashboard.includes('chart-panel'));
+// Chart popup pieces the brief asks for. The interval picker is a real
+// <select> (not chips) since the ChartPanel rebuild. ChartPopup renders
+// exactly seven chip-toggles: VOL, FLOW, DON, EMA, SMA, the add-indicator
+// opener and the marker-legend opener (the menu's own items only exist while
+// it is open, which SSR never is).
+ok('the interval control offers 1h', dashboard.includes('aria-label="chart interval"') && dashboard.includes('>1h<'));
+ok('indicator chips exist and start in a known state', (dashboard.match(/chip-toggle/g) ?? []).length >= 7);
+ok('the chart popup offers a chart area', dashboard.includes('chart-host'));
+ok('the chart popup shows its symbol and interval', dashboard.includes('chart-popup') && dashboard.includes('OSMOUSDT · 1h'));
 
 // --- the floating chart overlay --------------------------------------------
 const overlayHtml = renderToStaticMarkup(
@@ -535,7 +552,7 @@ const overlayHtml = renderToStaticMarkup(
           </button>
         }
       >
-        <ChartPanel symbol="OSMOUSDT" interval="1h" tools={null} onIntervalChange={noop} />
+        {chartPopup}
       </ChartOverlay>
     </SelectionProvider>
   </HeatProvider>,
@@ -548,7 +565,7 @@ ok('the close control is keyboard reachable (a button, so focusable)', overlayHt
 ok('the overlay has a dimmed backdrop', overlayHtml.includes('overlay-backdrop'));
 ok('the overlay has its own resize grip', overlayHtml.includes('overlay-grip-corner') && overlayHtml.includes('role="separator"'));
 ok('the header is the drag handle', overlayHtml.includes('overlay-head'));
-ok('the chart panel is inside the overlay body', overlayHtml.includes('overlay-body') && overlayHtml.includes('chart-panel'));
+ok('the chart popup is inside the overlay body', overlayHtml.includes('overlay-body') && overlayHtml.includes('chart-popup'));
 ok('the inline chart region is gone from the page shell', !dashboard.includes('overlay-backdrop'));
 
 // --- the drill-down panel ---------------------------------------------------
@@ -632,35 +649,11 @@ ok(
 ok('the flow split shows the backend counts', splitHtml.includes('scanned') || splitHtml.includes('dropped'));
 ok('the flow split never renders undefined', !splitHtml.includes('>undefined<') && !splitHtml.includes('>null<'));
 
-// --- the outlook strip, from the live payload -----------------------------
-const parsedOutlook = parseOutlook(LIVE_OUTLOOK);
-ok('the live outlook parses', parsedOutlook !== null);
-const outlookHtml = renderToStaticMarkup(
-  <TooltipViewer>
-    <OutlookStrip outlook={parsedOutlook} tools={null} />
-  </TooltipViewer>,
-);
-const liveSupport = parsedOutlook?.supports[0] ?? null;
-const liveResistance = parsedOutlook?.resistances[0] ?? null;
-if (liveSupport !== null) {
-  // The real price, formatted with the dashboard's own helper.
-  ok('a support line renders at its real price', outlookHtml.includes(px(liveSupport.price)), `expected ${px(liveSupport.price)}`);
-  ok('the support line shows its touch count', outlookHtml.includes(String(liveSupport.touches)));
-}
-if (liveResistance !== null) {
-  ok('a resistance line renders at its real price', outlookHtml.includes(px(liveResistance.price)), `expected ${px(liveResistance.price)}`);
-  ok('the resistance line shows its touch count', outlookHtml.includes(String(liveResistance.touches)));
-}
-// The honest sentences are quoted verbatim, never replaced by a number.
-const liveEdge = parsedOutlook?.shortHorizon?.edge ?? '';
-if (liveEdge !== '') {
-  ok('the short-horizon edge is quoted verbatim', outlookHtml.includes(liveEdge), liveEdge);
-}
-const liveBasis = parsedOutlook?.shortHorizon?.basis ?? '';
-if (liveBasis !== '') {
-  ok('the short-horizon basis is quoted verbatim', outlookHtml.includes(liveBasis), liveBasis);
-}
-ok('the outlook strip never renders undefined', !outlookHtml.includes('>undefined<'));
+// NOTE: the outlook strip section that lived here tested OutlookStrip, which
+// was deleted as dead code in commit 2d1aac3 (outlook levels now render inside
+// the chart popup's data column, which fetches live and cannot be exercised
+// in a static render). The section was removed rather than left importing a
+// component that no longer exists.
 
 // --- the canon's text colour, in the badge itself -------------------------
 // A pump must be a bright-green fill with black text, everywhere.
