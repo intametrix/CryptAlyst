@@ -3,11 +3,14 @@
 # shared log with every deepseek->kimi message that contains a question or an
 # explicit ask, so the watcher starts with history rather than a blank slate.
 # Re-runnable: entries whose keyword already exists are skipped.
-REPO=/Users/andrewpreston/Documents/deepseek-harness/default-workspace/binance-pumpdump
+# Repo root resolved from this script's location, not hardcoded: the checkout
+# lives at different paths on different machines (this was andrewpreston's, now
+# users1's -- same portability bug check.sh had).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE=/tmp/deepseek_watch
 mkdir -p "$STATE"
 touch "$STATE/asks.tsv"
-cd "$REPO" || exit 1
+cd "$ROOT" || exit 1
 
 python3 - <<'PY'
 import json, subprocess, os, re

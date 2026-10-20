@@ -12,11 +12,14 @@
 #      log entry with newer ts matches the keyword. >10min unacknowledged ->
 #      resend ANSWER NOW prefixed "UNACKNOWLEDGED (<age>)". >20min -> one-line
 #      digest, then every 10min.
-REPO=/Users/andrewpreston/Documents/deepseek-harness/default-workspace/binance-pumpdump
+# Repo root resolved from this script's location, not hardcoded: the checkout
+# lives at different paths on different machines (this was andrewpreston's, now
+# users1's -- same portability bug check.sh had).
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATE=/tmp/deepseek_watch
 mkdir -p "$STATE"
 touch "$STATE/asks.tsv"
-cd "$REPO" || exit 1
+cd "$ROOT" || exit 1
 
 ack_check() { # keyword ask_ts -> "yes" if a newer kimi->deepseek entry mentions it.
   # Token-overlap match, not exact substring: seeded keywords are full subject

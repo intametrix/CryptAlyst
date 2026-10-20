@@ -10,7 +10,7 @@
 #     why ~/.kimi-code/config.toml and credentials/ were root-owned and
 #     unreadable by this user, which made `kimi` report "No model configured".
 #     Fixed by asking that root session to run
-#     `chown -R andrewpreston:staff ~/.kimi-code`.
+#     `chown -R <this-user>:staff ~/.kimi-code`.
 #   * The real config carries a MANAGED CLOUD provider (api.kimi.ai, model
 #     kimi-for-coding) authenticated over OAuth. The local Ollama models on this
 #     machine are NOT usable: Qwen2.5-32B is too slow to emit even a few tokens,
@@ -41,7 +41,7 @@ unset KIMI_CODE_HOME
 if [[ ! -r "$HOME/.kimi-code/config.toml" ]]; then
   echo "ERROR: $HOME/.kimi-code/config.toml is not readable." >&2
   echo "Ask the root KIMI session to run:" >&2
-  echo "  ! chown -R andrewpreston:staff $HOME/.kimi-code" >&2
+  echo "  ! chown -R $USER:staff $HOME/.kimi-code" >&2
   exit 3
 fi
 
