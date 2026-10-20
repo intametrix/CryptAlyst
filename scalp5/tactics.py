@@ -130,14 +130,28 @@ def short_ok(sym):
 
 
 # directive: a position is never closed at a loss. No time limit, no exceptions.
-HOLD_LOSERS_FOREVER = True
+# Exit policy. The old rule refused every losing exit, which censored every PnL
+# figure: the fills table held only winners while equity fell on the losers still
+# open. Losers are now held only while they are small and young; a stop or the
+# time cap closes them, and the loss is recorded like any other outcome.
+HOLD_LOSERS_FOREVER = False
+STOP_LOSS_PCT = -0.45      # hard stop, in percent of entry
+MAX_HOLD_S = 1800.0        # dead money cap for a position that goes nowhere
 
 
 def hold_loser(held_s, chg_pct):
-    """True whenever an exit would book negative PnL. Always, by directive."""
+    """True while a losing exit should still be deferred.
+
+    Held while the loss is shallow and the position is young; released at the
+    stop or the time cap, so losses are booked rather than accumulated.
+    """
     if HOLD_LOSERS_FOREVER:
         return chg_pct < 0
-    return chg_pct < 0 and held_s < 24 * 3600
+    if chg_pct <= STOP_LOSS_PCT:
+        return False                     # stop hit: close now
+    if held_s >= MAX_HOLD_S:
+        return False                     # dead money: close now
+    return chg_pct < 0
 
 
 def no_progress(chg, held, limit_s=120.0, min_chg=0.02):
