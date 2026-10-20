@@ -262,11 +262,12 @@ func (b *AlertBuffer) ReadHistory(symbol string, sinceMS int64, limit int) ([]Al
 
 // HistoryForSymbol answers the "load this ticker's alerts NOW" path.
 //
-// It reads from memory first, because the user is waiting: an on-disk scan is
-// O(file) and the file grows forever, so the fastest path is the one that does
-// not touch it. The file is consulted only when memory cannot satisfy the
-// request, which is the correct trade -- immediacy for the common case, and
-// completeness when explicitly asked for.
+// Memory first, because the user is waiting: an on-disk scan is O(file) and
+// the file grows forever, so the fastest path is the one that does not touch
+// it. The file is consulted only when memory cannot satisfy the request
+// (fewer than `limit` in the ring, e.g. after a restart trimmed the per-symbol
+// cap), which is the correct trade -- immediacy for the common case, and
+// completeness when memory comes up short.
 //
 // Newest first, because a ticker panel wants the recent past at the top.
 func (b *AlertBuffer) HistoryForSymbol(symbol string, limit int) []Alert {
@@ -275,14 +276,29 @@ func (b *AlertBuffer) HistoryForSymbol(symbol string, limit int) []Alert {
 	}
 	b.mu.RLock()
 	history := b.bySymbol[symbol]
+	path := b.path
+	b.mu.RUnlock()
+
+	if len(history) >= limit || path == "" {
+		return newestFirst(history, limit)
+	}
+	// Memory cannot satisfy the request: fall back to the durable file so the
+	// answer is complete, not just fast. ReadHistory is newest-first already.
+	fromDisk, _, err := b.ReadHistory(symbol, 0, limit)
+	if err != nil || len(fromDisk) == 0 {
+		return newestFirst(history, limit)
+	}
+	return fromDisk
+}
+
+// newestFirst copies the tail of `history` (oldest-first ring order) capped
+// to `limit` and reverses it, so the reverse cannot race a writer mid-copy.
+func newestFirst(history []Alert, limit int) []Alert {
 	if len(history) > limit {
 		history = history[len(history)-limit:]
 	}
-	// Copy under the lock, reverse after, so the reverse cannot race a writer.
 	out := make([]Alert, len(history))
 	copy(out, history)
-	b.mu.RUnlock()
-
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]
 	}
