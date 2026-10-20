@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cryptalyst/core/internal/marketdata"
@@ -315,17 +316,39 @@ func metaFor(topic, plane, key string) map[string]string {
 
 // streamShard keeps one websocket alive: 900 streams per connection, reconnecting
 // with backoff. 400 symbols therefore need five connections, not one.
+type outbound struct {
+	topic string
+	key   string
+	body  []byte
+}
+
 func streamShard(st *marketdata.State, cl *stomp.Client, streams []string, index int) {
 	url := "wss://stream.binance.com:9443/stream?streams=" + strings.Join(streams, "/")
+
+	queue := make(chan outbound, 8192)
+	go func() {
+		for msg := range queue {
+			if !cl.Healthy() {
+				continue
+			}
+			spec, ok := topics.Get(msg.topic)
+			if !ok {
+				continue
+			}
+			cl.PublishWithHeaders(spec.Exchange, spec.Name, metaFor(msg.topic, "market", msg.key), msg.body)
+		}
+	}()
+
+	var dropped int64
 	emit := func(topic, key string, body []byte) {
-		if !cl.Healthy() {
-			return
+		select {
+		case queue <- outbound{topic: topic, key: key, body: body}:
+		default:
+			// never block the socket read: drop the sample and say so
+			if atomic.AddInt64(&dropped, 1)%5000 == 1 {
+				log.Printf("shard %d: publisher behind, dropped %d messages", index, atomic.LoadInt64(&dropped))
+			}
 		}
-		spec, ok := topics.Get(topic)
-		if !ok {
-			return
-		}
-		cl.PublishWithHeaders(spec.Exchange, spec.Name, metaFor(topic, "market", key), body)
 	}
 	for {
 		conn, err := ws.Dial(url, 15*time.Second)
