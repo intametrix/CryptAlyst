@@ -377,3 +377,43 @@ inside the lane that wrote it, and visible from a doc written by someone
 thinking about behaviour rather than implementation. That is the empirical
 argument Rule 3 and Rule 0e's "thinking is shared" clause already make — this
 session is one more data point for it.
+
+
+---
+
+## Entry 8 — The portability extermination, and a live data census
+
+**The ask:** fix every hardcoded path in the tree (the human, after the
+`seed_deepseek_watch.sh` find), then produce a full census of market-data
+storage — schemas, locations, indexes, and the number of data points on disk.
+
+**What the sweep found.** Five execution dependencies on user-specific
+absolute paths, all fixed the same way: resolve from the script's own
+location (or `expanduser(~)` where home-relative is the intent), env
+overrides unchanged. The two watcher scripts `cd`-failed before their first
+cycle because they pointed at `andrewpreston`'s checkout; `peek.py`'s
+`/clear` handler matched its `pkill` pattern on a dated task dir, so a broker
+running from anywhere else would never be killed and a second broker would be
+spawned on top of it. The remaining absolute paths in the tree are historical
+artifacts (one-shot applescripts, generated dist patches, logs) — none are
+execution dependencies. *Lesson already written in check.sh's fix: a path
+that still works is the most dangerous kind, because nothing tells you it is
+wrong.*
+
+**What the census found** is recorded in `DATA_STORAGE.md` (committed with
+this entry). The headline: there is no database. The Go service keeps four
+append-only JSONL/JSON stores whose flag defaults are relative to the launch
+directory — storage location depends on where the binary is started from,
+which is itself worth fixing — and every "index" is a Go map in memory. The
+live data reality of this machine is two systems: the new Go backend
+(currently stopped, 4,310 turtle session records from Oct 16 on disk, no
+alerts persisted yet, no calibration model fitted) and a running fleet of
+scalp5 Python strategies appending to their own ledgers as we speak, the
+largest of which has crossed 800k records / 256 MB.
+
+**The rule that came out of it.** The human set two new standing rules,
+codified in `AGENTS.md`: never remove features (removal needs explicit human
+sign-off on the channel, with proof of deadness first — the ChartPanel
+incident is the precedent), and tests must mock calculations and run on
+generated data — no live network, no wall clock, no dependence on
+pre-existing local files.
