@@ -448,6 +448,7 @@ var (
 	idxTopic = map[string][]offEntry{}
 	idxSize  = map[string]int64{}
 	idxReady = false
+	idxLast  time.Time
 )
 
 func indexOneLine(line []byte, file string, off int64) {
@@ -516,6 +517,7 @@ func indexFiles(dir string) {
 	}
 	idxMu.Lock()
 	idxReady = true
+	idxLast = time.Now()
 	idxMu.Unlock()
 }
 
@@ -695,7 +697,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("embedded ui: %v", err)
 	}
-	mux.Handle("/", http.FileServer(http.FS(sub)))
+	// the UI changes with every build: never let a browser serve a stale bundle
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		http.FileServer(http.FS(sub)).ServeHTTP(w, r)
+	}))
 
 	mux.HandleFunc("/api/stats", func(w http.ResponseWriter, r *http.Request) {
 		docs := st.snapshot()
@@ -1306,7 +1313,14 @@ func main() {
 	scanTopic := func(topic string, limit int) []envelopeDoc {
 		// keep the index current with whatever the recorder appended since it was built
 		if indexCount(topic) > 0 || idxReady {
-			indexFiles(*dir)
+			// refreshing walks whatever the recorder appended; doing it on every
+			// query made two tabs fight over the same walk for seconds
+			idxMu.RLock()
+			stale := time.Since(idxLast) > 30*time.Second
+			idxMu.RUnlock()
+			if stale {
+				indexFiles(*dir)
+			}
 			if docs := scanIndexed(topic, limit); len(docs) > 0 {
 				return docs
 			}

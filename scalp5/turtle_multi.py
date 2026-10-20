@@ -191,7 +191,9 @@ def run_engine(cfg, syms, args, shared_prices):
                         stop_frac = max(stop_frac, args.min_stop_frac)
                         if stop_frac <= 0:
                             continue
+                        stop_frac = max(stop_frac, 0.002)
                         notional = equity * (args.risk_pct / 100.0) / stop_frac
+                        notional = min(notional, equity * 0.25)
                         notional = min(notional, equity * args.max_leverage)
                         positions[s] = {"side": st["side"], "entry": px,
                                         "opened": time.time(), "stop": st["stop"],

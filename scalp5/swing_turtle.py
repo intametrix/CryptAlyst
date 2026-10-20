@@ -301,6 +301,12 @@ def main():
                 for s in syms:
                     if s in positions:
                         continue
+                    base = s[:-4] if s.endswith("USDT") else s
+                    if base in STABLES or base.endswith("USD"):
+                        continue
+                    px_now = prices.get(s)
+                    if px_now and abs(px_now - 1.0) < 0.01:      # a pegged pair
+                        continue
                     try:
                         x = analyse(s, args.interval, args.entry_bars, args.exit_bars)
                     except Exception:
@@ -316,7 +322,9 @@ def main():
                     stop_frac = abs(st["entry"] - st["stop"]) / st["entry"]
                     if stop_frac <= 0:
                         continue
+                    stop_frac = max(stop_frac, 0.002)          # 0.2% minimum stop
                     notional = equity * (args.risk_pct / 100.0) / stop_frac
+                    notional = min(notional, equity * 0.25)     # never more than a quarter
                     qty = notional / px
                     positions[s] = {"side": st["side"], "entry": px, "opened": time.time(),
                                     "stop": st["stop"], "trail": st["trail"], "n": st["n"],

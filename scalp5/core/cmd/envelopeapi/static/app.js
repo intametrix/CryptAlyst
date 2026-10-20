@@ -154,6 +154,7 @@ function findDoc(id) {
   // the live feed replaces the list every second, so the selected envelope is
   // remembered rather than expected to still be in the newest page
   if (!state.cache) state.cache = new Map();
+  if (state.selDoc && String(state.selDoc.id) === key) return state.selDoc;
   return state.docs.find((x) => String(x.id) === key) || state.cache.get(key) || null;
 }
 
@@ -179,7 +180,14 @@ async function select(id, quiet) {
   try {
     const resp = await fetch("/api/envelope/" + id + "?role=" + encodeURIComponent(state.role), { cache: "no-store" });
     if (!resp.ok) throw new Error("status " + resp.status);
-    renderDetail(await resp.json());
+    const fetched = await resp.json();
+    // the list is replaced every second by the live feed: keep the selected
+    // envelope itself, so every pane can render from it without looking it up
+    state.selDoc = Object.assign({}, state.selDoc || {}, fetched, { id: id });
+    if (!state.cache) state.cache = new Map();
+    state.cache.set(String(id), state.selDoc);
+    if (state.selDoc.key) state.journeyKey = state.selDoc.key;
+    renderDetail(fetched);
   } catch (e) {
     $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
   }
@@ -856,7 +864,18 @@ document.querySelectorAll(".ex-controls .mini").forEach((b) => {
    ribbons whose width is the number of correlations observed. */
 /* A journey starts at a point: the selected envelope becomes the anchor, the
    window opens from its timestamp and runs forward on its symbol. */
+async function warmFlow() {
+  try {
+    const d = await (await fetch("/api/flow", { cache: "no-store" })).json();
+    state.flowCache = { ts: Date.now(), data: d };
+  } catch (e) { /* the tab will fetch on demand */ }
+}
+
 async function renderJourney(anchorId) {
+  const svgBox = $("journeySvg");
+  if (svgBox && !svgBox.children.length) {
+    svgBox.innerHTML = '<text x="450" y="320" text-anchor="middle" fill="#5a6b80" font-size="12">drawing the flow…</text>';
+  }
   const params = new URLSearchParams();
   const anchor = anchorId || state.sel;
   if (anchor) {
@@ -866,10 +885,22 @@ async function renderJourney(anchorId) {
     if (state.from) params.set("from", String(state.from));
     if (state.to) params.set("to", String(state.to));
   }
-  const d = await (await fetch("/api/flow?" + params.toString(), { cache: "no-store" })).json();
+  const now = Date.now();
+  let d = null;
+  if (!anchor && state.flowCache && now - state.flowCache.ts < 30000) {
+    d = state.flowCache.data;
+  } else {
+    d = await (await fetch("/api/flow?" + params.toString(), { cache: "no-store" })).json();
+    if (!anchor) state.flowCache = { ts: now, data: d };
+  }
+  // an anchor with no chain of its own must still show the platform flow
+  if (anchor && !(d.nodes || []).length) {
+    d = await (await fetch("/api/flow", { cache: "no-store" })).json();
+  }
   state.journeyKey = d.key || "";
   const stamp = anchor ? " · from " + fmtTime(d.from) : " · last 5 minutes";
-  $("journeyKey").textContent = "key: " + (d.key || "all symbols") + stamp;
+  const head = $("journeyKey");
+  if (head) head.textContent = "key: " + (d.key || "all symbols") + stamp;
   drawFlow(d);
 }
 
@@ -1199,6 +1230,7 @@ $("live").onclick = () => {
   $("live").textContent = state.live ? "live" : "paused";
 };
 
-loadStats(); loadTopics(); loadTimeline(); load(); connect(); updateTabs();
+loadStats(); loadTopics(); loadTimeline();
+setTimeout(warmFlow, 1200); load(); connect(); updateTabs();
 setInterval(loadTimeline, 5000);
 setInterval(loadStats, 5000);
