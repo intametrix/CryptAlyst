@@ -3,9 +3,11 @@
 Binance SPOT Turtle system — **paper / detection only**. Public endpoints, no API
 keys, no order placement, stdlib-only Python 3.9+.
 
-Implements the specification in
-`/Users/andrewpreston/Dev/Binance/KIMI_TRADING_PLAN.md` (the plan) and
-`/Users/andrewpreston/Dev/Binance/KIMI_ANSWERS2.md` (the answers).
+Implements the specification in `KIMI_TRADING_PLAN.md` (the plan) and
+`KIMI_ANSWERS2.md` (the answers). The originals live outside this repo
+(they were authored at `/Users/andrewpreston/Dev/Binance/` on the machine
+this was first built on) and are not vendored here; the paths below cite
+them by name only so this README does not rot when the checkout moves.
 
 ```
 binance_turtle/

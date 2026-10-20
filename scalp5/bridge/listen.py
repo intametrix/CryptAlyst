@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """listen - print every new KIMI message the moment it lands, never skip one."""
 import json, os, time
-LOG = os.environ.get("BRIDGE_LOG", "/Users/users1/Documents/kimi/tasks/2026-10-17/11-08-11-ea1d54fe/bridge.log")
+HERE = os.path.dirname(os.path.abspath(__file__))
+# Default to the Go bridge's log next to this script; override with BRIDGE_LOG.
+# (Was a hardcoded dated task dir under another user's home -- it happened to
+# still exist, which is exactly what makes that kind of path dangerous.)
+LOG = os.environ.get("BRIDGE_LOG", os.path.join(HERE, "bridge.log"))
 seen = 0
 print("LISTENING for kimi messages", flush=True)
 while True:

@@ -5,7 +5,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 BROKER = os.environ.get("BROKER", "http://127.0.0.1:8810")
 PORT = int(os.environ.get("PORT", "8811"))
-LOG = os.environ.get("BRIDGE_LOG", "/Users/users1/Documents/kimi/tasks/2026-10-17/11-08-11-ea1d54fe/bridge.log")
+HERE = os.path.dirname(os.path.abspath(__file__))
+# Default to the Go bridge's log next to this script; override with BRIDGE_LOG.
+# (Was a hardcoded dated task dir under another user's home -- it happened to
+# still exist, which is exactly what makes that kind of path dangerous.)
+LOG = os.environ.get("BRIDGE_LOG", os.path.join(HERE, "bridge.log"))
 
 
 def jget(u, t=5.0):
@@ -182,13 +186,15 @@ class H(BaseHTTPRequestHandler):
             # restart it; it replays history from disk, so an empty log means empty
             try:
                 import signal, subprocess
-                logp = os.environ.get("BRIDGE_LOG", "/Users/users1/Documents/kimi/tasks/"
-                                      "2026-10-17/11-08-11-ea1d54fe/bridge.log")
-                subprocess.run(["pkill", "-f", "11-08-11-ea1d54fe/bridge"], check=False)
+                # Defaults live next to this script (BRIDGE_* env overrides).
+                # The old defaults hardcoded a dated task dir under one user's
+                # home -- including the pkill pattern, so a broker running from
+                # anywhere else would never be matched.
+                logp = os.environ.get("BRIDGE_LOG", os.path.join(HERE, "bridge.log"))
+                binp = os.environ.get("BRIDGE_BIN", os.path.join(HERE, "bridge"))
+                subprocess.run(["pkill", "-f", binp], check=False)
                 time.sleep(0.7)
                 open(logp, "w").close()
-                binp = os.environ.get("BRIDGE_BIN", "/Users/users1/Documents/kimi/tasks/"
-                                      "2026-10-17/11-08-11-ea1d54fe/bridge")
                 env = dict(os.environ, PORT="8810")
                 subprocess.Popen([binp], cwd=os.path.dirname(binp), env=env,
                                  stdout=open(os.path.join(os.path.dirname(binp), "bridge.out"), "ab"),

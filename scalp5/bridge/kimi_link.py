@@ -3,10 +3,12 @@
 
 Two transport paths, preferred first:
 
-  1. CLI     /Users/andrewpreston/.kimi-code/bin/kimi -p "..." --output-format text
-             Fastest by far, but it needs a model configured for THIS user. The
-             desktop app's credentials are 0600 under andrewpreston's home, so
-             until someone runs `kimi` and `/login` as users1 this path fails.
+  1. CLI     ~/.kimi-code/bin/kimi -p "..." --output-format text
+             Fastest by far, but it needs a model configured for the user
+             running it. When this was written the desktop app's credentials
+             were 0600 under another account's home, so this path failed until
+             `kimi` /login ran as the current user. Resolved dynamically via
+             expanduser(~) so it follows whoever runs the script.
 
   2. GUI     activate Kimi.app, paste the prompt, press Return. Works today.
              Replies come back through the bridge, so we still read them
@@ -24,7 +26,7 @@ import subprocess
 import time
 import urllib.request
 
-KIMI_BIN = "/Users/andrewpreston/.kimi-code/bin/kimi"
+KIMI_BIN = os.path.expanduser("~/.kimi-code/bin/kimi")
 BRIDGE = "http://127.0.0.1:8810"
 
 
