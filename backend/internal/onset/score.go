@@ -115,8 +115,17 @@ func Score(c flow.Candidate, cfg flow.Config, aggQuote float64) Result {
 
 	// --- quality (max 20) ------------------------------------------------
 	liquidity := 10 * clamp01(c.QuoteVolume24h/(10*math.Max(cfg.MinAbsFlow, 1)))
-	spread := 6 * clamp01(1-c.SpreadPct/math.Max(cfg.MaxSpreadPct, 1e-9))
-	depth := 4 * clamp01(c.BookDepthUSD/(20*math.Max(cfg.MinBookDepthUSD, 1)))
+	spread := 0.0
+	depth := 0.0
+	if !c.BookMissing {
+		spread = 6 * clamp01(1-c.SpreadPct/math.Max(cfg.MaxSpreadPct, 1e-9))
+		depth = 4 * clamp01(c.BookDepthUSD/(20*math.Max(cfg.MinBookDepthUSD, 1)))
+	} else {
+		// No usable top-of-book: SpreadPct is 0 because the data is absent,
+		// not because the book is tight -- absent data earns nothing rather
+		// than full spread/depth credit.
+		reasons = append(reasons, "no book data; spread/depth unscored")
+	}
 	components["quality"] = math.Min(liquidity+spread+depth, 20)
 
 	// --- lateness penalty -------------------------------------------------
