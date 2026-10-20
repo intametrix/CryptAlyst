@@ -279,3 +279,33 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
 .book-card .hdr{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:var(--faint)}
 .book-detail{padding:14px 16px}
 .book-detail h3{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--faint);margin:16px 0 6px}
+
+/* ---- phones and tablets -------------------------------------------------
+   The desktop layout is three fixed columns; on a phone that is unreadable, so
+   the grid stacks and each pane gets its own scroll. The tab bar stays, and the
+   filters become a block above the list rather than a sidebar. */
+@media (max-width: 1100px) {
+  html, body { overflow: auto; }
+  body { display: block; }
+  .grid { display: block; padding: 8px; }
+  .vsplit, .hsplit { display: none; }
+  .panel { margin-bottom: 10px; min-height: 46vh; }
+  .filters { min-height: 0; }
+  .top { flex-wrap: wrap; gap: 10px; padding: 10px 12px; }
+  .stats { width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+  .stat { min-width: 84px; }
+  .tabs { overflow-x: auto; flex-wrap: nowrap; padding: 8px 8px 0; }
+  .tab { white-space: nowrap; }
+  .row, .book-card { font-size: 12px; }
+  .detail .section pre { max-height: 220px; }
+  .timeline { margin: 8px 8px 0; }
+}
+@media (max-width: 700px) {
+  .brand h1 { font-size: 13px; }
+  .brand p { display: none; }
+  .stats .stat { min-width: 70px; padding: 5px 8px; }
+  .stat b { font-size: 13px; }
+  .panel { min-height: 52vh; }
+  .tabs { gap: 2px; }
+  .tab { padding: 5px 8px; font-size: 10px; }
+}

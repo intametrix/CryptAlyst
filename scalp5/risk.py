@@ -88,6 +88,10 @@ def allow(symbol, side, notional, book_equity, expected_move_pct=None, slippage_
     """Return (allowed, reason). Records the decision for the dashboard."""
     if notional <= 0:
         return False, "zero size"
+    # STOP is global: every engine honours the flag even if it is still running
+    import os as _os
+    if _os.path.exists(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "state", "STOP")):
+        return False, "trading stopped (control)"
     if bar_age_s is not None and bar_age_s > DEFAULTS["max_forecast_age_s"]:
         return False, "stale forecast: candles %.0fs old (max %ds)" % (
             bar_age_s, DEFAULTS["max_forecast_age_s"])

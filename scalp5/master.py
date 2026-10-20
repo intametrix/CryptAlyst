@@ -201,6 +201,13 @@ def _spawn(name, argv):
 
 
 def trading_start():
+    try:
+        if os.path.exists(STOP_FLAG):
+            os.remove(STOP_FLAG)
+    except Exception:
+        pass
+    control_publish("start")
+    TRADING_STATE["stopped"] = False
     if TRADING_STATE["on"]:
         return TRADING_STATE
     py = sys.executable or "python3"
@@ -221,6 +228,51 @@ def trading_start():
     return TRADING_STATE
 
 
+STOP_FLAG = os.path.join(HERE, "state", "STOP")
+
+
+def control_publish(action):
+    """Tell every part of the platform, not just this process."""
+    try:
+        from lib import bus
+        b = bus.Bus()
+        b.publish("system.control", {"action": action, "actor": "dashboard",
+                                     "ts": int(time.time() * 1000)})
+        b.close()
+        return True
+    except Exception:
+        return False
+
+
+def reset_books():
+    """Empty the books and put equity back to the opening balance, keeping an
+    archive of what was there."""
+    import glob
+    import shutil
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    archive = os.path.join(HERE, "state", "archive_stop_" + stamp)
+    os.makedirs(archive, exist_ok=True)
+    reset = 0
+    for path in glob.glob(os.path.join(HERE, "state", "pack_*.json")):
+        try:
+            with open(path) as fh:
+                book = json.load(fh)
+        except Exception:
+            continue
+        shutil.copy2(path, os.path.join(archive, os.path.basename(path)))
+        book["equity"] = book.get("start_equity") or book.get("equity") or 5000
+        book["positions"] = {}
+        book["trades"] = []
+        book["realised"] = 0.0
+        book["trade_count"] = 0
+        book["closed"] = 0
+        book["stopped_at"] = int(time.time() * 1000)
+        with open(path, "w") as fh:
+            json.dump(book, fh)
+        reset += 1
+    return reset, archive
+
+
 def trading_stop():
     TRADING_STATE["on"] = False
     for name, pr in list(PROCS.items()):
@@ -232,8 +284,20 @@ def trading_stop():
     import subprocess
     for pat in ("alpha.py", "multi_models.py", "stats_models.py", "slow_edges.py",
                 "sympathy_lag.py", "crypto_strategies.py",
-                "models10.py", "crypto_pack.py", "executor.py"):
+                "models10.py", "crypto_pack.py", "executor.py",
+                "alpha_rank.py", "alpha_signals.py", "skim_pump.py", "curve_rider.py",
+                "hft.py", "movers.py", "grid.py", "hybrids.py"):
         subprocess.run(["pkill", "-f", pat], check=False)
+    try:
+        with open(STOP_FLAG, "w") as fh:
+            json.dump({"stopped_at": int(time.time() * 1000), "actor": "dashboard"}, fh)
+    except Exception:
+        pass
+    control_publish("stop")
+    reset, archive = reset_books()
+    TRADING_STATE["stopped"] = True
+    TRADING_STATE["reset_books"] = reset
+    TRADING_STATE["archive"] = archive
     try:
         req = urllib.request.Request("http://127.0.0.1:8787/api/turtle?action=stop",
                                      data=b"{}", headers={"Content-Type": "application/json"})

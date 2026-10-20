@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"cryptalyst/core/internal/marketdata"
@@ -98,23 +99,22 @@ func main() {
 		l := strings.ToLower(s)
 		streams = append(streams, l+"@bookTicker", l+"@depth5", l+"@kline_1m", l+"@kline_15m")
 	}
-	url := "wss://stream.binance.com:9443/stream?streams=" + strings.Join(streams, "/")
+	// one connection carries at most ~1024 streams, so 400 symbols are sharded
+	// across several connections; each shard is an independent websocket
+	const maxStreamsPerConn = 900
+	var shards [][]string
+	for i := 0; i < len(streams); i += maxStreamsPerConn {
+		end := i + maxStreamsPerConn
+		if end > len(streams) {
+			end = len(streams)
+		}
+		shards = append(shards, streams[i:end])
+	}
+	log.Printf("sharding %d streams into %d connections", len(streams), len(shards))
 	log.Printf("market_data (Go) — %d symbols, %d streams", len(symbols), len(streams))
 
 	st := marketdata.New()
 	cl := stomp.New(*addr, "cryptalyst", "cryptalyst")
-
-	// meta builds the provenance headers for one publish. The body is untouched:
-	// existing consumers keep parsing exactly what they always did.
-	var genCounter uint64
-	meta := func(topic, plane, key string) map[string]string {
-		genCounter++
-		return map[string]string{
-			"v": "1", "plane": plane, "topic": topic, "producer": "market_data",
-			"key": key, "gen": fmt.Sprint(genCounter), "seq": fmt.Sprint(genCounter),
-			"cid": mintCID(), "computed_at": time.Now().UTC().Format(time.RFC3339Nano),
-		}
-	}
 
 	go func() {
 		tickSpec, _ := topics.Get("ticks")
@@ -135,10 +135,10 @@ func main() {
 				}
 			}
 			ticks, price := st.TickPayload()
-			cl.PublishWithHeaders(tickSpec.Exchange, tickSpec.Name, meta(tickSpec.Name, "market", ""), ticks)
-			cl.PublishWithHeaders(priceSpec.Exchange, priceSpec.Name, meta(priceSpec.Name, "market", ""), price)
+			cl.PublishWithHeaders(tickSpec.Exchange, tickSpec.Name, metaFor(tickSpec.Name, "market", ""), ticks)
+			cl.PublishWithHeaders(priceSpec.Exchange, priceSpec.Name, metaFor(priceSpec.Name, "market", ""), price)
 			miniBody, _ := json.Marshal(map[string]any{"count": len(symbols), "ts": time.Now().UnixMilli()})
-			cl.PublishWithHeaders(miniSpec.Exchange, miniSpec.Name, meta(miniSpec.Name, "market", ""), miniBody)
+			cl.PublishWithHeaders(miniSpec.Exchange, miniSpec.Name, metaFor(miniSpec.Name, "market", ""), miniBody)
 			for _, s := range symbols {
 				mark := lastDepth[s]
 				if time.Since(mark.at) < 250*time.Millisecond {
@@ -151,7 +151,7 @@ func main() {
 					continue
 				}
 				if body := st.DepthPayload(s); body != nil {
-					cl.PublishWithHeaders(depthSpec.Exchange, depthSpec.Name, meta(depthSpec.Name, "market", s), body)
+					cl.PublishWithHeaders(depthSpec.Exchange, depthSpec.Name, metaFor(depthSpec.Name, "market", s), body)
 					price, qty := st.TopOfBook(s)
 					lastDepth[s] = depthMark{at: time.Now(), price: price, qty: qty}
 				}
@@ -243,32 +243,64 @@ func main() {
 		log.Fatal(http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", *port), mux))
 	}()
 
+	for shardIndex := range shards {
+		shard := shards[shardIndex]
+		go streamShard(st, cl, shard, shardIndex)
+	}
+	select {}
+}
+
+var (
+	metaMu  sync.Mutex
+	metaSeq uint64
+)
+
+// metaFor builds the provenance headers for one publish. The body is untouched:
+// existing consumers keep parsing exactly what they always did.
+func metaFor(topic, plane, key string) map[string]string {
+	metaMu.Lock()
+	metaSeq++
+	n := metaSeq
+	metaMu.Unlock()
+	return map[string]string{
+		"v": "1", "plane": plane, "topic": topic, "producer": "market_data",
+		"key": key, "gen": fmt.Sprint(n), "seq": fmt.Sprint(n),
+		"cid": mintCID(), "computed_at": time.Now().UTC().Format(time.RFC3339Nano),
+	}
+}
+
+// streamShard keeps one websocket alive: 900 streams per connection, reconnecting
+// with backoff. 400 symbols therefore need five connections, not one.
+func streamShard(st *marketdata.State, cl *stomp.Client, streams []string, index int) {
+	url := "wss://stream.binance.com:9443/stream?streams=" + strings.Join(streams, "/")
+	emit := func(topic, key string, body []byte) {
+		if !cl.Healthy() {
+			return
+		}
+		spec, ok := topics.Get(topic)
+		if !ok {
+			return
+		}
+		cl.PublishWithHeaders(spec.Exchange, spec.Name, metaFor(topic, "market", key), body)
+	}
 	for {
 		conn, err := ws.Dial(url, 15*time.Second)
 		if err != nil {
-			log.Printf("connect failed: %v", err)
+			log.Printf("shard %d connect failed: %v", index, err)
 			time.Sleep(3 * time.Second)
 			continue
 		}
-		log.Printf("websocket connected")
+		log.Printf("shard %d connected (%d streams)", index, len(streams))
 		for {
 			payload, _, err := conn.Read()
 			if err != nil {
-				log.Printf("stream dropped: %v", err)
+				log.Printf("shard %d dropped: %v", index, err)
 				conn.Close()
 				break
 			}
-			handle(st, func(topic, key string, body []byte) {
-				if !cl.Healthy() {
-					return
-				}
-				spec, ok := topics.Get(topic)
-				if !ok {
-					return
-				}
-				cl.PublishWithHeaders(spec.Exchange, spec.Name, meta(topic, "market", key), body)
-			}, payload)
+			handle(st, emit, payload)
 		}
+		time.Sleep(2 * time.Second)
 	}
 }
 

@@ -74,7 +74,8 @@ class TopicRegistry:
         "risk.state":     Topic("risk.state", ("risk",), "5m", "risk"),
         "review.verdict": Topic("review.verdict", ("portfolio_review",), "5m", "review"),
         "exec.quote":     Topic("exec.quote", ("maker",), "60s", "exec"),
-        "system.health":  Topic("system.health", ("master",), "10m", "system"),
+        "system.control": Topic("system.control", ("dashboard", "supervisor", "cli"), "1d", "system"),
+    "system.health":  Topic("system.health", ("master",), "10m", "system"),
     }
 
     @classmethod

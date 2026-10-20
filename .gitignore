@@ -92,3 +92,6 @@ web/node_modules/
 # source information, and buries real diffs if tracked.
 .comms/all.jsonl
 .comms/*.inbox.jsonl
+
+# dependencies are installed, never committed
+node_modules/

@@ -32,6 +32,7 @@ var All = []Topic{
 	{"review.verdict", "review", []string{"portfolio_review"}, "5m"},
 	{"exec.quote", "exec", []string{"maker"}, "60s"},
 	{"system.health", "system", []string{"healthpub", "master"}, "10m"},
+	{"system.control", "system", []string{"master", "supervisor", "cli"}, "1d"},
 }
 
 func Names() []string {
