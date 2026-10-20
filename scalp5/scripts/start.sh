@@ -73,6 +73,7 @@ nohup python3 -u signals.py --every 10 --top 30 >"$LOGS/signals.log" 2>&1 &
 sleep 2; ok "signals · tad · forecast"
 
 say "6 · books and the dashboard"
+pgrep -f "heartbeat.py" >/dev/null || nohup python3 -u heartbeat.py >"$LOGS/heartbeat.log" 2>&1 &
 if [ "$TRADE" = "1" ]; then
   rm -f "$ROOT/state/STOP"
   ok "trading requested: state/STOP cleared"

@@ -250,7 +250,9 @@ def reset_stats(archive):
     import shutil
     cleared = 0
     for pattern in ("stats*.json", "model_stats*.json", "decisions*.json",
-                    "signals*.json", "paper*.json", "equity*.json"):
+                    "signals*.json", "paper*.json", "equity*.json",
+                    "heartbeat.json", "tape.json", "summary.json", "alerts*.json",
+                    "counters.json", "pairs.json"):
         for path in glob.glob(os.path.join(HERE, "state", pattern)):
             try:
                 shutil.copy2(path, os.path.join(archive, os.path.basename(path)))
@@ -305,7 +307,10 @@ def trading_stop():
                 "sympathy_lag.py", "crypto_strategies.py",
                 "models10.py", "crypto_pack.py", "executor.py",
                 "alpha_rank.py", "alpha_signals.py", "skim_pump.py", "curve_rider.py",
-                "hft.py", "movers.py", "grid.py", "hybrids.py"):
+                "hft.py", "movers.py", "grid.py", "hybrids.py",
+                "flash.py", "fast_ignition.py", "swing_v2.py", "swing_turtle.py",
+                "turtle_multi.py", "swing.py", "ignition.py", "momentum.py",
+                "mean_revert.py", "breakout.py", "scalper.py"):
         subprocess.run(["pkill", "-f", pat], check=False)
     try:
         with open(STOP_FLAG, "w") as fh:
@@ -329,6 +334,64 @@ def trading_stop():
     return TRADING_STATE
 
 
+_PROC_CACHE = {"ts": 0.0, "lines": []}
+
+
+def proc_runs(pat, lines=None):
+    """True when a process is *running* pat as its own script argument."""
+    for ln in (lines if lines is not None else _proc_snapshot()):
+        toks = ln.split()
+        if any(t == pat or t.endswith("/" + pat) for t in toks):
+            return True
+    return False
+
+
+def _proc_snapshot():
+    """One `ps` for the whole request, cached for a couple of seconds: asking
+    pgrep once per engine made /api/all slow enough to time out."""
+    import subprocess
+    if time.time() - _PROC_CACHE["ts"] < 3.0:
+        return _PROC_CACHE["lines"]
+    try:
+        out = subprocess.run(["ps", "-eo", "command"], capture_output=True, text=True, timeout=5).stdout
+        lines = [ln for ln in out.splitlines() if ".py" in ln]
+    except Exception:
+        lines = []
+    _PROC_CACHE.update({"ts": time.time(), "lines": lines})
+    return lines
+
+
+def live_heartbeat():
+    """What is true now: books actually running, and equity straight from the pack
+    files. Used whenever the stored heartbeat is stale."""
+    import glob
+    import subprocess
+    running = 0
+    for pat in ("models10.py", "crypto_pack.py", "executor.py", "grid.py", "hft.py",
+                "movers.py", "hybrids.py", "alpha_rank.py", "skim_pump.py",
+                "curve_rider.py", "alpha_signals.py", "supervisor.py"):
+        if subprocess.run(["pgrep", "-f", pat], capture_output=True).returncode == 0:
+            running += 1
+    rows, open_pos, realised = [], 0, 0.0
+    for f in sorted(glob.glob(os.path.join(HERE, "state", "pack_*.json"))):
+        try:
+            with open(f) as fh:
+                b = json.load(fh)
+        except Exception:
+            continue
+        start = float(b.get("start_equity") or 0)
+        eq = float(b.get("equity") or 0)
+        rows.append({"k": b.get("engine"), "eq": round(eq, 2),
+                     "ret": round(100 * (eq / start - 1), 2) if start else 0,
+                     "real": round(eq - start, 2), "open": len(b.get("positions") or []),
+                     "closed": b.get("trade_count") or len(b.get("trades") or [])})
+        open_pos += len(b.get("positions") or [])
+        realised += eq - start
+    return {"ts": int(time.time() * 1000), "beat_s": 5.0, "books": running,
+            "open": open_pos, "realised": round(realised, 2), "rows": rows,
+            "source": "live"}
+
+
 def _alive(pattern):
     import subprocess
     return subprocess.run(["pgrep", "-f", pattern], capture_output=True).returncode == 0
@@ -336,12 +399,11 @@ def _alive(pattern):
 
 def trading_loop_state():
     """Report what is actually alive, not what we asked for."""
-    import subprocess
+    procs = _proc_snapshot()
     alive = {}
     for name, pat in (("models10", "models10.py"), ("crypto_pack", "crypto_pack.py"),
                       ("executor", "executor.py")):
-        r = subprocess.run(["pgrep", "-f", pat], capture_output=True)
-        alive[name] = r.returncode == 0
+        alive[name] = proc_runs(pat, procs)
     TRADING_STATE["alive"] = alive
     return TRADING_STATE
 
@@ -681,6 +743,17 @@ def collect():
         pass
 
     # ---- crypto strategies (each writes state/strategy_<name>.json)
+    # A pack file is a record of a book, not proof that it is trading. Only a
+    # running process counts, so a stopped book does not appear on the dashboard.
+    def _running(name):
+        if not name:
+            return False
+        if name.startswith("hybrid_"):
+            pat = "hybrids.py --strategy " + name.replace("hybrid_", "")
+        else:
+            pat = name + ".py"
+        return proc_runs(pat, _proc_snapshot())
+
     try:
         for fn in sorted(os.listdir(os.path.join(HERE, "state"))):
             if not ((fn.startswith("strategy_") or fn.startswith("edge_") or fn.startswith("slow_") or fn.startswith("alpha_") or fn.startswith("pack_"))
@@ -691,8 +764,11 @@ def collect():
                 continue
             with open(fp) as fh:
                 d = json.load(fh)
+            eng_name = d.get("engine")
+            if not _running(eng_name):
+                continue
             engines.append({
-                "key": d.get("engine"), "label": d.get("basis", "crypto strategy"),
+                "key": eng_name, "label": d.get("basis", "crypto strategy"),
                 "colour": "#39d353", "alive": True,
                 "equity": d.get("equity"), "return_pct": norm_ret(d),
                 "realised": d.get("realised"), "unrealised": d.get("unrealised"),
@@ -715,6 +791,10 @@ def collect():
         models = jget("http://127.0.0.1:8792/api/aggregate")
     except Exception:
         models = None
+
+    # one rule for every source of engine state: if no process is running, it is
+    # not a book on this dashboard. History lives in the books view, not here.
+    engines = [e for e in engines if _running(e.get("key"))]
 
     live_closed = sum((e.get("closed") or 0) for e in engines if e.get("equity") is not None)
     return {"ts": int(time.time() * 1000), "engines": engines, "models": models,
@@ -5657,11 +5737,16 @@ class H(BaseHTTPRequestHandler):
             except Exception:
                 return self._send(200, json.dumps({"fills": []}), "application/json")
         if p == "/api/heartbeat":
+            hb = None
             try:
                 with open(os.path.join(HERE, "state", "heartbeat.json")) as fh:
-                    return self._send(200, fh.read(), "application/json")
+                    hb = json.load(fh)
             except Exception:
-                return self._send(200, json.dumps({"books": 0, "rows": []}), "application/json")
+                hb = None
+            # anything older than half a minute is history, not a heartbeat
+            if not hb or time.time() * 1000 - float(hb.get("ts") or 0) > 30000:
+                hb = live_heartbeat()
+            return self._send(200, json.dumps(hb), "application/json")
         if p == "/api/tick":
             q = urllib.parse.urlparse(self.path).query
             qs = urllib.parse.parse_qs(q).get("syms", [""])[0]
@@ -5710,15 +5795,18 @@ class H(BaseHTTPRequestHandler):
                                            "detail": d}
                 except Exception as exc:
                     out["checks"][name] = {"ok": False, "error": str(exc)[:120]}
-            probe("backend", "http://127.0.0.1:8787/api/health")
-            probe("klines", "http://127.0.0.1:8787/api/klines?symbol=BTCUSDT&interval=5m&limit=2")
+            # health is about the platform this build actually runs. The legacy
+            # python backend is not part of it, so it is reported, not required.
+            probe("market data", "http://127.0.0.1:8796/health")
+            probe("recorder", "http://127.0.0.1:8801/stats")
+            probe("explorer", "http://127.0.0.1:8802/api/stats")
             try:
                 a = jget("http://127.0.0.1:8799/api/all", timeout=10.0)
-                live = sum(1 for e in a.get("engines", []) if e.get("equity") is not None)
-                out["checks"]["engines"] = {"ok": live > 0, "detail": {"live": live,
-                                             "total": len(a.get("engines", []))}}
+                live = sum(1 for e in a.get("engines", []) if e.get("alive"))
+                out["checks"]["books"] = {"ok": True, "detail": {"live": live,
+                                          "total": len(a.get("engines", []))}}
             except Exception as exc:
-                out["checks"]["engines"] = {"ok": False, "error": str(exc)[:120]}
+                out["checks"]["books"] = {"ok": False, "error": str(exc)[:120]}
             ok = all(c.get("ok") for c in out["checks"].values())
             out["ok"] = ok
             return self._send(200 if ok else 503, json.dumps(out), "application/json")
