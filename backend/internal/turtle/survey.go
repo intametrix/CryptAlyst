@@ -126,8 +126,8 @@ func ComputeSnapshot(symbol, timeframe string, bars []binance.Kline, p Params, q
 	snap.Lower20 = fast.Lower[i]
 	snap.Upper55 = slow.Upper[i]
 	snap.Lower55 = slow.Lower[i]
-	snap.ExitLow10 = exitFast.Lower[i]
-	snap.ExitHigh10 = exitFast.Upper[i]
+	snap.ExitLow10 = exitFast.BreakoutLower[i]
+	snap.ExitHigh10 = exitFast.BreakoutUpper[i]
 
 	level20Up := fast.BreakoutUpper[i]
 	level20Down := fast.BreakoutLower[i]
@@ -786,7 +786,15 @@ func (s *Survey) Refresh() error {
 			budget.Rejected++
 			continue
 		}
-		plan := BuildPlan(entry.Snapshot, s.params, s.equity, 1, entry.Snapshot.ExitLow10)
+		// The exit level must sit on the trade's own side: a long resolves
+		// under the prior 10-bar low, a short above the prior 10-bar high.
+		// Passing ExitLow10 unconditionally put a short's exit level below
+		// the entry, where price would never close it.
+		exitLevel := entry.Snapshot.ExitLow10
+		if entry.Direction < 0 {
+			exitLevel = entry.Snapshot.ExitHigh10
+		}
+		plan := BuildPlan(entry.Snapshot, s.params, s.equity, 1, exitLevel)
 		if plan == nil {
 			entry.RejectReason = "could not size the position"
 			budget.Rejected++

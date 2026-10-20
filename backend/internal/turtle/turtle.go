@@ -4,7 +4,9 @@
 //
 //	ENTRY   an alert fires AND price confirms with a Donchian breakout
 //	FILTER  realised volatility must not be in a mean-reverting regime
-//	SIZE    one unit risks 1% of equity, sized off N (ATR)
+//	SIZE    one unit risks RiskPerUnit of equity (0.5% -- TRADING_PLAN.md
+//	        section 4; the original book's 1-2% breaches the crypto total-risk
+//	        cap in two trades), sized off N (ATR)
 //	STOP    2N adverse from entry
 //	EXIT    a 10-period Donchian break the other way, or the stop
 //
@@ -70,11 +72,14 @@ type Config struct {
 	MaxConcurrent int `json:"max_concurrent"`
 }
 
-// DefaultConfig is the starting rule set: 300 USDT, classic Turtle sizing.
+// DefaultConfig is the starting rule set: 300 USDT, crypto-adapted Turtle
+// sizing. RiskPerUnit is 0.5% per TRADING_PLAN.md section 4 -- the plan's
+// rationale: with alt correlations of 0.6-0.9, three 1% units are one 3%
+// bet, so the book's original 1-2% per unit does not survive translation.
 func DefaultConfig() Config {
 	return Config{
 		StartingEquity:    300,
-		RiskPerUnit:       0.01,
+		RiskPerUnit:       0.005,
 		StopN:             2,
 		EntryLookback:     20,
 		ExitLookback:      10,
