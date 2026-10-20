@@ -488,3 +488,47 @@ as the committed Oct-16 baseline while runtime appends continue in `data/`.
 **The decision worth keeping.** Copy-not-move for legacy import mirrors the
 append-only discipline of the stores themselves: a migration that deletes
 its source is one crash away from being a data-loss event.
+
+
+---
+
+## Entry 11 — Stage 0 P&L autopsy: per-model reports in docs/postmortems/
+
+**The ask:** the human commissioned a full back-analysis of the models that
+hurt the P&L, with per-model reports, and approved starting Stage 0
+immediately.
+
+**What landed.** `tools/pnl_autopsy.py` (stdlib-only, read-only,
+re-runnable) writes one markdown autopsy per source into
+`docs/postmortems/` — nine reports plus a README index: the five
+sentinel-monitored model ledgers (skim, scalp_fast, swing_turtle,
+multi_models, stats_models) and the four fills engines (grid, hft, movers,
+alpha_rank).
+
+**The three findings that matter.**
+
+1. **Every sentinel-monitored model is underwater.** skim -19.96 bps/trip
+   over 3,591 trips, scalp_fast -19.92 over 3,898, swing_turtle -$2,001
+   (-40% of paper equity), multi_models -$13,353 (-267%), stats_models
+   -$4,638 (-93%). And the guard is not guarding: `sentinel.json` still
+   reports swing / multimodels / statsmodels all `live` with no recorded
+   reason while two of them have lost most or all of their equity. Why the
+   sentinel never parks them is itself a Stage-1 investigation.
+2. **skim and scalp_fast are fee-machines, not alpha machines.** skim
+   averages +0.04 bps gross against 20 bps round-trip fees — 529× cost to
+   capture — with 2,023 consecutive losses and `time_cap` exits dominating.
+   No entry logic fixes that; it must trade less, hold longer, or capture
+   more per trip.
+3. **The fills engines mark their own homework.** grid/hft/movers report
+   ~100% win rates because they exit on their own terms (`profit_3s`);
+   their PnL is an upper bound, not mark-to-market. The autopsy says so in
+   every report so nobody tunes against scratch marks. The trustworthy loss
+   surface is the model ledgers.
+
+**Discipline notes.** The vote-attribution table for the decision models
+carries an explicit confound: when the whole book bleeds, every component
+bleeds — the yes/no gap is a search order for the Stage 1 counterfactual
+(replay with the component removed), not a verdict. Every hypothesis names
+the exact replay perturbation that would test it, and per Rule A6 nothing
+re-enables without the human. The PLAN for Stages 1–3 sits on the channel
+awaiting DeepSeek's AGREE.
