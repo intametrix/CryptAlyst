@@ -417,3 +417,42 @@ sign-off on the channel, with proof of deadness first — the ChartPanel
 incident is the precedent), and tests must mock calculations and run on
 generated data — no live network, no wall clock, no dependence on
 pre-existing local files.
+
+
+---
+
+## Entry 9 — Rule A6: disabled models stay disabled, and every disable gets a post-mortem
+
+**The ask:** the human set a new standing rule — a disabled model cannot be
+used to trade unless a human re-enables it, and a post-mortem must be
+conducted on the data that went in and why it failed.
+
+**The gap census** (probed before proposing, per "prove it with a command"):
+
+1. **Go `POST /api/detectors`.** Any client on the network can flip any
+   detector on or off; no reason is captured; the state is in-memory only,
+   so a disable evaporates on restart and everything comes back enabled.
+   No audit trail exists.
+2. **`cmd/learner` champion/challenger.** PROMOTE overwrites the live
+   `calibration.json` autonomously; KEEP CHAMPION is printed to stdout and
+   lost. Neither decision — the data that went in, the expectancy numbers,
+   why the challenger failed — is ever persisted.
+3. **scalp5 sentinel.** The good news: it already writes a reason with
+   metrics (`failed: avg … wr … dd …%`) into `state/sentinel.json` and has a
+   structured live/testing/parked lifecycle. The bad news: on FAIL it parks
+   the model *and immediately starts a trial with enabled:1* — an automatic
+   re-enable — and the master.py dashboard checkbox can flip `enabled` with
+   no human gate at all.
+
+**The plan** (PLAN on the channel to DeepSeek, per Rule 1 — discussion
+before building): durable detector state loaded at boot with a required
+reason and operator on every toggle; an append-only `postmortems.jsonl`
+recording model, input snapshot, the rule that fired, and the diagnosis;
+re-enablement rejected server-side unless the human armed it (launch flag
+or signed token file); the learner writing a post-mortem per
+champion/challenger decision and promoting to `calibration.proposed.json`
+for a human rename instead of overwriting live; the sentinel ending trials
+in an awaiting-human state rather than re-enabling. Codified as Rule A6 in
+`AGENTS.md`, binding the agents immediately even where the code lag: no
+agent re-enables a model, and every agent-performed disable is followed by
+a written post-mortem.

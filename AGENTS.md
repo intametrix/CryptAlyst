@@ -74,3 +74,27 @@ Mistakes are disclosed in writing and at volume (Rule 3). The tree is always
 left buildable at a handover (engagement rule 7). Journal the decision, not
 just the change — in `JOURNAL.md`, because the reasoning is lost first and
 costs the most to rediscover.
+
+## Rule A6 — DISABLED MODELS STAY DISABLED; EVERY DISABLE GETS A POST-MORTEM
+
+Set by the human. A disabled, parked, or quarantined model influences
+nothing — no signal, score, probability, or order — and the block is
+machine-enforced, not process-hoped.
+
+- **Re-enabling is a human act.** Explicit human instruction, on the channel,
+  lands the re-enable. No automatic promotion, no dashboard checkbox, no API
+  call re-enables a model by itself. Automated trials may run and may
+  *recommend*; only the human flips `enabled` back.
+- **No post-mortem, no disable.** Every disable, park, failed promotion, or
+  quarantine writes its post-mortem at the moment of disabling, durable and
+  append-only: the model, the exact input data in play (feature snapshot,
+  metrics, trade statistics), the quantitative rule that fired, the diagnosis
+  of why it failed, and the timestamp. A reason string next to a flag (which
+  the scalp5 sentinel already writes) is the floor, not the ceiling.
+- **Re-enablement is durable and audited.** A disable must survive a restart
+  (state loaded at boot, not in-memory only), and both the disable and the
+  human re-enable appear in the audit trail with who and why.
+
+Until the enforcement lands in code, this rule binds the agents directly:
+no agent re-enables a model, and every disable an agent performs is followed
+by a written post-mortem on the channel and in `JOURNAL.md`.
