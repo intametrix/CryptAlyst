@@ -220,9 +220,18 @@ type symbolFlow struct {
 
 	bucketStart     int64
 	bucketFlow      float64
+	bucketTrades    int64
 	bucketCoveredMs int64
 
 	floorFraction float64
+
+	// tradesBaseline mirrors the flow baseline but holds per-bucket trade
+	// COUNTS, so trades_multiple divides a count by a count. The previous
+	// version divided trades10 by the flow baseline's median quote dollars,
+	// which is a unit mismatch and produced garbage (120 trades / $7,700 =
+	// 0.0156). The two baselines are fed from the same bucket close, so they
+	// cannot drift apart.
+	tradesBaseline *baseline
 
 	taker []takerPrint
 	// orderSizeBaseline tracks average print size, which is what separates one
@@ -237,10 +246,11 @@ func newSymbolFlow(symbol string, capacity int, floorFraction float64) *symbolFl
 		capacity = 60
 	}
 	return &symbolFlow{
-		Symbol:        symbol,
-		buf:           make([]Tick, capacity),
-		baseline:      newBaseline(180, 6.0),
-		floorFraction: floorFraction,
+		Symbol:         symbol,
+		buf:            make([]Tick, capacity),
+		baseline:       newBaseline(180, 6.0),
+		tradesBaseline: newBaseline(180, 6.0),
+		floorFraction:  floorFraction,
 	}
 }
 
@@ -308,12 +318,15 @@ func (s *symbolFlow) accumulateBucket(t Tick) {
 	if bucket != s.bucketStart {
 		if s.bucketCoveredMs >= 9000 {
 			s.baseline.add(s.bucketFlow)
+			s.tradesBaseline.add(float64(s.bucketTrades))
 		}
 		s.bucketStart = bucket
 		s.bucketFlow = 0
+		s.bucketTrades = 0
 		s.bucketCoveredMs = 0
 	}
 	s.bucketFlow += t.DQuote
+	s.bucketTrades += t.DTrades
 	s.bucketCoveredMs += t.DTMs
 }
 
@@ -531,14 +544,19 @@ type Candidate struct {
 	// Precursor is the quiet-then-buy-surge read over 20/30/45/60s. Present only
 	// when the symbol could be assessed: a nil here means NOT MEASURABLE, which is
 	// a different statement from a low score and must never render as zero.
-	Precursor      *PrecursorRead `json:"precursor,omitempty"`
-	Sigma10s       float64        `json:"sigma_10s"`
-	SigmaMultiple  float64        `json:"sigma_multiple"`
-	Acceleration   *float64       `json:"acceleration"`
-	RangePosition  float64        `json:"range_position"`
-	SpreadPct      float64        `json:"spread_pct"`
-	BookDepthUSD   float64        `json:"book_depth_usd"`
-	QuoteVolume24h float64        `json:"quote_volume_24h"`
+	Precursor     *PrecursorRead `json:"precursor,omitempty"`
+	Sigma10s      float64        `json:"sigma_10s"`
+	SigmaMultiple float64        `json:"sigma_multiple"`
+	Acceleration  *float64       `json:"acceleration"`
+	RangePosition float64        `json:"range_position"`
+	SpreadPct     float64        `json:"spread_pct"`
+	BookDepthUSD  float64        `json:"book_depth_usd"`
+	// BookMissing is true when the ticker carried no usable top-of-book (no
+	// bid/ask, or a crossed book). Internal only: the wire keeps SpreadPct=0,
+	// and the scorer must NOT read that as a zero-spread market -- missing
+	// data earns zero quality points, not full ones.
+	BookMissing    bool    `json:"-"`
+	QuoteVolume24h float64 `json:"quote_volume_24h"`
 	// The 24h standing. Already tracked on the symbol and discarded before
 	// reaching the row, which is why a "greatest increases" view needed new
 	// plumbing for data that was arriving all along.
@@ -924,9 +942,15 @@ func (e *Engine) evaluateLocked(s *symbolFlow, now int64) (Candidate, bool) {
 	if trades10 < e.cfg.MinTrades {
 		return Candidate{}, false
 	}
+	// Count against count: the trades baseline holds per-bucket trade counts.
+	// Until it has enough samples (it cannot be seeded from klines, which
+	// carry no per-window trade counts) the multiple stays 0, meaning "not
+	// yet measurable" rather than a fabricated ratio.
 	tradesMultiple := 0.0
-	if med := s.baseline.quantile(0.5); med > 0 {
-		tradesMultiple = float64(trades10) / med
+	if s.tradesBaseline.ready() {
+		if ref := s.tradesBaseline.reference(); ref > 0 {
+			tradesMultiple = float64(trades10) / ref
+		}
 	}
 
 	spread := s.spreadPct()
@@ -937,6 +961,12 @@ func (e *Engine) evaluateLocked(s *symbolFlow, now int64) (Candidate, bool) {
 	if depth > 0 && depth < e.cfg.MinBookDepthUSD {
 		return Candidate{}, false
 	}
+	// Missing or crossed top-of-book reads as spread 0 / depth 0. The gates
+	// above stay permissive (a feed without book fields must not blind the
+	// scanner), but BookMissing stops the scorer treating "no data" as "a
+	// perfect book".
+	bookMissing := !s.hasLast || s.lastTick.Bid <= 0 || s.lastTick.Ask <= 0 ||
+		s.lastTick.Ask < s.lastTick.Bid
 
 	rangePos := s.rangePosition(window, now)
 	alignedRange := rangePos
@@ -976,6 +1006,7 @@ func (e *Engine) evaluateLocked(s *symbolFlow, now int64) (Candidate, bool) {
 		RangePosition:  rangePos,
 		SpreadPct:      spread,
 		BookDepthUSD:   depth,
+		BookMissing:    bookMissing,
 		QuoteVolume24h: s.QuoteVolume24h,
 		Trades10s:      trades10,
 		TradesMultiple: tradesMultiple,
