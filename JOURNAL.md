@@ -293,3 +293,87 @@ reader) is treated as success because the mailbox already holds the message.
 Six layers now: durable record → instant IPC → poll fallback → supervisor →
 **peer watcher** → self-check. The peer watcher is the only layer an agent
 cannot fake, which is why it exists.
+
+
+---
+
+## Entry 7 — The docs↔code audit, and a deliberate lane crossing
+
+**The ask:** the human instructed a complete reconciliation of the docs against
+the code ("read the docs and find bugs in this code base… I want it completely
+working with all features and no mistakes"), then "commit and push". KIMI
+executed it as a single session: find every mismatch, fix it in the code where
+the doc was the promise, fix the doc where the code was the deliberate
+decision, add regression tests, run the full gate, prove the binary live.
+
+**The lane crossing, stated plainly.** Every Go file touched here is
+DeepSeek's lane under Rule 0e. It stands because the human — the authority who
+set the rule, and who outranks it per the protocol's own control section —
+gave the instruction directly and explicitly. This entry and a SYNC on the
+channel are the disclosure the exception requires. KIMI's guardian role
+(commit/push) was on-lane throughout.
+
+**The decisions, and why each went the way it did:**
+
+1. **trades_multiple divided a count by dollars.** The flow baseline stores
+   median quote *dollars*; the old code divided a trade *count* by it, so a
+   genuine 10x burst read as 0.0156x. Fixed with a second baseline holding
+   per-bucket trade counts, fed from the same bucket close so the two cannot
+   drift. It cannot be seeded from klines (they carry no per-window trade
+   counts), so the multiple stays 0 — *not yet measurable*, never fabricated —
+   until live samples fill it.
+2. **RiskPerUnit 1% → 0.5%.** TRADING_PLAN §4 sets 0.5%; the code shipped the
+   original book's 1%. The plan's rationale is kept in the comment: with alt
+   correlations of 0.6–0.9, three 1% units are one 3% bet. `BookDefaults()` in
+   book.go keeps the original-book numbers *deliberately* — it is the labelled
+   reference set, not the live config.
+3. **Turtle exits sit on the trade's own side.** Two distinct bugs: the
+   snapshot sourced its 10-period exit channels from the smoothing channels
+   rather than the breakout channels, and `Refresh` passed `ExitLow10`
+   unconditionally — a short's exit level sat *below* its entry, where price
+   would never close it. Both fixed side-aware.
+4. **Only accepted setups are alerts.** `TurtleBreakout.Evaluate` republished
+   every survey setup, including ones rejected by the volume, ATR, BTC-regime
+   or budget gates — polluting the feed, the persisted history and the
+   prediction ledger with events the system explicitly refused to act on.
+   Rejections remain in the survey payload for the drill-down.
+5. **Alert history completes itself from disk.** `HistoryForSymbol` served the
+   in-memory ring only; the API doc promised disk completeness. The ring is a
+   memory bound (400 per symbol at load), not a retention bound — when it holds
+   fewer than the limit, the answer now falls back to `ReadHistory`, newest
+   first.
+6. **Missing book data earns zero quality points, not full ones.** A ticker
+   with no usable top-of-book serialises as `SpreadPct 0`, which the quality
+   scorer read as a zero-spread market and rewarded. `Candidate.BookMissing`
+   (wire-invisible, `json:"-"`) now stops that: absent data is unscored, with a
+   reason, and the detection gates stay fail-open — a feed without book fields
+   must not blind the scanner entirely.
+7. **The lateness guard doc was stale, not the code.** Both Go and Python
+   deliberately require the 60s move to exceed 6% *and* 3× the 10s move; a bare
+   3× ratio rejects fresh small bursts against a quiet backdrop. The doc was
+   fixed to say so — the one class of mismatch where the code was right.
+8. **check.sh could not report failure honestly.** It hardcoded one machine's
+   runtime paths, and under `set -o pipefail` every `cmd | grep -q .` check
+   *inverted* — a failing tool that printed errors took the PASS branch.
+   Capturing output and testing `-n` sidesteps pipefail entirely; a missing
+   toolchain now fails the gate instead of skipping it; a 180s watchdog turns
+   a hung vite step into a failure.
+9. **renderSmoke imported deleted components.** `ChartPanel` and `OutlookStrip`
+   died in `2d1aac3`; the smoke script still imported them and could not
+   typecheck. It now renders `ChartPopup`, the component the overlay actually
+   mounts.
+
+**Verification discipline, per the rules of engagement.** No claim without
+output: the full `./check.sh` gate passed on the exact tree pushed (including
+four new regression tests — count-over-count trades, accepted-only setups,
+history disk fallback, BookMissing scoring); the built binary was booted live
+against Binance and `/api/config` matched the plan exactly, `/api/flow`
+returned 25 real rows, `/api/turtle` showed `risk_per_unit: 0.005`; the server
+was stopped and confirmed dead afterwards. Eight commits, one logical change
+each, pushed as `1b5b64d..7d1c811`.
+
+**The lesson worth keeping.** Every one of the code bugs was invisible from
+inside the lane that wrote it, and visible from a doc written by someone
+thinking about behaviour rather than implementation. That is the empirical
+argument Rule 3 and Rule 0e's "thinking is shared" clause already make — this
+session is one more data point for it.
