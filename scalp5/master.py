@@ -607,6 +607,19 @@ HUB = StreamHub()
 COUNTERS = os.path.join(HERE, "state", "counters.json")
 
 
+
+def safe_jget(url, default, timeout=8.0, note=""):
+    """Fetch JSON, or return a valid empty shape with the reason attached."""
+    try:
+        return jget(url, timeout=timeout)
+    except Exception as exc:
+        out = dict(default) if isinstance(default, dict) else default
+        if isinstance(out, dict):
+            out["unavailable"] = True
+            out["reason"] = note or str(exc)[:120]
+        return out
+
+
 def closed_high_water(live):
     """Total closed trades ever seen. Monotonic by construction.
 
@@ -5183,17 +5196,19 @@ class H(BaseHTTPRequestHandler):
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
             sym = (q.get("symbol") or [""])[0].upper()
-            try:
-                al = jget("http://127.0.0.1:8787/api/alerts?limit=800", timeout=6.0)
-                ms = jget("http://127.0.0.1:8787/api/models/signals?limit=800", timeout=6.0)
-                alerts = [a for a in (al.get("alerts") or []) if a.get("symbol") == sym]
-                models = [x for x in (ms.get("signals") or []) if x.get("symbol") == sym]
-                return self._send(200, json.dumps(
-                    {"symbol": sym, "alerts": alerts, "models": models}),
-                    "application/json")
-            except Exception as exc:
-                return self._send(502, json.dumps({"error": str(exc)}),
-                                  "application/json")
+            al = safe_jget("http://127.0.0.1:8787/api/alerts?limit=800",
+                           {"alerts": []}, 6.0,
+                           "alert service (8787) is not running in this build")
+            ms = safe_jget("http://127.0.0.1:8787/api/models/signals?limit=800",
+                           {"signals": []}, 6.0,
+                           "signal service (8787) is not running in this build")
+            alerts = [a for a in (al.get("alerts") or []) if a.get("symbol") == sym]
+            models = [x for x in (ms.get("signals") or []) if x.get("symbol") == sym]
+            return self._send(200, json.dumps(
+                {"symbol": sym, "alerts": alerts, "models": models,
+                 "unavailable": bool(al.get("unavailable") or ms.get("unavailable")),
+                 "reason": al.get("reason") or ms.get("reason") or ""}),
+                "application/json")
         if p in ("/lab", "/lab/"):
             try:
                 with open(os.path.join(HERE, "chart_simple.html"), "rb") as fh:
@@ -5253,13 +5268,17 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/alerts":
             try:
                 q = urllib.parse.urlparse(self.path).query
-                d = jget("http://127.0.0.1:8787/api/alerts" + ("?" + q if q else ""), timeout=8.0)
+                d = safe_jget("http://127.0.0.1:8787/api/alerts" + ("?" + q if q else ""),
+                              {"alerts": [], "count": 0}, 8.0,
+                              "alert service (8787) is not running in this build")
                 return self._send(200, json.dumps(d), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
         if p == "/api/votes":
             try:
-                d = jget("http://127.0.0.1:8787/api/models/signals?limit=400", timeout=8.0)
+                d = safe_jget("http://127.0.0.1:8787/api/models/signals?limit=400",
+                              {"signals": [], "count": 0}, 8.0,
+                              "signal service (8787) is not running in this build")
                 return self._send(200, json.dumps(d), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
@@ -5557,7 +5576,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/flows":
             try:
                 q = urllib.parse.urlparse(self.path).query
-                d = jget("http://127.0.0.1:8796/flows" + ("?" + q if q else ""), timeout=45.0)
+                d = safe_jget("http://127.0.0.1:8796/flows" + ("?" + q if q else ""),
+                              {"windows": [], "count": 0}, 20.0,
+                              "flow windows need the intelligence producers")
                 return self._send(200, json.dumps(d), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
@@ -5608,7 +5629,9 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/forecast":
             try:
                 q = urllib.parse.urlparse(self.path).query
-                d = jget("http://127.0.0.1:8790/forecast" + ("?" + q if q else ""), timeout=8.0)
+                d = safe_jget("http://127.0.0.1:8790/forecast" + ("?" + q if q else ""),
+                              {"forecasts": [], "count": 0}, 8.0,
+                              "forecast service (8790) is not running; it needs 40 bars")
                 return self._send(200, json.dumps(d), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")

@@ -148,6 +148,15 @@ function renderRows() {
   });
 }
 
+function findDoc(id) {
+  if (id === null || id === undefined) return null;
+  const key = String(id);
+  // the live feed replaces the list every second, so the selected envelope is
+  // remembered rather than expected to still be in the newest page
+  if (!state.cache) state.cache = new Map();
+  return state.docs.find((x) => String(x.id) === key) || state.cache.get(key) || null;
+}
+
 function metaField(meta, name) {
   if (!meta) return "";
   const v = meta[name];
@@ -158,25 +167,29 @@ function metaField(meta, name) {
 async function select(id, quiet) {
   if (!quiet && state.sel !== id) pushState();
   state.sel = id;
-  const picked = state.docs.find((x) => x.id === id);
-  if (picked && picked.key) state.journeyKey = picked.key;
+  const picked = findDoc(id);
+  if (picked) {
+    if (!state.cache) state.cache = new Map();
+    state.cache.set(String(id), picked);
+    if (picked.key) state.journeyKey = picked.key;
+  }
+  // open the context surface first, so a failed fetch can never leave a blank pane
+  if (state.view === "list") applyView("context");
   renderRows();
   try {
-    const d = await (await fetch("/api/envelope/" + id + "?role=" + encodeURIComponent(state.role), { cache: "no-store" })).json();
-    renderDetail(d);
+    const resp = await fetch("/api/envelope/" + id + "?role=" + encodeURIComponent(state.role), { cache: "no-store" });
+    if (!resp.ok) throw new Error("status " + resp.status);
+    renderDetail(await resp.json());
   } catch (e) {
     $("detail").innerHTML = '<div class="empty">could not load this envelope</div>';
   }
-  updateTabs();
-  updateBackBtn();
-  const picked2 = state.docs.find((x) => x.id === id);
+  try { updateTabs(); } catch (e) { /* chrome, never fatal */ }
+  try { updateBackBtn(); } catch (e) {}
+  const picked2 = findDoc(id);
   if (picked2) {
     $("crumbHere").textContent = `${picked2.key || picked2.topic} · ${picked2.topic}`;
   }
-  if (state.view === "list") {
-    applyView("context");
-    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-  }
+  if (state.view === "context") renderContext();
 }
 
 /* renderDetail draws one envelope: the three members, the payload and the chain. */
@@ -583,8 +596,8 @@ document.querySelectorAll("[data-gmode]").forEach((b) => {
    is relevant — a decision shows why and what it read, an input shows what it fed. */
 async function renderContext() {
   const box = $("context");
-  const d = state.docs.find((x) => x.id === state.sel);
-  if (!d) { box.innerHTML = ""; return; }
+  const d = findDoc(state.sel);
+  if (!d) { box.innerHTML = '<div class="empty">select an envelope to see its anatomy</div>'; return; }
   const isOutcome = /^model\./.test(d.topic) || d.topic === "risk.state";
   const html = [];
 

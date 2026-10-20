@@ -231,6 +231,34 @@ func main() {
 	mux.HandleFunc("/api/v3/ticker/24hr", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(st.Movers(1000, 0)["most_traded"])
 	})
+	// /flows returns the recent flow windows per symbol. The Go feed does not
+	// aggregate flow yet, so it answers with the window it does know about and a
+	// count of what it has seen, rather than 404ing the dashboard panel.
+	mux.HandleFunc("/flows", func(w http.ResponseWriter, r *http.Request) {
+		limit := 100
+		fmt.Sscanf(r.URL.Query().Get("limit"), "%d", &limit)
+		if limit <= 0 || limit > 500 {
+			limit = 100
+		}
+		px := st.Snapshot()
+		windows := make([]map[string]any, 0, len(px))
+		for sym, price := range px {
+			if len(windows) >= limit {
+				break
+			}
+			windows = append(windows, map[string]any{
+				"symbol": sym, "price": price, "flow_conf": 0, "buy_ratio": 0.5,
+				"note": "flow aggregation runs in the intelligence producers",
+			})
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"windows": windows, "count": len(windows),
+			"ts":   time.Now().UnixMilli(),
+			"note": "prices from the feed; flow confidence requires intel.flow",
+		})
+	})
+
 	// /depth is what the models read to judge book pressure: the same payload the
 	// bus carries, served on demand for one symbol.
 	mux.HandleFunc("/depth", func(w http.ResponseWriter, r *http.Request) {
