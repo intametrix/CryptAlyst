@@ -37,12 +37,20 @@ TOPIC_FIELDS = {
 
 
 def _ensure_queue(queue, routing_key):
-    """Declare a durable queue bound to the topic, so every reader sees every message."""
+    """Declare a per-reader queue bound to the topic.
+
+    It is auto-delete with an expiry: when the last reader disconnects the queue
+    goes with it. Left durable, a stopped engine leaves a queue behind that fills
+    at the full publish rate - i.market.depth reached a million messages at 300/s
+    with nothing consuming it.
+    """
     auth = {"Authorization": "Basic " + base64.b64encode(b"cryptalyst:cryptalyst").decode(),
             "Content-Type": "application/json"}
     exchange = routing_key.split(".")[0]
     base = "http://127.0.0.1:15672/api"
-    for path, body in (("/queues/%2F/" + queue, {"durable": True, "arguments": {}}),
+    for path, body in (("/queues/%2F/" + queue,
+                        {"durable": False, "auto_delete": True,
+                         "arguments": {"x-expires": 600000}}),
                        ("/bindings/%2F/e/" + exchange + "/q/" + queue,
                         {"routing_key": routing_key, "arguments": {}})):
         try:

@@ -26,6 +26,8 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+from lib import books  # noqa: E402  (the one reader of book state)
 
 SOURCES = [
     ("turtle", "Go · Donchian/2N", "#a371f7"),
@@ -367,8 +369,23 @@ def _proc_snapshot():
 
 
 def live_heartbeat():
-    """What is true now: books actually running, and equity straight from the pack
-    files. Used whenever the stored heartbeat is stale."""
+    """What is true now, from the one reader of book state."""
+    try:
+        t = books.totals()
+        rows = [{"k": r["engine"], "eq": round(r["equity"], 2),
+                 "ret": round(100 * (r["equity"] / r["start"] - 1), 2) if r["start"] else 0,
+                 "real": round(r["pnl"], 2), "open": r["open"], "closed": r["closed"]}
+                for r in books.read_all()]
+        return {"ts": int(time.time() * 1000), "beat_s": 5.0, "books": t["books"],
+                "open": t["open"], "realised": t["pnl"], "rows": rows[:60],
+                "equity": t["equity"], "closed": t["closed"],
+                "wins": t["wins"], "losses": t["losses"], "source": "live"}
+    except Exception:
+        pass
+    return _live_heartbeat_legacy()
+
+
+def _live_heartbeat_legacy():
     import glob
     import subprocess
     running = 0
@@ -818,9 +835,16 @@ def collect():
     engines = [e for e in engines if (e.get("equity") or 0) > 0]
 
     live_closed = sum((e.get("closed") or 0) for e in engines if e.get("equity") is not None)
+    try:
+        t = books.totals()
+    except Exception:
+        t = {"books": len(engines), "equity": 0, "pnl": 0, "open": 0,
+             "closed": live_closed, "wins": 0, "losses": 0, "pnl_pct": 0}
     return {"ts": int(time.time() * 1000), "engines": engines, "models": models,
-            "totals": {"closed": closed_high_water(live_closed),
-                       "closed_live": live_closed}}
+            "totals": {"closed": t["closed"], "closed_live": live_closed,
+                       "books": t["books"], "equity": t["equity"], "pnl": t["pnl"],
+                       "pnl_pct": t["pnl_pct"], "open": t["open"],
+                       "wins": t["wins"], "losses": t["losses"]}}
 
 
 PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
