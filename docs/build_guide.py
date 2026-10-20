@@ -905,6 +905,40 @@ table(["Symptom after a restart", "Cause", "Fix"], [
     ["case file 404", "envelope outside the window and never scanned", "open it through WHY first, which scans the lake"],
 ], widths=[1.8, 2.2, 2.6], size=8.5)
 
+
+brk()
+h("29  The desktop app", 1)
+p("The Explorer also ships as a macOS application: the same interface in a native window, with a menu, "
+  "keyboard shortcuts and a native print dialog for Save as PDF.")
+table(["Property", "Value"], [
+    ["bundle", "The Envelope Explorer.app"],
+    ["size", "11 MB, of which 11 MB is the bundled Go service; the shell itself is 112 KB"],
+    ["built with", "Swift 6.4 and WKWebView, one source file, no runtime dependency"],
+    ["starts the service", "yes, when the bundled envelopeapi is present and nothing is listening"],
+    ["offline behaviour", "a page that says the service is not running and how to start it"],
+    ["signing", "ad-hoc; distributing to another Mac needs a Developer ID and notarisation"],
+], widths=[1.5, 5.1], size=8.6)
+h("29.1  Why native rather than Electron", 2)
+table(["", "native (WKWebView)", "Electron", "Tauri"], [
+    ["app size", "11 MB", "~150–200 MB", "~10 MB"],
+    ["toolchain on this machine", "Swift 6.4, Xcode 15", "Node — not on PATH", "Rust — absent"],
+    ["runtime dependency", "system WebView", "bundled Chromium", "system WebView"],
+    ["start time", "instant", "~1 s cold", "instant"],
+], widths=[1.3, 1.8, 1.8, 1.7], size=8.4)
+p("Electron was written first and is kept in the repository as an alternative, but shipping it would mean "
+  "downloading a Chromium runtime to provide a web view the operating system already has.")
+h("29.2  Shortcuts in the app", 2)
+table(["Key", "Action"], [
+    ["⌘1 … ⌘7", "Feed, Journey, Execution, Why, Gantt, Books, Health"],
+    ["⌘[", "back one step, the same as Escape"],
+    ["⌘R", "reconnect to the service"],
+    ["⌘E", "case file for the selected envelope"],
+    ["⇧⌘E", "book report"],
+    ["⌘P", "print — use Save as PDF"],
+], widths=[1.2, 5.4], size=8.6)
+callout("The app holds no data. It renders the explorer API and writes nothing, which is the same guarantee the "
+        "browser version makes — and the reason either can be used as evidence.")
+
 # footer + save
 def add_page_numbers(paragraph):
     def field(instr):

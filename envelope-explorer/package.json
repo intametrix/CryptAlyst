@@ -1,0 +1,24 @@
+{
+  "name": "envelope-explorer",
+  "productName": "The Envelope Explorer",
+  "version": "1.0.0",
+  "description": "Desktop shell for The Envelope Explorer — CryptAlyst's forensic and compliance view of every recorded envelope.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "dist": "electron-builder --mac --dir",
+    "dmg": "electron-builder --mac dmg"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.cryptalyst.envelope-explorer",
+    "productName": "The Envelope Explorer",
+    "files": ["main.js", "preload.js", "offline.html", "package.json"],
+    "mac": { "category": "public.app-category.finance", "target": ["dir", "dmg"] }
+  }
+}
