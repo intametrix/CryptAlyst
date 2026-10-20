@@ -55,9 +55,9 @@ measurement. Every gate exists to stop that number from lying:
 | price move | ≥ 0.4% and ≥ 3σ of window volatility | volume without a move is not an onset |
 | tick coverage | ≥ 70% of the window | refuses to score a burst built from 2 messages |
 | acceleration | current window > prior window | volume still building = the *start*, not the tail |
-| lateness guard | reject if the 60s move > 3× the 10s move | that is arriving late |
+| lateness guard | reject if the 60s move > 6% **and** > 3× the 10s move | that is arriving late; the 6% floor stops a quiet backdrop (60s +1.3% vs 10s +0.4%) from being misread as lateness |
 | 24h move | reject if already > 60% in the same direction | late-stage pump |
-| spread / depth | < 0.4% spread, > $500 top-of-book | thin-book artefacts |
+| spread / depth | < 0.4% spread, > $500 top-of-book | thin-book artefacts; when a ticker carries no usable book the gates neither fire nor score -- missing data earns zero quality points, never full credit |
 | trade count | ≥ 8 trades in the window | three prints is not a pump |
 
 **Baseline construction** is the subtle part. The reference is the **lower

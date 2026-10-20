@@ -29,7 +29,7 @@ is a JSON object with a `type` discriminator.
 { "type": "hello", "server_time_ms": 1792091700000,
   "config": { "market": "spot", "window_sec": 10, "min_burst_multiple": 8,
               "min_burst_z": 4, "min_move_pct_10s": 0.4, "min_flow_usd": 5000,
-              "min_quote_volume_24h": 750000, "max_symbols": 400,
+              "min_quote_volume_24h": 5000000, "max_symbols": 400,
               "cooldown_sec": 900, "severity_min": "WATCH" } }
 ```
 
