@@ -429,6 +429,27 @@ func (t *TurtleBreakout) Params() map[string]any {
 // Observe implements Detector. The survey is batch, so live events are ignored.
 func (t *TurtleBreakout) Observe(Event) {}
 
+// acceptedSurveySetups extracts the setups that may be published as alerts.
+// Only accepted setups qualify. A rejected setup (volume gate, ATR band, BTC
+// regime, budget) is explanation, not detection: emitting it as an alert
+// would pollute the live feed, the persisted history and the prediction
+// ledger with events the system explicitly refused to act on. The survey
+// payload still carries every rejection with its reason for the drill-down.
+func acceptedSurveySetups(payload map[string]any) []map[string]any {
+	raw, ok := payload["setups"].([]map[string]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(raw))
+	for _, setup := range raw {
+		if accepted, _ := setup["accepted"].(bool); !accepted {
+			continue
+		}
+		out = append(out, setup)
+	}
+	return out
+}
+
 // Evaluate implements Detector: it republishes the most recent survey setups.
 func (t *TurtleBreakout) Evaluate(now int64) []Signal {
 	if t.survey == nil {
@@ -438,13 +459,10 @@ func (t *TurtleBreakout) Evaluate(now int64) []Signal {
 	if !ok {
 		return nil
 	}
-	rawSetups, ok := payload["setups"].([]map[string]any)
-	if !ok {
-		return nil
-	}
+	setups := acceptedSurveySetups(payload)
 	snapshotMS := t.survey.LastMS()
-	out := make([]Signal, 0, len(rawSetups))
-	for _, setup := range rawSetups {
+	out := make([]Signal, 0, len(setups))
+	for _, setup := range setups {
 		score, _ := setup["score"].(float64)
 		direction, _ := setup["direction"].(int)
 		severity := "WATCH"
