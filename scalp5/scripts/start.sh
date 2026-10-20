@@ -8,6 +8,12 @@
 # that failed instead of leaving a half-running platform.
 set -u
 cd "$(dirname "$0")/.." || exit 1
+
+# Trading is OFF unless it is asked for. Starting the platform brings up market
+# data, the recorder, the explorer and the dashboard; it never puts money at risk
+# on its own. Pass --trade to start the books as well.
+TRADE=0
+for arg in "$@"; do [ "$arg" = "--trade" ] && TRADE=1; done
 ROOT=$(pwd)
 CORE="$ROOT/core"
 LOGS="$ROOT/logs"
@@ -38,8 +44,15 @@ else
   bad "RabbitMQ is not running — start it before the platform"; exit 1
 fi
 
+# the stop flag is written before anything else, so a book that somehow starts
+# finds trading already blocked
+mkdir -p "$ROOT/state"
+printf '{"stopped_at": %s, "actor": "start.sh", "reason": "platform start — trading off by default"}' \
+  "$(date +%s)000" > "$ROOT/state/STOP"
+ok "trading is OFF (state/STOP written) — pass --trade to start the books"
+
 say "2 · market data (the only process that talks to the exchange)"
-(cd "$CORE" && nohup ./bin/marketdata --port 8796 --top 40 >"$LOGS/marketdata.log" 2>&1 &)
+(cd "$CORE" && nohup ./bin/marketdata --port 8796 --top 400 >"$LOGS/marketdata.log" 2>&1 &)
 wait_for "http://127.0.0.1:8796/health" 20 "market data on :8796" || exit 1
 
 say "3 · recorder (the only consumer of the bus)"
@@ -60,19 +73,26 @@ nohup python3 -u signals.py --every 10 --top 30 >"$LOGS/signals.log" 2>&1 &
 sleep 2; ok "signals · tad · forecast"
 
 say "6 · books and the dashboard"
-pgrep -f supervisor.py >/dev/null || nohup python3 -u supervisor.py --every 60 --hours 8 >"$LOGS/supervisor.log" 2>&1 &
+if [ "$TRADE" = "1" ]; then
+  rm -f "$ROOT/state/STOP"
+  ok "trading requested: state/STOP cleared"
+  pgrep -f supervisor.py >/dev/null || nohup python3 -u supervisor.py --every 60 --hours 8 >"$LOGS/supervisor.log" 2>&1 &
+else
+  ok "books not started (no --trade)"
+fi
 pgrep -f "master.py --host" >/dev/null || nohup python3 -u master.py --host 0.0.0.0 --port 8799 >"$LOGS/master.log" 2>&1 &
 wait_for "http://127.0.0.1:8799/api/health" 25 "dashboard on :8799" || true
 
 say "7 · the Envelope Explorer"
 pkill -f "bin/envelopeapi" >/dev/null 2>&1
 (cd "$CORE" && nohup ./bin/envelopeapi --port 8802 --dir ../state/lake3 >"$LOGS/envelopeapi.log" 2>&1 &)
-wait_for "http://127.0.0.1:8802/api/stats" 15 "explorer on :8802" || exit 1
+wait_for "http://127.0.0.1:8802/api/stats" 60 "explorer on :8802" || exit 1
 
 cat <<BANNER
 
   CryptAlyst is up.
 
+  trading             $([ "$TRADE" = "1" ] && echo "ON" || echo "OFF — stop flag set, no books running")
   dashboard           http://127.0.0.1:8799
   envelope explorer   http://127.0.0.1:8802
   recorder            http://127.0.0.1:8801/stats

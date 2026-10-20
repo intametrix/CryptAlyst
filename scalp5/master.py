@@ -244,6 +244,23 @@ def control_publish(action):
         return False
 
 
+def reset_stats(archive):
+    """Clear the counters that describe trading, keeping an archive."""
+    import glob
+    import shutil
+    cleared = 0
+    for pattern in ("stats*.json", "model_stats*.json", "decisions*.json",
+                    "signals*.json", "paper*.json", "equity*.json"):
+        for path in glob.glob(os.path.join(HERE, "state", pattern)):
+            try:
+                shutil.copy2(path, os.path.join(archive, os.path.basename(path)))
+                os.remove(path)
+                cleared += 1
+            except Exception:
+                pass
+    return cleared
+
+
 def reset_books():
     """Empty the books and put equity back to the opening balance, keeping an
     archive of what was there."""
@@ -282,6 +299,8 @@ def trading_stop():
             pass
     PROCS.clear()
     import subprocess
+    # NOTE: the feed, the recorder and the explorer are deliberately absent here.
+    # STOP stops trading; market data keeps running.
     for pat in ("alpha.py", "multi_models.py", "stats_models.py", "slow_edges.py",
                 "sympathy_lag.py", "crypto_strategies.py",
                 "models10.py", "crypto_pack.py", "executor.py",
@@ -295,9 +314,12 @@ def trading_stop():
         pass
     control_publish("stop")
     reset, archive = reset_books()
+    stats = reset_stats(archive)
     TRADING_STATE["stopped"] = True
     TRADING_STATE["reset_books"] = reset
+    TRADING_STATE["reset_stats"] = stats
     TRADING_STATE["archive"] = archive
+    TRADING_STATE["market_data"] = "running" if _alive("bin/marketdata") else "not running"
     try:
         req = urllib.request.Request("http://127.0.0.1:8787/api/turtle?action=stop",
                                      data=b"{}", headers={"Content-Type": "application/json"})
@@ -305,6 +327,11 @@ def trading_stop():
     except Exception:
         pass
     return TRADING_STATE
+
+
+def _alive(pattern):
+    import subprocess
+    return subprocess.run(["pgrep", "-f", pattern], capture_output=True).returncode == 0
 
 
 def trading_loop_state():

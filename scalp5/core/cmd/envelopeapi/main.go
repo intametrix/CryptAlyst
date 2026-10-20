@@ -4,6 +4,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"embed"
 	"encoding/json"
 	"flag"
@@ -329,17 +330,48 @@ func loadDir(dir string, st *store) int {
 	return n
 }
 
+// loadFile reads the tail of a journal. The lake grows without bound, and
+// scanning a 7 GB file to find the newest 20,000 envelopes made startup take
+// minutes; reading backwards keeps it flat however large the file gets.
 func loadFile(path string, st *store) int {
 	f, err := os.Open(path)
 	if err != nil {
 		return 0
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 1<<20), 32<<20)
+	info, err := f.Stat()
+	if err != nil {
+		return 0
+	}
+
+	const want = 20000    // enough to fill the ring
+	const chunk = 4 << 20 // read backwards in 4 MB slices
+	offset := info.Size()
+	var tail []byte
+	for offset > 0 && len(tail) < 64<<20 {
+		size := int64(chunk)
+		if offset < size {
+			size = offset
+		}
+		offset -= size
+		buf := make([]byte, size)
+		if _, err := f.ReadAt(buf, offset); err != nil && err != io.EOF {
+			return 0
+		}
+		tail = append(buf, tail...)
+		if bytes.Count(tail, []byte("\n")) > want*2 {
+			break
+		}
+	}
+
+	lines := bytes.Split(tail, []byte("\n"))
 	n := 0
-	for sc.Scan() {
-		if d, ok := parse(sc.Bytes()); ok {
+	for i := len(lines) - 1; i >= 0 && n < want; i-- {
+		line := bytes.TrimSpace(lines[i])
+		if len(line) == 0 {
+			continue
+		}
+		if d, ok := parse(line); ok {
 			st.add(d)
 			n++
 		}
