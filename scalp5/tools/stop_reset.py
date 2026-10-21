@@ -140,6 +140,11 @@ def main():
                            "queues": purged or 0, "disabled_before": len(before)}, fh)
         except Exception:
             pass
+    say("start loss_watch (a model losing for more than 30s is disabled)")
+    if not DRY:
+        subprocess.run("pgrep -f loss_watch.py >/dev/null || "
+                       "nohup python3 -u tools/loss_watch.py > logs/loss_watch.log 2>&1 &",
+                       shell=True, cwd=HERE)
     restart_enabled()
     clear_stop()
     try:

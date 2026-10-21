@@ -238,6 +238,16 @@ def main():
         except Exception as _e:
             actions.append("cashin: %s" % _e)
 
+        # the 30-second loser rule runs as its own process, kept alive here
+        try:
+            if subprocess.run(["pgrep", "-f", "loss_watch.py"], capture_output=True).returncode != 0:
+                with open(os.path.join(HERE, "logs", "loss_watch.log"), "ab") as fh:
+                    subprocess.Popen([PY_, "-u", os.path.join("tools", "loss_watch.py")],
+                                     cwd=HERE, stdout=fh, stderr=fh, start_new_session=True)
+                actions.append("loss_watch started")
+        except Exception as _e:
+            actions.append("loss_watch: %s" % _e)
+
         for _a in bus_guard():
             actions.append(_a)
 
