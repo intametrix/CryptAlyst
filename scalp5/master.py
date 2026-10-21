@@ -1942,6 +1942,7 @@ header{margin-left:186px}
   </div>
   <span class="pill ok" id="live">—</span>
   <span class="pill" id="hz" title="service health">health —</span>
+  <span class="pill" id="buildid" title="dashboard build">—</span>
   <span class="pill" id="beat" title="platform heartbeat">beat —</span>
   <span class="pill ok" id="toteq" title="total equity across every book">total —</span>
   <span class="pill up" id="pill-long" title="open long positions / long trades closed">L —</span>
@@ -2220,6 +2221,23 @@ header{margin-left:186px}
 <footer id="foot">—</footer>
 <script>
 const $=i=>document.getElementById(i);
+var BUILD="__BUILD_ID__";
+(function(){
+  try{
+    var seen=localStorage.getItem("ca_build");
+    if(seen && seen!==BUILD){
+      var bar=document.getElementById("stale");
+      if(bar){ bar.style.display="flex"; bar.textContent=
+        "newer dashboard build "+BUILD.slice(-5)+" — reload to pick it up"; }
+    }
+    localStorage.setItem("ca_build", BUILD);
+    document.addEventListener("DOMContentLoaded", function(){
+      var b=document.getElementById("buildid");
+      if(b){ b.textContent="build "+BUILD.slice(-5); b.title="dashboard build "+BUILD;
+             b.style.cursor="pointer"; b.onclick=function(){ location.reload(true); }; }
+    });
+  }catch(e){}
+})();
 const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 const pct=v=>(v==null?"—":(v>=0?"+":"")+Number(v).toFixed(3)+"%");
 const money=v=>(v==null?"—":Number(v).toLocaleString(undefined,
@@ -5667,6 +5685,7 @@ setInterval(labelTickers, 2000);
 restoreSide();
 loadTickers(); setInterval(loadTickers,60000);
 tick(); setInterval(tick,2000);
+setTimeout(function(){ try{ renderModels(); renderEngines(); }catch(e){} }, 600);
 sidePills(); setInterval(sidePills,4000);
 health(); setInterval(health,5000);
 var PAGE_BUILD=null;
@@ -5836,6 +5855,12 @@ try:
         PAGE = PAGE.replace("__UI_LIB__", _fh.read())
 except Exception:
     PAGE = PAGE.replace("__UI_LIB__", "window.UI=window.UI||{};")
+
+# the build id goes in whether or not the UI library was found
+try:
+    PAGE = PAGE.replace("__BUILD_ID__", str(int(os.path.getmtime(__file__))))
+except Exception:
+    PAGE = PAGE.replace("__BUILD_ID__", "0")
 
 
 
