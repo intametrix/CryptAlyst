@@ -1458,7 +1458,7 @@ header{margin-left:186px}
     if(b){ b.style.display="block"; b.textContent="JS error: "+e.message+" @"+e.lineno; }
     window.__earlyErr = e.message;
   });
-  var PANELS=["dash","market","why","review","control","lb","opt","models","tape","signals","advisor","forecast","thinking","busview","moversview","marketlive","health"];
+  var PANELS=["dash","market","why","review","control","lb","opt","models","tape","signals","advisor","forecast","thinking","busview","moversview","marketlive","engines","health"];
   window.showTab = window.showTab || function(which){
     PANELS.forEach(function(k){
       var el=document.getElementById(k); if(!el) return;
@@ -1494,6 +1494,7 @@ header{margin-left:186px}
     <a onclick="showTab('review')" id="nav-review" class="nav"><i>◫</i><span>Review</span></a>
     <a onclick="showTab('control')" id="nav-control" class="nav"><i>⏻</i><span>TA Analysis</span></a>
     <a onclick="showTab('books')" id="nav-books" class="nav"><i>▤</i><span>Books</span></a>
+    <a onclick="showTab('engines')" id="nav-engines" class="nav"><i>⚙</i><span>Engines</span></a>
     <a onclick="showTab('health')" id="nav-health" class="nav"><i>✚</i><span>Health</span></a>
   </nav>
   <div class="rfoot" style="flex-direction:column;gap:6px">
@@ -1571,6 +1572,12 @@ header{margin-left:186px}
       <span style="flex:1"></span><span class="mk" id="booksnote">—</span></div>
     <div id="bookshead"></div>
     <div id="booksgrid"></div>
+  </div>
+  <div id="engines">
+    <div class="mhead"><span class="sym">Engines</span>
+      <span class="mk">every book · live status · realised and unrealised · start / stop</span>
+      <span style="flex:1"></span><span class="mk" id="engnote">—</span></div>
+    <div class="panel"><div id="engbody"><div class="hint">loading…</div></div></div>
   </div>
   <div id="health">
     <div class="mhead"><span class="sym">Dashboard health</span>
@@ -1926,7 +1933,7 @@ function showTab(which){
   try{ var cb=$("chartbox"); if(cb) cb.classList.remove("open"); }catch(e){}
   try{ window.scrollTo(0,0); document.documentElement.scrollLeft=0; document.body.scrollLeft=0; }catch(e){}
   ["dash","market","why","review","control","lb","opt","models","tape","signals","advisor",
-   "forecast","thinking","busview","moversview","marketlive","books","health"].forEach(function(k){
+   "forecast","thinking","busview","moversview","marketlive","engines","books","health"].forEach(function(k){
     var el=$(k); if(!el) return;
     if(k==="dash"){
       el.classList.toggle("off", which!=="dash");
@@ -1960,9 +1967,55 @@ function showTab(which){
   try{ if(which==="moversview"){ renderMovers(); renderFlow(); } }catch(e){ tabErr("moversview",e); }
   try{ if(which==="marketlive"){ renderMarketLive(); } mlStream(); }catch(e){ tabErr("marketlive",e); }
   try{ if(which==="books") renderBooks(); }catch(e){ tabErr("books",e); }
+  try{ if(which==="engines") renderEngines(); }catch(e){ tabErr("engines",e); }
   try{ if(which==="health") renderHealth(); }catch(e){ tabErr("health",e); }
 }
 
+
+
+/* ---- Engines: what each book is doing, and the two buttons that matter -------- */
+async function engineAction(name, act){
+  var r = await fetch("/api/engine?name="+encodeURIComponent(name)+"&action="+encodeURIComponent(act),
+                      {cache:"no-store"});
+  var d = await r.json().catch(function(){ return {}; });
+  var note = document.getElementById("engnote");
+  if(note) note.textContent = act+": "+name+(d.ok?" · done":" · "+(d.error||"failed"));
+  renderEngines();
+}
+function sgn(v){ v=Number(v||0); return (v>=0?'+':'')+money(v); }
+
+async function renderEngines(){
+  var el = document.getElementById("engbody"); if(!el) return;
+  var d;
+  try{ d = await (await fetch("/api/engines",{cache:"no-store"})).json(); }
+  catch(e){ el.innerHTML='<div class="empty">engines unavailable: '+esc(e.message||e)+'</div>'; return; }
+  if(d.error){ el.innerHTML='<div class="empty">'+esc(d.error)+'</div>'; return; }
+  var es = d.engines||[];
+  var note = document.getElementById("engnote");
+  if(note) note.textContent = es.filter(function(e){return e.alive;}).length+"/"+es.length+" running";
+  var head = '<tr><th>engine</th><th>status</th><th class="num">equity</th>'+
+             '<th class="num">realised</th><th class="num">unrealised</th><th class="num">total</th>'+
+             '<th class="num">trades</th><th class="num">open</th><th class="num">risk</th>'+
+             '<th class="num">slots</th><th>action</th></tr>';
+  var rows = es.map(function(e){
+    var cls = e.disabled ? "down" : (e.alive ? "up" : "flat");
+    var state = e.disabled ? "disabled" : (e.alive ? "running" : "stopped");
+    var btn = e.disabled
+      ? '<button class="tbtn" onclick="engineAction(\''+e.name+'\',\'start\')">start</button>'
+      : '<button class="tbtn" onclick="engineAction(\''+e.name+'\',\'stop\')">stop</button>';
+    return '<tr><td>'+esc(e.name)+'</td>'+
+      '<td class="'+cls+'">'+state+'</td>'+
+      '<td class="num">'+money(e.equity)+'</td>'+
+      '<td class="num '+((e.realised||0)>=0?"up":"down")+'">'+sgn(e.realised)+'</td>'+
+      '<td class="num '+((e.unrealised||0)>=0?"up":"down")+'">'+sgn(e.unrealised)+'</td>'+
+      '<td class="num '+((e.total||0)>=0?"up":"down")+'"><b>'+sgn(e.total)+'</b></td>'+
+      '<td class="num">'+(e.trades||0)+'</td><td class="num">'+(e.open||0)+'</td>'+
+      '<td class="num">'+(e.risk_mult==null?"—":Number(e.risk_mult).toFixed(2)+"x")+'</td>'+
+      '<td class="num">'+(e.slots==null?"—":e.slots)+'</td>'+
+      '<td>'+btn+'</td></tr>';
+  }).join("");
+  el.innerHTML = '<table class="wide"><thead>'+head+'</thead><tbody>'+rows+'</tbody></table>';
+}
 
 /* ============ market chart ============ */
 const MIV=["1m","5m","15m","1h","4h","1d"];
@@ -1992,7 +2045,7 @@ function closeChartModal(){
 function restoreSide(){ } function restoreIv(){} function restoreOv(){} function restoreEngine(){}
 function refreshCtlBtn(){ } function ctlSummary(){ return ''; }
 function toggleSide(){ /* handled inside the chart page */ }
-function toggleMeasure(){} function renderEngines(){} function renderMivs(){}
+function toggleMeasure(){} function renderMivs(){}
 function renderOverlays(){} function renderTickerList(){ /* the ticker list lives in the chart page now */ } function setDefaultIv(){}
 function toggleChartCtl(){ var b=$("chartctl"); if(b) b.style.display = (b.style.display==="none"?"flex":"none"); }
 function chartGestures(){ return "drag to pan · shift+drag to select a range · wheel to zoom · +/- keys · double-click to reset"; }
@@ -2578,7 +2631,7 @@ async function renderOptions(){
   var o={};
   try{ o=await (await fetch("/api/options",{cache:"no-store"})).json(); }catch(e){}
   var rows=[
-    ["override_crazy","BYPASS EVERY GATE — crazy trading","#f85149"],
+    ["override_crazy","BYPASS EVERY GATE — crazy trading",o.override_crazy],
     ["allow_counter_trend","trade against the BTC 4h trend",o.allow_counter_trend],
     ["forecast_gate","consult the forecast supervisor",o.forecast_gate],
   ];
@@ -2592,7 +2645,8 @@ async function renderOptions(){
       'border-bottom:1px solid '+(danger?'#f8514933':'#131c26')+'">'+
       '<input type="checkbox" '+(r[2]?'checked':'')+' onchange="setOpt(\''+r[0]+'\',this.checked)">'+
       '<b style="width:190px;color:'+(danger?'#f85149':'inherit')+'">'+r[0]+'</b>'+
-      '<span style="color:'+(danger?'#ffb3ad':'#7c8b9d')+'">'+r[1]+'</span></label>';
+      '<span style="color:'+(r[2]?(danger?'#ffb3ad':'#3fb950'):'#7c8b9d')+'">'+r[1]+
+      (danger?(r[2]?' — ON':' — off'):'')+'</span></label>';
   }).join("");
   html+=nums.map(function(r){
     return '<label style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid #131c26">'+
@@ -4818,6 +4872,53 @@ renderMarketLive(); mlStream();
 setInterval(function(){ if(document.getElementById("marketlive").classList.contains("on")) renderMarketLive(); },1000);
 renderPending(); setInterval(function(){ if(document.getElementById("signals").classList.contains("on")) renderPending(); },1000);
 
+/* ---- anti-flicker ------------------------------------------------------------
+   The panels re-render on timers (1–4 s). Replacing innerHTML resets scroll and
+   throws away whatever the reader was looking at, which reads as the UI "switching".
+   Every renderer is wrapped once: skip while the tab is hidden, and put the reader
+   back where they were afterwards. */
+(function(){
+  // timer-driven refreshers: safe to skip when the tab is in the background
+  var timed=["renderTape","renderSignals","renderPending","renderAdvisor","renderForecast",
+             "renderThinking","renderMarketLive"];
+  // tab-entry renderers: must run even when the page is not visible, or a headless
+  // check (and a background tab) would sit on "loading…" for ever
+  var ondemand=["renderBooks","renderModels","renderControl","renderHealth","renderLeaderboard",
+                "renderWhy","renderReview","renderMovers","renderFlow","renderBus",
+                "renderOptimiser","renderAttrib","renderEngines"];
+  var names=timed.concat(ondemand);
+  function scrollables(){
+    var out=[];
+    document.querySelectorAll(".panel, .scroll, .tbody, .lbtable, #dashbody, #booksbody").forEach(function(el){
+      if(el.scrollTop) out.push([el, el.scrollTop]);
+    });
+    return out;
+  }
+  names.forEach(function(n){
+    var f=window[n];
+    if(typeof f!=="function" || f.__wrapped) return;
+    var skipHidden = timed.indexOf(n) >= 0;
+    window[n+"_raw"] = f;
+    var w=function(){
+      if(skipHidden && document.hidden) return;
+      var y=window.scrollY, keep=scrollables();
+      function restore(){
+        window.scrollTo(0, y);
+        keep.forEach(function(pair){ try{ pair[0].scrollTop=pair[1]; }catch(e){} });
+      }
+      var r=f.apply(this, arguments);
+      // an async renderer must still be awaited by its caller: propagate the promise
+      if(r && typeof r.then === "function") return r.then(function(v){ restore(); return v; },
+                                                          function(e){ restore(); throw e; });
+      restore();
+      return r;
+    };
+    w.__wrapped=true;
+    window[n]=w;
+  });
+})();
+
+
 /* ================= SORTING (every table) ================= */
 window.__sortState = window.__sortState || {};
 window.__sortBusy = false;
@@ -5670,6 +5771,91 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(d), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/engines":
+            import glob as _glob, json as _json, subprocess as _sp
+            try:
+                import supervisor as _sup
+                reg = _sup.ENGINES
+            except Exception as e:
+                return self._send(500, _json.dumps({"error": "supervisor: %s" % e}),
+                                  "application/json")
+            try:
+                dis = {str(b).replace("_", "").lower()
+                       for b in _json.load(open(os.path.join(HERE, "state", "disabled.json"))).get("books") or []}
+            except Exception:
+                dis = set()
+            try:
+                cap = _json.load(open(os.path.join(HERE, "state", "capital.json")))
+            except Exception:
+                cap = {}
+            packs = {}
+            for f in _glob.glob(os.path.join(HERE, "state", "pack_*.json")):
+                try:
+                    b = _json.load(open(f))
+                except Exception:
+                    continue
+                packs[str(b.get("engine") or "").replace("_", "").lower()] = b
+            prices = _prices_now()
+            out = []
+            for name, argv in reg.items():
+                script = os.path.basename(argv[2]) if len(argv) > 2 else name
+                alive = _sp.run(["pgrep", "-f", script], capture_output=True).returncode == 0
+                key = name.replace("_", "").lower()
+                b = packs.get(key) or {}
+                start = float(b.get("start_equity") or 0)
+                eq = float(b.get("equity") or start)
+                unreal, marked, unmarked = _mark(b.get("positions") or [], prices)
+                c = cap.get(b.get("engine") or name) or {}
+                out.append({
+                    "name": name, "script": script, "alive": bool(alive),
+                    "disabled": key in dis or script.replace("_", "").lower() in dis,
+                    "equity": round(eq, 2), "start": round(start, 2),
+                    "realised": round(eq - start, 2), "unrealised": unreal,
+                    "total": round(eq - start + unreal, 2),
+                    "trades": len(b.get("trades") or []), "open": len(b.get("positions") or []),
+                    "risk_mult": c.get("risk_mult"), "slots": c.get("slots"),
+                    "note": c.get("note"),
+                })
+            out.sort(key=lambda r: -(r["total"] or 0))
+            return self._send(200, _json.dumps({"engines": out,
+                                                "alive": sum(1 for r in out if r["alive"])}),
+                              "application/json")
+        if p == "/api/engine":
+            import json as _json, subprocess as _sp
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            name = (q.get("name", [""])[0] or "").strip()
+            act = (q.get("action", [""])[0] or "").strip()
+            if not name or act not in ("start", "stop"):
+                return self._send(400, _json.dumps({"error": "name and action=start|stop"}),
+                                  "application/json")
+            path = os.path.join(HERE, "state", "disabled.json")
+            try:
+                cur = _json.load(open(path))
+            except Exception:
+                cur = {"books": []}
+            books = [b for b in (cur.get("books") or []) if b]
+            if act == "stop":
+                if name not in books:
+                    books.append(name)
+                try:
+                    import supervisor as _sup
+                    script = os.path.basename(_sup.ENGINES.get(name, [None, None, name + ".py"])[2])
+                except Exception:
+                    script = name + ".py"
+                _sp.run(["pkill", "-f", script], capture_output=True)
+            else:
+                books = [b for b in books if b != name]
+                # start it now rather than waiting for the supervisor's next tick
+                try:
+                    import supervisor as _sup
+                    _sup.start(name)
+                except Exception:
+                    pass
+            with open(path + ".t", "w") as fh:
+                _json.dump({"books": books, "ts": int(time.time() * 1000)}, fh)
+            os.replace(path + ".t", path)
+            return self._send(200, _json.dumps({"ok": True, "name": name, "action": act,
+                                                "disabled": books}), "application/json")
         if p == "/api/options":
             import tactics as _T
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
