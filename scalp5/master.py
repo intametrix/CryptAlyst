@@ -394,7 +394,8 @@ def _live_heartbeat_legacy():
                 "curve_rider.py", "alpha_signals.py", "supervisor.py"):
         if subprocess.run(["pgrep", "-f", pat], capture_output=True).returncode == 0:
             running += 1
-    rows, open_pos, realised = [], 0, 0.0
+    prices, marks = _prices()
+    rows, open_pos, realised, unrealised = [], 0, 0.0, 0.0
     for f in sorted(glob.glob(os.path.join(HERE, "state", "pack_*.json"))):
         try:
             with open(f) as fh:
@@ -403,15 +404,61 @@ def _live_heartbeat_legacy():
             continue
         start = float(b.get("start_equity") or 0)
         eq = float(b.get("equity") or 0)
+        unreal, marked, unmarked = _mark(b.get("positions") or [], prices)
         rows.append({"k": b.get("engine"), "eq": round(eq, 2),
                      "ret": round(100 * (eq / start - 1), 2) if start else 0,
-                     "real": round(eq - start, 2), "open": len(b.get("positions") or []),
+                     "real": round(eq - start, 2), "unreal": unreal,
+                     "total": round(eq - start + unreal, 2),
+                     "marked": marked, "unmarked": unmarked,
+                     "open": len(b.get("positions") or []),
                      "closed": b.get("trade_count") or len(b.get("trades") or [])})
         open_pos += len(b.get("positions") or [])
         realised += eq - start
+        unrealised += unreal
     return {"ts": int(time.time() * 1000), "beat_s": 5.0, "books": running,
-            "open": open_pos, "realised": round(realised, 2), "rows": rows,
-            "source": "live"}
+            "open": open_pos, "realised": round(realised, 2),
+            "unrealised": round(unrealised, 2),
+            "total": round(realised + unrealised, 2),
+            "marks": marks, "rows": rows, "source": "live"}
+
+
+def _prices():
+    """Last trade per symbol from the feed. Empty on failure: marks are optional."""
+    try:
+        d = jget("http://127.0.0.1:8796/streamprices", timeout=4.0)
+        return d.get("p") or {}, int(d.get("msgs") or 0)
+    except Exception:
+        return {}, 0
+
+
+_PX = {"ts": 0.0, "p": {}}
+
+
+def _prices_now():
+    """Cached two seconds: a page of books must not fetch the feed once per book."""
+    if time.time() - _PX["ts"] > 2.0:
+        _PX["p"], _ = _prices()
+        _PX["ts"] = time.time()
+    return _PX["p"]
+
+
+def _mark(positions, prices):
+    """Unrealised PnL of open positions at the last trade: (total, marked, unmarked)."""
+    total, marked, unmarked = 0.0, 0, 0
+    for p in positions or []:
+        sym = (p.get("symbol") or "").upper()
+        entry = float(p.get("entry") or 0)
+        notional = float(p.get("notional") or 0)
+        px = float(prices.get(sym) or 0)
+        if not entry or not notional or not px:
+            unmarked += 1
+            continue
+        chg = (px / entry - 1.0) * 100.0
+        if (p.get("side") or "buy").lower() in ("sell", "short"):
+            chg = -chg
+        total += notional * chg / 100.0
+        marked += 1
+    return round(total, 2), marked, unmarked
 
 
 def _alive(pattern):
@@ -2849,7 +2896,9 @@ function lbRow(e, rank, best, worst){
       '<div class="lbbar" style="margin-top:4px"><i style="width:'+pctW.toFixed(0)+'%;background:'+
       (ret>=0?'#3fb950':'#f85149')+'"></i></div></td>'+
     '<td class="'+((e.realised||0)>=0?'up':'down')+'">'+((e.realised||0)>=0?'+':'')+money(e.realised)+'</td>'+
-    '<td class="'+((e.unrealised||0)>=0?'up':'down')+'">'+((e.unrealised||0)>=0?'+':'')+money(e.unrealised)+'</td>'+
+    '<td class="'+((e.unrealised||0)>=0?'up':'down')+'">'+((e.unrealised||0)>=0?'+':'')+money(e.unrealised||0)+'</td>'+
+    '<td class="'+(((e.realised||0)+(e.unrealised||0))>=0?'up':'down')+'"><b>'+
+      ((((e.realised||0)+(e.unrealised||0))>=0)?'+':'')+money((e.realised||0)+(e.unrealised||0))+'</b></td>'+
     '<td>'+tr.length+'</td>'+
     '<td>'+(wr==null?'—':wr+'%')+'</td>'+
     '<td class="'+(avg!=null&&avg>=0?'up':'down')+'">'+(avg==null?'—':(avg>=0?'+':'')+avg.toFixed(3)+'%')+'</td>'+
@@ -2908,7 +2957,7 @@ function renderLeaderboard(){
     label+arrow(k)+'</th>'; };
   box.innerHTML=podium(es)+'<table class="lbtable"><thead><tr>'+
     '<th>#</th>'+th("key","engine")+th("realised","realised")+th("equity","equity")+
-    th("return","return")+th("unrealised","unrealised")+th("closed","closed")+
+    th("return","return")+th("unrealised","unrealised")+th("total","realised + unrealised")+th("closed","closed")+
     th("win","win")+th("avgnet","avg net")+th("open","open")+
     '<th>equity curve</th></tr></thead><tbody>'+
     es.map(function(e,i){ return lbRow(e,i+1,best,worst); }).join('')+
@@ -5753,9 +5802,14 @@ class H(BaseHTTPRequestHandler):
                 for t in trades[-60:]:
                     run += (t.get("net_pct") or 0)
                     curve.append(round(run, 4))
+                unreal, marked, unmarked = _mark(b.get("positions") or [], _prices_now())
                 out.append({
                     "engine": b.get("engine"),
                     "equity": round(eq, 2), "start": round(start, 2),
+                    "realised": round(eq - start, 2),
+                    "unrealised": unreal,
+                    "total": round(eq - start + unreal, 2),
+                    "marked": marked, "unmarked": unmarked,
                     "return_pct": round(100 * (eq / start - 1), 3) if start else 0,
                     "trades": len(trades), "win_pct": round(100 * wins / len(trades), 1) if trades else 0,
                     "avg_net": round(sum((t.get("net_pct") or 0) for t in trades) / len(trades), 4) if trades else 0,
@@ -5771,8 +5825,12 @@ class H(BaseHTTPRequestHandler):
                     "ts": b.get("ts")})
             total = sum(r["equity"] for r in out)
             start_total = sum(r["start"] for r in out) or 1
+            real_t = sum(r["realised"] for r in out)
+            unreal_t = sum(r["unrealised"] for r in out)
             return self._send(200, json.dumps({
                 "books": out, "equity": round(total, 2), "start": round(start_total, 2),
+                "realised": round(real_t, 2), "unrealised": round(unreal_t, 2),
+                "total": round(real_t + unreal_t, 2),
                 "return_pct": round(100 * (total / start_total - 1), 3),
                 "open": sum(r["open"] for r in out),
                 "closed": sum(r["trades"] for r in out),
