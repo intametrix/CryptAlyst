@@ -180,7 +180,7 @@ func TestPlanOneHourOpensOneSegment(t *testing.T) {
 			t.Fatalf("planned segment has no valid index: %v", err)
 		}
 	}
-	n, err := readSegment(plan[len(plan)-1].Segment, base, base+59_000, func(Record) error { return nil })
+	n, err := readSegment(plan[len(plan)-1].Segment, base, base+59_000, nil, func(Record) error { return nil })
 	if err != nil || n == 0 {
 		t.Fatalf("reading the planned segment returned %d rows, err=%v", n, err)
 	}
@@ -208,7 +208,7 @@ func TestGoldenReplayZeroMismatches(t *testing.T) {
 		if strings.HasSuffix(seg, idxSuffix) {
 			continue
 		}
-		n, err := readSegment(seg, 0, 1<<62, func(Record) error { return nil })
+		n, err := readSegment(seg, 0, 1<<62, nil, func(Record) error { return nil })
 		if err != nil {
 			t.Fatalf("replay %s: %v", seg, err)
 		}

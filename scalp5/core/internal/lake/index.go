@@ -50,6 +50,18 @@ type SegmentStats struct {
 	Codec           string      `json:"codec"`
 	CRC             uint32      `json:"crc32"`
 	Topics          []TopicSpan `json:"topics"`
+	// Buckets is a sampled time-to-byte map for seeking. It is emitted only when
+	// the segment's records are TS-monotonic in byte order; an out-of-order
+	// segment has no buckets and readers fall back to a full scan.
+	Buckets []TimeBucket `json:"buckets,omitempty"`
+}
+
+// TimeBucket maps a record timestamp to the byte offset of its first byte in the
+// segment. Buckets are sorted by Offset (and by Ts, under the monotonicity
+// invariant), so a reader binary-searches them to skip the front of a segment.
+type TimeBucket struct {
+	Ts     int64 `json:"ts_ms"`
+	Offset int64 `json:"offset"`
 }
 
 // spanTracker accumulates per-topic and per-key spans for the segment being written.

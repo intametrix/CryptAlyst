@@ -31,6 +31,9 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 	// resume point
 	off, tracker := int64(0), newSpanTracker()
 	counts := map[string]int{}
+	ordered := true
+	var prevTS int64
+	var buckets []TimeBucket
 	progPath := segment + ".scan.progress"
 	if body, err := os.ReadFile(progPath); err == nil {
 		var prog struct {
@@ -39,6 +42,9 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 			Records int            `json:"records"`
 			Bytes   int64          `json:"bytes"`
 			Counts  map[string]int `json:"counts"`
+			Ordered bool           `json:"ordered"`
+			PrevTS  int64          `json:"prev_ts"`
+			Buckets []TimeBucket   `json:"buckets"`
 		}
 		if json.Unmarshal(body, &prog) == nil && prog.Offset > 0 && prog.Offset < total {
 			off = prog.Offset
@@ -49,6 +55,7 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 			if prog.Counts != nil {
 				counts = prog.Counts
 			}
+			ordered, prevTS, buckets = prog.Ordered, prog.PrevTS, prog.Buckets
 		}
 	}
 	if off > 0 {
@@ -71,6 +78,10 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 			if complete {
 				var rec Record
 				if json.Unmarshal(line[:len(line)-1], &rec) == nil {
+					if rec.TS < prevTS {
+						ordered = false
+					}
+					prevTS = rec.TS
 					tracker.add(rec.Topic, rec.Key, rec.TS, int64(len(line)))
 					counts[rec.Topic]++
 					lastGood = pos + int64(len(line))
@@ -83,7 +94,10 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 			break
 		}
 		if pos >= nextCheckpoint {
-			_ = writeProgress(progPath, pos, tracker, counts)
+			if ordered {
+				buckets = append(buckets, TimeBucket{Ts: prevTS, Offset: pos})
+			}
+			_ = writeProgress(progPath, pos, tracker, counts, ordered, prevTS, buckets)
 			nextCheckpoint = pos + checkpointBytes
 		}
 	}
@@ -113,6 +127,9 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 
 	st := SegmentStats{OpenedAt: info.ModTime().UnixMilli(), SealedAt: time.Now().UnixMilli(),
 		Records: recs, Bytes: bytes, Codec: "none", Topics: spans}
+	if ordered {
+		st.Buckets = buckets
+	}
 	if err := writeSidecar(segment, st); err != nil {
 		return st, err
 	}
@@ -128,9 +145,9 @@ func lenCounts(m map[string]int) int {
 	return n
 }
 
-func writeProgress(path string, off int64, t *spanTracker, counts map[string]int) error {
+func writeProgress(path string, off int64, t *spanTracker, counts map[string]int, ordered bool, prevTS int64, buckets []TimeBucket) error {
 	recs, bytes, spans := t.snapshot()
-	body, err := json.Marshal(map[string]any{"offset": off, "records": recs, "bytes": bytes, "topics": spans, "counts": counts})
+	body, err := json.Marshal(map[string]any{"offset": off, "records": recs, "bytes": bytes, "topics": spans, "counts": counts, "ordered": ordered, "prev_ts": prevTS, "buckets": buckets})
 	if err != nil {
 		return err
 	}
@@ -177,7 +194,7 @@ func SampleVerify(dir, segment string, n int) error {
 		}
 		var planCount int
 		for _, p := range planned {
-			c, err := ScanSegment(p.Segment, from, to, func(rec Record) error {
+			c, err := ScanSegmentSeek(p.Segment, from, to, st.Buckets, func(rec Record) error {
 				if rec.Topic != sp.Topic {
 					return nil
 				}
@@ -190,7 +207,7 @@ func SampleVerify(dir, segment string, n int) error {
 			}
 		}
 		var directCount int
-		if _, err := ScanSegment(segment, from, to, func(rec Record) error {
+		if _, err := ScanSegmentSeek(segment, from, to, st.Buckets, func(rec Record) error {
 			if rec.Topic == sp.Topic {
 				directCount++
 			}

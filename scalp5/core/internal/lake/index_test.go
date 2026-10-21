@@ -173,3 +173,83 @@ func TestBuildIndexForSegmentResumeReconciles(t *testing.T) {
 		t.Fatalf("checkpoint not removed on completion: %v", err)
 	}
 }
+
+// The bucket seek must return the same count as a full scan on a monotonic
+// segment, and must not be emitted (so the reader falls back to a full scan) on
+// an out-of-order segment. This pins the TS-monotonic-with-offset assumption.
+func TestBucketSeekMatchesFullScan(t *testing.T) {
+	dir := t.TempDir()
+	seg := filepath.Join(dir, "seg.jsonl")
+	f, err := os.Create(seg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 200; i++ {
+		rec := Record{Topic: "market.depth", Key: "BTCUSDT", TS: int64(1_000_000 + i*1000),
+			Payload:  []byte(`{"i":` + strconv.Itoa(i) + `}`),
+			Envelope: []byte(`{"data":{"i":` + strconv.Itoa(i) + `}}`)}
+		line, err := marshalRecord(rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Write(append(line, '\n')); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.Close()
+
+	st, err := BuildIndexForSegment(seg, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Buckets) == 0 {
+		t.Fatalf("monotonic segment should carry buckets")
+	}
+	for _, w := range [][2]int64{{1_000_000, 1_000_050_000}, {1_000_100_000, 1_000_150_000}, {1_000_050_000, 1_000_200_000}} {
+		var seek, full int
+		if _, err := ScanSegmentSeek(seg, w[0], w[1], st.Buckets, func(Record) error { seek++; return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ScanSegment(seg, w[0], w[1], func(Record) error { full++; return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if seek != full {
+			t.Fatalf("window %d..%d: seek %d, full %d", w[0], w[1], seek, full)
+		}
+	}
+}
+
+func TestOutOfOrderSegmentHasNoBuckets(t *testing.T) {
+	dir := t.TempDir()
+	seg := filepath.Join(dir, "seg.jsonl")
+	f, err := os.Create(seg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 50; i++ {
+		rec := Record{Topic: "market.depth", Key: "BTCUSDT", TS: int64(1_000_000 + i*1000),
+			Payload: []byte(`{}`), Envelope: []byte(`{}`)}
+		line, _ := marshalRecord(rec)
+		f.Write(append(line, '\n'))
+	}
+	// a backdated record breaks TS monotonicity
+	rec := Record{Topic: "market.depth", Key: "BTCUSDT", TS: 999_000,
+		Payload: []byte(`{}`), Envelope: []byte(`{}`)}
+	line, _ := marshalRecord(rec)
+	f.Write(append(line, '\n'))
+	f.Close()
+
+	st, err := BuildIndexForSegment(seg, 500)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Buckets) != 0 {
+		t.Fatalf("out-of-order segment should carry no buckets, got %d", len(st.Buckets))
+	}
+	var seek, full int
+	ScanSegmentSeek(seg, 0, 1<<62, st.Buckets, func(Record) error { seek++; return nil })
+	ScanSegment(seg, 0, 1<<62, func(Record) error { full++; return nil })
+	if seek != full {
+		t.Fatalf("fallback full scan: seek %d, full %d", seek, full)
+	}
+}

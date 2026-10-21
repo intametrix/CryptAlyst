@@ -396,19 +396,59 @@ func (s *Sealed) Stats() (sealed, failed, rebuilt int64) {
 }
 
 // ScanSegment is the read-side entry point: scan one planned segment for a window.
+// It scans the whole segment (no bucket index); kept for callers with no sidecar.
 func ScanSegment(path string, from, to int64, fn func(Record) error) (int, error) {
-	return readSegment(path, from, to, fn)
+	return readSegment(path, from, to, nil, fn)
 }
 
-// readSegment scans a segment (plain or gzipped) within a byte span, calling fn for
-// each record. The plan gives the span; we still filter, because topics interleave.
-func readSegment(path string, from, to int64, fn func(Record) error) (int, error) {
+// ScanSegmentSeek scans a window using the segment's time buckets to skip the
+// front of the file. Absent or out-of-order buckets degrade to a full scan, so a
+// pre-change segment still reads correctly.
+func ScanSegmentSeek(path string, from, to int64, buckets []TimeBucket, fn func(Record) error) (int, error) {
+	return readSegment(path, from, to, buckets, fn)
+}
+
+// bucketSeekOffset returns the byte offset to seek to for a window starting at
+// `from`: the offset of the last bucket whose Ts <= from. Monotonicity invariant:
+// a segment is written in arrival order and record TS is assigned at write time,
+// so byte offset is non-decreasing with TS. If the buckets are out of order the
+// invariant is broken, and 0 is returned so the caller scans from the front.
+func bucketSeekOffset(buckets []TimeBucket, from int64) int64 {
+	if len(buckets) == 0 {
+		return 0
+	}
+	for i := 1; i < len(buckets); i++ {
+		if buckets[i].Ts < buckets[i-1].Ts {
+			return 0
+		}
+	}
+	lo, hi := 0, len(buckets)-1
+	best := -1
+	for lo <= hi {
+		mid := (lo + hi) / 2
+		if buckets[mid].Ts < from {
+			best = mid
+			lo = mid + 1
+		} else {
+			hi = mid - 1
+		}
+	}
+	if best < 0 {
+		return 0
+	}
+	return buckets[best].Offset
+}
+
+// readSegment scans a segment (plain or gzipped) within a byte span, calling fn
+// for each record. Buckets enable a seek on a plain segment; a gzipped segment
+// has no usable plain offset, so it is decompressed and scanned whole.
+func readSegment(path string, from, to int64, buckets []TimeBucket, fn func(Record) error) (int, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return 0, err
 	}
 	defer f.Close()
-	var reader io.Reader = f
+	var reader io.Reader
 	if strings.HasSuffix(path, ".gz") {
 		gz, err := gzip.NewReader(f)
 		if err != nil {
@@ -416,6 +456,13 @@ func readSegment(path string, from, to int64, fn func(Record) error) (int, error
 		}
 		defer gz.Close()
 		reader = gz
+	} else {
+		if off := bucketSeekOffset(buckets, from); off > 0 {
+			if _, err := f.Seek(off, io.SeekStart); err != nil {
+				return 0, err
+			}
+		}
+		reader = f
 	}
 	sc := bufio.NewScanner(reader)
 	sc.Buffer(make([]byte, 1<<20), 64<<20)
