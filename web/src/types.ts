@@ -69,6 +69,12 @@ export interface StatusMsg {
   screen_generated_ms?: number | null;
   survey_generated_ms?: number | null;
   stream_connected?: boolean | null;
+  stream_up?: boolean | null;
+  stream_messages?: number | null;
+  stream_streams?: number | null;
+  stream_reconnects?: number | null;
+  truncated?: number | null;
+  clients?: number | null;
 }
 
 /** One row of the flow split (pumps / dumps). */

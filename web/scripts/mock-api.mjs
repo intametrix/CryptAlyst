@@ -168,6 +168,12 @@ const server = createServer((req, res) => {
     });
   }
   if (path === '/api/heat') return sendJson({ type: 'heat', ts_ms: NOW, rows: heatRows });
+  if (path === '/api/bus') {
+    return sendJson({
+      received: 42849, written: 41786, refused: 1063, rate_per_s: 57.3, ts_ms: NOW,
+      by_topic: { 'market.depth': 30225, 'market.price': 3003, 'market.mini24h': 3003, 'market.candle': 494, 'intel.ta': 1574, 'intel.signal': 144, 'intel.flow': 144, 'alert.pumpdump': 47, 'system.health': 149 },
+    });
+  }
   if (path === '/api/colors') return sendJson(live.LIVE_COLORS ?? {});
   if (path === '/api/screen/refresh' || path === '/api/survey/refresh') return sendJson({}, 204);
   if (path === '/api/alerts' && req.method === 'DELETE') return sendJson({}, 204);

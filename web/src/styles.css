@@ -4605,3 +4605,20 @@ table {
   font-size: 10px;
   color: var(--text-dim, #7f93ad);
 }
+
+/* --- message bus tab ---------------------------------------------------- */
+.bus-grid { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 8px 10px; }
+.bus-strip { display: flex; flex-wrap: wrap; gap: 14px; padding: 6px 10px; border-bottom: 1px solid var(--border, #223046); min-width: 0; }
+.bus-stat { display: flex; align-items: baseline; gap: 5px; font-size: 11px; color: var(--text-dim, #7f93ad); min-width: 0; }
+.bus-stat b { font-size: 14px; color: var(--text, #d5e0ef); }
+.bus-stat i { font-style: normal; font-size: 10px; }
+.bus-rows { display: flex; flex-direction: column; min-height: 0; overflow: auto; padding: 4px 8px; }
+.bus-row { display: grid; min-height: 0; grid-template-columns: minmax(120px, 2fr) 90px 60px minmax(80px, 3fr) 70px; gap: 8px; align-items: center; padding: 2px 4px; min-width: 0; }
+.bus-row.bus-head { border-bottom: 1px solid var(--border, #223046); min-width: 0; }
+.bus-topic { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bus-bar { position: relative; height: 4px; border-radius: 2px; background: var(--panel, #0d1622); overflow: hidden; }
+.bus-bar .bar-fill { display: block; height: 100%; background: var(--accent, #4d8dfd); }
+.bus-refused { color: var(--down, #ff4d5e); }
+.bus-refused-row { border-top: 1px solid var(--border, #223046); min-width: 0; }
+.bus-refused-row .bus-topic { color: var(--down, #ff4d5e); }
+.bus-note { margin: 0; padding: 4px 10px 8px; font-size: 10px; color: var(--text-dim, #7f93ad); }

@@ -7,6 +7,7 @@ import { ChartOverlay } from './components/ChartOverlay';
 import { SplitPane } from './components/Panel';
 import { FlowLeaderboard } from './components/FlowLeaderboard';
 import { PumpRadar } from './components/PumpRadar';
+import { BusPanel } from './components/BusPanel';
 import { FlowSplit } from './components/FlowSplit';
 import { Header } from './components/Header';
 import { ScreenTable } from './components/ScreenTable';
@@ -55,13 +56,15 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   // Top-level surface switch: the full overview, or the dedicated pump/dump
   // dashboard (owner ruling 2026-10-21: pump and dump is a first-class view).
   // Hash-addressable so the view is linkable and screenshot-able: #pumpdump.
-  const [view, setViewState] = useState<'main' | 'pumpdump'>(() =>
-    typeof window !== 'undefined' && window.location.hash === '#pumpdump' ? 'pumpdump' : 'main',
-  );
-  const setView = useCallback((v: 'main' | 'pumpdump') => {
+  const [view, setViewState] = useState<'main' | 'pumpdump' | 'bus'>(() => {
+    if (typeof window === 'undefined') return 'main';
+    const h = window.location.hash;
+    return h === '#pumpdump' ? 'pumpdump' : h === '#bus' ? 'bus' : 'main';
+  });
+  const setView = useCallback((v: 'main' | 'pumpdump' | 'bus') => {
     setViewState(v);
     if (typeof window !== 'undefined') {
-      window.location.hash = v === 'pumpdump' ? 'pumpdump' : '';
+      window.location.hash = v === 'main' ? '' : v;
     }
   }, []);
 
@@ -452,9 +455,21 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           >
             pump &amp; dump
           </button>
+          <button
+            type="button"
+            className={`view-btn${view === 'bus' ? ' active' : ''}`}
+            aria-pressed={view === 'bus'}
+            onClick={() => setView('bus')}
+          >
+            message bus
+          </button>
         </nav>
 
-        {view === 'pumpdump' ? (
+        {view === 'bus' ? (
+          <div className="bus-grid">
+            <BusPanel status={status} />
+          </div>
+        ) : view === 'pumpdump' ? (
           <div className="pd-grid">
             <AlertFeed
               alerts={feedAlerts}
