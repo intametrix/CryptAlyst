@@ -6236,6 +6236,12 @@ class H(BaseHTTPRequestHandler):
                                   "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)}), "application/json")
+        if p == "/api/decisions":
+            try:
+                from lib import emit
+                return self._send(200, json.dumps(emit.export_decisions()), "application/json")
+            except Exception as exc:
+                return self._send(502, json.dumps({"error": str(exc)}), "application/json")
         if p == "/api/path":
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)

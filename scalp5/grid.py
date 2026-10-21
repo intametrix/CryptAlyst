@@ -215,11 +215,13 @@ def evaluate(now, a):
             if lv["pos"] is None:
                 # a buy level fills when the market trades down to it
                 if lv["side"] == "buy" and b["ask"] <= lv["px"]:
+                    did = emit.decision("grid", sym, "buy", True, "grid_level") if emit else None
                     lv["pos"] = {"side": "buy", "entry": lv["px"], "t": now,
-                                 "notional": g["notional"]}
+                                 "notional": g["notional"], "decision_id": did}
                 elif lv["side"] == "sell" and b["bid"] >= lv["px"]:
+                    did = emit.decision("grid", sym, "sell", True, "grid_level") if emit else None
                     lv["pos"] = {"side": "sell", "entry": lv["px"], "t": now,
-                                 "notional": g["notional"]}
+                                 "notional": g["notional"], "decision_id": did}
             else:
                 p = lv["pos"]
                 # close against the neighbouring level on the other side
@@ -241,7 +243,8 @@ def evaluate(now, a):
                        "entry_ms": int(p["t"] * 1000), "exit_ms": int(now * 1000),
                        "features": {"spacing_pct": round(g["spacing"] * 100, 3),
                                     "level": lv["i"]},
-                       "slippage_bps": 0}
+                       "slippage_bps": 0,
+                       "decision_id": p.get("decision_id")}
                 TRADES.append(rec)
                 fills += 1
                 lv["pos"] = None
