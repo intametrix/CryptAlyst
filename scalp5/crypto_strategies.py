@@ -337,6 +337,8 @@ def main():
         votes = vote_map(sigs)
 
         for name, fn, cfg in load_lineage_strategies():
+            if _tactics.is_disabled(name):
+                continue          # A6: a disabled model is never used
             b = books.get(name)
             if b is None:
                 b = books[name] = Book(name, cfg)

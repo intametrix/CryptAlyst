@@ -4340,10 +4340,11 @@ async function refreshTrading(){
   var b=$("tradebtn"); if(!b) return;
   try{
     var d=await (await fetch("/api/trading",{cache:"no-store"})).json();
-    var alive=d.alive||{};
-    var n=Object.keys(alive).filter(function(k){return alive[k];}).length;
-    b.textContent=(n>0?"⏸ stop trading":"▶ start trading")+(n?" · "+n+" running":"");
-    b.className="tbtn "+(n>0?"on":"");
+    var stopped=!!d.stopped;
+    b.textContent=(stopped?"▶ start trading":"⏸ stop trading");
+    b.className="tbtn "+(stopped?"":"on");
+    b.title=stopped?"state/STOP exists: every book refuses trades":
+                    "state/STOP absent: enabled books may trade";
   }catch(e){ b.textContent="▶ start trading"; }
 }
 var TAPEDATA=[], TAPESORT={k:"t", dir:-1}, TOTEQ=0;
@@ -6975,7 +6976,8 @@ class H(BaseHTTPRequestHandler):
             out = []
             try:
                 files = [f for f in os.listdir(os.path.join(HERE, "state"))
-                         if f.startswith("pack_") and f.endswith(".json")]
+                         if (f.startswith("pack_") or f.startswith("strategy_"))
+                         and f.endswith(".json")]
             except Exception:
                 files = []
             for fn in sorted(files):
@@ -6996,7 +6998,7 @@ class H(BaseHTTPRequestHandler):
                 _age = int(time.time() - os.path.getmtime(os.path.join(HERE, "state", fn)))
                 sides = _sides(b.get("positions") or [], trades)
                 out.append({
-                    "engine": b.get("engine"),
+                    "engine": b.get("engine") or fn.split("_", 1)[-1][:-5],
                     "equity": round(eq, 2), "start": round(start, 2),
                     "realised": round(eq - start, 2),
                     "unrealised": unreal,
