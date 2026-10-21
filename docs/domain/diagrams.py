@@ -104,6 +104,9 @@ class Fig:
             bold = kind in ("aggregate", "entity", "state")
             tag_w = text_w(kind.upper(), 11) + 12 if kind else 0
             size = fit(name, min(16.0, by_height), w - 24 - tag_w, 9.5)
+            if kind and text_w(name, 9.5) > w - 24 - tag_w:
+                tag_w = 0                      # the label matters more than its tag
+                size = fit(name, min(16.0, by_height), w - 24, 9.5)
             self.parts.append(
                 f'<text x="{x+10}" y="{yy}" fill="{INK if bold else DIM}" font-size="{size}" '
                 f'font-weight="{600 if bold else 400}">{html.escape(name)}</text>')
@@ -598,8 +601,124 @@ def decision_tree():
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "10-decision-tree.svg"))
 
 
-ALL = [context_map, envelope, market_data, book_aggregate, risk_gate, recorder, lake,
-       control, stores, decision_tree]
+# ---------------------------------------------------------------- 11 · engines
+def engines():
+    f = Fig(1660, 820, "The engines — what trades, and in what families",
+            "38 supervised processes, grouped by the edge they claim to have",
+            "one book per engine · one process per book")
+    cols = [
+        ("Cross-section", 40, "model", [
+            ("alpha_rank", "entity"), ("movers", "entity"),
+            ("sympathy_lag", "entity"), ("multi_models", "entity")]),
+        ("Microstructure", 320, "market", [
+            ("grid", "entity"), ("hft", "entity"), ("scalp_fast", "entity"),
+            ("skim_pump", "entity"), ("flash", "entity"), ("fast_ignition", "entity")]),
+        ("Momentum", 600, "intel", [
+            ("crypto_pack — 12 strategies", "aggregate"),
+            ("swing_v2", "entity"), ("curve_rider", "entity"), ("churn", "entity")]),
+        ("Mean reversion", 880, "evidence", [
+            ("vwap_revert", "entity"), ("vwap_scalp", "entity"),
+            ("rsi2", "entity"), ("boll_squeeze", "entity")]),
+        ("Intelligence-led", 1160, "risk", [
+            ("alpha_signals", "entity"), ("crypto_edges", "entity"),
+            ("slow_edges", "entity"), ("skim_ai", "entity")]),
+        ("Hybrids", 1440, "control", [
+            ("trend_pullback", "entity"), ("breakout_atr", "entity"),
+            ("mean_revert_z", "entity"), ("vwap_reclaim", "entity"),
+            ("momentum_ignition", "entity"), ("oi_squeeze", "entity"),
+            ("funding_fade", "entity"), ("taker_imbalance", "entity"),
+            ("flow_confirm", "entity"), ("range_break", "entity")]),
+    ]
+    for title, x, colour, rows in cols:
+        f.box(x, 110, 200, 300, title, rows, colour)
+    f.box(40, 460, 820, 150, "Execution and oversight", [
+        ("executor — turns decisions into fills", "service"),
+        ("market_agent — the market-floor view", "service"),
+        ("supervisor — restarts a dead engine", "service"),
+        ("heartbeat — reads the books, writes the pulse", "service")], "control")
+    f.box(900, 460, 720, 150, "Every engine does the same five things", [
+        ("reads market and intel state", "value"),
+        ("asks risk.allow() before it acts", "value"),
+        ("publishes model.decision, model.fill", "value"),
+        ("writes its own state/pack_<engine>.json", "value"),
+        ("exits through the shared exit policy", "value")], "model")
+    f.note(40, 660, "The families are a reading aid, not a code boundary: every engine is the same "
+                    "shape, and the difference is the signal it trusts.", size=19)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "11-engines.svg"))
+
+
+# ---------------------------------------------------------------- 12 · dependencies
+def engine_deps():
+    f = Fig(1660, 800, "What an engine depends on",
+            "the same seven dependencies for all thirty-eight, which is why one can be added safely",
+            "no engine talks to the exchange")
+    f.box(640, 320, 380, 150, "One engine", [
+        ("its strategy", "value"), ("its book", "aggregate"),
+        ("its state file", "entity")], "model")
+    f.box(60, 110, 380, 130, "Market feed", [
+        ("127.0.0.1:8796", "service"),
+        ("prices, klines, depth", "value")], "market")
+    f.box(60, 330, 380, 130, "Intel cache", [
+        ("signals · flow · TA · forecast", "value"),
+        ("carries its own age", "value")], "intel")
+    f.box(60, 550, 380, 130, "Risk gate", [
+        ("risk.allow()", "service"), ("stop flag on disk", "entity")], "risk")
+    f.box(1220, 110, 380, 130, "The bus", [
+        ("model.decision", "value"), ("model.fill", "value")], "evidence")
+    f.box(1220, 330, 380, 130, "Its own state", [
+        ("state/pack_<engine>.json", "entity"),
+        ("rewritten in place", "value")], "model")
+    f.box(1220, 550, 380, 130, "Supervisor", [
+        ("restart on exit", "service"), ("equity and open counts", "value")], "control")
+
+    f.arrow([(440, 175), (640, 350)], "market", label="read", lx=470, ly=250)
+    f.arrow([(440, 395), (640, 395)], "intel", label="read", lx=520, ly=385)
+    f.arrow([(440, 615), (640, 440)], "risk", label="ask", lx=470, ly=560)
+    f.arrow([(1020, 360), (1220, 175)], "evidence", label="publish", lx=1050, ly=250)
+    f.arrow([(1020, 395), (1220, 395)], "model", label="write", lx=1070, ly=385)
+    f.arrow([(1020, 430), (1220, 615)], "control", label="be restarted", lx=1040, ly=560)
+    f.note(40, 700, "An engine may not talk to the exchange, may not write the lake, and may not "
+                     "decide its own size:", size=19)
+    f.note(40, 728, "those three refusals are what make forty engines safe to run at once.", size=19)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "12-dependencies.svg"))
+
+
+# ---------------------------------------------------------------- 13 · model lifecycle
+def model_lifecycle():
+    f = Fig(1660, 720, "The life of a model",
+            "proposed, trained on the record, admitted by a human, measured, and disabled in writing",
+            "a model that is disabled influences nothing")
+    stages = [
+        ("Propose", "model_gen.py", "control"),
+        ("Record", "the lake → features.csv", "evidence"),
+        ("Train", "tools/train.py", "intel"),
+        ("Measure", "Brier · AUC · time split", "intel"),
+        ("Admit", "supervisor registry", "model"),
+        ("Trade", "one book, one process", "model"),
+        ("Evaluate", "fills → fit_weights", "risk"),
+        ("Disable", "sentinel + post-mortem", "risk"),
+    ]
+    x = 36
+    for i, (name, detail, colour) in enumerate(stages):
+        f.box(x, 150, 184, 120, name, [(detail, "")], colour)
+        if i:
+            f.arrow([(x - 12, 210), (x, 210)], colour, width=1.3)
+        x += 196
+    f.arrow([(1490, 270), (1490, 360), (130, 360), (130, 270)], "risk", dashed=True, width=1.2)
+    f.note(600, 348, "a disabled model does not come back without a human", size=18, colour=COLOUR["risk"])
+    f.box(40, 430, 760, 170, "What admission requires", [
+        ("a dataset built from the record, not from memory", "value"),
+        ("a metric that would catch a coin-flip model", "value"),
+        ("a written reason, and a way back to off", "value")], "control")
+    f.box(860, 430, 760, 170, "What disabling requires", [
+        ("the exact inputs in play at the time", "value"),
+        ("the rule that fired, and the number", "value"),
+        ("a post-mortem appended, never rewritten", "value")], "risk")
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "13-model-life.svg"))
+
+
+ALL = [context_map, envelope, market_data, book_aggregate, risk_gate, recorder, lake, control,
+       stores, decision_tree, engines, engine_deps, model_lifecycle]
 
 if __name__ == "__main__":
     for fn in ALL:

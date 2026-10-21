@@ -32,20 +32,16 @@
       <select id="f-class"><option value="">class: all</option></select>
       <select id="f-status"><option value="">status: all</option></select>
       <select id="f-venue"><option value="">venue: all</option></select>
+      <div class="colchooser-wrap">
+        <button id="col-chooser" title="choose columns">columns ▾</button>
+        <div id="col-menu" class="colmenu" hidden></div>
+      </div>
       <span class="count" id="inst-count"></span>
     </div>
     <div class="split" id="inst-split">
       <div class="tablewrap">
-        <table id="inst-table">
-          <thead><tr>
-            <th data-k="id">id</th>
-            <th data-k="class">class</th>
-            <th data-k="symbol">symbol</th>
-            <th data-k="status">status</th>
-            <th data-k="venues">venues</th>
-            <th data-k="nidents" title="registered identifiers">ids</th>
-            <th data-k="updated_ms">updated</th>
-          </tr></thead>
+        <table id="inst-table" class="grid">
+          <thead id="inst-thead"></thead>
           <tbody></tbody>
         </table>
       </div>

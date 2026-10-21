@@ -181,6 +181,75 @@ SECTIONS = [
         ],
     },
     {
+        "id": "engines",
+        "level": 3,
+        "title": "The engines — what trades, and in what families",
+        "shows": "Thirty-eight supervised engines, grouped by the edge they claim to have, and the five things every one of them does identically.",
+        "figure": ("11-engines.png", "Six families and one shape: the difference between engines is the signal they trust, not the way they are built."),
+        "body": [
+            "The platform runs thirty-eight engine processes. They are grouped here by the edge they "
+            "claim: cross-sectional ranking, microstructure, momentum, mean reversion, "
+            "intelligence-led, and the ten hybrids that combine two families on purpose.",
+            "The grouping is a reading aid, not a code boundary. Every engine reads the same state, asks "
+            "the same gate, publishes the same two topics and writes the same kind of file. That is what "
+            "makes adding a thirty-ninth safe.",
+        ],
+        "table": (["Family", "Engines", "The edge it claims"],
+                  [["Cross-section", "alpha_rank, movers, sympathy_lag, multi_models", "rank every symbol, trade the extremes"],
+                   ["Microstructure", "grid, hft, scalp_fast, skim_pump, flash, fast_ignition", "the book moves before the price does"],
+                   ["Momentum", "crypto_pack (12 strategies), swing_v2, curve_rider, churn", "the move continues"],
+                   ["Mean reversion", "vwap_revert, vwap_scalp, rsi2, boll_squeeze", "the move overshoots"],
+                   ["Intelligence-led", "alpha_signals, crypto_edges, slow_edges, skim_ai", "flow and derivatives lead price"],
+                   ["Hybrids", "ten strategies, two families each", "one signal confirming another"]]),
+    },
+    {
+        "id": "deps",
+        "level": 3,
+        "title": "What an engine depends on",
+        "shows": "The seven dependencies every engine shares — and the three things an engine is not allowed to do.",
+        "figure": ("12-dependencies.png", "One engine, seven dependencies. The same shape for all thirty-eight, which is why none of them can quietly become special."),
+        "body": [
+            "An engine reads market and intelligence state, asks the risk gate, publishes its decision and "
+            "its fill, writes its own pack file, and is restarted by the supervisor if it dies. Those seven "
+            "dependencies are the same for every engine, including the ones added last week.",
+            "The refusals matter more than the dependencies. An engine may not open a socket to the "
+            "exchange, may not write the lake, and may not choose its own size. Each refusal removes a way "
+            "for a single engine to damage the record or the book.",
+        ],
+        "bullets": [
+            "may not talk to the exchange — the feed is the only process that does",
+            "may not write the lake — the recorder is the only writer",
+            "may not size itself — risk.allow and size_for decide",
+            "may not trade while the stop flag exists",
+            "must publish its decision even when it is refused",
+        ],
+    },
+    {
+        "id": "models",
+        "level": 3,
+        "title": "The life of a model",
+        "shows": "How a model is proposed, trained on the record, admitted, measured, and disabled — and why it cannot come back without a human.",
+        "figure": ("13-model-life.png", "Eight stages, one loop back. The dashed return path is the one an automated system is not allowed to take."),
+        "body": [
+            "A model is proposed, trained on data built from the record rather than from memory, measured "
+            "with a metric that would catch a coin-flip, admitted to the registry, traded as one book, and "
+            "evaluated on its own fills.",
+            "The last two stages are the ones most systems leave out. Disabling requires the exact inputs "
+            "in play, the rule that fired and the number that tripped it, written down at the moment of "
+            "disabling. Re-enabling is a human act: the dashed line back to admission is drawn because it "
+            "exists, and dashed because no cron job may take it.",
+        ],
+        "table": (["Stage", "Artefact", "Rule"],
+                  [["propose", "model_gen.py", "an idea, not a claim"],
+                   ["record", "datasets/features.csv", "built from the lake, never from memory"],
+                   ["train", "datasets/model/model.json", "time split, forward-return label"],
+                   ["measure", "metrics.json", "Brier and AUC, not accuracy alone"],
+                   ["admit", "supervisor registry", "human sign-off"],
+                   ["trade", "state/pack_<engine>.json", "one book, one process"],
+                   ["evaluate", "fill records", "judged on what it actually did"],
+                   ["disable", "sentinel + post-mortem", "written at the moment of disabling"]]),
+    },
+    {
         "id": "lake",
         "level": 4,
         "shows": "What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.",
@@ -340,7 +409,8 @@ SECTIONS = [
 # then the record and what is under it. Order is declared here, not left to the
 # order the sections happen to be written in.
 ORDER = ["how-to-read", "contexts", "envelope", "market", "books", "risk", "recorder",
-         "control", "lake", "stores", "tree", "beneath", "crossing", "failures"]
+         "control", "engines", "deps", "models", "lake", "stores", "tree", "beneath",
+         "crossing", "failures"]
 SECTIONS.sort(key=lambda s: ORDER.index(s["id"]) if s["id"] in ORDER else len(ORDER))
 
 # Numbering: a level with one section is "3"; a level with several is "3.1", "3.2".

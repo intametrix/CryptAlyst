@@ -128,9 +128,13 @@ refreshStats();
 setInterval(refreshStats, 5000);
 
 /* ---------- generic sortable table ---------- */
+/* suppressSortClick: set while a column-resize drag ends, so the click that
+   follows pointerup does not also toggle sort on that header. */
+let suppressSortClick = false;
 function wireSort(theadSel, tbodySel, rows, render, state) {
   const thead = $(theadSel);
   thead.addEventListener("click", (e) => {
+    if (suppressSortClick || e.target.closest(".rz")) return;
     const th = e.target.closest("th");
     if (!th) return;
     const k = th.dataset.k;
@@ -143,10 +147,13 @@ function wireSort(theadSel, tbodySel, rows, render, state) {
 }
 function sorted(rows, k, dir) {
   const m = dir === "asc" ? 1 : -1;
+  const col = INST_COLS.find((c) => c.k === k);
   return [...rows].sort((a, b) => {
-    let va = a[k], vb = b[k];
+    let va = col && col.sk ? col.sk(a) : a[k];
+    let vb = col && col.sk ? col.sk(b) : b[k];
     if (Array.isArray(va)) va = va.join(",");
     if (typeof va === "object" && va) va = Object.keys(va).length;
+    if (Array.isArray(vb)) vb = vb.join(",");
     if (typeof vb === "object" && vb) vb = Object.keys(vb).length;
     if (va == null) va = ""; if (vb == null) vb = "";
     return va > vb ? m : va < vb ? -m : 0;
@@ -162,7 +169,40 @@ function countSels(rows, key) {
 const fmtMS = (ms) => (ms ? new Date(ms).toLocaleString() : "—");
 
 /* ---------- instruments ---------- */
-const inst = { rows: [], sort: { key: "id", dir: "asc" }, sel: null };
+/* Column model: k = sort key, label = header text, def = visible by default,
+   w = default width (px) before the user saves one, html = cell renderer,
+   tip = optional tooltip text, sk = sort key value. Visibility and widths
+   persist in localStorage. */
+const joinKV = (o) => o && typeof o === "object"
+  ? Object.entries(o).map(([k, v]) => `${k}=${v}`).join(", ") : "";
+const INST_COLS = [
+  { k: "symbol",      label: "symbol",      def: true,  w: 110, html: (r) => esc(r.symbol), sk: (r) => r.symbol || "" },
+  { k: "id",          label: "id",          def: true,  w: 210, html: (r) => `<span class="mono">${esc(r.id)}</span>`, sk: (r) => r.id || "" },
+  { k: "class",       label: "class",       def: true,  w: 110, html: (r) => `<span class="pill ${esc(r.class)}">${esc(r.class)}</span>` },
+  { k: "name",        label: "name",        def: false, w: 160, html: (r) => esc(r.name || "") },
+  { k: "status",      label: "status",      def: true,  w: 100, html: (r) => `<span class="pill ${esc(r.status)}">${esc(r.status)}</span>` },
+  { k: "venues",      label: "venues",      def: true,  w: 130, html: (r) => esc((r.venues || []).join(", ")), sk: (r) => (r.venues || []).join(",") },
+  { k: "identifiers", label: "identifiers", def: false, w: 200, html: (r) => esc(joinKV(r.identifiers)), tip: (r) => joinKV(r.identifiers), sk: (r) => joinKV(r.identifiers) },
+  { k: "nidents",     label: "#ids",        def: true,  w: 56,  html: (r) => String(r.identifiers ? Object.keys(r.identifiers).length : 0), sk: (r) => r.identifiers ? Object.keys(r.identifiers).length : 0 },
+  { k: "limits",      label: "limits",      def: false, w: 160, html: (r) => esc(joinKV(r.limits)), tip: (r) => joinKV(r.limits), sk: (r) => joinKV(r.limits) },
+  { k: "meta",        label: "meta",        def: false, w: 160, html: (r) => esc(joinKV(r.meta)), tip: (r) => joinKV(r.meta), sk: (r) => joinKV(r.meta) },
+  { k: "created_ms",  label: "created",     def: false, w: 150, html: (r) => fmtMS(r.created_ms), sk: (r) => r.created_ms || 0 },
+  { k: "updated_ms",  label: "updated",     def: true,  w: 150, html: (r) => fmtMS(r.updated_ms), sk: (r) => r.updated_ms || 0 },
+];
+
+function instCols() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem("refdata:inst:cols") || "null"); } catch {}
+  if (Array.isArray(saved) && saved.length)
+    return INST_COLS.filter((c) => saved.includes(c.k));
+  return INST_COLS.filter((c) => c.def);
+}
+function instWidths() {
+  try { return JSON.parse(localStorage.getItem("refdata:inst:widths") || "{}") || {}; }
+  catch { return {}; }
+}
+
+const inst = { rows: [], sort: { key: "symbol", dir: "asc" }, sel: null };
 
 async function loadInstruments() {
   inst.rows = await api("/v1/instruments");
@@ -170,6 +210,7 @@ async function loadInstruments() {
   countSels(inst.rows, "class").forEach((v) => $("#f-class").insertAdjacentHTML("beforeend", `<option>${esc(v)}</option>`));
   countSels(inst.rows, "status").forEach((v) => $("#f-status").insertAdjacentHTML("beforeend", `<option>${esc(v)}</option>`));
   countSels(inst.rows, "venues").forEach((v) => $("#f-venue").insertAdjacentHTML("beforeend", `<option>${esc(v)}</option>`));
+  renderInstHead();
   renderInstruments();
 }
 
@@ -183,21 +224,87 @@ function filteredInstruments() {
     (!vn || (r.venues || []).includes(vn)));
 }
 
+function renderInstHead() {
+  const cols = instCols();
+  const widths = instWidths();
+  const { key, dir } = inst.sort;
+  $("#inst-thead").innerHTML = `<tr>${cols.map((c) => {
+    const w = widths[c.k] || c.w;
+    const srt = c.k === key ? ` sorted ${dir}` : "";
+    return `<th data-k="${c.k}"${w ? ` style="width:${w}px"` : ""}${srt}>` +
+      `${c.label}<span class="rz" title="drag to resize"></span></th>`;
+  }).join("")}</tr>`;
+  wireResize();
+}
+
+/* drag the right edge of a header to resize its column; width persists. */
+function wireResize() {
+  $$("#inst-thead .rz").forEach((rz) => {
+    rz.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const th = rz.closest("th");
+      const startX = e.clientX, startW = th.getBoundingClientRect().width;
+      rz.classList.add("on");
+      rz.setPointerCapture(e.pointerId);
+      let moved = false;
+      const move = (ev) => {
+        const w = Math.max(48, Math.min(640, Math.round(startW + ev.clientX - startX)));
+        if (w !== Math.round(startW)) moved = true;
+        th.style.width = w + "px";
+      };
+      const up = (ev) => {
+        rz.removeEventListener("pointermove", move);
+        rz.removeEventListener("pointerup", up);
+        rz.classList.remove("on");
+        const w = Math.max(48, Math.min(640, Math.round(startW + ev.clientX - startX)));
+        const widths = instWidths();
+        widths[th.dataset.k] = w;
+        localStorage.setItem("refdata:inst:widths", JSON.stringify(widths));
+        if (moved) { suppressSortClick = true; setTimeout(() => (suppressSortClick = false), 0); }
+      };
+      rz.addEventListener("pointermove", move);
+      rz.addEventListener("pointerup", up);
+    });
+  });
+}
+
+/* column chooser: every attribute toggleable, >=1 column must stay visible. */
+function renderColMenu() {
+  const visible = new Set(instCols().map((c) => c.k));
+  $("#col-menu").innerHTML = INST_COLS.map((c) =>
+    `<label class="colitem"><input type="checkbox" data-col="${c.k}"${visible.has(c.k) ? " checked" : ""}> ${c.label}</label>`).join("");
+  $$("#col-menu input").forEach((cb) => cb.addEventListener("change", () => {
+    if (!$("#col-menu input:checked")) { cb.checked = true; return; }
+    localStorage.setItem("refdata:inst:cols",
+      JSON.stringify($$("#col-menu input:checked").map((x) => x.dataset.col)));
+    renderInstHead();
+    renderInstruments();
+  }));
+}
+$("#col-chooser").addEventListener("click", (e) => {
+  e.stopPropagation();
+  const menu = $("#col-menu");
+  if (menu.hidden) { renderColMenu(); menu.hidden = false; }
+  else menu.hidden = true;
+});
+document.addEventListener("click", (e) => {
+  const menu = $("#col-menu");
+  if (!menu.hidden && !e.target.closest(".colchooser-wrap")) menu.hidden = true;
+});
+
 function renderInstruments(rows = sorted(filteredInstruments(), inst.sort.key, inst.sort.dir)) {
   $("#inst-count").textContent = `${rows.length} of ${inst.rows.length} instruments`;
+  const cols = instCols();
   $("#inst-table tbody").innerHTML = rows.map((r) => `
     <tr data-id="${esc(r.id)}" class="${inst.sel === r.id ? "sel" : ""}">
-      <td class="id">${esc(r.id)}</td>
-      <td><span class="pill ${esc(r.class)}">${esc(r.class)}</span></td>
-      <td>${esc(r.symbol)}</td>
-      <td><span class="pill ${esc(r.status)}">${esc(r.status)}</span></td>
-      <td>${esc((r.venues || []).join(", "))}</td>
-      <td>${r.identifiers ? Object.keys(r.identifiers).length : 0}</td>
-      <td>${fmtMS(r.updated_ms)}</td>
+      ${cols.map((c) => {
+        const tip = c.tip ? ` title="${esc(c.tip(r))}"` : "";
+        return `<td${tip}>${c.html(r)}</td>`;
+      }).join("")}
     </tr>`).join("");
 }
 
-wireSort("#inst-table thead", "#inst-table tbody", filteredInstruments, renderInstruments, inst.sort);
+wireSort("#inst-thead", "#inst-table tbody", filteredInstruments, renderInstruments, inst.sort);
 ["#f-q", "#f-class", "#f-status", "#f-venue"].forEach((s) =>
   $(s).addEventListener("input", () => renderInstruments()));
 

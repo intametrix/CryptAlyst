@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="800" viewBox="0 0 1660 800" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1660" height="800" fill="#0b1118"/>
+<marker id="a-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="a-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="40" y="50" fill="#e6eef8" font-size="25" font-weight="700">What an engine depends on</text>
+<text x="40" y="74" fill="#8ea0b6" font-size="15">the same seven dependencies for all thirty-eight, which is why one can be added safely</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="13" text-anchor="end">no engine talks to the exchange</text>
+<rect x="640" y="320" width="380" height="150" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="650" y="342" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">ONE ENGINE</text>
+<text x="650" y="360" fill="#8ea0b6" font-size="16.0" font-weight="400">its strategy</text>
+<text x="1010" y="360" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="650" y="384.0" fill="#e6eef8" font-size="16.0" font-weight="600">its book</text>
+<text x="1010" y="384.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">AGGREGATE</text>
+<text x="650" y="408.0" fill="#e6eef8" font-size="16.0" font-weight="600">its state file</text>
+<text x="1010" y="408.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<rect x="60" y="110" width="380" height="130" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="70" y="132" fill="#4f9bff" font-size="15.0" font-weight="700" letter-spacing="0.06em">MARKET FEED</text>
+<text x="70" y="150" fill="#8ea0b6" font-size="16.0" font-weight="400">127.0.0.1:8796</text>
+<text x="430" y="150" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="70" y="174.0" fill="#8ea0b6" font-size="16.0" font-weight="400">prices, klines, depth</text>
+<text x="430" y="174.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<rect x="60" y="330" width="380" height="130" rx="9" fill="#0d1f1a" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="70" y="352" fill="#38d39f" font-size="15.0" font-weight="700" letter-spacing="0.06em">INTEL CACHE</text>
+<text x="70" y="370" fill="#8ea0b6" font-size="16.0" font-weight="400">signals · flow · TA · forecast</text>
+<text x="430" y="370" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="70" y="394.0" fill="#8ea0b6" font-size="16.0" font-weight="400">carries its own age</text>
+<text x="430" y="394.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<rect x="60" y="550" width="380" height="130" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="70" y="572" fill="#ef6b6b" font-size="15.0" font-weight="700" letter-spacing="0.06em">RISK GATE</text>
+<text x="70" y="590" fill="#8ea0b6" font-size="16.0" font-weight="400">risk.allow()</text>
+<text x="430" y="590" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="70" y="614.0" fill="#e6eef8" font-size="16.0" font-weight="600">stop flag on disk</text>
+<text x="430" y="614.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<rect x="1220" y="110" width="380" height="130" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1230" y="132" fill="#a879ff" font-size="15.0" font-weight="700" letter-spacing="0.06em">THE BUS</text>
+<text x="1230" y="150" fill="#8ea0b6" font-size="16.0" font-weight="400">model.decision</text>
+<text x="1590" y="150" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1230" y="174.0" fill="#8ea0b6" font-size="16.0" font-weight="400">model.fill</text>
+<text x="1590" y="174.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<rect x="1220" y="330" width="380" height="130" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1230" y="352" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">ITS OWN STATE</text>
+<text x="1230" y="370" fill="#e6eef8" font-size="16.0" font-weight="600">state/pack_&lt;engine&gt;.json</text>
+<text x="1590" y="370" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1230" y="394.0" fill="#8ea0b6" font-size="16.0" font-weight="400">rewritten in place</text>
+<text x="1590" y="394.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<rect x="1220" y="550" width="380" height="130" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1230" y="572" fill="#7f8ea3" font-size="15.0" font-weight="700" letter-spacing="0.06em">SUPERVISOR</text>
+<text x="1230" y="590" fill="#8ea0b6" font-size="16.0" font-weight="400">restart on exit</text>
+<text x="1590" y="590" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="1230" y="614.0" fill="#8ea0b6" font-size="16.0" font-weight="400">equity and open counts</text>
+<text x="1590" y="614.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<path d="M 440,175 L 640,350" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
+<text x="470" y="250" fill="#8ea0b6" font-size="13.5" text-anchor="start">read</text>
+<path d="M 440,395 L 640,395" fill="none" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-intel)"/>
+<text x="520" y="385" fill="#8ea0b6" font-size="13.5" text-anchor="start">read</text>
+<path d="M 440,615 L 640,440" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-risk)"/>
+<text x="470" y="560" fill="#8ea0b6" font-size="13.5" text-anchor="start">ask</text>
+<path d="M 1020,360 L 1220,175" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-evidence)"/>
+<text x="1050" y="250" fill="#8ea0b6" font-size="13.5" text-anchor="start">publish</text>
+<path d="M 1020,395 L 1220,395" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
+<text x="1070" y="385" fill="#8ea0b6" font-size="13.5" text-anchor="start">write</text>
+<path d="M 1020,430 L 1220,615" fill="none" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-control)"/>
+<text x="1040" y="560" fill="#8ea0b6" font-size="13.5" text-anchor="start">be restarted</text>
+<text x="40" y="700" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">An engine may not talk to the exchange, may not write the lake, and may not decide its own size:</text>
+<text x="40" y="728" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">those three refusals are what make forty engines safe to run at once.</text>
+</svg>

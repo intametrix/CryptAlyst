@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="820" viewBox="0 0 1660 820" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1660" height="820" fill="#0b1118"/>
+<marker id="a-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="a-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="40" y="50" fill="#e6eef8" font-size="25" font-weight="700">The engines — what trades, and in what families</text>
+<text x="40" y="74" fill="#8ea0b6" font-size="15">38 supervised processes, grouped by the edge they claim to have</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="13" text-anchor="end">one book per engine · one process per book</text>
+<rect x="40" y="110" width="200" height="300" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="50" y="132" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">CROSS-SECTION</text>
+<text x="50" y="150" fill="#e6eef8" font-size="16.0" font-weight="600">alpha_rank</text>
+<text x="230" y="150" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="50" y="174.0" fill="#e6eef8" font-size="16.0" font-weight="600">movers</text>
+<text x="230" y="174.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="50" y="198.0" fill="#e6eef8" font-size="16.0" font-weight="600">sympathy_lag</text>
+<text x="230" y="198.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="50" y="222.0" fill="#e6eef8" font-size="16.0" font-weight="600">multi_models</text>
+<text x="230" y="222.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<rect x="320" y="110" width="200" height="300" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="330" y="132" fill="#4f9bff" font-size="14.5" font-weight="700" letter-spacing="0.06em">MICROSTRUCTURE</text>
+<text x="330" y="150" fill="#e6eef8" font-size="16.0" font-weight="600">grid</text>
+<text x="510" y="150" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="330" y="174.0" fill="#e6eef8" font-size="16.0" font-weight="600">hft</text>
+<text x="510" y="174.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="330" y="198.0" fill="#e6eef8" font-size="16.0" font-weight="600">scalp_fast</text>
+<text x="510" y="198.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="330" y="222.0" fill="#e6eef8" font-size="16.0" font-weight="600">skim_pump</text>
+<text x="510" y="222.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="330" y="246.0" fill="#e6eef8" font-size="16.0" font-weight="600">flash</text>
+<text x="510" y="246.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="330" y="270.0" fill="#e6eef8" font-size="16.0" font-weight="600">fast_ignition</text>
+<text x="510" y="270.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<rect x="600" y="110" width="200" height="300" rx="9" fill="#0d1f1a" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="610" y="132" fill="#38d39f" font-size="15.0" font-weight="700" letter-spacing="0.06em">MOMENTUM</text>
+<text x="610" y="150" fill="#e6eef8" font-size="12.5" font-weight="600">crypto_pack — 12 strategies</text>
+<text x="790" y="150" fill="#5a6b80" font-size="7.5" text-anchor="end" letter-spacing="0.04em">AGGREGATE</text>
+<text x="610" y="170.5" fill="#e6eef8" font-size="16.0" font-weight="600">swing_v2</text>
+<text x="790" y="170.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="610" y="194.5" fill="#e6eef8" font-size="16.0" font-weight="600">curve_rider</text>
+<text x="790" y="194.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="610" y="218.5" fill="#e6eef8" font-size="16.0" font-weight="600">churn</text>
+<text x="790" y="218.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<rect x="880" y="110" width="200" height="300" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="890" y="132" fill="#a879ff" font-size="15.0" font-weight="700" letter-spacing="0.06em">MEAN REVERSION</text>
+<text x="890" y="150" fill="#e6eef8" font-size="16.0" font-weight="600">vwap_revert</text>
+<text x="1070" y="150" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="890" y="174.0" fill="#e6eef8" font-size="16.0" font-weight="600">vwap_scalp</text>
+<text x="1070" y="174.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="890" y="198.0" fill="#e6eef8" font-size="16.0" font-weight="600">rsi2</text>
+<text x="1070" y="198.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="890" y="222.0" fill="#e6eef8" font-size="16.0" font-weight="600">boll_squeeze</text>
+<text x="1070" y="222.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<rect x="1160" y="110" width="200" height="300" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1170" y="132" fill="#ef6b6b" font-size="13.0" font-weight="700" letter-spacing="0.06em">INTELLIGENCE-LED</text>
+<text x="1170" y="150" fill="#e6eef8" font-size="16.0" font-weight="600">alpha_signals</text>
+<text x="1350" y="150" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1170" y="174.0" fill="#e6eef8" font-size="16.0" font-weight="600">crypto_edges</text>
+<text x="1350" y="174.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1170" y="198.0" fill="#e6eef8" font-size="16.0" font-weight="600">slow_edges</text>
+<text x="1350" y="198.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1170" y="222.0" fill="#e6eef8" font-size="16.0" font-weight="600">skim_ai</text>
+<text x="1350" y="222.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<rect x="1440" y="110" width="200" height="300" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1450" y="132" fill="#7f8ea3" font-size="15.0" font-weight="700" letter-spacing="0.06em">HYBRIDS</text>
+<text x="1450" y="150" fill="#e6eef8" font-size="15.5" font-weight="600">trend_pullback</text>
+<text x="1630" y="150" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="173.5" fill="#e6eef8" font-size="16.0" font-weight="600">breakout_atr</text>
+<text x="1630" y="173.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="197.5" fill="#e6eef8" font-size="15.0" font-weight="600">mean_revert_z</text>
+<text x="1630" y="197.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="220.5" fill="#e6eef8" font-size="16.0" font-weight="600">vwap_reclaim</text>
+<text x="1630" y="220.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="244.5" fill="#e6eef8" font-size="11.5" font-weight="600">momentum_ignition</text>
+<text x="1630" y="244.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="264.0" fill="#e6eef8" font-size="16.0" font-weight="600">oi_squeeze</text>
+<text x="1630" y="264.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="288.0" fill="#e6eef8" font-size="16.0" font-weight="600">funding_fade</text>
+<text x="1630" y="288.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="312.0" fill="#e6eef8" font-size="13.5" font-weight="600">taker_imbalance</text>
+<text x="1630" y="312.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="333.5" fill="#e6eef8" font-size="16.0" font-weight="600">flow_confirm</text>
+<text x="1630" y="333.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1450" y="357.5" fill="#e6eef8" font-size="16.0" font-weight="600">range_break</text>
+<text x="1630" y="357.5" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<rect x="40" y="460" width="820" height="150" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="50" y="482" fill="#7f8ea3" font-size="15.0" font-weight="700" letter-spacing="0.06em">EXECUTION AND OVERSIGHT</text>
+<text x="50" y="500" fill="#8ea0b6" font-size="16.0" font-weight="400">executor — turns decisions into fills</text>
+<text x="850" y="500" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="50" y="524.0" fill="#8ea0b6" font-size="16.0" font-weight="400">market_agent — the market-floor view</text>
+<text x="850" y="524.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="50" y="548.0" fill="#8ea0b6" font-size="16.0" font-weight="400">supervisor — restarts a dead engine</text>
+<text x="850" y="548.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="50" y="572.0" fill="#8ea0b6" font-size="16.0" font-weight="400">heartbeat — reads the books, writes the pulse</text>
+<text x="850" y="572.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<rect x="900" y="460" width="720" height="150" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="910" y="482" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">EVERY ENGINE DOES THE SAME FIVE THINGS</text>
+<text x="910" y="500" fill="#8ea0b6" font-size="12.8" font-weight="400">reads market and intel state</text>
+<text x="1610" y="500" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="910" y="520.8" fill="#8ea0b6" font-size="12.8" font-weight="400">asks risk.allow() before it acts</text>
+<text x="1610" y="520.8" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="910" y="541.5999999999999" fill="#8ea0b6" font-size="12.8" font-weight="400">publishes model.decision, model.fill</text>
+<text x="1610" y="541.5999999999999" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="910" y="562.3999999999999" fill="#8ea0b6" font-size="12.8" font-weight="400">writes its own state/pack_&lt;engine&gt;.json</text>
+<text x="1610" y="562.3999999999999" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="910" y="583.1999999999998" fill="#8ea0b6" font-size="12.8" font-weight="400">exits through the shared exit policy</text>
+<text x="1610" y="583.1999999999998" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="40" y="660" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">The families are a reading aid, not a code boundary: every engine is the same shape, and the difference is the signal it trusts.</text>
+</svg>

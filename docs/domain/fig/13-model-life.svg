@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="720" viewBox="0 0 1660 720" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1660" height="720" fill="#0b1118"/>
+<marker id="a-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="a-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="40" y="50" fill="#e6eef8" font-size="25" font-weight="700">The life of a model</text>
+<text x="40" y="74" fill="#8ea0b6" font-size="15">proposed, trained on the record, admitted by a human, measured, and disabled in writing</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="13" text-anchor="end">a model that is disabled influences nothing</text>
+<rect x="36" y="150" width="184" height="120" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="46" y="172" fill="#7f8ea3" font-size="15.0" font-weight="700" letter-spacing="0.06em">PROPOSE</text>
+<text x="46" y="190" fill="#8ea0b6" font-size="16.0" font-weight="400">model_gen.py</text>
+<rect x="232" y="150" width="184" height="120" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="242" y="172" fill="#a879ff" font-size="15.0" font-weight="700" letter-spacing="0.06em">RECORD</text>
+<text x="242" y="190" fill="#8ea0b6" font-size="14.0" font-weight="400">the lake → features.csv</text>
+<path d="M 220,210 L 232,210" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.3" marker-end="url(#a-evidence)"/>
+<rect x="428" y="150" width="184" height="120" rx="9" fill="#0d1f1a" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="438" y="172" fill="#38d39f" font-size="15.0" font-weight="700" letter-spacing="0.06em">TRAIN</text>
+<text x="438" y="190" fill="#8ea0b6" font-size="16.0" font-weight="400">tools/train.py</text>
+<path d="M 416,210 L 428,210" fill="none" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.3" marker-end="url(#a-intel)"/>
+<rect x="624" y="150" width="184" height="120" rx="9" fill="#0d1f1a" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="634" y="172" fill="#38d39f" font-size="15.0" font-weight="700" letter-spacing="0.06em">MEASURE</text>
+<text x="634" y="190" fill="#8ea0b6" font-size="12.5" font-weight="400">Brier · AUC · time split</text>
+<path d="M 612,210 L 624,210" fill="none" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.3" marker-end="url(#a-intel)"/>
+<rect x="820" y="150" width="184" height="120" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="830" y="172" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">ADMIT</text>
+<text x="830" y="190" fill="#8ea0b6" font-size="16.0" font-weight="400">supervisor registry</text>
+<path d="M 808,210 L 820,210" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.3" marker-end="url(#a-model)"/>
+<rect x="1016" y="150" width="184" height="120" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1026" y="172" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">TRADE</text>
+<text x="1026" y="190" fill="#8ea0b6" font-size="14.5" font-weight="400">one book, one process</text>
+<path d="M 1004,210 L 1016,210" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.3" marker-end="url(#a-model)"/>
+<rect x="1212" y="150" width="184" height="120" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1222" y="172" fill="#ef6b6b" font-size="15.0" font-weight="700" letter-spacing="0.06em">EVALUATE</text>
+<text x="1222" y="190" fill="#8ea0b6" font-size="16.0" font-weight="400">fills → fit_weights</text>
+<path d="M 1200,210 L 1212,210" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.3" marker-end="url(#a-risk)"/>
+<rect x="1408" y="150" width="184" height="120" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1418" y="172" fill="#ef6b6b" font-size="15.0" font-weight="700" letter-spacing="0.06em">DISABLE</text>
+<text x="1418" y="190" fill="#8ea0b6" font-size="14.0" font-weight="400">sentinel + post-mortem</text>
+<path d="M 1396,210 L 1408,210" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.3" marker-end="url(#a-risk)"/>
+<path d="M 1490,270 L 1490,360 L 130,360 L 130,270" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#a-risk)"/>
+<text x="600" y="348" fill="#ef6b6b" font-size="18" text-anchor="start" font-weight="400">a disabled model does not come back without a human</text>
+<rect x="40" y="430" width="760" height="170" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="50" y="452" fill="#7f8ea3" font-size="15.0" font-weight="700" letter-spacing="0.06em">WHAT ADMISSION REQUIRES</text>
+<text x="50" y="470" fill="#8ea0b6" font-size="16.0" font-weight="400">a dataset built from the record, not from memory</text>
+<text x="790" y="470" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="50" y="494.0" fill="#8ea0b6" font-size="16.0" font-weight="400">a metric that would catch a coin-flip model</text>
+<text x="790" y="494.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="50" y="518.0" fill="#8ea0b6" font-size="16.0" font-weight="400">a written reason, and a way back to off</text>
+<text x="790" y="518.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<rect x="860" y="430" width="760" height="170" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="870" y="452" fill="#ef6b6b" font-size="15.0" font-weight="700" letter-spacing="0.06em">WHAT DISABLING REQUIRES</text>
+<text x="870" y="470" fill="#8ea0b6" font-size="16.0" font-weight="400">the exact inputs in play at the time</text>
+<text x="1610" y="470" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="870" y="494.0" fill="#8ea0b6" font-size="16.0" font-weight="400">the rule that fired, and the number</text>
+<text x="1610" y="494.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="870" y="518.0" fill="#8ea0b6" font-size="16.0" font-weight="400">a post-mortem appended, never rewritten</text>
+<text x="1610" y="518.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+</svg>

@@ -16,6 +16,9 @@ Seven bounded contexts, one contract between them, and a record that can be read
 - **3.3** [The gate — what must pass before money moves](#risk) — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
 - **3.4** [The recorder — the only writer](#recorder) — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
 - **3.5** [Control — what may change behaviour](#control) — What may change behaviour — supervise and stop — and what STOP must never touch.
+- **3.6** [The engines — what trades, and in what families](#engines) — Thirty-eight supervised engines, grouped by the edge they claim to have, and the five things every one of them does identically.
+- **3.7** [What an engine depends on](#deps) — The seven dependencies every engine shares — and the three things an engine is not allowed to do.
+- **3.8** [The life of a model](#models) — How a model is proposed, trained on the record, admitted, measured, and disabled — and why it cannot come back without a human.
 - **4.1** [The lake — what is actually on disk](#lake) — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
 - **4.2** [The data stores, as they exist](#stores) — Every place data is actually written on this machine, in which format, by which process, for how long.
 - **4.3** [How the lake chooses](#tree) — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
@@ -34,6 +37,9 @@ Seven bounded contexts, one contract between them, and a record that can be read
 | 3.3 | The gate | interceptors before arithmetic, and the exit policy |
 | 3.4 | The recorder | one writer, hops recorded, derived references attached |
 | 3.5 | Control | supervise, stop, and what STOP must never touch |
+| 3.6 | Figure |  |
+| 3.7 | Figure |  |
+| 3.8 | Figure |  |
 | 4.1 | The lake | journal, line format, index, retention, replay |
 | 4.2 | Data stores | every store on disk: format, writer, reader, lifetime |
 | 4.3 | How the lake chooses | the rules that decide where data lands and how long it lives |
@@ -199,6 +205,74 @@ The inverse is equally deliberate: no data path can stop the platform. A feed ou
 - STOP leaves market data, the recorder and the explorer running
 - starting the platform does not start trading unless it is asked to
 - a stopped book is visibly stopped; it does not linger as a row on a dashboard
+
+---
+
+## 3.6  The engines — what trades, and in what families
+
+> **What this shows** — Thirty-eight supervised engines, grouped by the edge they claim to have, and the five things every one of them does identically.
+
+![Six families and one shape: the difference between engines is the signal they trust, not the way they are built.](fig/11-engines.png)
+
+*Six families and one shape: the difference between engines is the signal they trust, not the way they are built.*
+
+The platform runs thirty-eight engine processes. They are grouped here by the edge they claim: cross-sectional ranking, microstructure, momentum, mean reversion, intelligence-led, and the ten hybrids that combine two families on purpose.
+
+The grouping is a reading aid, not a code boundary. Every engine reads the same state, asks the same gate, publishes the same two topics and writes the same kind of file. That is what makes adding a thirty-ninth safe.
+
+| Family | Engines | The edge it claims |
+|---|---|---|
+| Cross-section | alpha_rank, movers, sympathy_lag, multi_models | rank every symbol, trade the extremes |
+| Microstructure | grid, hft, scalp_fast, skim_pump, flash, fast_ignition | the book moves before the price does |
+| Momentum | crypto_pack (12 strategies), swing_v2, curve_rider, churn | the move continues |
+| Mean reversion | vwap_revert, vwap_scalp, rsi2, boll_squeeze | the move overshoots |
+| Intelligence-led | alpha_signals, crypto_edges, slow_edges, skim_ai | flow and derivatives lead price |
+| Hybrids | ten strategies, two families each | one signal confirming another |
+
+---
+
+## 3.7  What an engine depends on
+
+> **What this shows** — The seven dependencies every engine shares — and the three things an engine is not allowed to do.
+
+![One engine, seven dependencies. The same shape for all thirty-eight, which is why none of them can quietly become special.](fig/12-dependencies.png)
+
+*One engine, seven dependencies. The same shape for all thirty-eight, which is why none of them can quietly become special.*
+
+An engine reads market and intelligence state, asks the risk gate, publishes its decision and its fill, writes its own pack file, and is restarted by the supervisor if it dies. Those seven dependencies are the same for every engine, including the ones added last week.
+
+The refusals matter more than the dependencies. An engine may not open a socket to the exchange, may not write the lake, and may not choose its own size. Each refusal removes a way for a single engine to damage the record or the book.
+
+- may not talk to the exchange — the feed is the only process that does
+- may not write the lake — the recorder is the only writer
+- may not size itself — risk.allow and size_for decide
+- may not trade while the stop flag exists
+- must publish its decision even when it is refused
+
+---
+
+## 3.8  The life of a model
+
+> **What this shows** — How a model is proposed, trained on the record, admitted, measured, and disabled — and why it cannot come back without a human.
+
+![Eight stages, one loop back. The dashed return path is the one an automated system is not allowed to take.](fig/13-model-life.png)
+
+*Eight stages, one loop back. The dashed return path is the one an automated system is not allowed to take.*
+
+A model is proposed, trained on data built from the record rather than from memory, measured with a metric that would catch a coin-flip, admitted to the registry, traded as one book, and evaluated on its own fills.
+
+The last two stages are the ones most systems leave out. Disabling requires the exact inputs in play, the rule that fired and the number that tripped it, written down at the moment of disabling. Re-enabling is a human act: the dashed line back to admission is drawn because it exists, and dashed because no cron job may take it.
+
+| Stage | Artefact | Rule |
+|---|---|---|
+| propose | model_gen.py | an idea, not a claim |
+| record | datasets/features.csv | built from the lake, never from memory |
+| train | datasets/model/model.json | time split, forward-return label |
+| measure | metrics.json | Brier and AUC, not accuracy alone |
+| admit | supervisor registry | human sign-off |
+| trade | state/pack_<engine>.json | one book, one process |
+| evaluate | fill records | judged on what it actually did |
+| disable | sentinel + post-mortem | written at the moment of disabling |
 
 ---
 
