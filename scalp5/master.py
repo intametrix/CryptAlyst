@@ -2541,6 +2541,27 @@ async function optApply(m){
 }
 
 
+window.BOOKFILTER = window.BOOKFILTER || null;
+function _sideTile(label, value, colour, kind){
+  var on = (window.BOOKFILTER === kind);
+  return '<span onclick="bookFilter(\''+kind+'\')" title="click to '+(on?"clear":"filter to")+' '+
+    label+'" style="cursor:pointer;display:inline-block;border-radius:8px;padding:1px 4px;'+
+    (on?('outline:1px solid '+colour+';background:#0f1a14;'):'')+'">'+
+    UI.stat(label, value, colour)+'</span>';
+}
+function bookFilter(kind){
+  window.BOOKFILTER = (window.BOOKFILTER === kind) ? null : kind;
+  renderBooks();
+}
+function _bookMatches(b, kind){
+  if(!kind) return true;
+  if(kind === "open_long")   return (b.open_long||0) > 0;
+  if(kind === "open_short")  return (b.open_short||0) > 0;
+  if(kind === "closed_long") return (b.closed_long||0) > 0;
+  if(kind === "closed_short")return (b.closed_short||0) > 0;
+  return true;
+}
+
 async function renderBooks(){
   var head=$("bookshead"), grid=$("booksgrid"), note=$("booksnote");
   if(!grid) return;
@@ -2560,10 +2581,10 @@ async function renderBooks(){
     UI.stat("books trading", active, "#58a6ff")+
     UI.stat("books idle", flat, "#7c8b9d")+
     UI.stat("open positions", d.open||0)+
-    UI.stat("open long", d.open_long||0, "#3fb950")+
-    UI.stat("open short", d.open_short||0, "#f85149")+
-    UI.stat("closed long", d.closed_long||0, "#3fb950")+
-    UI.stat("closed short", d.closed_short||0, "#f85149")+
+    _sideTile("open long", d.open_long||0, "#3fb950", "open_long")+
+    _sideTile("open short", d.open_short||0, "#f85149", "open_short")+
+    _sideTile("closed long", d.closed_long||0, "#3fb950", "closed_long")+
+    _sideTile("closed short", d.closed_short||0, "#f85149", "closed_short")+
     UI.stat("closed trades", d.closed||0)+
     UI.stat("realised", ((d.realised||0)>=0?"+":"")+money(d.realised||0), ((d.realised||0)>=0?"#3fb950":"#f85149"))+
     UI.stat("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"))+
@@ -2574,8 +2595,19 @@ async function renderBooks(){
       ' positions open across them · '+(d.closed||0)+' trades closed in total</div>'+
     '</div>';
 
+  var allBooks = books.length;
+  if(window.BOOKFILTER) books = books.filter(function(b){ return _bookMatches(b, window.BOOKFILTER); });
   books.sort(function(a,b){ return (b.total_pct||0)-(a.total_pct||0); });
-  grid.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">'+
+  if(window.BOOKFILTER){
+    grid.insertAdjacentHTML("beforebegin", "");
+  }
+  var banner = window.BOOKFILTER
+    ? '<div class="panel" style="padding:8px 12px;margin-bottom:10px;border-color:#2a3b4d">'+
+      '<span style="color:#9fc7ef">filtered: '+esc(window.BOOKFILTER.replace("_"," "))+' — '+
+      books.length+' of '+allBooks+' books</span>'+
+      '<span style="flex:1"></span><button class="tbtn" onclick="bookFilter(\''+window.BOOKFILTER+'\')">clear filter</button></div>'
+    : '';
+  grid.innerHTML=banner+'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">'+
     books.map(function(b){
       var tp=(b.total_pct==null?b.return_pct:b.total_pct)||0;
       var col=tp>0?"#3fb950":tp<0?"#f85149":"#7c8b9d";
