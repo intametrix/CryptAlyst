@@ -97,6 +97,12 @@ def running(name):
 
 
 def start(name):
+    # defense-in-depth: the restart loop checks the disabled list, but a launch
+    # must also refuse a disabled book itself (A6: a disabled book never runs).
+    script = os.path.basename(ENGINES[name][2])
+    stem = script[:-3] if script.endswith(".py") else script
+    if _norm(name) in disabled_set() or _norm(stem) in disabled_set():
+        return
     argv = ENGINES[name]
     log = os.path.join(HERE, "logs", "sup_%s.log" % name)
     with open(log, "ab") as fh:
