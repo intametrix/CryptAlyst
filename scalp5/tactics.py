@@ -226,28 +226,45 @@ DEFAULT_OPTIONS = {
 _OPT = {"ts": 0.0, "v": dict(DEFAULT_OPTIONS)}
 
 
-def options(force=False):
-    """Live options, reloaded from state/options.json at most every 2 seconds."""
-    now = time.time()
-    if not force and now - _OPT["ts"] < 2.0:
-        return _OPT["v"]
+# what the override forces on, and therefore what must never be written back to disk
+OVERRIDE_VALUES = {
+    "allow_counter_trend": True, "forecast_gate": False, "min_expected_move": 0.0,
+    "max_positions": 30, "clock_s": 300, "lock_pct": 0.50, "stop_pct": 1.50,
+}
+
+
+def _load_raw():
+    """Exactly what is on disk. Never the expanded override view."""
     v = dict(DEFAULT_OPTIONS)
     try:
         with open(OPT_PATH) as fh:
             v.update(json.load(fh) or {})
     except Exception:
         pass
+    return v
+
+
+def options(force=False):
+    """The EFFECTIVE options: the file, plus the override expansion when it is on.
+
+    The expansion is a view, never a stored value. Writing it back is how turning the
+    flag off used to leave its parameters behind - the flag read false while the
+    platform kept trading crazy.
+    """
+    now = time.time()
+    if not force and now - _OPT["ts"] < 2.0:
+        return _OPT["v"]
+    v = _load_raw()
     if v.get("override_crazy"):
         v = dict(v)
-        v.update({"allow_counter_trend": True, "forecast_gate": False,
-                  "min_expected_move": 0.0, "max_positions": 30,
-                  "clock_s": 300, "lock_pct": 0.50, "stop_pct": 1.50})
+        v.update(OVERRIDE_VALUES)
     _OPT["v"], _OPT["ts"] = v, now
     return v
 
 
 def set_option(key, value):
-    v = dict(options(True))
+    # persist the file's own values, not the override expansion
+    v = _load_raw()
     v[key] = value
     os.makedirs(os.path.dirname(OPT_PATH), exist_ok=True)
     with open(OPT_PATH + ".t", "w") as fh:
