@@ -65,34 +65,10 @@ nohup tools/comms.sh listen kimi >>"$BOX/kimi.fifo.log" 2>&1 &
 echo "  started: comms.sh listen deepseek | comms.sh listen kimi"
 
 # --- 5. mutual liveness monitor -------------------------------------------------
-step "5. Mutual liveness monitor (60s cycle, both agents, chase on flag age)"
-cat > tools/mutual_watch.sh <<'EOF'
-#!/usr/bin/env bash
-# mutual_watch.sh — one monitor, both agents. Restarts a dead poll loop via
-# watch_inbox.sh (which supervises), and chases flagged mail older than 10 min
-# with an UNACKNOWLEDGED note in the shared log. It cannot type into an agent
-# window; when a chase is due it also appends WAKE-NEEDED so setup-comms.sh's
-# report shows the gap plainly.
-set -uo pipefail
-cd "$(dirname "$0")/.."
-BOX="$PWD/.comms"
-while true; do
-  sleep 60
-  for a in deepseek kimi; do
-    pgrep -f "comms.sh poll $a" >/dev/null 2>&1 || \
-      echo "$(date +%H:%M:%S) $a poll DEAD — supervisor should restart; if not, run ./setup-comms.sh" >> "$BOX/mutual_watch.log"
-    if [ -f "$BOX/ATTENTION.$a" ]; then
-      age=$(( $(date +%s) - $(stat -f %m "$BOX/ATTENTION.$a" 2>/dev/null || echo 0) ))
-      if [ "$age" -gt 600 ]; then
-        echo "$(date +%H:%M:%S) UNACKNOWLEDGED ${age}s for $a — WAKE-NEEDED (human click or Accessibility grant)" >> "$BOX/mutual_watch.log"
-      fi
-    fi
-  done
-done
-EOF
-chmod +x tools/mutual_watch.sh
+step "5. Mutual liveness monitor (5s heartbeat cycle: infra heartbeats, dead-poll log, chase on flag age)"
+[ -x tools/mutual_watch.sh ] || { echo "  ERROR: tools/mutual_watch.sh missing (tracked in git — restore it)"; exit 1; }
 nohup tools/mutual_watch.sh >>"$BOX/mutual_watch.log" 2>&1 &
-echo "  started: mutual_watch.sh (log: .comms/mutual_watch.log)"
+echo "  started: mutual_watch.sh (log: .comms/mutual_watch.log, heartbeats: .comms/*.heartbeat.infra)"
 
 # --- 6. verify ------------------------------------------------------------------
 step "6. Verify both sides TICK"
