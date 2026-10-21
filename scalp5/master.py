@@ -3551,12 +3551,21 @@ async function renderModels(){
   if(!box) return;
   box.innerHTML='<div class="hint" style="padding:8px 0">loading models…</div>';
 
-  var d1={}, alive={}, disabled=[];
-  if(window.LAST && window.LAST.length){ d1={engines:window.LAST}; }   // instant first paint
-  else {
-    try{ d1=await (await fetch("/api/all",{cache:"no-store"})).json(); }catch(e){ d1={}; }
-  }
-  try{ var dj=await (await fetch("/api/model_control",{cache:"no-store"})).json(); disabled=dj.disabled||[]; }catch(e){}
+  // a small purpose-built payload: 5KB, cached for two seconds, so this tab does not wait
+  // behind the dashboard's polling for an 84KB /api/all
+  var d1={engines:[]};
+  try{
+    d1=await (await fetch("/api/models",{cache:"no-store"})).json();
+    d1.engines=(d1.models||[]).map(function(m){
+      return {key:m.key, equity:m.equity, start_equity:m.start, return_pct:m.return_pct,
+              realised:m.realised, unrealised:m.unrealised, positions:new Array(m.open),
+              trades:new Array(m.trades), long:m.long, short:m.short,
+              closed_long:m.closed_long, closed_short:m.closed_short,
+              disabled:m.disabled, alive:!m.disabled};
+    });
+    window.__MDISABLED=(d1.models||[]).filter(function(m){return m.disabled;}).map(function(m){return m.key;});
+  }catch(e){}
+  var disabled=window.__MDISABLED||[];
   var books=(d1.engines||[]).filter(function(e){return e.equity!=null;});
   if(note) note.textContent=books.length+" books · "+disabled.length+" stopped";
   if(!books.length){
@@ -5854,9 +5863,28 @@ def ui_lib():
 
 
 class H(BaseHTTPRequestHandler):
+    _TTL = {"/api/models": 2.0, "/api/all": 2.0, "/api/books": 2.0, "/api/engines": 3.0,
+            "/api/heartbeat": 3.0, "/api/trading": 2.0}
+    _CACHE = {}
+
+    def _cache_get(self, path):
+        row = self._CACHE.get(path)
+        if row and (time.time() - row[0]) < self._TTL.get(path, 0):
+            return row[1], row[2]
+        return None
+
+    def _cache_put(self, path, body, ctype):
+        if path in self._TTL and body:
+            self._CACHE[path] = (time.time(), body, ctype)
+
     def _send(self, code, body, ctype):
         if isinstance(body, str):
             body = body.encode()
+        if code == 200:
+            try:
+                self._cache_put(urllib.parse.urlparse(self.path).path, body, ctype)
+            except Exception:
+                pass
         self.send_response(code)
         self.send_header("Content-Type", ctype + "; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -6581,6 +6609,39 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(d), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if p == "/api/models":
+            import glob as _g, json as _json
+            rows = []
+            try:
+                dis = {str(b).replace("_", "").lower()
+                       for b in _json.load(open(os.path.join(HERE, "state", "disabled.json"))).get("books") or []}
+            except Exception:
+                dis = set()
+            for f in sorted(_g.glob(os.path.join(HERE, "state", "pack_*.json")) +
+                            _g.glob(os.path.join(HERE, "state", "strategy_*.json"))):
+                try:
+                    b = _json.load(open(f))
+                except Exception:
+                    continue
+                eng = b.get("engine") or os.path.basename(f).split("_", 1)[-1][:-5]
+                tr = b.get("trades") or []
+                pos = b.get("positions") or []
+                start = float(b.get("start_equity") or 0)
+                eq = float(b.get("equity") or start)
+                rows.append({
+                    "key": eng, "equity": round(eq, 2), "start": round(start, 2),
+                    "return_pct": round(100 * (eq / start - 1), 3) if start else 0,
+                    "realised": round(eq - start, 2),
+                    "unrealised": b.get("unrealised") or 0,
+                    "trades": len(tr), "open": len(pos),
+                    "long": sum(1 for p in pos if str(p.get("side") or "buy").lower() not in ("sell", "short")),
+                    "short": sum(1 for p in pos if str(p.get("side") or "").lower() in ("sell", "short")),
+                    "closed_long": sum(1 for t in tr if str(t.get("side") or "buy").lower() not in ("sell", "short")),
+                    "closed_short": sum(1 for t in tr if str(t.get("side") or "").lower() in ("sell", "short")),
+                    "wins": sum(1 for t in tr if (t.get("net_pct") or 0) > 0),
+                    "disabled": eng.replace("_", "").lower() in dis,
+                })
+            return self._send(200, _json.dumps({"models": rows}), "application/json")
         if p == "/api/engines":
             import glob as _glob, json as _json, subprocess as _sp
             try:
@@ -6609,7 +6670,7 @@ class H(BaseHTTPRequestHandler):
             out = []
             for name, argv in reg.items():
                 script = os.path.basename(argv[2]) if len(argv) > 2 else name
-                alive = _sp.run(["pgrep", "-f", script], capture_output=True).returncode == 0
+                alive = any(script in ln for ln in _proc_snapshot())
                 key = name.replace("_", "").lower()
                 b = packs.get(key) or {}
                 start = float(b.get("start_equity") or 0)
