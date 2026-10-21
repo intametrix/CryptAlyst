@@ -182,11 +182,41 @@ printf '{"stopped_at": %s, "actor": "start.sh", "reason": "platform start — tr
 ok "trading is OFF (state/STOP written)"
 
 # ------------------------------------------------------------- 2 · core
-say "2 · market data (the only process that talks to the exchange)"
+say "2 · the Go backend (detectors and alerts, :8787)"
+if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:8787/health 2>/dev/null; then
+  ok "backend already answering on :8787"
+else
+  if [ ! -x "$ROOT/backend/bin/server" ]; then
+    warn "building the backend"
+    ( cd "$ROOT/backend" && /opt/homebrew/bin/go build -o bin/server ./cmd/server ) || die "backend build failed"
+  fi
+  ( cd "$ROOT/backend" && nohup ./bin/server --addr 127.0.0.1:8787 --timeframes 1d,4h,1h,30m \
+      --alert-history "$ROOT/alerts.jsonl" --ledger "$ROOT/ledger/backend.jsonl" \
+      >"$LOGS/backend.log" 2>&1 & )
+  wait_http "http://127.0.0.1:8787/health" 60 "backend on :8787" || die "backend did not answer"
+fi
+
+say "3 · market data (the only process that talks to the exchange)"
 (cd "$CORE" && nohup ./bin/marketdata --port 8796 --top 400 >"$LOGS/marketdata.log" 2>&1 &)
 wait_http "http://127.0.0.1:8796/health" 25 "market data on :8796" || die "market data did not answer"
 
-say "3 · recorder (the only consumer of the bus, the only writer of the lake)"
+say "4 · signal bus (alerts to the models, :8793)"
+if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:8793/health 2>/dev/null; then
+  ok "signal bus already answering on :8793"
+else
+  nohup python3 -u signal_bus.py --port 8793 >"$LOGS/signal_bus.log" 2>&1 &
+  wait_http "http://127.0.0.1:8793/health" 20 "signal bus on :8793" || die "signal bus did not answer"
+fi
+
+say "5 · optimiser (:8795)"
+if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:8795/health 2>/dev/null; then
+  ok "optimiser already answering on :8795"
+else
+  nohup python3 -u optimiser_svc.py --port 8795 >"$LOGS/optimiser.log" 2>&1 &
+  wait_http "http://127.0.0.1:8795/health" 20 "optimiser on :8795" || die "optimiser did not answer"
+fi
+
+say "6 · recorder (the only consumer of the bus, the only writer of the lake)"
 STORE_ARGS=""
 [ -n "${STORE_KV:-}" ]   && STORE_ARGS="$STORE_ARGS --kv $STORE_KV"
 [ -n "${STORE_SQL:-}" ]  && STORE_ARGS="$STORE_ARGS --sql $STORE_SQL"
@@ -197,31 +227,31 @@ STORE_ARGS=""
 (cd "$CORE" && nohup ./bin/recorder --port 8801 --data ../state/lake3 $STORE_ARGS >"$LOGS/recorder.log" 2>&1 &)
 wait_http "http://127.0.0.1:8801/stats" 20 "recorder on :8801" || die "recorder did not answer"
 
-say "4 · bus services"
+say "7 · bus services"
 (cd "$CORE" && nohup ./bin/busconsumer --port 8798 >"$LOGS/busconsumer.log" 2>&1 &)
 (cd "$CORE" && nohup ./bin/healthpub --every 5s >"$LOGS/healthpub.log" 2>&1 &)
 (cd "$CORE" && nohup ./bin/signalbus --every 2s >"$LOGS/signalbus.log" 2>&1 &)
 wait_http "http://127.0.0.1:8798/" 15 "bus consumer on :8798" || die "bus consumer did not answer"
 ok "health publisher and alert intake started"
 
-say "5 · intelligence producers"
+say "8 · intelligence producers"
 nohup python3 -u signals.py --every 10 --top 30 >"$LOGS/signals.log" 2>&1 &
 [ -x "$CORE/tad" ]      && (cd "$CORE" && nohup ./tad --addr 127.0.0.1:61613 --every 5s >"$LOGS/tad.log" 2>&1 &)
 [ -x "$CORE/forecast" ] && (cd "$CORE" && nohup ./forecast --addr 127.0.0.1:61613 >"$LOGS/forecast.log" 2>&1 &)
 sleep 3
 pgrep -f "signals.py --every" >/dev/null && ok "signals publishing" || warn "signals.py did not stay up — see logs/signals.log"
 
-say "6 · dashboard"
+say "9 · dashboard"
 nohup python3 -u master.py --host 0.0.0.0 --port 8799 >"$LOGS/master.log" 2>&1 &
 nohup python3 -u heartbeat.py >"$LOGS/heartbeat.log" 2>&1 &
 wait_http "http://127.0.0.1:8799/api/health" 30 "dashboard on :8799" || die "dashboard did not answer"
 
-say "7 · the Envelope Explorer"
+say "10 · the Envelope Explorer"
 (cd "$CORE" && nohup ./bin/envelopeapi --port 8802 --dir ../state/lake3 >"$LOGS/envelopeapi.log" 2>&1 &)
 wait_http "http://127.0.0.1:8802/api/stats" 60 "explorer on :8802" || die "explorer did not answer"
 
 # ------------------------------------------------------------- 3 · books
-say "8 · books"
+say "11 · books"
 if [ "$TRADE" = "1" ]; then
   rm -f "$ROOT/state/STOP"
   ok "trading requested: state/STOP cleared"
