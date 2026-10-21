@@ -123,6 +123,19 @@ func RebuildMissing(dir string) (int, error) {
 		return 0, err
 	}
 	rebuilt := 0
+	// invariant: exactly one sidecar per segment, named after the file it describes.
+	// A plain-named sidecar beside a gzipped segment is stale, and is removed here.
+	seen := map[string]bool{}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), idxSuffix) {
+			seg := strings.TrimSuffix(filepath.Join(dir, e.Name()), idxSuffix)
+			if _, err := os.Stat(seg); err != nil {
+				// the segment this describes is gone; the sidecar is a leftover
+				_ = os.Remove(filepath.Join(dir, e.Name()))
+			}
+			seen[seg] = true
+		}
+	}
 	for _, e := range entries {
 		name := e.Name()
 		if !strings.HasPrefix(name, "seg-") || strings.HasSuffix(name, idxSuffix) {

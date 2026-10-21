@@ -355,6 +355,11 @@ func (s *Sealed) Stats() (sealed, failed, rebuilt int64) {
 	return atomic.LoadInt64(&s.sealed), atomic.LoadInt64(&s.failed), atomic.LoadInt64(&s.rebuild)
 }
 
+// ScanSegment is the read-side entry point: scan one planned segment for a window.
+func ScanSegment(path string, from, to int64, fn func(Record) error) (int, error) {
+	return readSegment(path, from, to, fn)
+}
+
 // readSegment scans a segment (plain or gzipped) within a byte span, calling fn for
 // each record. The plan gives the span; we still filter, because topics interleave.
 func readSegment(path string, from, to int64, fn func(Record) error) (int, error) {

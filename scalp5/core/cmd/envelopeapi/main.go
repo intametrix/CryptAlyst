@@ -538,6 +538,53 @@ func indexCount(topic string) int {
 }
 
 // scanIndexed reads the newest `limit` envelopes of a topic using the index.
+// scanCold answers a cold query the indexed way when segments exist: Plan() names the
+// segments, ScanSegment reads them. The raw journal scan remains as the repair
+// fallback for a directory without sidecars.
+var lakeDir *string
+
+func scanCold(topic string, limit int) []envelopeDoc {
+	if lakeDir == nil {
+		return scanIndexed(topic, limit)
+	}
+	dir := *lakeDir
+	if plans, err := lake.Plan(dir, topic, 0, 1<<62, ""); err == nil && len(plans) > 0 {
+		var out []envelopeDoc
+		for i := len(plans) - 1; i >= 0 && len(out) < limit; i-- {
+			_, _ = lake.ScanSegment(plans[i].Segment, 0, 1<<62, func(r lake.Record) error {
+				if r.Topic != topic {
+					return nil
+				}
+				body := []byte(strings.TrimSpace(string(mustMarshal(r))))
+				if d, ok := parse(body); ok {
+					out = append(out, d)
+				}
+				return nil
+			})
+		}
+		if len(out) > limit {
+			out = out[:limit]
+		}
+		// plans are oldest-first; the API wants newest-last
+		for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
+			out[i], out[j] = out[j], out[i]
+		}
+		return out
+	}
+	return scanIndexed(topic, limit)
+}
+
+func mustMarshal(r lake.Record) []byte {
+	env := r.Envelope
+	if len(env) == 0 {
+		if p, err := lake.DerivePayload(r); err == nil {
+			env = p
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"topic": r.Topic, "key": r.Key, "ts": r.TS, "payload": env})
+	return b
+}
+
 func scanIndexed(topic string, limit int) []envelopeDoc {
 	idxMu.RLock()
 	entries := idxTopic[topic]
@@ -667,6 +714,7 @@ func containsFold(haystack, needle string) bool {
 func main() {
 	port := flag.Int("port", 8802, "http port")
 	dir := flag.String("dir", "../state/lake2", "lake directory")
+	lakeDir = dir
 	limit := flag.Int("limit", 20000, "documents kept in memory")
 	flag.Parse()
 	log.SetFlags(log.Ltime)
@@ -1331,7 +1379,7 @@ func main() {
 			if stale {
 				indexFiles(*dir)
 			}
-			if docs := scanIndexed(topic, limit); len(docs) > 0 {
+			if docs := scanCold(topic, limit); len(docs) > 0 {
 				return docs
 			}
 		}
