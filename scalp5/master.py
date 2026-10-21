@@ -2346,7 +2346,7 @@ window.DRILL = window.DRILL || null;
 
 function drillClose(){
   var m=document.getElementById("drillmodal");
-  if(m) m.classList.remove("open");
+  if(m){ m.classList.remove("open"); m.style.display="none"; }
   window.DRILL=null;
 }
 
@@ -2356,14 +2356,22 @@ async function drillOpen(kind){
   if(!m){
     m=document.createElement("div");
     m.id="drillmodal";
-    m.className="sheet";
-    m.style.cssText="position:fixed;inset:0;background:#050a10ee;z-index:60;display:none;"+
-      "overflow:auto;padding:22px";
-    m.innerHTML='<div style="max-width:1200px;margin:0 auto">'+
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">'+
-      '<b id="drilltitle" style="font-size:16px">—</b><span class="spacer" style="flex:1"></span>'+
-      '<button class="tbtn" onclick="drillClose()">close</button></div>'+
-      '<div id="drillbody" class="panel" style="padding:10px">loading…</div></div>';
+    m.style.cssText="position:fixed;inset:0;z-index:80;display:none;background:#050a10f2;"+
+      "backdrop-filter:blur(2px)";
+    m.innerHTML=
+      '<div style="position:absolute;inset:0;display:flex;flex-direction:column">'+
+        '<div style="flex:0 0 auto;display:flex;align-items:center;gap:12px;'+
+          'padding:14px 20px;border-bottom:1px solid #16202b;background:#070d14">'+
+          '<b id="drilltitle" style="font-size:15px;letter-spacing:.02em">—</b>'+
+          '<span id="drillsub" style="color:#7c8b9d;font-family:var(--mono);font-size:11px"></span>'+
+          '<span style="flex:1"></span>'+
+          '<button class="tbtn" onclick="drillRender()">refresh</button>'+
+          '<button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
+            'onclick="drillClose()">✕ close</button>'+
+        '</div>'+
+        '<div style="flex:1 1 auto;overflow:auto;padding:14px 20px 30px">'+
+          '<div id="drillbody">loading…</div></div>'+
+      '</div>';
     document.body.appendChild(m);
   }
   m.classList.add("open");
@@ -2436,23 +2444,30 @@ async function drillRender(){
     var posRows="";
     if(kind==="unrealised" && (e.positions_detail||[]).length){
       posRows=(e.positions_detail||[]).map(function(p){
-        return '<tr style="background:#0a0f15"><td style="padding-left:26px;color:#8095ab">'+
-          esc(p.symbol)+'</td><td>'+esc(String(p.side).toUpperCase())+'</td>'+
-          '<td class="num">'+money(p.entry)+'</td><td class="num">'+money(p.mark)+'</td>'+
-          '<td class="num">'+money(p.notional)+'</td>'+
-          '<td class="num '+(((p.pnl||0)>=0)?"up":"down")+'"><b>'+sgn(p.pnl||0)+'</b></td>'+
-          '<td class="num">'+(p.held_s?Math.round(p.held_s)+"s":"—")+'</td>'+
-          '<td><button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
+        return '<tr style="background:#070d13;color:#93a5b8">'+
+          '<td style="padding:5px 8px 5px 26px">'+esc(p.symbol)+'</td>'+
+          '<td style="padding:5px 8px;color:'+((String(p.side).toLowerCase()==="sell")?"#f85149":"#3fb950")+'">'+
+            esc(String(p.side).toUpperCase())+'</td>'+
+          '<td style="padding:5px 8px;text-align:right">'+money(p.entry)+'</td>'+
+          '<td style="padding:5px 8px;text-align:right">'+money(p.mark)+'</td>'+
+          '<td style="padding:5px 8px;text-align:right">'+money(p.notional)+'</td>'+
+          '<td style="padding:5px 8px;text-align:right" class="'+(((p.pnl||0)>=0)?"up":"down")+'"><b>'+
+            sgn(p.pnl||0)+'</b></td>'+
+          '<td style="padding:5px 8px;text-align:right;color:#5f7186">'+
+            (p.held_s?Math.round(p.held_s)+"s":"—")+'</td>'+
+          '<td style="padding:5px 8px"><button class="tbtn" style="padding:1px 8px;font-size:10px" '+
             'onclick="closePosition(\''+esc(e.name)+'\',\''+esc(p.symbol)+'\',this)">close</button></td></tr>';
       }).join("");
     }
-    return '<tr><td>'+esc(e.name)+'</td>'+
-      '<td>'+((e.disabled)?"disabled":(e.alive?"running":"stopped"))+'</td>'+
-      '<td class="num '+((e.realised||0)>=0?"up":"down")+'">'+sgn(e.realised||0)+'</td>'+
-      '<td class="num '+((e.unrealised||0)>=0?"up":"down")+'">'+sgn(e.unrealised||0)+'</td>'+
-      '<td class="num '+((e.total||0)>=0?"up":"down")+'"><b>'+sgn(e.total||0)+'</b></td>'+
-      '<td class="num">'+(e.open||0)+'</td>'+
-      '<td style="white-space:nowrap">'+
+    return '<tr style="background:#0b121a">'+
+      '<td style="padding:8px;font-weight:700;color:#dbe6f2">'+esc(e.name)+'</td>'+
+      '<td style="padding:8px;color:'+((e.disabled)?"#e3b341":(e.alive?"#3fb950":"#7c8b9d"))+'">'+
+        ((e.disabled)?"disabled":(e.alive?"running":"stopped"))+'</td>'+
+      '<td style="padding:8px;text-align:right" class="'+((e.realised||0)>=0?"up":"down")+'">'+sgn(e.realised||0)+'</td>'+
+      '<td style="padding:8px;text-align:right" class="'+((e.unrealised||0)>=0?"up":"down")+'">'+sgn(e.unrealised||0)+'</td>'+
+      '<td style="padding:8px;text-align:right" class="'+((e.total||0)>=0?"up":"down")+'"><b>'+sgn(e.total||0)+'</b></td>'+
+      '<td style="padding:8px;text-align:right">'+(e.open||0)+'</td>'+
+      '<td style="padding:8px;white-space:nowrap">'+
         '<button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
           'onclick="closeBook(\''+e.name+'\',this)">close all</button> '+
         '<button class="tbtn" onclick="setCashIn(\''+e.name+'\')">cash in</button> '+
@@ -2461,11 +2476,17 @@ async function drillRender(){
           'onclick="closeBook(\''+e.name+'\').then?closeBook(\''+e.name+'\'):0">close</button>'+
       '</td></tr>'+posRows;
   }).join("");
-  box.innerHTML='<div style="margin-bottom:8px;color:#9fb0c4;font-family:var(--mono);font-size:11px">'+
-      es.length+' books · '+key+' total '+sgn(sum)+'</div>'+
-    '<table class="wide"><thead><tr><th>book</th><th>state</th>'+
-    '<th class="num">total realised</th><th class="num">unrealized</th><th class="num">total</th>'+
-    '<th class="num">open</th><th>actions</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  var sub=document.getElementById("drillsub");
+  if(sub) sub.textContent = es.length+" books · "+key+" total "+sgn(sum);
+  box.innerHTML='<table style="width:100%;border-collapse:separate;border-spacing:0 3px;'+
+      'font-family:var(--mono);font-size:11.5px">'+
+    '<thead><tr style="color:#5f7186;text-align:right;font-size:10px;letter-spacing:.08em">'+
+    '<th style="text-align:left;padding:6px 8px">BOOK</th>'+
+    '<th style="text-align:left;padding:6px 8px">STATE</th>'+
+    '<th style="padding:6px 8px">TOTAL REALISED</th><th style="padding:6px 8px">UNREALIZED</th>'+
+    '<th style="padding:6px 8px">TOTAL</th><th style="padding:6px 8px">OPEN</th>'+
+    '<th style="text-align:left;padding:6px 8px">ACTIONS</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>';
 }
 
 async function closePosition(engine, symbol, btn){
@@ -5169,12 +5190,24 @@ async function tick(){
   const unreal=alive.reduce((a,e)=>a+(e.unrealised||0),0);
   const open=alive.reduce((a,e)=>a+(e.positions||[]).length,0);
   const closed=(d.totals&&d.totals.closed)||alive.reduce((a,e)=>a+(e.closed||0),0);
-  const KPI=[["combined equity","$"+money(eq),"equity"],
+  let KPI=[["combined equity","$"+money(eq),"equity"],
              ["combined return",pct(base?100*(eq/base-1):null),"return"],
              ["total realised","$"+money(real),"realised"],
              ["unrealized","$"+money(unreal),"unrealised"],
              ["open positions",open,"open"],
              ["closed trades",closed,"closed"]];
+  // the tiles must agree with the books page, so they read the same endpoint
+  try{
+    var bk=await (await fetch("/api/books",{cache:"no-store"})).json();
+    if(bk && typeof bk.realised === "number"){
+      KPI=[["combined equity","$"+money(bk.equity),"equity"],
+           ["combined return",pct(bk.return_pct),"return"],
+           ["total realised","$"+money(bk.realised),"realised"],
+           ["unrealized","$"+money(bk.unrealised),"unrealised"],
+           ["open positions",bk.open,"open"],
+           ["closed trades",bk.closed,"closed"]];
+    }
+  }catch(e){}
   $("totals").innerHTML=KPI.map(([k,v,kind])=>
     `<div class="kpi" style="cursor:pointer" title="click to see every book behind this" `+
     `onclick="drillOpen('${kind}')"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
