@@ -55,8 +55,10 @@ def fit(text, size, avail, floor):
     return size
 
 class Fig:
-    def __init__(self, w, h, title, subtitle=None, corner=None):
+    def __init__(self, w, h, title, subtitle=None, corner=None, top=0):
         self.w, self.h = w, h
+        self.dy = top              # headroom under the title block
+        self.header = 96 if subtitle else 74
         self.boxes = []
         self.notes = []
         self.parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
@@ -80,6 +82,7 @@ class Fig:
                               f'text-anchor="end">{html.escape(corner)}</text>')
 
     def box(self, x, y, w, h, title, rows, colour, dashed=False, tag=None):
+        y += self.dy
         c = COLOUR[colour]
         self.boxes.append((x, y, w, h))
         dash = ' stroke-dasharray="6 5"' if dashed else ""
@@ -113,6 +116,7 @@ class Fig:
         return self
 
     def diamond(self, cx, cy, w, h, text, colour):
+        cy += self.dy
         c = COLOUR[colour]
         pts = f"{cx},{cy-h/2} {cx+w/2},{cy} {cx},{cy+h/2} {cx-w/2},{cy}"
         self.parts.append(f'<polygon points="{pts}" fill="{FILL[colour]}" stroke="{c}" '
@@ -126,6 +130,8 @@ class Fig:
         return self
 
     def arrow(self, pts, colour, dashed=False, width=1.4, label=None, lx=0, ly=0, anchor="start"):
+        pts = [(a, b + self.dy) for a, b in pts]
+        ly += self.dy
         d = "M " + " L ".join(f"{a},{b}" for a, b in pts)
         dash = ' stroke-dasharray="5 4"' if dashed else ""
         self.parts.append(f'<path d="{d}" fill="none" stroke="{COLOUR[colour]}" '
@@ -133,12 +139,15 @@ class Fig:
                           f'marker-end="url(#a-{colour})"/>')
         if label:
             run = max(abs(pts[-1][0] - pts[0][0]), abs(pts[-1][1] - pts[0][1]), 40)
-            size = fit(label, 13, max(run * 0.85, 60), 8.5)
+            if run < 92:
+                return self        # no room for a label between these boxes
+            size = fit(label, 13.5, run * 0.9, 9.5)
             self.parts.append(f'<text x="{lx}" y="{ly}" fill="{DIM}" font-size="{size}" '
                               f'text-anchor="{anchor}">{html.escape(label)}</text>')
         return self
 
     def note(self, x, y, text, size=20, colour=DIM, anchor="start", weight="400"):
+        y += self.dy
         room = (self.w - x - 30) if anchor == "start" else (x - 30)
         size = fit(text, min(size, 22), room, 12)
         width = text_w(text, size)
@@ -147,6 +156,8 @@ class Fig:
 
         def blocked(at):
             """Lowest y this note must move to, or None if the line is clear."""
+            if at - size < self.header:
+                return self.header + size + 8
             for bx, by, bw, bh in self.boxes:
                 if x0 < bx + bw and x0 + width > bx and at - size < by + bh and at > by:
                     return by + bh + size + 10
@@ -183,9 +194,9 @@ class Fig:
 
 # ---------------------------------------------------------------- 1 · context map
 def context_map():
-    f = Fig(1660, 760, "Domain model, level 1 — the contexts",
+    f = Fig(1660, 800, "Domain model, level 1 — the contexts",
             "what the platform is about, and which way knowledge flows",
-            "one envelope contract · one bus · one record")
+            "one envelope contract · one bus · one record", top=44)
     f.box(40, 118, 300, 190, "Market data", [
         ("Symbol universe", "value"), ("Kline series", "entity"),
         ("Depth book", "entity"), ("Feed shard", "service")], "market", tag="ingest")
