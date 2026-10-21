@@ -64,3 +64,29 @@ func TestKLinesAreBounded(t *testing.T) {
 		t.Fatalf("limit ignored: %d", got)
 	}
 }
+
+// SeedKlines backfills a symbol's bars and bounds them to the store's 200 cap.
+func TestSeedKlinesBounds(t *testing.T) {
+	st := New()
+	k1 := make([]Kline, 250)
+	for i := range k1 {
+		k1[i] = Kline{T: int64(i), C: float64(i)}
+	}
+	k15 := make([]Kline, 300)
+	for i := range k15 {
+		k15[i] = Kline{T: int64(i), C: float64(i)}
+	}
+	st.SeedKlines("BTCUSDT", k1, k15)
+
+	got1 := st.KLines("BTCUSDT", "1m", 1000)
+	if len(got1) != 200 {
+		t.Fatalf("1m seed not bounded: %d", len(got1))
+	}
+	if got1[0].T != 50 || got1[199].T != 249 {
+		t.Fatalf("1m seed keeps the wrong tail: %d..%d", got1[0].T, got1[199].T)
+	}
+	got15 := st.KLines("BTCUSDT", "15m", 1000)
+	if len(got15) != 200 {
+		t.Fatalf("15m seed not bounded: %d", len(got15))
+	}
+}

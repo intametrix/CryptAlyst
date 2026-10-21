@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -36,6 +37,66 @@ var fallbackSymbols = []string{
 	"TRXUSDT", "MATICUSDT", "ETCUSDT", "HBARUSDT", "AAVEUSDT", "UNIUSDT", "ICPUSDT",
 	"RENDERUSDT", "FETUSDT", "WLDUSDT", "PEPEUSDT", "SHIBUSDT", "BCHUSDT", "XLMUSDT",
 	"ALGOUSDT", "VETUSDT", "SANDUSDT", "GALAUSDT", "EOSUSDT",
+}
+
+// backfillKlines fetches historical bars from Binance REST so a fresh start is
+// not history-starved while the websocket warms up. limit is the Binance max of
+// 1000, but the store caps at 200, so 200 is enough to fill the window.
+func backfillKlines(sym, interval string, limit int) []marketdata.Kline {
+	u := fmt.Sprintf("https://api.binance.com/api/v3/klines?symbol=%s&interval=%s&limit=%d",
+		sym, interval, limit)
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(u)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return nil
+	}
+	dec := json.NewDecoder(resp.Body)
+	dec.UseNumber()
+	var rows [][]any
+	if err := dec.Decode(&rows); err != nil {
+		return nil
+	}
+	out := make([]marketdata.Kline, 0, len(rows))
+	for _, r := range rows {
+		if len(r) < 10 {
+			continue
+		}
+		out = append(out, marketdata.Kline{
+			T: klineInt(r[0]), O: klineFloat(r[1]), H: klineFloat(r[2]),
+			L: klineFloat(r[3]), C: klineFloat(r[4]), V: klineFloat(r[5]),
+			Q: klineFloat(r[7]), Qb: klineFloat(r[9]),
+		})
+	}
+	return out
+}
+
+func klineFloat(v any) float64 {
+	switch x := v.(type) {
+	case string:
+		f, _ := strconv.ParseFloat(x, 64)
+		return f
+	case json.Number:
+		f, _ := x.Float64()
+		return f
+	case float64:
+		return x
+	}
+	return 0
+}
+
+func klineInt(v any) int64 {
+	switch x := v.(type) {
+	case json.Number:
+		i, _ := x.Int64()
+		return i
+	case float64:
+		return int64(x)
+	}
+	return 0
 }
 
 func loadSymbols(top int) []string {
@@ -125,6 +186,23 @@ func main() {
 	log.Printf("market_data (Go) — %d symbols, %d streams", len(symbols), len(streams))
 
 	st := marketdata.New()
+
+	// Backfill historical bars so the platform is not history-starved on a fresh
+	// start. Runs concurrently with the live feed; the websocket fills any gap.
+	go func() {
+		log.Printf("backfilling %d symbols x {1m,15m} klines", len(symbols))
+		seeded := 0
+		for _, sym := range symbols {
+			k1 := backfillKlines(sym, "1m", 200)
+			k15 := backfillKlines(sym, "15m", 200)
+			if len(k1) > 0 || len(k15) > 0 {
+				st.SeedKlines(sym, k1, k15)
+				seeded++
+			}
+			time.Sleep(80 * time.Millisecond) // ~12 req/s, well under Binance's 1200/min
+		}
+		log.Printf("backfill done: %d/%d symbols seeded", seeded, len(symbols))
+	}()
 	cl := stomp.New(*addr, "cryptalyst", "cryptalyst")
 
 	go func() {

@@ -149,6 +149,28 @@ func (s *State) Price(sym string) (float64, bool) {
 	return v, ok
 }
 
+// SeedKlines backfills a symbol's 1m and 15m bars from the REST API, so a fresh
+// start is not history-starved until the websocket has accumulated enough bars.
+// It is called once at startup before the live feed takes over.
+func (s *State) SeedKlines(sym string, k1, k15 []Kline) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(k1) > 0 {
+		s.K1[sym] = boundKlines(k1)
+	}
+	if len(k15) > 0 {
+		s.K15[sym] = boundKlines(k15)
+	}
+	s.Series = len(s.K1) + len(s.K15)
+}
+
+func boundKlines(list []Kline) []Kline {
+	if len(list) > 200 {
+		list = list[len(list)-200:]
+	}
+	return list
+}
+
 func (s *State) KLines(sym, interval string, limit int) []Kline {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
