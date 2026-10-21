@@ -1943,6 +1943,8 @@ header{margin-left:186px}
   <span class="pill up" id="pill-long" title="open long positions / long trades closed">L —</span>
   <span class="pill down" id="pill-short" title="open short positions / short trades closed">S —</span>
   <button id="tradebtn" class="tbtn" onclick="toggleTrading()">▶ start trading</button>
+  <button id="stopbtn" class="tbtn" style="border-color:#f85149;color:#ffb3ad"
+          onclick="stopReset()" title="clear books and messages, start fresh (disables kept)">STOP</button>
   <span class="pill" id="modelsbadge">—</span>
   <span class="spacer"></span>
   <span class="pill" id="clock">—</span>
@@ -4307,6 +4309,24 @@ async function health(){
   }
 }
 
+async function stopReset(){
+  if(!confirm("STOP\n\nClear every book back to its start equity and clear every message "+
+              "on the bus, then start fresh.\n\nDisabled engines and models are NOT "+
+              "changed — that list is yours.\n\nThis archives the current books first.")) return;
+  var b=document.getElementById("stopbtn");
+  if(b){ b.disabled=true; b.textContent="stopping…"; }
+  var out={};
+  try{ out=await (await fetch("/api/stop_reset",{cache:"no-store"})).json(); }
+  catch(e){ out={error:e.message||String(e)}; }
+  if(b){ b.disabled=false; b.textContent="STOP"; }
+  var note=document.getElementById("booksnote")||document.getElementById("engnote");
+  if(note) note.textContent = out.ok
+    ? ("STOP done: "+out.books+" books archived and reset, "+out.queues+" queues purged, "+
+       "disables kept ("+out.disabled+" listed)")
+    : ("STOP failed: "+(out.error||"?"));
+  setTimeout(function(){ try{ renderBooks(); renderEngines(); }catch(e){} }, 1500);
+}
+
 async function toggleTrading(){
   var b=$("tradebtn"); if(!b) return;
   var on=/start/.test(b.textContent);
@@ -6599,6 +6619,32 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, _json.dumps({"engines": out,
                                                 "alive": sum(1 for r in out if r["alive"])}),
                               "application/json")
+        if p == "/api/stop_reset":
+            import json as _json, subprocess as _sp
+            try:
+                before = _json.load(open(os.path.join(HERE, "state", "disabled.json"))).get("books") or []
+            except Exception:
+                before = []
+            try:
+                _sp.run([sys.executable, os.path.join(HERE, "tools", "stop_reset.py")],
+                        cwd=HERE, timeout=180)
+            except Exception as e:
+                return self._send(500, _json.dumps({"error": str(e)}), "application/json")
+            try:
+                after = _json.load(open(os.path.join(HERE, "state", "disabled.json"))).get("books") or []
+            except Exception:
+                after = before
+            try:
+                summary = _json.load(open(os.path.join(HERE, "state", "stop_reset.json")))
+            except Exception:
+                summary = {}
+            return self._send(200, _json.dumps({
+                "ok": True,
+                "books": summary.get("books") or len(__import__("glob").glob(
+                    os.path.join(HERE, "state", "pack_*.json"))),
+                "queues": summary.get("queues") or 0,
+                "disabled": len(after),
+                "disables_unchanged": after == before}), "application/json")
         if p == "/api/book_reassess":
             import json as _json, shutil as _sh
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
