@@ -17,6 +17,7 @@ No keys, no orders, no account access. Fills are simulated at the live
 
 import argparse
 import json
+import math
 import os
 import time
 
@@ -37,6 +38,24 @@ BASE = "https://api.binance.com"
 KLINES = BASE + "/api/v3/klines?interval=1s&limit=90&symbol=%s"
 PRICE = BASE + "/api/v3/ticker/price?symbol=%s"
 TICKER = BASE + "/api/v3/ticker/24hr"
+
+# Entry floor, observe-only: half the +30 bps take-profit. A 3-bar momentum below
+# this clears the 20 bps round-trip fee with no expectancy, so entering it is a fee
+# machine. Below the floor the entry is suppressed and counted, not opened.
+MIN_ENTRY_BPS = 10.0
+
+
+def should_enter(score_bps, floor=MIN_ENTRY_BPS):
+    """A candidate only enters when its momentum clears the fee floor."""
+    return score_bps >= floor
+
+
+def pctile(sorted_scores, p):
+    """The p-th percentile (0..1) of an already-sorted list; None when empty."""
+    if not sorted_scores:
+        return None
+    idx = min(len(sorted_scores) - 1, max(0, math.ceil(p * len(sorted_scores)) - 1))
+    return sorted_scores[idx]
 
 
 def log(m):
@@ -124,6 +143,7 @@ def main():
     trades = []
     pos = None
     hit_target = False
+    suppressed = []   # rejected 3-bar scores, for the p50/p90 distribution log
 
     while time.time() - start < args.seconds:
         if cum_bps >= args.target_pct * 100.0:
@@ -146,6 +166,17 @@ def main():
                 if best_score is None or score > best_score:
                     best, best_score = s, score
             if best is None:
+                time.sleep(0.5)
+                continue
+            if not should_enter(best_score):
+                # observe-only: below the fee floor, suppress the entry and sample
+                # its momentum so the floor can be fitted from data, not re-guessed.
+                suppressed.append(best_score)
+                if len(suppressed) >= 50:
+                    ss = sorted(suppressed)
+                    log("SUPPRESSED %d entries < %.0fbps | p50 %.2f p90 %.2f bps" % (
+                        len(suppressed), MIN_ENTRY_BPS, pctile(ss, 0.5), pctile(ss, 0.9)))
+                    suppressed = suppressed[-200:]
                 time.sleep(0.5)
                 continue
             try:
