@@ -252,6 +252,17 @@ def main():
         except Exception as _e:
             actions.append("cashin: %s" % _e)
 
+        # the hard stop runs as its own process too
+        try:
+            if subprocess.run(["pgrep", "-f", "stop_loss.py"],
+                              capture_output=True).returncode != 0:
+                with open(os.path.join(HERE, "logs", "stop_loss.log"), "ab") as fh:
+                    subprocess.Popen([PY_, "-u", os.path.join("tools", "stop_loss.py")],
+                                     cwd=HERE, stdout=fh, stderr=fh, start_new_session=True)
+                actions.append("stop_loss started")
+        except Exception as _e:
+            actions.append("stop_loss: %s" % _e)
+
         # the 30-second loser rule runs as its own process, kept alive here
         try:
             if subprocess.run(["pgrep", "-f", "loss_watch.py"], capture_output=True).returncode != 0:

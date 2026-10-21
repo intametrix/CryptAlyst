@@ -637,7 +637,7 @@ def _owner_is_multi(engine):
     return False
 
 
-def flatten_position(engine, symbol, reason="position_close"):
+def flatten_position(engine, symbol, reason="position_close", prices=None):
     """Close one position. A shared owner is asked by flag; a standalone book is edited
     and its process restarted, so memory and pack cannot disagree."""
     symbol = symbol.upper()
@@ -647,7 +647,7 @@ def flatten_position(engine, symbol, reason="position_close"):
             fh.write(str(int(time.time() * 1000)))
         return {"requested": True, "engine": engine, "symbol": symbol}
 
-    prices = _prices_now()
+    prices = prices or _prices_now()
     pack_path = os.path.join(HERE, "state", "pack_%s.json" % engine)
     try:
         import json as _json
