@@ -267,7 +267,7 @@ say "11 · books"
 if [ "$TRADE" = "1" ]; then
   rm -f "$ROOT/state/STOP"
   ok "trading requested: state/STOP cleared"
-  nohup python3 -u supervisor.py --every 60 --hours 8 >"$LOGS/supervisor.log" 2>&1 &
+  nohup bash -c 'while true; do python3 -u supervisor.py --every 60 --hours 8; sleep 3; done' >"$LOGS/supervisor.log" 2>&1 &
   sleep 5
   pgrep -f supervisor.py >/dev/null && ok "supervisor running, books starting" \
     || die "supervisor did not stay up — see logs/supervisor.log"
