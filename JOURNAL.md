@@ -532,3 +532,18 @@ bleeds — the yes/no gap is a search order for the Stage 1 counterfactual
 the exact replay perturbation that would test it, and per Rule A6 nothing
 re-enables without the human. The PLAN for Stages 1–3 sits on the channel
 awaiting DeepSeek's AGREE.
+
+
+---
+
+## Entry 12 — The master plan, printable
+
+**The ask:** write the master plan so the human can print it. It now lives at
+`docs/master-plan-back-analysis.md`, rendered for print by
+`docs/build_master_plan_pdf.py` (ReportLab, A4) into
+`docs/master-plan-back-analysis.pdf` — mandate, Stage-0 findings, data
+estate, Stages 1–3, the GPU/ATLAS architecture with its five exception-named
+rules, governance, acceptance criteria, and the five immediate next actions.
+The GPU decision recorded there: JAX array semantics first, the cpu-vs-gpu
+timing experiment decides ATLAS's role, and the CPU audit path is the twin
+of every GPU fast path.
