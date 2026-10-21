@@ -230,7 +230,7 @@ function renderInstHead() {
   const { key, dir } = inst.sort;
   $("#inst-thead").innerHTML = `<tr>${cols.map((c) => {
     const w = widths[c.k] || c.w;
-    const srt = c.k === key ? ` sorted ${dir}` : "";
+    const srt = c.k === key ? ` class="sorted ${dir}"` : "";
     return `<th data-k="${c.k}"${w ? ` style="width:${w}px"` : ""}${srt}>` +
       `${c.label}<span class="rz" title="drag to resize"></span></th>`;
   }).join("")}</tr>`;

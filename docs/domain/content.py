@@ -444,7 +444,8 @@ def _number_figures():
         if not s.get("figure"):
             continue
         fname = s["figure"][0]
-        title, what = meta.get(fname, ("Figure", ""))
+        short = s["title"].split(" — ")[0]
+        title, what = meta.get(fname, (short, s.get("shows", "").split(".")[0][:88]))
         out.append((s["number"], fname, title, what))
     return out
 

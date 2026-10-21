@@ -37,9 +37,9 @@ Seven bounded contexts, one contract between them, and a record that can be read
 | 3.3 | The gate | interceptors before arithmetic, and the exit policy |
 | 3.4 | The recorder | one writer, hops recorded, derived references attached |
 | 3.5 | Control | supervise, stop, and what STOP must never touch |
-| 3.6 | Figure |  |
-| 3.7 | Figure |  |
-| 3.8 | Figure |  |
+| 3.6 | The engines | Thirty-eight supervised engines, grouped by the edge they claim to have, and the five th |
+| 3.7 | What an engine depends on | The seven dependencies every engine shares — and the three things an engine is not allow |
+| 3.8 | The life of a model | How a model is proposed, trained on the record, admitted, measured, and disabled — and w |
 | 4.1 | The lake | journal, line format, index, retention, replay |
 | 4.2 | Data stores | every store on disk: format, writer, reader, lifetime |
 | 4.3 | How the lake chooses | the rules that decide where data lands and how long it lives |
