@@ -239,7 +239,8 @@ def run(a):
                        "held_s": round(held, 1), "notional": round(p["notional"], 2),
                        "pnl_usd": round(p["notional"] * net / 100, 4),
                        "entry_ms": int(p["t"] * 1000), "exit_ms": int(now * 1000),
-                       "features": p["feat"], "slippage_bps": 0}
+                       "features": p["feat"], "slippage_bps": 0,
+                       "decision_id": p.get("decision_id")}
                 TRADES.append(rec)
                 del POS[sym2]
                 write_book()
@@ -276,12 +277,14 @@ def run(a):
                     continue
                 entry = f["bid"] if side == "buy" else f["ask"]
                 notional = min(EQ * a.risk / 100 * 40, EQ * 0.08)
+                did = emit.decision("hft", sym2, side, True, "hft_signal") if emit else None
                 POS[sym2] = {"side": side, "entry": entry, "t": now,
                              "notional": notional,
                              "feat": {"z": round(f["z"], 2), "imb": round(f["imbalance"], 3),
                                       "spread_bps": round(f["spread_bps"], 2),
                                       "move": round(f["move_pct"], 4),
-                                      "rate": round(f["rate"], 1)}}
+                                      "rate": round(f["rate"], 1)},
+                             "decision_id": did}
                 log("OPEN  %-10s %-4s %.8g z %+.2f imb %+.2f spread %.1fbp move %+.3f%%"
                     % (sym2, side, entry, f["z"], f["imbalance"], f["spread_bps"],
                        f["move_pct"]))

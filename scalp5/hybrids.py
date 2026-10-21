@@ -284,8 +284,10 @@ class Book:
         self.stopped = False
 
     def open(self, sym, side, px, notional, reason, score):
+        did = emit.decision(self.name, sym, side, True, reason) if emit else None
         self.pos[sym] = {"side": side, "entry": px, "notional": notional,
-                         "t": time.time(), "reason": reason, "score": score}
+                         "t": time.time(), "reason": reason, "score": score,
+                         "decision_id": did}
 
     def close(self, sym, px, chg, reason):
         p = self.pos.pop(sym, None)
@@ -300,7 +302,7 @@ class Book:
                  "notional": round(p["notional"], 2),
                  "pnl_usd": round(p["notional"] * net / 100.0, 2),
                  "entry_ms": int(p["t"] * 1000), "exit_ms": int(time.time() * 1000),
-                 "why": p["reason"]}
+                 "why": p["reason"], "decision_id": p.get("decision_id")}
         self.trades.append(trade)
         log("CLOSE %-10s %-4s %+.3f%% net %+.3f%% %s (%s)" %
             (sym, p["side"], chg, net, reason, self.name))

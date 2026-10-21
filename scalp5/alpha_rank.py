@@ -119,7 +119,8 @@ def main():
                                   "entry_ms": int(p["t"] * 1000), "exit_ms": int(time.time() * 1000),
                                   "notional": p["notional"], "pnl_usd": p["notional"] * net / 100,
                                   "why": p["why"], "features": p.get("feat") or {},
-                                  "rank_score": p.get("rank_score")})
+                                  "rank_score": p.get("rank_score"),
+                                  "decision_id": p.get("decision_id")})
                 try:
                     emit.fill(BOOK, bk.trades[-1])
                 except Exception:
@@ -166,8 +167,9 @@ def main():
                                  signal_age_s=_age,
               book_positions=list(bk.pos.values()))
             risk.record(sym, side, ok, why)
+            did = None
             try:
-                emit.decision(BOOK, sym, side, ok, why, conf)
+                did = emit.decision(BOOK, sym, side, ok, why, conf)
             except Exception:
                 pass
             if not ok:
@@ -178,7 +180,8 @@ def main():
             bk.pos[sym] = {"side": side, "entry": px, "t": time.time(),
                            "notional": notional, "feat": mat.get(sym) or {}, "rank_score": sc,
                            "why": "RANK %s score %+.2f (rank %d/%d) flow %+.0f" % (
-                               side, sc, ranked.index((sym, sc)) + 1, len(ranked), conf)}
+                               side, sc, ranked.index((sym, sc)) + 1, len(ranked), conf),
+                           "decision_id": did}
             log("OPEN  %-10s %-4s %.6g  rank score %+.2f" % (sym, side, px, sc))
             write(bk)
 

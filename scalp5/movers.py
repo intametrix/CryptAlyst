@@ -221,7 +221,8 @@ def run(a):
                        "notional": round(p["notional"], 2),
                        "pnl_usd": round(p["notional"] * net / 100, 4),
                        "entry_ms": int(p["t"] * 1000), "exit_ms": int(now * 1000),
-                       "features": p["feat"], "slippage_bps": 0}
+                       "features": p["feat"], "slippage_bps": 0,
+                       "decision_id": p.get("decision_id")}
                 TRADES.append(rec)
                 del POS[sym]
                 if emit:
@@ -259,9 +260,11 @@ def run(a):
                 notional = min(EQ * a.risk / 100 * 40, EQ * 0.08)
                 if side == "sell":
                     notional *= a.short_weight   # measured: shorting losers is our best short
+                did = emit.decision("movers", sym, side, True, "mover") if emit else None
                 POS[sym] = {"side": side, "entry": entry, "t": now, "notional": notional,
                             "feat": {"mover_pct": round(pct, 2), "mom": round(mv, 3),
-                                     "spread_bps": round(spread_bps, 2)}}
+                                     "spread_bps": round(spread_bps, 2)},
+                            "decision_id": did}
                 last_entry = now
                 write_book()
                 log("OPEN  %-11s %-4s %.8g  24h %+6.2f%%  last %.0fs %+0.3f%%  spread %.1fbp"
