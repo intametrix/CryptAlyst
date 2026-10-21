@@ -442,6 +442,88 @@ def _prices_now():
     return _PX["p"]
 
 
+def close_book(engine):
+    """Close a book: flatten it at the last price, stop it, and write the post-mortem.
+
+    Order matters. The book is disabled FIRST, so the supervisor cannot restart it
+    between the flatten and the kill; then the process is stopped; then the pack is
+    flattened and the trades are recorded with an operator reason. A6 requires the
+    post-mortem to be written at the moment of disabling, not later.
+    """
+    import json as _json, subprocess as _sp
+    here = HERE
+    path = os.path.join(here, "state", "disabled.json")
+    try:
+        cur = _json.load(open(path))
+    except Exception:
+        cur = {"books": []}
+    books = [b for b in (cur.get("books") or []) if b]
+    if engine not in books:
+        books.append(engine)
+    tmp = path + ".t"
+    with open(tmp, "w") as fh:
+        _json.dump({"books": books, "ts": int(time.time() * 1000)}, fh)
+    os.replace(tmp, path)
+
+    killed = False
+    for pat in ("%s.py" % engine, engine.replace("_", "") + ".py"):
+        if _sp.run(["pkill", "-f", pat], capture_output=True).returncode == 0:
+            killed = True
+
+    prices = _prices_now()
+    pack_path = os.path.join(here, "state", "pack_%s.json" % engine)
+    closed, realised, kept = 0, 0.0, 0
+    try:
+        pack = _json.load(open(pack_path))
+    except Exception:
+        pack = None
+    if pack is not None:
+        trades = pack.get("trades") or []
+        for pos in list(pack.get("positions") or []):
+            sym = (pos.get("symbol") or "").upper()
+            entry = float(pos.get("entry") or 0)
+            px = float(prices.get(sym) or 0)
+            notional = float(pos.get("notional") or 0)
+            if not entry or not px:
+                kept += 1
+                continue
+            chg = (px / entry - 1.0) * 100.0
+            if str(pos.get("side") or "buy").lower() in ("sell", "short"):
+                chg = -chg
+            pnl = notional * chg / 100.0
+            trades.append({"ts": int(pos.get("entry_ms") or time.time() * 1000),
+                           "symbol": sym, "side": pos.get("side", "buy"),
+                           "entry": entry, "exit": px, "gross_pct": round(chg, 4),
+                           "net_pct": round(chg, 4), "held_s": pos.get("held_s"),
+                           "reason": "operator_close", "notional": notional,
+                           "pnl_usd": round(pnl, 2),
+                           "exit_ms": int(time.time() * 1000)})
+            realised += pnl
+            closed += 1
+        pack["positions"] = [p for p in (pack.get("positions") or [])
+                             if (p.get("symbol") or "").upper() not in prices]
+        pack["trades"] = trades[-400:]
+        pack["equity"] = round(float(pack.get("equity") or 0) + realised, 2)
+        pack["closed_by"] = "operator"
+        pack["ts"] = int(time.time() * 1000)
+        with open(pack_path + ".t", "w") as fh:
+            _json.dump(pack, fh)
+        os.replace(pack_path + ".t", pack_path)
+
+    post = os.path.join(here, "state", "postmortems.jsonl")
+    with open(post, "a") as fh:
+        fh.write(_json.dumps({
+            "ts": int(time.time() * 1000), "engine": engine, "action": "closed",
+            "by": "operator", "rule": "operator close — book judged bad",
+            "positions_closed": closed, "positions_unpriced": kept,
+            "realised_usd": round(realised, 2),
+            "equity_after": (pack or {}).get("equity"),
+            "note": "flattened at the last traded price, then stopped; A6 post-mortem",
+        }) + "\n")
+    return {"ok": True, "engine": engine, "closed": closed, "unpriced": kept,
+            "realised": round(realised, 2), "killed": killed, "disabled": books}
+
+
 def _sides(positions, trades):
     """Long and short counts, for open positions and closed trades."""
     def is_short(side):
@@ -2013,6 +2095,23 @@ async function engineAction(name, act){
   if(note) note.textContent = act+": "+name+(d.ok?" · done":" · "+(d.error||"failed"));
   renderEngines();
 }
+async function closeBook(name, btn){
+  if(!confirm("Close "+name+"?\n\nEvery open position is flattened at the last traded price,\n"+
+              "the trades are recorded as operator_close, and the book is disabled "+
+              "(it will not restart).\n\nA post-mortem is written.")) return;
+  if(btn){ btn.disabled=true; btn.textContent="closing…"; }
+  var out={};
+  try{
+    out=await (await fetch("/api/book_close?engine="+encodeURIComponent(name),
+                           {cache:"no-store"})).json();
+  }catch(e){ out={error:e.message||String(e)}; }
+  var note=document.getElementById("engnote")||document.getElementById("booksnote");
+  if(note) note.textContent = out.ok
+    ? ("closed "+name+": "+out.closed+" positions, realised "+out.realised)
+    : ("close failed: "+(out.error||"unknown"));
+  renderEngines();
+}
+
 function sgn(v){ v=Number(v||0); return (v>=0?'+':'')+money(v); }
 
 async function renderEngines(){
@@ -2032,9 +2131,11 @@ async function renderEngines(){
   var rows = es.map(function(e){
     var cls = e.disabled ? "down" : (e.alive ? "up" : "flat");
     var state = e.disabled ? "disabled" : (e.alive ? "running" : "stopped");
-    var btn = e.disabled
+    var btn = (e.disabled
       ? '<button class="tbtn" onclick="engineAction(\''+e.name+'\',\'start\')">start</button>'
-      : '<button class="tbtn" onclick="engineAction(\''+e.name+'\',\'stop\')">stop</button>';
+      : '<button class="tbtn" onclick="engineAction(\''+e.name+'\',\'stop\')">stop</button>')+
+      ' <button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
+      'onclick="closeBook(\''+e.name+'\',this)">close book</button>';
     return '<tr><td>'+esc(e.name)+'</td>'+
       '<td class="'+cls+'">'+state+'</td>'+
       '<td class="num">'+money(e.equity)+'</td>'+
@@ -2636,6 +2737,8 @@ async function renderBooks(){
             b.open+' open (L'+(b.open_long||0)+'/S'+(b.open_short||0)+')</span>'+
           '<span style="flex:1"></span>'+
           '<b style="color:'+col+';font-size:14px">'+(tp>0?"+":"")+Number(tp).toFixed(2)+'%</b>'+
+        ' <button class="tbtn" onclick="event.stopPropagation();closeBook(\''+esc(b.engine)+'\',this)" '+
+        'style="border-color:#f85149;color:#ffb3ad;font-size:10px">close</button>'+
         '</div>'+
         spark+
         '<div style="display:flex;gap:12px;margin-top:6px;font-family:var(--mono);font-size:11px">'+
@@ -5940,6 +6043,18 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, _json.dumps({"engines": out,
                                                 "alive": sum(1 for r in out if r["alive"])}),
                               "application/json")
+        if p == "/api/book_close":
+            import json as _json, subprocess as _sp
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            engine = (q.get("engine", [""])[0] or "").strip()
+            if not engine:
+                return self._send(400, _json.dumps({"error": "engine required"}),
+                                  "application/json")
+            try:
+                out = close_book(engine)
+            except Exception as e:
+                return self._send(500, _json.dumps({"error": str(e)}), "application/json")
+            return self._send(200, _json.dumps(out), "application/json")
         if p == "/api/engine":
             import json as _json, subprocess as _sp
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
