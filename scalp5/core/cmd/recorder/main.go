@@ -124,6 +124,7 @@ func main() {
 	addr := flag.String("stomp", "127.0.0.1:61613", "broker address")
 	dataDir := flag.String("data", "../state/lake", "lake directory")
 	kvPath := flag.String("kv", "", "key/value store path (bbolt); empty disables it")
+	lsmPath := flag.String("lsm", "", "rocksdb-class store (pebble) directory; empty disables it")
 	sqlPath := flag.String("sql", "", "sqlite path for envelopes, books and trades; empty disables it")
 	docsDir := flag.String("docs", "", "directory for envelope documents; empty disables it")
 	mongoURI := flag.String("mongo", "", "mongodb uri for envelope documents; empty disables it")
@@ -145,6 +146,13 @@ func main() {
 			stores = append(stores, kv)
 		} else {
 			log.Printf("kv store disabled: %v", err)
+		}
+	}
+	if *lsmPath != "" {
+		if l, err := store.OpenLSM(*lsmPath); err == nil {
+			stores = append(stores, l)
+		} else {
+			log.Printf("lsm store disabled: %v", err)
 		}
 	}
 	if *sqlPath != "" {

@@ -60,6 +60,7 @@ say "3 · recorder (the only consumer of the bus)"
 STORE_ARGS=""
 [ -n "${STORE_KV:-}" ]  && STORE_ARGS="$STORE_ARGS --kv $STORE_KV"
 [ -n "${STORE_SQL:-}" ] && STORE_ARGS="$STORE_ARGS --sql $STORE_SQL"
+[ -n "${STORE_LSM:-}" ] && STORE_ARGS="$STORE_ARGS --lsm $STORE_LSM"
 [ -n "${STORE_DOCS:-}" ] && STORE_ARGS="$STORE_ARGS --docs $STORE_DOCS"
 [ -n "${MONGO_URI:-}" ] && STORE_ARGS="$STORE_ARGS --mongo $MONGO_URI"
 (cd "$CORE" && nohup ./bin/recorder --port 8801 --data ../state/lake3 $STORE_ARGS >"$LOGS/recorder.log" 2>&1 &)

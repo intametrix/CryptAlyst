@@ -22,6 +22,7 @@ func main() {
 	kvPath := flag.String("kv", "", "kv store path")
 	sqlPath := flag.String("sql", "", "sqlite path")
 	docsDir := flag.String("docs", "", "documents directory")
+	lsmPath := flag.String("lsm", "", "rocksdb-class store (pebble) directory")
 	topic := flag.String("topic", "", "topic for latest")
 	key := flag.String("key", "", "key for latest")
 	packsDir := flag.String("packs", "", "directory holding pack_*.json for sync")
@@ -47,6 +48,15 @@ func main() {
 				fmt.Fprintf(os.Stderr, "sql: %v\n", err)
 			}
 		}
+		if *lsmPath != "" {
+			if l, err := store.OpenLSM(*lsmPath); err == nil {
+				n, _ := l.Count()
+				fmt.Printf("lsm    %-40s %d envelopes\n", *lsmPath, n)
+				l.Close()
+			} else {
+				fmt.Fprintf(os.Stderr, "lsm: %v\n", err)
+			}
+		}
 		if *docsDir != "" {
 			if d, err := store.OpenFileDocs(*docsDir); err == nil {
 				n, _ := d.Count()
@@ -56,9 +66,29 @@ func main() {
 		}
 
 	case "latest":
-		if *kvPath == "" || *topic == "" {
-			fmt.Fprintln(os.Stderr, "latest needs --kv and --topic")
+		if *topic == "" {
+			fmt.Fprintln(os.Stderr, "latest needs --topic and a store (--kv or --lsm)")
 			os.Exit(2)
+		}
+		if *lsmPath != "" && *kvPath == "" {
+			l, err := store.OpenLSM(*lsmPath)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			defer l.Close()
+			keys, _ := l.TopicKeys(*topic, 12)
+			if *key == "" {
+				fmt.Printf("keys for %s: %v\n", *topic, keys)
+				return
+			}
+			e, ok, err := l.Latest(*topic, *key)
+			if err != nil || !ok {
+				fmt.Printf("no envelope for %s %s\n", *topic, *key)
+				return
+			}
+			fmt.Printf("%s  %s %s  ts=%d producer=%s\n%s\n", e.ID, e.Topic, e.Key, e.TS, e.Producer, e.Data)
+			return
 		}
 		k, err := store.OpenKVReadOnly(*kvPath)
 		if err != nil {

@@ -72,6 +72,40 @@ func TestSQL(t *testing.T) {
 	drive(t, s)
 }
 
+func TestLSM(t *testing.T) {
+	l, err := OpenLSM(filepath.Join(t.TempDir(), "lsm"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	drive(t, l)
+
+	// a merge tree gives ordered keys for free; prove the order is sorted
+	for _, e := range []Envelope{
+		{ID: "b1", Topic: "model.fill", Key: "ZECUSDT", TS: 3000},
+		{ID: "b2", Topic: "model.fill", Key: "AAVEUSDT", TS: 3100},
+		{ID: "b3", Topic: "model.fill", Key: "BTCUSDT", TS: 3200},
+	} {
+		if err := l.Put(e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	keys, err := l.TopicKeys("model.fill", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the fixture already put one model.fill for ETHUSDT, so four keys in order
+	want := []string{"AAVEUSDT", "BTCUSDT", "ETHUSDT", "ZECUSDT"}
+	if len(keys) != len(want) {
+		t.Fatalf("topic keys: %v want %v", keys, want)
+	}
+	for i := range want {
+		if keys[i] != want[i] {
+			t.Fatalf("topic keys not sorted: %v want %v", keys, want)
+		}
+	}
+}
+
 func TestFileDocs(t *testing.T) {
 	d, err := OpenFileDocs(filepath.Join(t.TempDir(), "docs"))
 	if err != nil {
