@@ -3171,6 +3171,10 @@ function bookFilter(kind){
 }
 function _bookMatches(b, kind){
   if(!kind) return true;
+  if(kind === "trading")     return (b.open>0) || (b.trades>0);
+  if(kind === "idle")        return !((b.open>0) || (b.trades>0));
+  if(kind === "live")        return b.live !== false;
+  if(kind === "frozen")      return b.live === false;
   if(kind === "open_long")   return (b.open_long||0) > 0;
   if(kind === "open_short")  return (b.open_short||0) > 0;
   if(kind === "closed_long") return (b.closed_long||0) > 0;
@@ -3192,12 +3196,12 @@ async function renderBooks(){
   head.innerHTML='<div class="panel" style="padding:12px 14px;margin-bottom:12px">'+
     '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center">'+
     _drillTile("equity","$"+Number(d.equity||0).toLocaleString(undefined,{maximumFractionDigits:0}),"#c9d6e3")+
-    UI.stat("live books", (d.live_books||0)+" live · "+(d.stale_books||0)+" frozen",
-            (d.stale_books? "#e3b341" : "#3fb950"))+
+    _sideTile("live books", (d.live_books||0), "#3fb950", "live")+
+    _sideTile("frozen books", (d.stale_books||0), (d.stale_books? "#e3b341" : "#7c8b9d"), "frozen")+
     _drillTile("return",(d.return_pct>=0?"+":"")+Number(d.return_pct||0).toFixed(3)+"%", (d.return_pct>=0?"#3fb950":"#f85149"))+
     UI.stat("books", books.length)+
-    UI.stat("books trading", active, "#58a6ff")+
-    UI.stat("books idle", flat, "#7c8b9d")+
+    _sideTile("books trading", active, "#58a6ff", "trading")+
+    _sideTile("books idle", flat, "#7c8b9d", "idle")+
     _drillTile("open", d.open||0, "#58a6ff")+
     _sideTile("open long", d.open_long||0, "#3fb950", "open_long")+
     _sideTile("open short", d.open_short||0, "#f85149", "open_short")+
