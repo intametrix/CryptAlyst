@@ -111,6 +111,31 @@ go run ./cmd/refdata                      # defaults: ../state/refdata, 127.0.0.
 go run ./cmd/refdata -seed cmd/refdata/seed.json   # idempotent ingest
 ```
 
+Or as part of the platform, via the core boot sequence (the missing
+start/stop/status for the lake services; Python engines stay with
+`scalp5/platform.sh`):
+
+```
+cd scalp5/core
+./boot.sh start     # recorder, envelope explorer, healthpub, refdata (skips ones already up)
+./boot.sh status    # liveness plus a refdata registry summary
+./boot.sh stop
+```
+
+Boot applies `-seed` idempotently at every start, so the registry reconverges
+on the committed seed. Liveness checks are service-specific: the recorder
+serves no `/` (any HTTP probe 404s while healthy), so `boot.sh` probes it by
+process, refdata via `/healthz`, the explorer via `/`.
+
+Lake-side consumers resolve symbols at runtime with the client (envelope-aware,
+shareable across goroutines):
+
+```go
+c := refdata.NewClient("http://127.0.0.1:8790")
+hits, err := c.Resolve(ctx, "ticker", "SOL")   // -> crypto_perp:binance_usdt_m:solusdt
+edges, err := c.Correlations(ctx, hits[0].ID)  // every handle other stores use
+```
+
 Seed covers the ten USDT-M perps observed in the repo ledgers (BTC, ETH,
 SOL, XRP, NEAR, ZEC, AVA, UNI, WLD, SPCXB) plus a `crypto_perp` class
 definition. The venue label `binance_usdt_m` is inferred from bot
