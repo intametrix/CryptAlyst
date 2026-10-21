@@ -1,7 +1,14 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -14,7 +21,11 @@ func fapiFixture() fapiExchangeInfo {
 			Symbol: "BTCUSDT", Pair: "BTCUSDT", ContractType: "PERPETUAL", Status: "TRADING",
 			BaseAsset: "BTC", QuoteAsset: "USDT", MarginAsset: "USDT",
 			PricePrecision: 2, QuantityPrecision: 3, UnderlyingType: "COIN",
-			OnboardDate: 1567965300000,
+			OnboardDate:     1567965300000,
+			MaintMarginPct:  "2.5000",
+			LiquidationFee:  "0.012500",
+			TriggerProtect:  "0.0500",
+			MarketTakeBound: "0.05",
 			Filters: []filter{
 				{"filterType": json.RawMessage(`"PRICE_FILTER"`), "tickSize": json.RawMessage(`"0.10"`), "minPrice": json.RawMessage(`"556.80"`), "maxPrice": json.RawMessage(`"4529764"`)},
 				{"filterType": json.RawMessage(`"LOT_SIZE"`), "stepSize": json.RawMessage(`"0.001"`), "minQty": json.RawMessage(`"0.001"`), "maxQty": json.RawMessage(`"1000"`)},
@@ -93,7 +104,7 @@ func byID(t *testing.T, seed seedFile, id string) refdata.Instrument {
 }
 
 func TestBuildSeed(t *testing.T) {
-	seed, skipped := buildSeed(spotFixture(), fapiFixture(), map[string]bool{"USDT": true, "FDUSD": true})
+	seed, skipped := buildSeed(spotFixture(), fapiFixture(), map[string]bool{"USDT": true, "FDUSD": true}, nil)
 
 	// One TRADING perp; the quarterly and the settling perp are skipped.
 	if got := len(seed.Instruments); got != 3 {
@@ -156,7 +167,7 @@ func TestBuildSeed(t *testing.T) {
 }
 
 func TestBuildSeedSortOrder(t *testing.T) {
-	seed, _ := buildSeed(spotFixture(), fapiFixture(), map[string]bool{"USDT": true, "FDUSD": true})
+	seed, _ := buildSeed(spotFixture(), fapiFixture(), map[string]bool{"USDT": true, "FDUSD": true}, nil)
 	for i := 1; i < len(seed.Instruments); i++ {
 		a, b := seed.Instruments[i-1], seed.Instruments[i]
 		if a.Class > b.Class || (a.Class == b.Class && a.Symbol > b.Symbol) {
@@ -166,7 +177,7 @@ func TestBuildSeedSortOrder(t *testing.T) {
 }
 
 func TestMergeSeedKeepsHandCuratedRecords(t *testing.T) {
-	seed, _ := buildSeed(spotFixture(), fapiFixture(), map[string]bool{"USDT": true})
+	seed, _ := buildSeed(spotFixture(), fapiFixture(), map[string]bool{"USDT": true}, nil)
 	existing := &seedFile{
 		Instruments: []refdata.Instrument{
 			{ID: "crypto_perp:binance_usdt_m:spcxbusdt", Class: refdata.ClassCryptoPerp,
@@ -175,12 +186,14 @@ func TestMergeSeedKeepsHandCuratedRecords(t *testing.T) {
 		},
 		Documents: []refdata.Document{
 			{ID: "doc-hand-note", Title: "hand-written note", Kind: "note", Body: "keep me"},
+			// Same title+kind as a generated doc: must survive exactly once.
+			{ID: "doc-old-spot-def", Title: "crypto_spot class definition", Kind: "definition", Body: "older version\n"},
 		},
 		Edges: []refdata.Edge{
 			{Subject: "crypto_perp:binance_usdt_m:spcxbusdt", Predicate: "listed_on", Object: "venue:binance_usdt_m"},
 		},
 	}
-	docs := generatedDocs(map[string]int{"perp": 1, "spot": 1}, []string{"USDT"}, time.Unix(0, 0))
+	docs := generatedDocs(map[string]int{"perp": 1, "spot": 1}, []string{"USDT"}, time.Unix(0, 0), []string{"test"})
 	mergeSeed(&seed, existing, docs)
 
 	byID(t, seed, "crypto_perp:binance_usdt_m:spcxbusdt") // survived the merge
@@ -240,5 +253,118 @@ func TestFilterStr(t *testing.T) {
 	}
 	if got := f.str("bad"); got != "" {
 		t.Fatalf("unreadable value: %q", got)
+	}
+}
+
+func testEnrichment() *enrichment {
+	return &enrichment{
+		Assets: map[string]assetInfo{
+			"BTC": {
+				Name:   "Bitcoin",
+				Supply: "19806450",
+				Tags:   "Payments, Store Of Value",
+				Link:   "https://www.binance.com/en/price/bitcoin",
+				Logo:   "https://public.bnbstatic.com/image/pm/xxx/btc.png",
+			},
+		},
+		Perp24: map[string]ticker24{
+			"BTCUSDT": {Symbol: "BTCUSDT", OpenPrice: "100", HighPrice: "110", LowPrice: "95", LastPrice: "108", Volume: "12345.6", QuoteVolume: "1300000", PriceChangePercent: "8.0", Count: 999},
+		},
+		Spot24: map[string]ticker24{
+			"BTCUSDT": {Symbol: "BTCUSDT", OpenPrice: "101", HighPrice: "109", LowPrice: "96", LastPrice: "105", Volume: "5000", QuoteVolume: "520000", PriceChangePercent: "4.0", Count: 111},
+		},
+		Premium: map[string]premium{
+			"BTCUSDT": {Symbol: "BTCUSDT", MarkPrice: "107.9", IndexPrice: "108.0", LastFundingRate: "0.0001", NextFundingTime: 1792569600000},
+		},
+		Brackets: map[string]bracketInfo{
+			"BTCUSDT": {MaxLeverage: 125, MaxNotional: 500000000},
+		},
+		Ratios: map[string]ratioInfo{
+			"BTCUSDT": {LongShort: "2.5", TakerBuySell: "1.1", GlobalLongStr: "3.0"},
+		},
+	}
+}
+
+func TestEnrichmentApplied(t *testing.T) {
+	e := testEnrichment()
+	perp := perpInstrument(fapiFixture().Symbols[0], e)
+
+	if perp.Name != "Bitcoin USDT-M Perpetual" {
+		t.Fatalf("enriched name: %q", perp.Name)
+	}
+	// Risk limits: exchangeInfo fractions plus the bracket ladder.
+	for k, want := range map[string]float64{
+		"maint_margin": 2.5, "liquidation_fee": 0.0125, "trigger_protect": 0.05,
+		"market_take_bound": 0.05, "max_leverage": 125, "max_notional": 500000000,
+	} {
+		if perp.Limits[k] != want {
+			t.Fatalf("perp limits[%s] = %v, want %v (all: %+v)", k, perp.Limits[k], want, perp.Limits)
+		}
+	}
+	for k, want := range map[string]string{
+		"asset_name":              "Bitcoin",
+		"asset_supply":            "19806450",
+		"asset_tags":              "Payments, Store Of Value",
+		"coin_link":               "https://www.binance.com/en/price/bitcoin",
+		"mark_price":              "107.9",
+		"index_price":             "108.0",
+		"funding_rate":            "0.0001",
+		"d24_last":                "108",
+		"d24_quote_volume":        "1300000",
+		"long_short_ratio":        "2.5",
+		"global_long_short_ratio": "3.0",
+	} {
+		if perp.Meta[k] != want {
+			t.Fatalf("perp meta[%s] = %q, want %q", k, perp.Meta[k], want)
+		}
+	}
+	if perp.Meta["next_funding_time"] != time.UnixMilli(1792569600000).UTC().Format(time.RFC3339) {
+		t.Fatalf("next_funding_time: %q", perp.Meta["next_funding_time"])
+	}
+
+	spot := spotInstrument(spotFixture().Symbols[0], e)
+	if spot.Name != "Bitcoin/USDT Spot" {
+		t.Fatalf("enriched spot name: %q", spot.Name)
+	}
+	if spot.Meta["d24_last"] != "105" {
+		t.Fatalf("spot d24_last: %q", spot.Meta["d24_last"])
+	}
+	if _, isPerpField := spot.Meta["funding_rate"]; isPerpField {
+		t.Fatal("spot must not carry perp-only fields")
+	}
+	if _, hasLeverage := spot.Limits["max_leverage"]; hasLeverage {
+		t.Fatal("spot must not carry perp-only limits")
+	}
+}
+
+func TestSignedGet(t *testing.T) {
+	var gotKey, gotQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotKey = r.Header.Get("X-MBX-APIKEY")
+		gotQuery = r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"ok":true}`)
+	}))
+	defer ts.Close()
+	var dst map[string]any
+	if err := signedGet(ts.URL, "/bracket", "KEY", "SECRET", &dst); err != nil {
+		t.Fatalf("signedGet: %v", err)
+	}
+	if gotKey != "KEY" {
+		t.Fatalf("api key header: %q", gotKey)
+	}
+	q, err := url.ParseQuery(gotQuery)
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	if q.Get("timestamp") == "" {
+		t.Fatal("no timestamp in signed query")
+	}
+	sig := q.Get("signature")
+	q.Del("signature")
+	mac := hmac.New(sha256.New, []byte("SECRET"))
+	mac.Write([]byte(q.Encode()))
+	if sig != hex.EncodeToString(mac.Sum(nil)) {
+		t.Fatalf("signature mismatch: got %q want %q over %q", sig, hex.EncodeToString(mac.Sum(nil)), q.Encode())
 	}
 }
