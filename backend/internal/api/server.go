@@ -220,6 +220,7 @@ func New(deps Deps) *Server { return &Server{deps: deps} }
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", s.handleHealth)
+	mux.HandleFunc("/api/bus", s.handleBus)
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/universe", s.handleUniverse)
 	mux.HandleFunc("/api/flow", s.handleFlow)
@@ -290,6 +291,35 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":     "ok",
 		"uptime_sec": int(time.Since(s.deps.StartedAt).Seconds()),
+	})
+}
+
+// recorderAddr is the persistence plane's stats endpoint, proxied for the
+// message-bus tab. Same process layout as every other hardcoded peer here.
+const recorderAddr = "http://127.0.0.1:8801/stats"
+
+func (s *Server) handleBus(w http.ResponseWriter, r *http.Request) {
+	resp, err := http.Get(recorderAddr)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "recorder unreachable"})
+		return
+	}
+	defer resp.Body.Close()
+	var st struct {
+		Received int64            `json:"received"`
+		Written  int64            `json:"written"`
+		Refused  int64            `json:"refused"`
+		ByTopic  map[string]int64 `json:"by_topic"`
+		RatePerS string           `json:"rate_per_s"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": "recorder bad payload"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"received": st.Received, "written": st.Written, "refused": st.Refused,
+		"rate_per_s": st.RatePerS, "by_topic": st.ByTopic,
+		"ts_ms": time.Now().UnixMilli(),
 	})
 }
 
