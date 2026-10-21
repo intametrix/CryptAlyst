@@ -1,0 +1,35 @@
+{
+  "instruments": [
+    {"id": "crypto_perp:binance_usdt_m:btcusdt", "class": "crypto_perp", "symbol": "BTCUSDT", "name": "Bitcoin USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "BTC", "exchange_symbol": "BTCUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:ethusdt", "class": "crypto_perp", "symbol": "ETHUSDT", "name": "Ether USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "ETH", "exchange_symbol": "ETHUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:solusdt", "class": "crypto_perp", "symbol": "SOLUSDT", "name": "Solana USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "SOL", "exchange_symbol": "SOLUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:xrpusdt", "class": "crypto_perp", "symbol": "XRPUSDT", "name": "XRP USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "XRP", "exchange_symbol": "XRPUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:nearusdt", "class": "crypto_perp", "symbol": "NEARUSDT", "name": "NEAR Protocol USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "NEAR", "exchange_symbol": "NEARUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:zecusdt", "class": "crypto_perp", "symbol": "ZECUSDT", "name": "Zcash USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "ZEC", "exchange_symbol": "ZECUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:avausdt", "class": "crypto_perp", "symbol": "AVAUSDT", "name": "Travala USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "AVA", "exchange_symbol": "AVAUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:uniusdt", "class": "crypto_perp", "symbol": "UNIUSDT", "name": "Uniswap USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "UNI", "exchange_symbol": "UNIUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:wldusdt", "class": "crypto_perp", "symbol": "WLDUSDT", "name": "Worldcoin USDT-M Perpetual", "status": "active", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "WLD", "exchange_symbol": "WLDUSDT"}},
+    {"id": "crypto_perp:binance_usdt_m:spcxbusdt", "class": "crypto_perp", "symbol": "SPCXBUSDT", "name": "SpaceX Beta USDT-M Perpetual", "status": "testing", "venues": ["binance_usdt_m"], "identifiers": {"ticker": "SPCXB", "exchange_symbol": "SPCXBUSDT"}}
+  ],
+  "documents": [
+    {
+      "class": "crypto_perp",
+      "title": "crypto_perp class definition",
+      "kind": "definition",
+      "source": "seed: docs/refdata.md",
+      "body": "# crypto_perp\n\nA perpetual futures contract on a cryptocurrency, quoted and settled in USDT,\nwith no expiry. Funding payments exchange hands between longs and shorts to\nanchor the mark price to spot.\n\nRegistry conventions for this class:\n\n- `id` shape: `crypto_perp:<venue>:<exchange_symbol>` in lowercase.\n- `venues` lists the venues where the contract trades; the seeded venue\n  `binance_usdt_m` is inferred from the trading bots' USDT-M style notionals\n  and fills, and must be confirmed against venue configuration before\n  position-limit logic relies on it.\n- `limits` keys (populated as they become known): `tick_size`, `lot_size`,\n  `min_notional`, `max_leverage`, `max_position`.\n- `meta.source` on seeded records names where the symbol was observed.\n"
+    }
+  ],
+  "edges": [
+    {"subject": "crypto_perp:binance_usdt_m:btcusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:ethusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:solusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:xrpusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:nearusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:zecusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:avausdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:uniusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:wldusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"},
+    {"subject": "crypto_perp:binance_usdt_m:spcxbusdt", "predicate": "listed_on", "object": "venue:binance_usdt_m"}
+  ]
+}

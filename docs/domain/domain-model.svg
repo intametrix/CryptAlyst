@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1680" height="900" viewBox="0 0 1680 900" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1680" height="900" fill="#0b1118"/>
+<marker id="arrow-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="arrow-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="arrow-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="arrow-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="arrow-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="arrow-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="48" y="58" fill="#e6eef8" font-size="24" font-weight="700">CryptAlyst — domain model</text>
+<text x="48" y="76" fill="#8ea0b6" font-size="13">what the platform is about: the contracts, the books, the record</text>
+<text x="1632" y="58" fill="#5a6b80" font-size="11" text-anchor="end">one envelope contract · one bus · one record</text>
+<rect x="48" y="110" width="330" height="200" rx="10" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="62" y="132" fill="#4f9bff" font-size="12" font-weight="700" letter-spacing="0.08em">MARKET DATA</text>
+<text x="62" y="152" fill="#8ea0b6" font-size="12.5" font-weight="400">Symbol universe</text>
+<text x="364" y="152" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">VALUE</text>
+<text x="62" y="171" fill="#e6eef8" font-size="12.5" font-weight="600">Kline series</text>
+<text x="364" y="171" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="62" y="190" fill="#e6eef8" font-size="12.5" font-weight="600">Depth book</text>
+<text x="364" y="190" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="62" y="209" fill="#e6eef8" font-size="12.5" font-weight="600">Top of book</text>
+<text x="364" y="209" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="62" y="228" fill="#8ea0b6" font-size="12.5" font-weight="400">Feed shard</text>
+<text x="364" y="228" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<rect x="48" y="470" width="330" height="170" rx="10" fill="#0d1f1a" stroke="#38d39f" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="62" y="492" fill="#38d39f" font-size="12" font-weight="700" letter-spacing="0.08em">INTELLIGENCE</text>
+<text x="62" y="512" fill="#e6eef8" font-size="12.5" font-weight="600">Signal</text>
+<text x="364" y="512" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="62" y="531" fill="#e6eef8" font-size="12.5" font-weight="600">Flow window</text>
+<text x="364" y="531" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="62" y="550" fill="#e6eef8" font-size="12.5" font-weight="600">TA reading</text>
+<text x="364" y="550" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="62" y="569" fill="#e6eef8" font-size="12.5" font-weight="600">Forecast</text>
+<text x="364" y="569" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<rect x="470" y="110" width="330" height="290" rx="10" fill="#221a10" stroke="#f5b544" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="484" y="132" fill="#f5b544" font-size="12" font-weight="700" letter-spacing="0.08em">BOOKS</text>
+<text x="484" y="152" fill="#e6eef8" font-size="12.5" font-weight="600">Book</text>
+<text x="786" y="152" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">AGGREGATE</text>
+<text x="484" y="171" fill="#e6eef8" font-size="12.5" font-weight="600">Position</text>
+<text x="786" y="171" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="484" y="190" fill="#e6eef8" font-size="12.5" font-weight="600">Trade (fill)</text>
+<text x="786" y="190" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="484" y="209" fill="#e6eef8" font-size="12.5" font-weight="600">Decision</text>
+<text x="786" y="209" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="484" y="228" fill="#e6eef8" font-size="12.5" font-weight="600">Refusal</text>
+<text x="786" y="228" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="484" y="247" fill="#8ea0b6" font-size="12.5" font-weight="400">Strategy</text>
+<text x="786" y="247" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">VALUE</text>
+<rect x="470" y="470" width="330" height="170" rx="10" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="484" y="492" fill="#ef6b6b" font-size="12" font-weight="700" letter-spacing="0.08em">RISK &amp; EXECUTION</text>
+<text x="484" y="512" fill="#8ea0b6" font-size="12.5" font-weight="400">Risk gate</text>
+<text x="786" y="512" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<text x="484" y="531" fill="#e6eef8" font-size="12.5" font-weight="600">Kill switch</text>
+<text x="786" y="531" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">AGGREGATE</text>
+<text x="484" y="550" fill="#8ea0b6" font-size="12.5" font-weight="400">Sizing rule</text>
+<text x="786" y="550" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">VALUE</text>
+<text x="484" y="569" fill="#8ea0b6" font-size="12.5" font-weight="400">Exit policy</text>
+<text x="786" y="569" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">VALUE</text>
+<rect x="900" y="110" width="340" height="210" rx="10" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="914" y="132" fill="#a879ff" font-size="12" font-weight="700" letter-spacing="0.08em">RECORDING</text>
+<text x="914" y="152" fill="#8ea0b6" font-size="12.5" font-weight="400">Recorder</text>
+<text x="1226" y="152" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<text x="914" y="171" fill="#e6eef8" font-size="12.5" font-weight="600">Lake segment</text>
+<text x="1226" y="171" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="914" y="190" fill="#e6eef8" font-size="12.5" font-weight="600">Envelope</text>
+<text x="1226" y="190" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">AGGREGATE</text>
+<text x="914" y="209" fill="#8ea0b6" font-size="12.5" font-weight="400">Derived reference</text>
+<text x="1226" y="209" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">VALUE</text>
+<rect x="900" y="470" width="340" height="170" rx="10" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="914" y="492" fill="#a879ff" font-size="12" font-weight="700" letter-spacing="0.08em">FORENSICS</text>
+<text x="914" y="512" fill="#e6eef8" font-size="12.5" font-weight="600">Case file</text>
+<text x="1226" y="512" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">AGGREGATE</text>
+<text x="914" y="531" fill="#e6eef8" font-size="12.5" font-weight="600">Book report</text>
+<text x="1226" y="531" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">AGGREGATE</text>
+<text x="914" y="550" fill="#8ea0b6" font-size="12.5" font-weight="400">Search</text>
+<text x="1226" y="550" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<text x="914" y="569" fill="#8ea0b6" font-size="12.5" font-weight="400">Journey</text>
+<text x="1226" y="569" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<text x="914" y="588" fill="#8ea0b6" font-size="12.5" font-weight="400">Chronology</text>
+<text x="1226" y="588" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<rect x="1330" y="110" width="300" height="530" rx="10" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.35" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="1344" y="132" fill="#7f8ea3" font-size="12" font-weight="700" letter-spacing="0.08em">CONTROL</text>
+<text x="1344" y="152" fill="#8ea0b6" font-size="12.5" font-weight="400">Supervisor</text>
+<text x="1616" y="152" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<text x="1344" y="171" fill="#8ea0b6" font-size="12.5" font-weight="400">Heartbeat</text>
+<text x="1616" y="171" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<text x="1344" y="190" fill="#e6eef8" font-size="12.5" font-weight="600">Trading state</text>
+<text x="1616" y="190" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">AGGREGATE</text>
+<text x="1344" y="209" fill="#e6eef8" font-size="12.5" font-weight="600">Stop flag</text>
+<text x="1616" y="209" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">ENTITY</text>
+<text x="1344" y="228" fill="#e6eef8" font-size="12.5" font-weight="600">Topic registry</text>
+<text x="1616" y="228" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">AGGREGATE</text>
+<text x="1344" y="247" fill="#8ea0b6" font-size="12.5" font-weight="400">Interceptor chain</text>
+<text x="1616" y="247" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<text x="1344" y="266" fill="#8ea0b6" font-size="12.5" font-weight="400">Operator registry</text>
+<text x="1616" y="266" fill="#5a6b80" font-size="9.5" text-anchor="end" letter-spacing="0.06em">SERVICE</text>
+<path d="M 378,200 L 430,200" fill="none" stroke="#4f9bff" stroke-opacity="0.75" stroke-width="1.4" marker-end="url(#arrow-market)"/>
+<text x="386" y="186" fill="#8ea0b6" font-size="9.5" text-anchor="start">market.*</text>
+<path d="M 378,555 L 430,555 L 430,330 L 470,330" fill="none" stroke="#38d39f" stroke-opacity="0.75" stroke-width="1.2" marker-end="url(#arrow-intel)"/>
+<text x="384" y="570" fill="#8ea0b6" font-size="9.5" text-anchor="start">intel.*</text>
+<path d="M 635,400 L 635,470" fill="none" stroke="#f5b544" stroke-opacity="0.75" stroke-width="1.6" marker-end="url(#arrow-model)"/>
+<text x="646" y="424" fill="#8ea0b6" font-size="10.5">proposed order</text>
+<path d="M 505,470 L 505,400" fill="none" stroke="#ef6b6b" stroke-opacity="0.75" stroke-width="1.2" stroke-dasharray="6 5" marker-end="url(#arrow-risk)"/>
+<text x="300" y="432" fill="#8ea0b6" font-size="10.5" text-anchor="start">allowed / refused</text>
+<path d="M 800,240 L 856,240 L 856,210 L 900,210" fill="none" stroke="#f5b544" stroke-opacity="0.75" stroke-width="1.6" marker-end="url(#arrow-model)"/>
+<text x="806" y="274" fill="#8ea0b6" font-size="10" text-anchor="start">model.decision · model.fill</text>
+<path d="M 390,104 L 1020,104" fill="none" stroke="#4f9bff" stroke-opacity="0.75" stroke-width="1.0" stroke-dasharray="6 5" marker-end="url(#arrow-market)"/>
+<text x="404" y="98" fill="#8ea0b6" font-size="10.5" text-anchor="start">every topic is recorded, not only trades</text>
+<path d="M 1070,320 L 1070,470" fill="none" stroke="#a879ff" stroke-opacity="0.75" stroke-width="1.6" marker-end="url(#arrow-evidence)"/>
+<text x="1082" y="415" fill="#8ea0b6" font-size="10.5">read-only replay</text>
+<path d="M 1330,430 L 1244,430" fill="none" stroke="#7f8ea3" stroke-opacity="0.75" stroke-width="1.0" stroke-dasharray="6 5" marker-end="url(#arrow-control)"/>
+<text x="1318" y="470" fill="#8ea0b6" font-size="9.5" text-anchor="end">supervises books, publishes system.control</text>
+<text x="1614" y="560" fill="#8ea0b6" font-size="9.5" text-anchor="end">STOP resets books and stats;</text>
+<text x="1614" y="574" fill="#8ea0b6" font-size="9.5" text-anchor="end">market data keeps running.</text>
+<text x="1614" y="592" fill="#8ea0b6" font-size="9.5" text-anchor="end">The kill switch is read by</text>
+<text x="1614" y="606" fill="#8ea0b6" font-size="9.5" text-anchor="end">every gate, never hoped for.</text>
+<rect x="872" y="700" width="760" height="150" rx="10" fill="#0d141d" stroke="#233244"/>
+<text x="892" y="730" fill="#e6eef8" font-size="12" font-weight="700" letter-spacing="0.08em">THE CONTRACT</text>
+<text x="892" y="756" fill="#8ea0b6" font-size="11.5">Envelope = data + meta + refs. meta carries version, plane, topic, producer, generation, cid, computed_at, hops.</text>
+<text x="892" y="778" fill="#8ea0b6" font-size="11.5">Unknown top-level member refused · unknown meta key ignored · one previous version accepted.</text>
+<text x="892" y="800" fill="#8ea0b6" font-size="11.5">A reference is declared by a producer or derived by the recorder, and always carries its age.</text>
+<rect x="48" y="700" width="800" height="150" rx="10" fill="#0d141d" stroke="#233244"/>
+<text x="66" y="730" fill="#e6eef8" font-size="12" font-weight="700" letter-spacing="0.08em">READING THIS</text>
+<rect x="66" y="750" width="10" height="10" rx="2" fill="#4f9bff"/>
+<text x="82" y="759" fill="#8ea0b6" font-size="10.5">data plane</text>
+<rect x="152.0" y="750" width="10" height="10" rx="2" fill="#f5b544"/>
+<text x="168.0" y="759" fill="#8ea0b6" font-size="10.5">decision plane</text>
+<rect x="263.6" y="750" width="10" height="10" rx="2" fill="#ef6b6b"/>
+<text x="279.6" y="759" fill="#8ea0b6" font-size="10.5">risk</text>
+<rect x="311.20000000000005" y="750" width="10" height="10" rx="2" fill="#a879ff"/>
+<text x="327.20000000000005" y="759" fill="#8ea0b6" font-size="10.5">evidence</text>
+<rect x="384.40000000000003" y="750" width="10" height="10" rx="2" fill="#7f8ea3"/>
+<text x="400.40000000000003" y="759" fill="#8ea0b6" font-size="10.5">control</text>
+<text x="66" y="788" fill="#8ea0b6" font-size="10.5">Bold names are aggregates — the things that must stay consistent. Others are entities, services or values.</text>
+<text x="66" y="808" fill="#8ea0b6" font-size="10.5">Dashed arrows are control, not data: they change what the platform will do next.</text>
+<text x="66" y="828" fill="#5a6b80" font-size="10">Every arrow in this diagram carries an envelope; there is one bus and no side channels.</text>
+</svg>
