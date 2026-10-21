@@ -12,15 +12,18 @@
 #   ./scripts/start.sh              platform up, trading OFF
 #   ./scripts/start.sh --trade      platform up, books running
 #   ./scripts/start.sh --keep       do not kill what is already running
+#   ./scripts/start.sh --keep-broker  restart the platform, leave RabbitMQ alone
 set -u
 cd "$(dirname "$0")/.." || exit 1
 
 TRADE=0
 KILL=1
+KILL_BROKER=1
 for arg in "$@"; do
   case "$arg" in
     --trade) TRADE=1 ;;
     --keep)  KILL=0 ;;
+    --keep-broker) KILL_BROKER=0 ;;
     --help|-h)
       sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
       exit 0 ;;
@@ -92,6 +95,25 @@ if [ "$KILL" = "1" ]; then
   for p in $PORTS; do
     wait_port "$p" 8 || busy="$busy $p"
   done
+  if [ "$KILL_BROKER" = "1" ]; then
+    if command -v rabbitmqctl >/dev/null 2>&1 && rabbitmqctl status >/dev/null 2>&1; then
+      rabbitmqctl stop >/dev/null 2>&1
+    fi
+    pkill -f "beam.smp" 2>/dev/null
+    sleep 2
+    pkill -9 -f "beam.smp|epmd" 2>/dev/null
+    i=0
+    while [ $i -lt 20 ]; do
+      lsof -nP -iTCP:61613 -sTCP:LISTEN >/dev/null 2>&1 || break
+      sleep 1; i=$((i+1))
+    done
+    ok "RabbitMQ stopped (ports 61613 and 15672 released)"
+  else
+    ok "RabbitMQ left alone (--keep-broker)"
+  fi
+  for p in $PORTS 61613 15672; do
+    wait_port "$p" 8 || busy="$busy $p"
+  done
   [ -n "$busy" ] && die "ports still held after the kill:$busy"
   ok "platform processes stopped ($KILLED patterns matched), ports free"
 else
@@ -114,7 +136,7 @@ else
   if [ -z "$RMQ" ]; then
     die "RabbitMQ is not installed and not running; install it or start it by hand"
   fi
-  nohup "$RMQ" >"$LOGS/broker.log" 2>&1 &
+  "$RMQ" -detached >"$LOGS/broker.log" 2>&1 || nohup "$RMQ" >"$LOGS/broker.log" 2>&1 &
   ok "started $RMQ"
   i=0
   while [ $i -lt 45 ]; do
