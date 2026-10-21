@@ -309,3 +309,7 @@ pre{background:#080e15;border:1px solid #14202c;border-radius:9px;padding:10px 1
   .tabs { gap: 2px; }
   .tab { padding: 5px 8px; font-size: 10px; }
 }
+
+/* reference-data one-hop: symbol tokens link into the refdata viewer */
+.reflink{color:var(--intel);text-decoration:none;border-bottom:1px dotted var(--intel)}
+.reflink:hover{color:#06121f;background:var(--intel);border-radius:3px}

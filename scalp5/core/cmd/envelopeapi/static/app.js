@@ -47,6 +47,16 @@ function esc(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+/* Reference-data one-hop: symbol-looking tokens become links into the
+   refdata viewer (:8790), whose ?resolve= deep link maps them to the
+   canonical instrument record — the same identity the lake stores use. */
+const REFDATA_URL = "http://127.0.0.1:8790";
+const SYMBOL_TOKEN = /(^|[^A-Za-z0-9])((?:[A-Z][A-Z0-9]{1,14})?(?:USDT|USDC|BUSD|FDUSD))(?![A-Za-z0-9])/g;
+function refLink(s) {
+  return esc(s).replace(SYMBOL_TOKEN, (m, pre, sym) =>
+    `${pre}<a class="reflink" target="_blank" rel="noopener" href="${REFDATA_URL}/?resolve=${encodeURIComponent(sym)}">${sym}</a>`);
+}
+
 /* JSON with syntax colouring, built from text so it can never execute markup. */
 function colourJSON(value) {
   const text = JSON.stringify(value, null, 2);
@@ -264,7 +274,7 @@ async function renderDetail(d) {
     $("detail").innerHTML = notice + `
       <div class="dhead">
         <div>
-          <h2>${esc(d.topic)}${d.key ? " · " + esc(d.key) : ""}</h2>
+          <h2>${esc(d.topic)}${d.key ? " · " + refLink(d.key) : ""}</h2>
           <div class="sub"><span class="pill ${esc(d.plane)}">${esc(d.plane)}</span>
             &nbsp;${esc(d.producer || "unknown producer")} &nbsp;·&nbsp; ${fmtTime(d.ts)}</div>
           <div class="sub" style="margin-top:5px;color:var(--dim)">${esc(TOPIC_MEANING[d.topic] || "")}</div>
@@ -493,11 +503,11 @@ async function openBook(engine) {
     <h3>trades</h3>
     <table><tr><th>time</th><th>instrument</th><th>side</th><th>held</th><th>net</th><th>envelope</th></tr>
       ${(d.trades || []).slice(0, 40).map((t) => `<tr data-id="${t.id}"><td>${fmtTime(t.ts)}</td>
-        <td>${esc(t.key)}</td><td>${esc(t.side)}</td><td>${Math.round(t.held_s)}s</td>
+        <td>${refLink(t.key)}</td><td>${esc(t.side)}</td><td>${Math.round(t.held_s)}s</td>
         <td>${t.net_pct.toFixed(3)}%</td><td>${t.id}</td></tr>`).join("")}</table>
     <h3>refusals</h3>
     ${(d.refusals || []).length ? `<table><tr><th>time</th><th>instrument</th><th>rule</th></tr>
-      ${d.refusals.slice(0, 20).map((x) => `<tr><td>${fmtTime(x.ts)}</td><td>${esc(x.key)}</td>
+      ${d.refusals.slice(0, 20).map((x) => `<tr><td>${fmtTime(x.ts)}</td><td>${refLink(x.key)}</td>
         <td>${esc(x.reason)}</td></tr>`).join("")}</table>` : `<div class="muted">none recorded</div>`}
   </div>`;
   $("bookReport").onclick = () => window.open("/api/book.html?engine=" + encodeURIComponent(engine), "_blank");
@@ -582,7 +592,7 @@ function drawGantt(d) {
     : `trace — ${total} inputs leading to ${d.topic || ""} ${d.key || ""}`;
   $("ganttLegend").innerHTML = d.mode === "positions"
     ? `<table><tr><th>symbol</th><th>engine</th><th>held</th><th>net</th></tr>
-        ${rows.slice(0, 12).map((r) => `<tr data-id="${r.id}"><td>${esc(r.label)}</td><td>${esc(r.producer)}</td>
+        ${rows.slice(0, 12).map((r) => `<tr data-id="${r.id}"><td>${refLink(r.label)}</td><td>${esc(r.producer)}</td>
         <td>${Math.round((r.end - r.start) / 1000)}s</td><td>${(r.value || 0).toFixed(2)}%</td></tr>`).join("")}</table>`
     : `<table><tr><th>input</th><th>producer</th><th>valid for</th></tr>
         ${rows.slice(0, 12).map((r) => `<tr data-id="${r.id}"><td>${esc(r.topic)}</td><td>${esc(r.producer)}</td>
@@ -612,7 +622,7 @@ async function renderContext() {
   // 1 · identity
   html.push(`<div class="ctx">
     <h3>${esc(d.topic)}</h3>
-    <div class="big">${esc(d.key || "multi-symbol")} <span class="muted">· ${esc(d.producer || "")} · ${fmtTime(d.ts)}</span></div>
+    <div class="big">${refLink(d.key || "multi-symbol")} <span class="muted">· ${esc(d.producer || "")} · ${fmtTime(d.ts)}</span></div>
     <div class="muted">${esc(TOPIC_MEANING[d.topic] || "")}</div>
   </div>`);
 
