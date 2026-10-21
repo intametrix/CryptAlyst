@@ -1837,7 +1837,23 @@ header{margin-left:186px}
     }
   };
 })();
-</script></head><body>
+</script>
+<style>
+.tbtn{background:#111a23;border:1px solid #24313e;color:#cfe4f7;border-radius:6px;
+      padding:3px 10px;font:inherit;font-size:11px;cursor:pointer;line-height:1.5}
+.tbtn:hover{background:#16232f;border-color:#31506b}
+.tbtn:disabled{opacity:.5;cursor:default}
+.drillbook{background:#0b121a;border:1px solid #16202b;border-radius:9px;
+           padding:9px 11px;margin-bottom:7px}
+.drillbook .top{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.drillbook .name{font-weight:700;font-size:12.5px;color:#dbe6f2;min-width:140px}
+.drillbook .metric{font-family:var(--mono);font-size:11px;color:#8095ab}
+.drillbook .metric b{color:#dbe6f2;font-weight:700}
+.drillbook .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap}
+.drillpos{display:grid;grid-template-columns:150px 60px 1fr 1fr 1fr 1fr 70px 70px;
+          gap:6px;align-items:center;font-family:var(--mono);font-size:10.5px;
+          color:#93a5b8;padding:3px 0 3px 14px;border-top:1px solid #101a24}
+</style></head><body>
 <aside id="rail">
   <div class="rlogo"><b>Crypt<span>Alyst</span></b>
   <button id="railbtn" onclick="toggleRail()" title="collapse / expand">☰</button></div>
@@ -2444,49 +2460,41 @@ async function drillRender(){
     var posRows="";
     if(kind==="unrealised" && (e.positions_detail||[]).length){
       posRows=(e.positions_detail||[]).map(function(p){
-        return '<tr style="background:#070d13;color:#93a5b8">'+
-          '<td style="padding:5px 8px 5px 26px">'+esc(p.symbol)+'</td>'+
-          '<td style="padding:5px 8px;color:'+((String(p.side).toLowerCase()==="sell")?"#f85149":"#3fb950")+'">'+
-            esc(String(p.side).toUpperCase())+'</td>'+
-          '<td style="padding:5px 8px;text-align:right">'+money(p.entry)+'</td>'+
-          '<td style="padding:5px 8px;text-align:right">'+money(p.mark)+'</td>'+
-          '<td style="padding:5px 8px;text-align:right">'+money(p.notional)+'</td>'+
-          '<td style="padding:5px 8px;text-align:right" class="'+(((p.pnl||0)>=0)?"up":"down")+'"><b>'+
-            sgn(p.pnl||0)+'</b></td>'+
-          '<td style="padding:5px 8px;text-align:right;color:#5f7186">'+
-            (p.held_s?Math.round(p.held_s)+"s":"—")+'</td>'+
-          '<td style="padding:5px 8px"><button class="tbtn" style="padding:1px 8px;font-size:10px" '+
-            'onclick="closePosition(\''+esc(e.name)+'\',\''+esc(p.symbol)+'\',this)">close</button></td></tr>';
+        return '<div class="drillpos">'+
+          '<span>'+esc(p.symbol)+'</span>'+
+          '<span style="color:'+((String(p.side).toLowerCase()==="sell")?"#f85149":"#3fb950")+'">'+
+            esc(String(p.side).toUpperCase())+'</span>'+
+          '<span>entry '+money(p.entry)+'</span>'+
+          '<span>mark '+money(p.mark)+'</span>'+
+          '<span>'+money(p.notional)+'</span>'+
+          '<span class="'+(((p.pnl||0)>=0)?"up":"down")+'"><b>'+sgn(p.pnl||0)+'</b></span>'+
+          '<span style="color:#5f7186">'+(p.held_s?Math.round(p.held_s)+"s":"—")+'</span>'+
+          '<button class="tbtn" onclick="closePosition(\''+esc(e.name)+'\',\''+esc(p.symbol)+'\',this)">close</button>'+
+        '</div>';
       }).join("");
     }
-    return '<tr style="background:#0b121a">'+
-      '<td style="padding:8px;font-weight:700;color:#dbe6f2">'+esc(e.name)+'</td>'+
-      '<td style="padding:8px;color:'+((e.disabled)?"#e3b341":(e.alive?"#3fb950":"#7c8b9d"))+'">'+
-        ((e.disabled)?"disabled":(e.alive?"running":"stopped"))+'</td>'+
-      '<td style="padding:8px;text-align:right" class="'+((e.realised||0)>=0?"up":"down")+'">'+sgn(e.realised||0)+'</td>'+
-      '<td style="padding:8px;text-align:right" class="'+((e.unrealised||0)>=0?"up":"down")+'">'+sgn(e.unrealised||0)+'</td>'+
-      '<td style="padding:8px;text-align:right" class="'+((e.total||0)>=0?"up":"down")+'"><b>'+sgn(e.total||0)+'</b></td>'+
-      '<td style="padding:8px;text-align:right">'+(e.open||0)+'</td>'+
-      '<td style="padding:8px;white-space:nowrap">'+
-        '<button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
-          'onclick="closeBook(\''+e.name+'\',this)">close all</button> '+
-        '<button class="tbtn" onclick="setCashIn(\''+e.name+'\')">cash in</button> '+
-        '<button class="tbtn" onclick="reloadEngine(\''+e.name+'\')">reload</button> '+
-        '<button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
-          'onclick="closeBook(\''+e.name+'\').then?closeBook(\''+e.name+'\'):0">close</button>'+
-      '</td></tr>'+posRows;
+    return '<div class="drillbook">'+
+      '<div class="top">'+
+        '<span class="name">'+esc(e.name)+'</span>'+
+        '<span class="metric" style="color:'+((e.disabled)?"#e3b341":(e.alive?"#3fb950":"#7c8b9d"))+'">'+
+          ((e.disabled)?"disabled":(e.alive?"running":"stopped"))+'</span>'+
+        '<span class="metric">realised <b class="'+((e.realised||0)>=0?"up":"down")+'">'+
+          sgn(e.realised||0)+'</b></span>'+
+        '<span class="metric">unrealized <b class="'+((e.unrealised||0)>=0?"up":"down")+'">'+
+          sgn(e.unrealised||0)+'</b></span>'+
+        '<span class="metric">total <b class="'+((e.total||0)>=0?"up":"down")+'">'+
+          sgn(e.total||0)+'</b></span>'+
+        '<span class="metric">open <b>'+(e.open||0)+'</b></span>'+
+        '<span class="acts">'+
+          '<button class="tbtn" onclick="closeBook(\''+e.name+'\',this)">close all</button>'+
+          '<button class="tbtn" onclick="setCashIn(\''+e.name+'\')">cash in</button>'+
+          '<button class="tbtn" onclick="reloadEngine(\''+e.name+'\')">reload</button>'+
+        '</span>'+
+      '</div>'+posRows+'</div>';
   }).join("");
   var sub=document.getElementById("drillsub");
   if(sub) sub.textContent = es.length+" books · "+key+" total "+sgn(sum);
-  box.innerHTML='<table style="width:100%;border-collapse:separate;border-spacing:0 3px;'+
-      'font-family:var(--mono);font-size:11.5px">'+
-    '<thead><tr style="color:#5f7186;text-align:right;font-size:10px;letter-spacing:.08em">'+
-    '<th style="text-align:left;padding:6px 8px">BOOK</th>'+
-    '<th style="text-align:left;padding:6px 8px">STATE</th>'+
-    '<th style="padding:6px 8px">TOTAL REALISED</th><th style="padding:6px 8px">UNREALIZED</th>'+
-    '<th style="padding:6px 8px">TOTAL</th><th style="padding:6px 8px">OPEN</th>'+
-    '<th style="text-align:left;padding:6px 8px">ACTIONS</th></tr></thead>'+
-    '<tbody>'+rows+'</tbody></table>';
+  box.innerHTML=rows;
 }
 
 async function closePosition(engine, symbol, btn){
