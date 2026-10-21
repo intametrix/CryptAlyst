@@ -9,14 +9,27 @@ POST /apply?model=X          write the winning params for the engine to read
 The backtest replays real 1m klines for the model's own basket, applies its rule,
 and grid-searches lock/stop/clock on realised net PnL after fees.
 """
-import json, os, threading, time, urllib.request
+import json, os, threading, time, urllib.request, hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from lib import solver
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state")
-FEE = 0.2          # round trip in percent
+# first-class fee model: fee + slippage with provenance (solver AMEND)
+FEE_MODEL = solver.fee_model(fee_bps=20.0, slippage_bps=0.0, provenance="hand-constant")
+FEE = FEE_MODEL["round_trip_bps"] / 100.0   # percent (was 0.2)
 JOBS = {}
 LOCK = threading.Lock()
+
+
+def code_hash():
+    """Hash of this optimiser source, so a recommendation names its code."""
+    try:
+        src = open(os.path.join(HERE, "optimiser_svc.py"), "rb").read()
+        return hashlib.sha1(src).hexdigest()[:12]
+    except Exception:
+        return "unknown"
 
 GRID = [{"lock": 0.4, "stop": 1.0, "clock": 300},
         {"lock": 0.5, "stop": 0.8, "clock": 600},
@@ -136,7 +149,7 @@ def simulate(series, name, params):
     wins = sum(1 for t in trades if t > 0)
     return {"trades": len(trades), "win_pct": 100 * wins / len(trades),
             "avg_net": sum(trades) / len(trades), "total": sum(trades),
-            "best": max(trades), "worst": min(trades)}
+            "best": max(trades), "worst": min(trades), "nets": trades}
 
 
 def job(model):
@@ -155,22 +168,40 @@ def job(model):
             job["note"] = "loaded %d/%d symbols" % (k + 1, len(syms))
         results = []
         for gi, params in enumerate(GRID):
-            agg = []
+            if not solver.bounds_ok(params):
+                continue
+            train_nets = []
+            val_nets = []
             for s, ser in series.items():
-                r = simulate(ser, model, params)
-                if r: agg.append(r)
-            if agg:
-                results.append({"params": params,
-                                "trades": sum(a["trades"] for a in agg),
-                                "win_pct": sum(a["win_pct"] * a["trades"] for a in agg) / max(1, sum(a["trades"] for a in agg)),
-                                "avg_net": sum(a["avg_net"] * a["trades"] for a in agg) / max(1, sum(a["trades"] for a in agg)),
-                                "total": sum(a["total"] for a in agg)})
+                cut = int(len(ser) * 0.7)
+                tr = simulate(ser[:cut], model, params)
+                va = simulate(ser[cut:], model, params)
+                if tr:
+                    train_nets += tr.get("nets") or []
+                if va:
+                    val_nets += va.get("nets") or []
+            obj = solver.objective(train_nets, FEE_MODEL["round_trip_bps"])
+            if obj is not None:
+                results.append({"params": params, "objective": obj,
+                                "validate_objective": solver.objective(val_nets, FEE_MODEL["round_trip_bps"]),
+                                "train_trades": len(train_nets),
+                                "validate_trades": len(val_nets)})
             job["progress"] = 45 + int(50 * (gi + 1) / len(GRID))
             job["note"] = "grid %d/%d" % (gi + 1, len(GRID))
-        results.sort(key=lambda r: r["avg_net"], reverse=True)
-        job["result"] = {"model": model, "grid": results,
-                         "best": results[0] if results else None,
-                         "symbols": list(series), "ts": int(time.time() * 1000)}
+        results.sort(key=lambda r: r["objective"], reverse=True)
+        best = results[0] if results else None
+        rec = None
+        if best:
+            rec = solver.recommend(
+                model, best["params"], best["objective"],
+                {"validate_objective": best["validate_objective"],
+                 "validate_trades": best["validate_trades"]},
+                code_hash=code_hash(), budget=len(GRID),
+                priors={"lock_pct": 0.4}, window="walk-forward 70/30",
+                tier="backtest_only")
+        job["result"] = {"model": model, "grid": results, "best": rec,
+                         "symbols": list(series), "ts": int(time.time() * 1000),
+                         "fee_model": FEE_MODEL}
         job["status"] = "done"; job["progress"] = 100; job["note"] = "complete"
     except Exception as exc:
         job["status"] = "failed"; job["error"] = str(exc)[:200]; job["progress"] = 100
