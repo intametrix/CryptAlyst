@@ -649,6 +649,10 @@ def flatten_position(engine, symbol, reason="position_close", prices=None):
 
     prices = prices or _prices_now()
     pack_path = os.path.join(HERE, "state", "pack_%s.json" % engine)
+    if not os.path.exists(pack_path):
+        alt = os.path.join(HERE, "state", "strategy_%s.json" % engine)
+        if os.path.exists(alt):
+            pack_path = alt
     try:
         import json as _json
         pack = _json.load(open(pack_path))
@@ -2103,7 +2107,8 @@ header{margin-left:186px}
     <div id="revcount" class="panel" style="padding:9px 14px;margin-bottom:10px"></div>
     <div class="mhead"><span class="sym">All models</span>
       <span class="mk">every constituent model, not just the books</span>
-      <span style="flex:1"></span><span class="mk" id="mn"></span></div>
+      <span style="flex:1"></span><span class="mk" id="mn"></span>
+      <button class="tbtn" onclick="renderModels()">refresh</button></div>
     <div id="modelsbody"></div>
   </div>
   <div id="opt">
@@ -3545,12 +3550,20 @@ async function renderModels(){
   var box=$("modelsbody"), note=$("mn");
   if(!box) return;
   box.innerHTML='<div class="hint" style="padding:8px 0">loading models…</div>';
+
   var d1={}, alive={}, disabled=[];
-  try{ d1=await (await fetch("/api/all",{cache:"no-store"})).json(); }catch(e){}
+  if(window.LAST && window.LAST.length){ d1={engines:window.LAST}; }   // instant first paint
+  else {
+    try{ d1=await (await fetch("/api/all",{cache:"no-store"})).json(); }catch(e){ d1={}; }
+  }
   try{ var dj=await (await fetch("/api/model_control",{cache:"no-store"})).json(); disabled=dj.disabled||[]; }catch(e){}
   var books=(d1.engines||[]).filter(function(e){return e.equity!=null;});
   if(note) note.textContent=books.length+" books · "+disabled.length+" stopped";
-  if(!books.length){ box.innerHTML='<div class="panel"><div class="empty">no books reporting</div></div>'; return; }
+  if(!books.length){
+    box.innerHTML='<div class="panel"><div class="empty">no books reporting — '+
+      'the engine list came back empty. Check Health, then press refresh.</div></div>';
+    return;
+  }
   books.sort(function(a,b){
     var da=disabled.indexOf(a.key)>=0, db=disabled.indexOf(b.key)>=0;
     if(da!==db) return da?1:-1;                 // live books first, remembered disables last
@@ -3601,13 +3614,20 @@ async function renderModels(){
       'start, on any launch path (A6). Re-enabling is a human act.</td></tr>'+
       parts.slice(cut).join("</tr>");
   }
-  box.innerHTML='<table class="wide"><thead><tr><th>model</th><th>curve</th>'+
+  if(!d1 || !(d1.engines||[]).length){
+    box.innerHTML='<div class="panel"><div class="empty">/api/all returned no engines — '+
+      'the dashboard cannot see the fleet. Press refresh; if it persists the engine '+
+      'processes are not writing packs.</div></div>';
+    return;
+  }
+  box.innerHTML='<div style="overflow-x:auto"><table class="wide" style="min-width:1180px">'+
+    '<thead><tr><th>model</th><th>curve</th>'+
     '<th style="text-align:right">equity</th><th style="text-align:right">return</th>'+
     '<th style="text-align:right">total realised</th><th style="text-align:right">unrealized</th>'+
     '<th style="text-align:right">total</th><th style="text-align:right">trades</th>'+
     '<th style="text-align:right">long</th><th style="text-align:right">short</th>'+
     '<th style="text-align:right">win</th><th style="text-align:right">open</th>'+
-    '<th style="text-align:right">status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+    '<th style="text-align:right">status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 async function toggleModel(name, enable){
   var act=enable?"start":"stop";
