@@ -324,3 +324,103 @@ def ext_signals(sym=None):
     return _EXT["rows"].get(sym)
 
 
+
+
+# ---------------------------------------------------------------- model-owned exits
+#
+# An exit belongs to the model that opened the position. This registry is the
+# contract: an engine declares its rules here, the rule names its reason, and a
+# clock close is labelled as a clock close rather than being mistaken for a signal.
+#
+# Two tiers, deliberately:
+#   tier 1  the model's own rules, checked in order
+#   tier 2  a hard safety cap, the only clock allowed, reported as clock:<engine>
+# The cap exists because before it, losers were held forever and every PnL figure
+# was censored. It is an exception, and the reason string says so.
+
+MODEL = "model"
+CLOCK = "clock"
+SESSION_END = "session_end"
+
+_MAX_HOLD_DEFAULT = 1800.0
+
+
+class ExitRule:
+    """One named exit owned by one engine."""
+
+    def __init__(self, name, applies, note=""):
+        self.name = name
+        self.applies = applies      # applies(position, market) -> bool
+        self.note = note
+
+    def __repr__(self):
+        return "ExitRule(%s)" % self.name
+
+
+# engine -> list[ExitRule]. Filled by engine modules at import, or here.
+EXITS = {}
+
+# engines that have not been converted yet: they declare the fallback explicitly,
+# so an undeclared engine fails the gate instead of inheriting a timer silently
+FALLBACK = set()
+
+# the clock is only reachable through a declared cap, and is always labelled
+MAX_HOLD = {}
+
+
+def declare(engine, rules, max_hold_s=_MAX_HOLD_DEFAULT):
+    """An engine declaring its exits. max_hold_s is the safety cap, not a strategy."""
+    EXITS[engine] = list(rules)
+    MAX_HOLD[engine] = float(max_hold_s)
+    return EXITS[engine]
+
+
+def declare_fallback(engine, max_hold_s=_MAX_HOLD_DEFAULT):
+    """Explicitly 'not converted yet'. Keeps today's behaviour and labels it."""
+    FALLBACK.add(engine)
+    MAX_HOLD[engine] = float(max_hold_s)
+
+
+def require_declared(engine):
+    """The startup gate: an engine with no declaration and no fallback refuses to run."""
+    if engine in EXITS or engine in FALLBACK:
+        return True
+    raise SystemExit(
+        "%s declares no exit rules. Add tactics.declare(%r, [...]) with the model's "
+        "own exits, or tactics.declare_fallback(%r) to keep the old clock explicitly."
+        % (engine, engine, engine))
+
+
+def decide_exit(engine, position, market=None):
+    """Returns (reason, tier) or (None, None). Model rules first, then the cap."""
+    held = float(position.get("held_s") or 0.0)
+    for rule in EXITS.get(engine, []):
+        try:
+            if rule.applies(position, market):
+                return rule.name, MODEL
+        except Exception:
+            continue
+    cap = MAX_HOLD.get(engine)
+    if cap is not None and held >= cap:
+        return "clock:%s" % engine, CLOCK
+    return None, None
+
+
+def session_end(engine):
+    """The process is stopping. Not an exit, and never counted as model quality."""
+    return ("session_end:%s" % engine), SESSION_END
+
+
+# legacy names, from before exits had owners: they were clocks or session ends
+_LEGACY_CLOCK = {"time_cap", "max_hold", "clock", "time_limit", "stale"}
+_LEGACY_END = {"run_end", "closed_at_end"}
+
+
+def classify_reason(reason):
+    """Bucket any historical or new reason string into model, clock or session end."""
+    r = (reason or "").strip()
+    if r.startswith("clock:") or r in _LEGACY_CLOCK:
+        return CLOCK
+    if r.startswith("session_end:") or r in _LEGACY_END:
+        return SESSION_END
+    return MODEL

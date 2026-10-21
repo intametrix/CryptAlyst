@@ -98,6 +98,14 @@ def start(name):
         subprocess.Popen(argv, cwd=HERE, stdout=fh, stderr=fh, start_new_session=True)
 
 
+def _norm(name):
+    return name.replace("_", "").lower()
+
+
+def disabled_set():
+    return {_norm(n) for n in load_disabled()}
+
+
 def load_disabled():
     try:
         return set(json.load(open(DISABLED)).get("books") or [])
@@ -161,7 +169,14 @@ def main():
     while time.time() < deadline:
         actions = []
         # 1. keep the fleet alive
+        dis_norm = disabled_set()
         for name in ENGINES:
+            # the disabled list names scripts as often as registry keys, so both are
+            # checked: "fast_ignition" in disabled.json is the "ignition" registry entry
+            script = os.path.basename(ENGINES[name][2])
+            stem = script[:-3] if script.endswith(".py") else script
+            if _norm(name) in dis_norm or _norm(stem) in dis_norm:
+                continue          # A6: a disabled book influences nothing
             if not running(name):
                 start(name)
                 actions.append("restarted %s" % name)

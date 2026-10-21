@@ -19,6 +19,8 @@ import argparse
 import json
 import os
 import time
+
+import tactics
 import urllib.request
 
 BASE = "https://api.binance.com"
@@ -75,6 +77,20 @@ def top(n):
         rows.append(r)
     rows.sort(key=lambda r: float(r["quoteVolume"]), reverse=True)
     return [r["symbol"] for r in rows[:n]]
+
+
+# ---- model-owned exits -------------------------------------------------------
+# skim owns three exits. The 8 s cap is a safety cap, not the strategy: when it
+# fires the reason reads clock:skim, so a clock close is never scored as a signal.
+tactics.declare(
+    "skim",
+    [
+        tactics.ExitRule("skim_tp", lambda pos, mkt: pos["move_bps"] >= (mkt or {}).get("tp", 1e9)),
+        tactics.ExitRule("skim_stop", lambda pos, mkt: pos["move_bps"] <= -(mkt or {}).get("sl", 1e9)),
+        tactics.ExitRule("skim_decay", lambda pos, mkt: pos["move_bps"] < 0.5 and pos["held_s"] > 4.0),
+    ],
+    max_hold_s=8.0,
+)
 
 
 def main():
@@ -143,13 +159,16 @@ def main():
             continue
         move_bps = (px / pos["entry"] - 1.0) * 1e4
         held = time.time() - pos["opened"]
-        reason = None
-        if move_bps >= args.tp_bps:
-            reason = "skim_tp"
-        elif move_bps <= -args.sl_bps:
-            reason = "stop"
-        elif held >= args.max_hold:
-            reason = "time_cap"
+        # the model's own exits: take profit, stop, and the move decaying back to
+        # zero. A clock close is only reachable through the declared safety cap and
+        # is labelled clock:skim, never "time_cap".
+        reason, _tier = tactics.decide_exit("skim", {"held_s": held, "move_bps": move_bps},
+                                            {"tp": args.tp_bps, "sl": args.sl_bps})
+        if reason is None:
+            if move_bps >= args.tp_bps:
+                reason = "skim_tp"
+            elif move_bps <= -args.sl_bps:
+                reason = "skim_stop"
 
         if reason:
             net = move_bps - fee_bps
