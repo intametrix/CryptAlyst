@@ -871,6 +871,23 @@ def collect():
     except Exception:
         pass
 
+    # ---- marks: the same rule as the books view, so the models table can show
+    # realised, unrealised and the total without a second definition of "result"
+    try:
+        _px = _prices_now()
+        for _e in engines:
+            if _e.get("unrealised") is None:
+                _u, _m, _um = _mark(_e.get("positions") or [], _px)
+                _e["unrealised"] = _u
+            if _e.get("realised") is not None:
+                _e["total"] = round(float(_e.get("realised") or 0) +
+                                    float(_e.get("unrealised") or 0), 2)
+                if _e.get("equity") is not None:
+                    _e["total_pct"] = round(100.0 * _e["total"] /
+                                            float(_e.get("start_equity") or 5000), 3)
+    except Exception:
+        pass
+
     # ---- model aggregate (not an engine, but the signal source)
     models = None
     try:
@@ -2855,6 +2872,10 @@ async function renderModels(){
       '<td class="'+(ret>=0?'up':'down')+'" style="text-align:right">'+(ret>=0?'+':'')+ret.toFixed(2)+'%</td>'+
       '<td class="'+((e.realised||0)>=0?'up':'down')+'" style="text-align:right">'+
         ((e.realised||0)>=0?'+':'')+money(e.realised)+'</td>'+
+      '<td class="'+((e.unrealised||0)>=0?'up':'down')+'" style="text-align:right">'+
+        ((e.unrealised||0)>=0?'+':'')+money(e.unrealised||0)+'</td>'+
+      '<td class="'+((e.total||0)>=0?'up':'down')+'" style="text-align:right"><b>'+
+        ((e.total||0)>=0?'+':'')+money(e.total||0)+'</b></td>'+
       '<td style="text-align:right">'+n+'</td>'+
       '<td style="text-align:right">'+wr+'</td>'+
       '<td style="text-align:right">'+((e.positions||[]).length)+'</td>'+
@@ -2866,7 +2887,8 @@ async function renderModels(){
   }).join("");
   box.innerHTML='<table class="wide"><thead><tr><th>model</th><th>curve</th>'+
     '<th style="text-align:right">equity</th><th style="text-align:right">return</th>'+
-    '<th style="text-align:right">realised</th><th style="text-align:right">trades</th>'+
+    '<th style="text-align:right">realised</th><th style="text-align:right">unrealised</th>'+
+    '<th style="text-align:right">total</th><th style="text-align:right">trades</th>'+
     '<th style="text-align:right">win</th><th style="text-align:right">open</th>'+
     '<th style="text-align:right">status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
