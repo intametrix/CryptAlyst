@@ -1,5 +1,6 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { clock, int, num, pct } from '../format';
+import { subscribeStreamTally } from '../api';
 import type { StatusMsg } from '../types';
 import { ResizablePanel } from './Panel';
 
@@ -26,6 +27,25 @@ interface BusStats {
 export const BusPanel = memo(function BusPanel({ status }: Props) {
   const [bus, setBus] = useState<BusStats | null>(null);
   const [busLive, setBusLive] = useState(false);
+  // Live per-type tally of every SSE message this browser session receives —
+  // the genuinely live per-queue count, no backend dependency.
+  const [tally, setTally] = useState<Record<string, number>>({});
+  const tallyRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    const unsub = subscribeStreamTally((type) => {
+      tallyRef.current[type] = (tallyRef.current[type] ?? 0) + 1;
+    });
+    const id = window.setInterval(() => setTally({ ...tallyRef.current }), 1000);
+    return () => {
+      unsub();
+      window.clearInterval(id);
+    };
+  }, []);
+  const tallyRows = useMemo(
+    () => Object.entries(tally).sort((a, b) => b[1] - a[1]),
+    [tally],
+  );
+  const tallyPeak = tallyRows.reduce((m, [, v]) => Math.max(m, v), 1);
 
   useEffect(() => {
     let dead = false;
@@ -130,7 +150,31 @@ export const BusPanel = memo(function BusPanel({ status }: Props) {
               )}
             </div>
           )}
-          <p className="bus-note">in = raw stream messages consumed · out = envelopes processed · truncated = dropped by backpressure</p>
+          {tallyRows.length > 0 && (
+            <div className="bus-rows">
+              <div className="bus-row bus-head" role="row">
+                <span className="col-head">queue (this session)</span>
+                <span className="col-head num">msgs</span>
+                <span className="col-head num">share</span>
+                <span className="col-head">flow</span>
+                <span />
+              </div>
+              {tallyRows.map(([type, count]) => (
+                <div key={type} className="bus-row" role="row">
+                  <span className="bus-topic">{type}</span>
+                  <span className="num">{int(count)}</span>
+                  <span className="num">
+                    {pct(tallyRows.reduce((s, [, v]) => s + v, 0) > 0 ? count / tallyRows.reduce((s, [, v]) => s + v, 0) : 0)}
+                  </span>
+                  <span className="bus-bar" title={`${int(count)} msgs`}>
+                    <span className="bar-fill" style={{ width: `${Math.max(2, (count / tallyPeak) * 100)}%` }} />
+                  </span>
+                  <span />
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="bus-note">in = raw stream messages consumed · out = envelopes processed · truncated = dropped by backpressure · session tally counts every SSE message as it lands</p>
         </section>
       )}
     </ResizablePanel>

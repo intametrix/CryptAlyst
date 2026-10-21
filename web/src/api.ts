@@ -215,6 +215,21 @@ async function send(url: string, method: 'POST' | 'DELETE'): Promise<boolean> {
  * handler. The connection pill follows `onopen`/`onerror`; reconnection itself
  * is left to `EventSource`, which retries on its own.
  */
+/**
+ * Live per-type stream tally subscribers. Diagnostic surfaces (the message
+ * bus tab) count every SSE message as it arrives; registering here avoids
+ * threading a callback through every consumer of the stream.
+ */
+const streamTallySubs = new Set<(type: string) => void>();
+
+/** Subscribe to every parsed stream message's type. Returns an unsubscribe. */
+export function subscribeStreamTally(fn: (type: string) => void): () => void {
+  streamTallySubs.add(fn);
+  return () => {
+    streamTallySubs.delete(fn);
+  };
+}
+
 export interface EventStreamOptions {
   /**
    * Called for every `heat` message. Heat is deliberately *not* React state: it
@@ -281,6 +296,9 @@ export function useEventStream(options: EventStreamOptions = {}): EventStream {
       const msg = parseStreamMsg(ev.data);
       if (msg === null) return;
       setLastEventMs(Date.now());
+      if (streamTallySubs.size > 0) {
+        for (const sub of streamTallySubs) sub(msg.type);
+      }
       switch (msg.type) {
         case 'hello':
           setServerTimeMs(typeof msg.server_time_ms === 'number' ? msg.server_time_ms : null);
