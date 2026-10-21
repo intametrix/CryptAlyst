@@ -42,6 +42,7 @@ type Sealed struct {
 
 	mu      sync.Mutex
 	file    *os.File
+	bw      *bufio.Writer
 	hot     string // seg-...jsonl.tmp
 	size    int64
 	seq     int
@@ -54,14 +55,19 @@ type Sealed struct {
 	once     sync.Once
 	wg       sync.WaitGroup
 
-	sealed  int64
-	failed  int64
-	rebuild int64
+	sealed      int64
+	failed      int64
+	rebuild     int64
+	fsyncErrors int64
+	shortWrites int64
+	dirty       int32
 }
 
 const (
-	idxSuffix = ".idx.json"
-	tmpSuffix = ".tmp"
+	idxSuffix      = ".idx.json"
+	tmpSuffix      = ".tmp"
+	flushBuffer    = 256 << 10 // bufio size: the syscall lands once per buffer, not per 64 KB
+	flushThreshold = 256 << 10 // flush early above this much buffered
 )
 
 func nowMillis() int64 { return time.Now().UnixMilli() }
@@ -102,7 +108,7 @@ func OpenSealed(cfg RetentionConfig, policy RotationPolicy) (*Sealed, error) {
 			return nil, err
 		}
 		info, _ := f.Stat()
-		s.file, s.hot, s.size, s.opened = f, hot, info.Size(), time.Now()
+		s.file, s.bw, s.hot, s.size, s.opened = f, bufio.NewWriterSize(f, flushBuffer), hot, info.Size(), time.Now()
 	} else if err := s.openHotLocked(); err != nil {
 		lock.Close()
 		return nil, err
@@ -121,7 +127,7 @@ func (s *Sealed) openHotLocked() error {
 	if err != nil {
 		return err
 	}
-	s.file, s.hot, s.size, s.opened = f, name, 0, time.Now()
+	s.file, s.bw, s.hot, s.size, s.opened = f, bufio.NewWriterSize(f, flushBuffer), name, 0, time.Now()
 	return nil
 }
 
@@ -138,32 +144,66 @@ func (s *Sealed) Write(r Record) error {
 			return err
 		}
 	}
-	if _, err := s.file.Write(append(line, '\n')); err != nil {
+	if _, err := s.bw.Write(line); err != nil {
+		atomic.AddInt64(&s.shortWrites, 1)
+		atomic.StoreInt32(&s.dirty, 1)
+		return err
+	}
+	if err := s.bw.WriteByte('\n'); err != nil {
+		atomic.AddInt64(&s.shortWrites, 1)
+		atomic.StoreInt32(&s.dirty, 1)
 		return err
 	}
 	s.size += n
 	s.tracker.add(r.Topic, r.Key, r.TS, n)
+	atomic.StoreInt32(&s.dirty, 1)
+	if s.bw.Buffered() >= flushThreshold {
+		if err := s.bw.Flush(); err != nil {
+			atomic.AddInt64(&s.shortWrites, 1)
+			return err
+		}
+	}
 	return nil
 }
 
-// Flush makes the hot segment durable. Called once a second by the recorder: the
-// durability window is one second, agreed with the owner.
+// Flush makes the hot segment durable: buffer to the file, then fsync. The recorder
+// calls it once a second; the writer also flushes early above flushThreshold so a
+// burst does not wait a full second. The durability window is one second or 256 KB.
 func (s *Sealed) Flush() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.file == nil {
+	return s.flushLocked()
+}
+
+func (s *Sealed) flushLocked() error {
+	if s.file == nil || s.bw == nil {
 		return nil
 	}
-	return s.file.Sync()
+	if err := s.bw.Flush(); err != nil {
+		atomic.AddInt64(&s.shortWrites, 1)
+		return err
+	}
+	if err := s.file.Sync(); err != nil {
+		atomic.AddInt64(&s.fsyncErrors, 1)
+		return err
+	}
+	atomic.StoreInt32(&s.dirty, 0)
+	return nil
+}
+
+// Counters exposes the failure numbers the observer and the sweep read.
+func (s *Sealed) Counters() (fsyncErrors, shortWrites int64, dirty bool) {
+	return atomic.LoadInt64(&s.fsyncErrors), atomic.LoadInt64(&s.shortWrites),
+		atomic.LoadInt32(&s.dirty) == 1
 }
 
 // sealLocked closes the hot segment, renames it into place, and writes its index
 // before returning: no reader ever meets a sealed segment without a sidecar.
 func (s *Sealed) sealLocked() error {
 	if s.file != nil {
-		_ = s.file.Sync()
+		_ = s.flushLocked()
 		_ = s.file.Close()
-		s.file = nil
+		s.file, s.bw = nil, nil
 	}
 	final := strings.TrimSuffix(s.hot, tmpSuffix)
 	if err := os.Rename(filepath.Join(s.dir, s.hot), filepath.Join(s.dir, final)); err != nil {
@@ -324,9 +364,9 @@ func (s *Sealed) Close() error {
 		close(s.stop)
 		s.mu.Lock()
 		if s.file != nil {
-			_ = s.file.Sync()
+			_ = s.flushLocked()
 			_ = s.file.Close()
-			s.file = nil
+			s.file, s.bw = nil, nil
 			// seal the final segment so it gets an index like any other
 			final := strings.TrimSuffix(s.hot, tmpSuffix)
 			if rerr := os.Rename(filepath.Join(s.dir, s.hot), filepath.Join(s.dir, final)); rerr == nil {
