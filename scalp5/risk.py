@@ -89,6 +89,15 @@ def _engine():
     return _os.path.basename(_sys.argv[0] or "").replace(".py", "")
 
 
+def exposure_ok(gross_multiple, notional, fleet_equity, max_gross_multiple):
+    """True when fleet gross exposure stays under the multiple.
+
+    gross_multiple is a FLEET metric (total notional / total equity), so the new
+    notional is divided by the fleet equity too — not by one book's equity.
+    """
+    return gross_multiple + notional / max(fleet_equity, 1) <= max_gross_multiple
+
+
 def allow(symbol, side, notional, book_equity, expected_move_pct=None, slippage_bps=None,
           confidence=None, bar_age_s=None, signal_age_s=None, book_positions=None):
     """Return (allowed, reason). Records the decision for the dashboard."""
@@ -135,7 +144,7 @@ def allow(symbol, side, notional, book_equity, expected_move_pct=None, slippage_
     if halted:
         return False, why
     st = snapshot()
-    if st["gross_multiple"] + notional / max(book_equity, 1) > DEFAULTS["max_gross_multiple"]:
+    if not exposure_ok(st["gross_multiple"], notional, st["equity"], DEFAULTS["max_gross_multiple"]):
         return False, "gross exposure would exceed %.1fx" % DEFAULTS["max_gross_multiple"]
     if notional / max(book_equity, 1) > DEFAULTS["max_symbol_share"]:
         return False, "position above %.0f%% of the book" % (100 * DEFAULTS["max_symbol_share"])

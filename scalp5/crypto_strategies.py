@@ -4,7 +4,8 @@ all fed by the platform's own signal stream (pump/dump alerts + model votes).
 
   flow_follow     aggressive taker flow + burst        -> trade with the flow
   range_fade      extreme range position + burst       -> fade the extension
-  model_stack     >=3 models agree                     -> trade the consensus
+  model_stack     NET vote >= 2 (currently 2 detectors -> "2 of 2 agree")
+                  -> trade the consensus
   sweep_reversal  CRITICAL alert with a burst z spike  -> fade the stop hunt
   momentum_stack  alert AND model agreement AND range  -> triple confirmation
 
@@ -88,9 +89,10 @@ def range_fade(a, votes, held):
 
 
 def model_stack(a, votes, held):
-    # only two detectors currently emit votes, so |net| can never exceed 2
+    # consensus threshold: the NET vote (buys minus sells) must reach NEED.
+    # Today only two detectors emit votes, so |net|>=2 means "2 of 2 agree".
     net = sum(votes.values())
-    if abs(net) >= 2:
+    if abs(net) >= MODEL_STACK_NEED:
         return ("buy" if net > 0 else "sell"), "%d model net %+d" % (len(votes), net)
     return None, ""
 
@@ -121,6 +123,8 @@ def momentum_stack(a, votes, held):
 
 LINEAGE = os.path.join(STATE, "lineage.json")
 BASE_FN = {}   # name -> callable
+
+MODEL_STACK_NEED = 2   # net vote threshold: with 2 detectors, "2 of 2 agree"
 
 STRATEGIES = [
     ("flow_follow", flow_follow, {"tp": 1.2, "sl": 1.0, "hold": 900, "risk": 0.65}),

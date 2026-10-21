@@ -39,6 +39,9 @@ def main():
     # climax caps the adjustment regardless of strategy
     checks.append(("climax cap momentum", O.adjust(1.0, "climax", "buy", "momentum"), 0.70))
     checks.append(("climax cap reversion", O.adjust(1.0, "climax", "buy", "reversion"), 0.60))
+    # climax is exhaustion in BOTH directions: a short must be demoted, not boosted
+    checks.append(("climax short demotes momentum", O.adjust(1.0, "climax", "sell", "momentum"), 0.70))
+    checks.append(("climax short demotes reversion", O.adjust(1.0, "climax", "sell", "reversion"), 0.60))
 
     # default is neutral (observe-only, no weighting when unknown strategy)
     checks.append(("default neutral", O.adjust(1.0, "divergence", "buy", "unknown"), 1.0))

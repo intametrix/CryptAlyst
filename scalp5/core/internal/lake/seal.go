@@ -412,7 +412,7 @@ func ScanSegmentSeek(path string, from, to int64, buckets []TimeBucket, fn func(
 }
 
 // bucketSeekOffset returns the byte offset to seek to for a window starting at
-// `from`: the offset of the last bucket whose Ts <= from. Monotonicity invariant:
+// `from`: the offset of the last bucket whose Ts < from. Monotonicity invariant:
 // a segment is written in arrival order and record TS is assigned at write time,
 // so byte offset is non-decreasing with TS. If the buckets are out of order the
 // invariant is broken, and 0 is returned so the caller scans from the front.

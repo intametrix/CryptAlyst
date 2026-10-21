@@ -110,12 +110,7 @@ func (s *Scheduler) worker() {
 		s.processing[sym] = true
 		s.mu.Unlock()
 
-		s.run(sym)
-
-		s.mu.Lock()
-		delete(s.processing, sym)
-		delete(s.busy, sym)
-		s.mu.Unlock()
+		s.run(sym) // run() clears processing+busy atomically with its dirty check
 	}
 }
 
@@ -128,10 +123,16 @@ func (s *Scheduler) run(sym string) {
 		if again {
 			delete(s.dirty, sym)
 		}
-		s.mu.Unlock()
 		if !again {
+			// clear processing + busy in the SAME lock that observed dirty==false:
+			// a Submit landing after this can only see busy==false (enqueue normally);
+			// one landing before re-runs us via dirty. No orphaned dirty flag.
+			delete(s.processing, sym)
+			delete(s.busy, sym)
+			s.mu.Unlock()
 			return
 		}
+		s.mu.Unlock()
 	}
 }
 

@@ -180,10 +180,10 @@ def job(model):
                     train_nets += tr.get("nets") or []
                 if va:
                     val_nets += va.get("nets") or []
-            obj = solver.objective(train_nets, FEE_MODEL["round_trip_bps"])
+            obj = solver.objective(train_nets)
             if obj is not None:
                 results.append({"params": params, "objective": obj,
-                                "validate_objective": solver.objective(val_nets, FEE_MODEL["round_trip_bps"]),
+                                "validate_objective": solver.objective(val_nets),
                                 "train_trades": len(train_nets),
                                 "validate_trades": len(val_nets)})
             job["progress"] = 45 + int(50 * (gi + 1) / len(GRID))

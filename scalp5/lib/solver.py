@@ -37,10 +37,11 @@ def fee_model(fee_bps=20.0, slippage_bps=0.0, provenance="hand-constant"):
             "round_trip_bps": fee_bps + slippage_bps, "provenance": provenance}
 
 
-def objective(net_pct_list, round_trip_bps=20.0):
-    """Risk-adjusted fee-inclusive objective: mean net minus a drawdown penalty.
+def objective(net_pct_list):
+    """Risk-adjusted objective: mean net minus a drawdown penalty.
 
-    net_pct_list is already fee-inclusive per-trade returns. The drawdown penalty
+    net_pct_list is already fee-inclusive per-trade returns (the backtest
+    subtracts the fee), so no fee term is applied here. The drawdown penalty
     keeps the solver from chasing one lucky tail.
     """
     if not net_pct_list:

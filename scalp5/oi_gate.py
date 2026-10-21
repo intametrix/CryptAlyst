@@ -44,6 +44,10 @@ def adjust(score, q, side, strategy="default"):
     """
     table = LONG.get(strategy, LONG["default"])
     mult = table.get(q, 1.0)
+    if q == "climax":
+        # exhaustion is a demote in BOTH directions, not a side-dependent signal:
+        # skip the short inversion so a climax never becomes a boost.
+        return round(score * mult, 6)
     if side in ("sell", "short"):
         mult = 2.0 - mult
     return round(score * mult, 6)

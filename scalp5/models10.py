@@ -263,8 +263,11 @@ class Book:
     def realised(self):
         return self.equity - self.start
 
-    def open(self, sym, side, px):
-        notional = min(self.equity * RISK / 100 * 40, self.equity * 0.08) * T.size_mult()  # cap 8% of book, scaled
+    def open(self, sym, side, px, notional=None):
+        # the entry loop computes the size (incl. the short half-size); reuse it so
+        # the risk-checked size is the size actually opened.
+        if notional is None:
+            notional = min(self.equity * RISK / 100 * 40, self.equity * 0.08) * T.size_mult()
         did = emit.decision(self.name, sym, side, True, "model") if emit else None
         self.pos[sym] = {"side": side, "entry": px, "t": time.time(),
                          "notional": notional, "peak": 0.0, "decision_id": did}
@@ -438,7 +441,7 @@ def main():
                 q_px, q_prob, q_note = maker.quote(sym, side, _notional)
                 if q_px is None or q_prob < 0.30:
                     continue
-                bk.open(sym, side, q_px)
+                bk.open(sym, side, q_px, _notional)
                 log("%-13s OPEN  %-11s %s %.6g" % (name, sym, side, px[sym]))
                 break
             write(bk)
