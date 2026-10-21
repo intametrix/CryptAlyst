@@ -30,6 +30,16 @@ def fresh(levels=6, spacing_pct=0.25):
 
 def main():
     checks = []
+    # A3: tests never write live state. emit.fill would append synthetic fills to
+    # state/fills.jsonl (the live ledger). Replace it with a recorder so the fill
+    # path is still exercised but the write is captured, never persisted.
+    emitted = []
+
+    class _FakeEmit:
+        def fill(self, engine, trade):
+            emitted.append((engine, trade.get("symbol")))
+
+    G.emit = _FakeEmit()
 
     # Gate: due on first call, then only once per interval
     g = G.Gate(1.0)
@@ -81,6 +91,8 @@ def main():
     checks.append(("equity grew", G.EQ > 5000.0, True))
     checks.append(("level is free again",
                    G.GRIDS["AAAUSDT"]["levels"][0]["pos"], None))
+    # the fill was emitted to the fake recorder, never to the live ledger
+    checks.append(("fill emitted to the fake, not live", emitted, [("grid", "AAAUSDT")]))
 
     # evaluate never writes the pack itself: writing is the caller's decision
     hits = {"n": 0}
