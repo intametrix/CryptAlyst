@@ -10,6 +10,15 @@ and the losses are real; only the trade rate is artificial.
 """
 import argparse, json, os, random, time, urllib.request
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('churn', 'churn.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 SPOT = "https://api.binance.com"; FEE = 0.001
 

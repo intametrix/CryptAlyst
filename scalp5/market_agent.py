@@ -16,6 +16,15 @@ Score components (each normalised, weighted, then summed):
 """
 import argparse, json, os, statistics, time, urllib.request
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('marketagent', 'market_agent.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 MASTER = "http://127.0.0.1:8799"; SITE = "http://127.0.0.1:8787"
 FAPI = "https://fapi.binance.com"

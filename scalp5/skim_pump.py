@@ -11,6 +11,15 @@ cut a small loss, and never hold past the clock. High turnover, maker fees only.
 import argparse, json, os, time
 import maker, risk, tactics as T
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('skimpump', 'skim_pump.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state")
 BUS = "http://127.0.0.1:8793"

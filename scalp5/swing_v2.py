@@ -26,6 +26,15 @@ import threading
 import time
 import urllib.request
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('swingv2', 'swing_v2.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 BASE = "https://api.binance.com"
 ALL_PRICES = BASE + "/api/v3/ticker/price"
 ALERTS = "http://127.0.0.1:8787/api/alerts"

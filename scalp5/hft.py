@@ -13,6 +13,15 @@ Exit    target, stop, or clock. Defaults sized from the measured cost.
 """
 import argparse, json, os, socket, ssl, statistics, struct, sys, threading, time
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('hft', 'hft.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 STATE = os.path.join(HERE, "state")

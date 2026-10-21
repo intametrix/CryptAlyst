@@ -9,6 +9,15 @@ move will bleed by construction. That is measured and published, not hidden.
 """
 import argparse, json, os, random, time, urllib.request
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('flash', 'flash.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 MASTER = "http://127.0.0.1:8799"; SITE = "http://127.0.0.1:8787"
 FEE = 0.001

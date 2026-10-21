@@ -26,6 +26,15 @@ import statistics as stats
 import time
 import urllib.request
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('scalpast', 'scalp_fast.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 BASE = "https://api.binance.com"
 KLINES = BASE + "/api/v3/klines?interval=1s&limit=%d&symbol=%s"
 TICKER = BASE + "/api/v3/ticker/24hr"

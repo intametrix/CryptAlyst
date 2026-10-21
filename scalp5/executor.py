@@ -20,6 +20,15 @@ import argparse, json, os, time, urllib.request
 import tactics as T
 import risk
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('executor', 'executor.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 MASTER = "http://127.0.0.1:8799"; SPOT = "https://api.binance.com"; FEE = 0.001
 FC_API = "http://127.0.0.1:8790"

@@ -26,6 +26,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from turtle_core import analyse, setup, universe, all_prices, log, atr_wilder, median, ema
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('turtlemulti', 'turtle_multi.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 CONFIGS = [

@@ -23,6 +23,15 @@ import time
 import tactics
 import urllib.request
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('skim', 'skim.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 BASE = "https://api.binance.com"
 KLINES = BASE + "/api/v3/klines?interval=1s&limit=90&symbol=%s"
 PRICE = BASE + "/api/v3/ticker/price?symbol=%s"

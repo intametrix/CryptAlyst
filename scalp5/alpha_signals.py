@@ -10,6 +10,15 @@ same upstream as one.
 import argparse, json, os, time
 import maker, risk, tactics as T
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('alphasignals', 'alpha_signals.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state")
 SIG = os.path.join(STATE, "signals.json")

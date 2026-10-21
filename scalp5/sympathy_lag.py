@@ -23,6 +23,15 @@ import os
 import time
 import urllib.request
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('sympathy', 'sympathy_lag.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 MASTER = "http://127.0.0.1:8799"
 
 HERE = os.path.dirname(os.path.abspath(__file__))

@@ -27,6 +27,15 @@ import os
 import time
 import urllib.request
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('swingturtle', 'swing_turtle.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 BASE = "https://api.binance.com"
 ALL_PRICES = BASE + "/api/v3/ticker/price"
 KLINES = BASE + "/api/v3/klines?interval=%s&limit=%d&symbol=%s"

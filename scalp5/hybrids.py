@@ -26,6 +26,15 @@ import risk
 import tactics as T
 from lib import emit, intel
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('hybrid_trend_pullback', 'hybrids.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 FEE_ROUND_TRIP = 0.04     # maker each side
 COST_FLOOR = 0.06         # fees plus a buffer, the minimum edge worth taking
 

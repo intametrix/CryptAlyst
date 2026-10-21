@@ -12,6 +12,15 @@ import argparse, json, os, socket, ssl, struct, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 import sys
+
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('movers', 'movers.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
 sys.path.insert(0, HERE)
 STATE = os.path.join(HERE, "state")
 try:

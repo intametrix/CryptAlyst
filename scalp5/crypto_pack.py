@@ -17,6 +17,15 @@ import tactics as T
 import risk
 import maker
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('cryptopack', 'crypto_pack.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 MASTER = "http://127.0.0.1:8799"
 FC_API = "http://127.0.0.1:8790"

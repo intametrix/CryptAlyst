@@ -20,6 +20,15 @@ from lib.feed import Feed
 from lib import bus as _bus
 from lib import emit
 
+try:
+    import tactics as _tactics
+    _tactics.require_enabled('alpharank', 'alpha_rank.py')   # A6: a disabled book does not run
+except SystemExit:
+    raise
+except Exception:
+    pass
+
+
 STATE = os.path.join(HERE, "state")
 BOOK = "alpha_rank"
 
