@@ -226,3 +226,19 @@ func TestParseQuotes(t *testing.T) {
 		t.Fatalf("parseQuotes: %+v", got)
 	}
 }
+
+func TestFilterStr(t *testing.T) {
+	f := filter{"tickSize": json.RawMessage(`"0.10"`), "limit": json.RawMessage(`10`), "bad": json.RawMessage(`{"x"}`)}
+	if got := f.str("tickSize"); got != "0.10" {
+		t.Fatalf("string value: %q", got)
+	}
+	if got := f.str("limit"); got != "10" {
+		t.Fatalf("number value: %q", got)
+	}
+	if got := f.str("missing"); got != "" {
+		t.Fatalf("missing key: %q", got)
+	}
+	if got := f.str("bad"); got != "" {
+		t.Fatalf("unreadable value: %q", got)
+	}
+}

@@ -20,7 +20,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -34,6 +36,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -322,42 +325,86 @@ func (s *server) search(w http.ResponseWriter, r *http.Request) {
 }
 
 // seedFile is the shape of -seed JSON: upserts, applied in order, idempotent
-// because every Put is an upsert keyed by id.
+// because every Put is an upsert keyed by id. Records already present with
+// identical content are skipped, so reseeding at every boot does not grow
+// the journal.
 type seedFile struct {
 	Instruments []refdata.Instrument `json:"instruments"`
 	Documents   []refdata.Document   `json:"documents"`
 	Edges       []refdata.Edge       `json:"edges"`
 }
 
-func applySeed(svc *refdata.Service, path string) (int, error) {
+func sha256Hex(s string) string {
+	sum := sha256.Sum256([]byte(s))
+	return hex.EncodeToString(sum[:])
+}
+
+// docSeedID resolves the id PutDocument would assign, so a seeded document
+// can be recognised on reapply.
+func docSeedID(doc refdata.Document) string {
+	if doc.ID != "" {
+		return doc.ID
+	}
+	return "doc-" + sha256Hex(doc.Body)[:12]
+}
+
+// sameInstrument compares the content fields PutInstrument stores; the
+// service-owned timestamps change on every write and must not force a
+// reapply.
+func sameInstrument(a, b *refdata.Instrument) bool {
+	return a.Class == b.Class &&
+		a.Symbol == b.Symbol &&
+		a.Name == b.Name &&
+		a.Status == b.Status &&
+		reflect.DeepEqual(a.Venues, b.Venues) &&
+		reflect.DeepEqual(a.Limits, b.Limits) &&
+		reflect.DeepEqual(a.Meta, b.Meta) &&
+		reflect.DeepEqual(a.Identifiers, b.Identifiers)
+}
+
+// applySeed applies a seed file and reports how many records were written
+// and how many were skipped as already present. Skipping keeps the journal
+// append-only but stable across boots.
+func applySeed(svc *refdata.Service, path string) (applied, skipped int, err error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	var seed seedFile
 	if err := json.Unmarshal(raw, &seed); err != nil {
-		return 0, fmt.Errorf("seed: %w", err)
+		return 0, 0, fmt.Errorf("seed: %w", err)
 	}
-	n := 0
 	for _, inst := range seed.Instruments {
-		if _, err := svc.PutInstrument(inst); err != nil {
-			return n, fmt.Errorf("seed instrument %s: %w", inst.ID, err)
+		if prev, err := svc.GetInstrument(strings.ToLower(inst.ID)); err == nil && sameInstrument(prev, &inst) {
+			skipped++
+			continue
 		}
-		n++
+		if _, err := svc.PutInstrument(inst); err != nil {
+			return applied, skipped, fmt.Errorf("seed instrument %s: %w", inst.ID, err)
+		}
+		applied++
 	}
 	for _, doc := range seed.Documents {
-		if _, err := svc.PutDocument(doc); err != nil {
-			return n, fmt.Errorf("seed document %s: %w", doc.Title, err)
+		if prev, err := svc.GetDocument(docSeedID(doc)); err == nil && prev.SHA256 == sha256Hex(doc.Body) {
+			skipped++
+			continue
 		}
-		n++
+		if _, err := svc.PutDocument(doc); err != nil {
+			return applied, skipped, fmt.Errorf("seed document %s: %w", doc.Title, err)
+		}
+		applied++
 	}
 	for _, edge := range seed.Edges {
-		if _, err := svc.PutEdge(edge); err != nil {
-			return n, fmt.Errorf("seed edge %s-%s-%s: %w", edge.Subject, edge.Predicate, edge.Object, err)
+		if len(svc.Edges(edge.Subject, edge.Predicate, edge.Object)) > 0 {
+			skipped++
+			continue
 		}
-		n++
+		if _, err := svc.PutEdge(edge); err != nil {
+			return applied, skipped, fmt.Errorf("seed edge %s-%s-%s: %w", edge.Subject, edge.Predicate, edge.Object, err)
+		}
+		applied++
 	}
-	return n, nil
+	return applied, skipped, nil
 }
 
 func main() {
@@ -390,11 +437,11 @@ func main() {
 	defer svc.Close()
 
 	if *seedPath != "" {
-		n, err := applySeed(svc, *seedPath)
+		applied, skipped, err := applySeed(svc, *seedPath)
 		if err != nil {
 			log.Fatalf("seed: %v", err)
 		}
-		log.Printf("seed applied: %d records from %s", n, *seedPath)
+		log.Printf("seed applied: %d new, %d already present, from %s", applied, skipped, *seedPath)
 	}
 	stats := svc.Stats()
 	log.Printf("refdata backend=%s instruments=%d documents=%d edges=%d replayed=%d",

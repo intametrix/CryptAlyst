@@ -460,7 +460,7 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Printf("refseed: %d instruments (%d perp, %d spot), %d documents, %d edges -> %s\n",
-		len(seed.Instruments), counts["crypto_perp"], counts["crypto_spot"], len(seed.Documents), len(seed.Edges), *out)
+		len(seed.Instruments), counts["perp"], counts["spot"], len(seed.Documents), len(seed.Edges), *out)
 	fmt.Printf("refseed: kept %d hand-curated instruments not mentioned by Binance\n", kept)
 	if len(skipped) > 0 {
 		reasons := []string{}

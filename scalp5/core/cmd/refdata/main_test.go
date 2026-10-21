@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -274,30 +276,63 @@ func TestStatsEndpoint(t *testing.T) {
 	}
 }
 
+// TestSeedIsIdempotent applies a generated seed twice: the second pass must
+// skip every record (no journal growth), and a changed record must reapply.
 func TestSeedIsIdempotent(t *testing.T) {
 	svc, err := refdata.NewService(refdata.NewMemory())
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
 	defer svc.Close()
-	n1, err := applySeed(svc, "seed.json")
-	if err != nil {
-		t.Fatalf("seed pass 1: %v", err)
+	path := filepath.Join(t.TempDir(), "seed.json")
+	raw := []byte(`{
+	  "instruments": [
+	    {"id": "crypto_perp:genvenue:GENUSDT", "class": "crypto_perp", "symbol": "GENUSDT", "status": "active", "venues": ["genvenue"], "identifiers": {"ticker": "GEN"}},
+	    {"id": "crypto_spot:genvenue:GENUSDT", "class": "crypto_spot", "symbol": "GENUSDT", "status": "active", "venues": ["genvenue"]}
+	  ],
+	  "documents": [
+	    {"class": "crypto_perp", "title": "GEN class definition", "kind": "definition", "body": "# GEN\n\ngenerated\n"}
+	  ],
+	  "edges": [
+	    {"subject": "crypto_perp:genvenue:genusdt", "predicate": "listed_on", "object": "venue:genvenue"}
+	  ]
+	}`)
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatalf("write seed: %v", err)
 	}
-	n2, err := applySeed(svc, "seed.json")
-	if err != nil {
-		t.Fatalf("seed pass 2: %v", err)
+
+	applied, skipped, err := applySeed(svc, path)
+	if err != nil || applied != 4 || skipped != 0 {
+		t.Fatalf("pass 1: applied=%d skipped=%d err=%v", applied, skipped, err)
 	}
-	if n1 == 0 || n2 != n1 {
-		t.Fatalf("seed not idempotent: n1=%d n2=%d", n1, n2)
+	statsAfterFirst := svc.Stats()
+
+	applied, skipped, err = applySeed(svc, path)
+	if err != nil || applied != 0 || skipped != 4 {
+		t.Fatalf("pass 2 not a pure skip: applied=%d skipped=%d err=%v", applied, skipped, err)
 	}
-	stats := svc.Stats()
-	if stats.Instruments != 10 || stats.Documents != 1 || stats.Edges != 10 {
-		t.Fatalf("unexpected seed stats: %+v", stats)
+	if svc.Stats() != statsAfterFirst {
+		t.Fatalf("reseed moved the stats: %+v -> %+v", statsAfterFirst, svc.Stats())
 	}
+
+	// A record with changed content must reapply and overwrite.
+	changed := bytes.Replace(raw, []byte(`"status": "active", "venues": ["genvenue"], "identifiers": {"ticker": "GEN"}`),
+		[]byte(`"status": "active", "venues": ["genvenue"], "limits": {"tick_size": 0.5}, "identifiers": {"ticker": "GEN"}`), 1)
+	if err := os.WriteFile(path, changed, 0o644); err != nil {
+		t.Fatalf("rewrite seed: %v", err)
+	}
+	applied, skipped, err = applySeed(svc, path)
+	if err != nil || applied != 1 || skipped != 3 {
+		t.Fatalf("pass 3: applied=%d skipped=%d err=%v", applied, skipped, err)
+	}
+	inst, err := svc.GetInstrument("crypto_perp:genvenue:GENUSDT")
+	if err != nil || inst.Limits["tick_size"] != 0.5 {
+		t.Fatalf("changed record not stored: %+v %v", inst, err)
+	}
+
 	// A seeded symbol must resolve through its ticker.
-	if hits := svc.Resolve(refdata.IDTicker, "BTC"); len(hits) != 1 {
-		t.Fatalf("seed resolve BTC: %+v", hits)
+	if hits := svc.Resolve(refdata.IDTicker, "GEN"); len(hits) != 1 {
+		t.Fatalf("seed resolve GEN: %+v", hits)
 	}
 }
 
