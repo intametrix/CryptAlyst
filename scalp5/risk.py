@@ -95,6 +95,15 @@ def allow(symbol, side, notional, book_equity, expected_move_pct=None, slippage_
     if notional <= 0:
         return False, "zero size"
 
+    # owner: no new shorts. Entries still come from the indicators; only the direction
+    # is restricted, and turning allow_shorts on restores them without a restart.
+    try:
+        import tactics as _T
+        if str(side).lower() in ("sell", "short") and not _T.options().get("allow_shorts", False):
+            return False, "no new shorts (owner: stop trading shorts)"
+    except Exception:
+        pass
+
     # earned capital: a promoted book may size up, a demoted one or a disabled one may
     # only size down, and a disabled book is refused outright (A6)
     try:

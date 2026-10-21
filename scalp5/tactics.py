@@ -222,6 +222,7 @@ DEFAULT_OPTIONS = {
     "lock_pct": 0.35,               # take profit
     "stop_pct": 1.00,               # max loss per trade
     "min_expected_move": 0.0,       # require forecast move >= this (3x fee = 0.60)
+    "allow_shorts": False,          # owner: no new shorts; entries come from the indicators
     "short_lock_pct": 0.15,         # take a short's profit early: 0.15% and it is banked
     "short_cash_usd": 100.0,        # ...or when the open short book is $100 in profit
 }
