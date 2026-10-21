@@ -368,8 +368,8 @@ def main():
                 reason = None
                 if chg >= float(T.options().get("lock_pct", LOCK)):
                     reason = "lock"
-                elif chg <= -float(T.options().get("stop_pct", STOP)):
-                    reason = "stop"
+                elif False:
+                    reason = "stop"   # profit-only: no loss exits
                 elif held >= float(T.options().get("clock_s", CLOCK)):
                     reason = "clock"
                 if reason and T.hold_loser(held, chg):

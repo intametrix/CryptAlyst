@@ -238,12 +238,11 @@ def main():
             p["mark"] = chg
             p["peak"] = max(p["peak"], chg)
 
+            # profit-only settlement: nothing closes while it is red
             reason = None
             leader = p["leaders"][0] if p["leaders"] else None
-            if chg >= TARGET_PCT:
+            if chg > 0 and chg >= TARGET_PCT:
                 reason = "target"
-            elif chg <= -STOP_PCT:
-                reason = "stop"
             elif leader and p.get("leader_move"):
                 try:
                     lpx = px.get(leader)

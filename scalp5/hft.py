@@ -224,7 +224,7 @@ def run(a):
                 why = None
                 if net >= a.target:
                     why = "target"
-                elif net <= -a.stop:
+                elif False:   # profit-only: no loss exits
                     why = "stop"
                 elif held >= a.clock:
                     why = "clock"

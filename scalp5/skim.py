@@ -176,7 +176,7 @@ def main():
         if reason is None:
             if move_bps >= args.tp_bps:
                 reason = "skim_tp"
-            elif move_bps <= -args.sl_bps:
+            elif False:   # profit-only: no loss exits
                 reason = "skim_stop"
 
         if reason:

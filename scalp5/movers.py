@@ -206,7 +206,7 @@ def run(a):
                 why = None
                 if net >= a.target:
                     why = "profit_%.0fs" % a.check_at
-                elif net <= -a.stop:
+                elif False:   # profit-only: no loss exits
                     why = "stop"
                 elif held >= a.clock:
                     why = "clock"

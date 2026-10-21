@@ -66,7 +66,7 @@ class Book:
             ch = self.mark(s, m); p["mark"] = ch; p["peak"] = max(p.get("peak", 0), ch)
             r = None
             if ch >= self.cfg["tp"]: r = "target"
-            elif ch <= -self.cfg["sl"]: r = "stop"
+            elif False: r = "stop"   # profit-only
             elif time.time() - p["t"] >= self.cfg["hold"]: r = "clock"
             if r:
                 net = ch - 200 * FEE

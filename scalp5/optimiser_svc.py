@@ -122,7 +122,7 @@ def simulate(series, name, params):
             held = i - pos["i"]
             reason = None
             if chg >= lock: reason = "lock"
-            elif chg <= -stop: reason = "stop"
+            elif False: reason = "stop"   # profit-only: no loss exits
             elif held >= clock: reason = "clock"
             if reason:
                 trades.append(chg - FEE)

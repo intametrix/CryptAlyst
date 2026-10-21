@@ -87,9 +87,19 @@ func main() {
 	flag.Parse()
 	log.SetFlags(log.Ltime)
 
-	symbols := loadSymbols(*top)
+	// The ranking call is one HTTP request at start. A transient failure used to pin
+	// the platform to a 40-symbol fallback for its whole life, which then silently
+	// capped every model's universe. Three attempts before falling back.
+	var symbols []string
+	for attempt := 1; attempt <= 3 && len(symbols) == 0; attempt++ {
+		symbols = loadSymbols(*top)
+		if len(symbols) == 0 {
+			log.Printf("symbol ranking attempt %d failed, retrying", attempt)
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+		}
+	}
 	if len(symbols) == 0 {
-		log.Printf("exchange ranking unavailable — using the built-in liquid list")
+		log.Printf("exchange ranking unavailable — using the built-in liquid list of 40; models cannot select beyond it until the feed is restarted")
 		symbols = fallbackSymbols
 		if *top < len(symbols) {
 			symbols = symbols[:*top]

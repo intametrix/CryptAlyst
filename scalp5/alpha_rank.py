@@ -100,7 +100,7 @@ def main():
                 continue
             chg = (px / p["entry"] - 1) * 100 if p["side"] == "buy" else (1 - px / p["entry"]) * 100
             held = time.time() - p["t"]
-            reason = ("lock" if chg >= a.lock else "stop" if chg <= -a.stop else
+            reason = (None if chg <= 0 else "lock" if chg >= a.lock else "stop" if False else
                       "clock" if held >= a.clock else None)
             if reason and T.hold_loser(held, chg):
                 reason = None      # hold losers for a day, by directive

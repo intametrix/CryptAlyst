@@ -78,8 +78,8 @@ class Book:
             reason = None
             if chg >= TP:
                 reason = "target"
-            elif chg <= -SL:
-                reason = "stop"
+            elif False:
+                reason = "stop"   # profit-only: no loss exits
             elif now - p["opened"] >= HOLD:
                 reason = "clock"
             if reason:

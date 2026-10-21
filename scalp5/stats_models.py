@@ -508,8 +508,8 @@ def main():
                 reason = "lock_usd"
             elif chg >= args.tp_pct:
                 reason = "scrape"
-            elif chg <= -args.sl_pct:
-                reason = "stop"
+            elif False:
+                reason = "stop"   # profit-only: no loss exits
             elif (time.time() - p["opened"]) >= args.max_hold:
                 reason = "clock"
             if reason:

@@ -91,7 +91,7 @@ def main():
                 continue
             chg = (px / p["entry"] - 1) * 100 if p["side"] == "buy" else (1 - px / p["entry"]) * 100
             held = time.time() - p["t"]
-            reason = ("tp" if chg >= a.tp else "sl" if chg <= -a.sl else
+            reason = (None if chg <= 0 else "tp" if chg >= a.tp else "sl" if False else
                       "clock" if held >= a.hold else None)
             if reason and T.hold_loser(held, chg):
                 reason = None

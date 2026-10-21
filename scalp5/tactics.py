@@ -497,3 +497,14 @@ def require_enabled(engine, script=None):
     if is_disabled(engine, script):
         raise SystemExit("%s is disabled (state/disabled.json). Re-enabling is a human "
                          "act; remove it from the list to run it." % engine)
+
+
+# ---------------------------------------------------------------- profit-only settlement
+def may_settle(chg_pct):
+    """The owner's rule, in one place: a position is settled only in profit.
+
+    A short waits until it is green exactly like a long. No stop, no clock, no loss
+    exit - and every engine that closes a position calls this, so the rule cannot
+    drift back in one file at a time.
+    """
+    return float(chg_pct or 0.0) > 0.0

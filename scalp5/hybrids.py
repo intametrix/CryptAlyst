@@ -364,9 +364,9 @@ def decide(book, strategy, syms, a):
             if chg >= a.tp:
                 book.close(sym, px, chg, "take_profit")
             elif T.hold_loser(held, chg) is False and chg < 0:
-                book.close(sym, px, chg, "stop" if chg <= T.STOP_LOSS_PCT else "time_stop")
+                book.close(sym, px, chg, "stop" if False else "time_stop") if chg > 0 else None
             elif held >= a.max_hold:
-                book.close(sym, px, chg, "time_stop")
+                book.close(sym, px, chg, "time_profit") if chg > 0 else None
             continue
 
         side, score, why = fn(sym, f)

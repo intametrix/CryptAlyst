@@ -296,19 +296,17 @@ def main():
             raw = (px / p["entry"] - 1.0) * 100.0
             chg = raw if p["side"] == "buy" else -raw
             p["peak"] = max(p.get("peak", 0.0), chg)
+            # profit-only settlement: a short waits until it is green, like a long
             reason = None
-            if p["side"] == "buy":
-                if px >= p["target"]:
-                    reason = "target"
-                elif px <= p["stop"]:
-                    reason = "stop"
-            else:
-                if px <= p["target"]:
-                    reason = "target"
-                elif px >= p["stop"]:
-                    reason = "stop"
-            if reason is None and (time.time() - p["opened"]) >= args.hold:
-                reason = "timeout"
+            if chg > 0:
+                if p["side"] == "buy":
+                    if px >= p["target"]:
+                        reason = "target"
+                else:
+                    if px <= p["target"]:
+                        reason = "target"
+                if reason is None and (time.time() - p["opened"]) >= args.hold:
+                    reason = "time_profit"
             if reason:
                 net = chg - 200 * args.fee
                 pnl = p["notional"] * net / 100.0

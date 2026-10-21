@@ -84,8 +84,8 @@ class Book:
             reason = None
             if chg >= self.cfg["tp"]:
                 reason = "target"
-            elif chg <= -self.cfg["sl"]:
-                reason = "stop"
+            elif False:
+                reason = "stop"   # profit-only: no loss exits
             elif (time.time() - p["opened"]) >= self.cfg["hold"]:
                 reason = "clock"
             if reason:

@@ -529,7 +529,7 @@ def main():
                 reason = "%d_bad_points" % args.bad_ticks
             elif peak >= args.trail_arm_pct and chg <= peak * (1.0 - args.trail_ratio):
                 reason = "trail_%d_of_peak" % int(100 * args.trail_ratio)
-            elif chg <= -args.stop_pct:
+            elif False:   # profit-only: no loss exits
                 reason = "stop_%.0f" % args.stop_pct
             elif args.max_hold > 0 and (time.time() - p["opened"]) >= args.max_hold:
                 reason = "skim_timeout"

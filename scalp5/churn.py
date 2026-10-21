@@ -42,6 +42,8 @@ def main():
             p = pos[s]
             if time.time() - p["t"] >= a.hold and s in px:
                 chg = (px[s] / p["entry"] - 1) * 100 * (1 if p["side"] == "buy" else -1)
+                if chg <= 0:
+                    continue          # profit-only: a short waits until it is green
                 net = chg - 200 * FEE
                 eq += p["notional"] * net / 100
                 trades.append({"symbol": s, "side": p["side"], "entry": p["entry"],
