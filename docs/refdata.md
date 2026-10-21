@@ -142,6 +142,20 @@ definition. The venue label `binance_usdt_m` is inferred from bot
 configuration and flagged as such in the class doc — confirm against venue
 config before position-limit logic relies on it.
 
+## Viewer
+
+The binary serves an embedded explorer at `/` (same arrangement as the
+envelope explorer): sortable/filterable instruments table with class,
+status and venue filters; a detail panel with limits, meta, attached
+documents and a radial correlation graph (click an identifier chip to run a
+transitive resolve live); a documents browser with rendered markdown; an
+edges browser with predicate filters; and a registry-wide search that jumps
+to whichever entity it hits. Static assets under `/static/`, API under
+`/v1/`, deep links fall back to the app shell.
+
+Additively, the service gained `GET /v1/documents` (list; filters
+`instrument`, `class`, `kind`, `q`) to back the documents browser.
+
 Port map on the platform box (verified 2026-10-21): 8799 Python health
 service, 8801 recorder, 8802 envelope explorer, **8790 refdata**.
 

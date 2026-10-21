@@ -307,3 +307,65 @@ func TestDecodeBodyRejectsGarbage(t *testing.T) {
 		t.Fatal("garbage body accepted")
 	}
 }
+
+func TestListDocumentsEndpoint(t *testing.T) {
+	ts := newTestServer(t)
+	code, _ := serveThrough(t, ts, "PUT", "/v1/documents", refdata.Document{
+		InstrumentID: "crypto_perp:genvenue:GENUSDT",
+		Title:        "GEN limits", Kind: "limits", Body: "generated limits body\n",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("put instrument doc: %d", code)
+	}
+	code, _ = serveThrough(t, ts, "PUT", "/v1/documents", refdata.Document{
+		Class: refdata.ClassCryptoPerp, Title: "class def", Kind: "definition", Body: "generated class body\n",
+	})
+	if code != http.StatusOK {
+		t.Fatalf("put class doc: %d", code)
+	}
+	code, data := serveThrough(t, ts, "GET", "/v1/documents", nil)
+	if code != http.StatusOK {
+		t.Fatalf("list documents: %d", code)
+	}
+	var docs []refdata.Document
+	if err := json.Unmarshal(data, &docs); err != nil || len(docs) != 2 {
+		t.Fatalf("documents payload: %v %s", err, data)
+	}
+	code, data = serveThrough(t, ts, "GET", "/v1/documents?kind=definition", nil)
+	var filtered []refdata.Document
+	if err := json.Unmarshal(data, &filtered); err != nil || len(filtered) != 1 || code != http.StatusOK {
+		t.Fatalf("kind filter: %d %v %s", code, err, data)
+	}
+}
+
+func TestUIServing(t *testing.T) {
+	ts := newTestServer(t)
+	for _, path := range []string{"/", "/ui", "/ui/", "/static/style.css", "/static/app.js", "/some/deep/route"} {
+		resp, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		body := make([]byte, 512)
+		n, _ := resp.Body.Read(body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s: status %d", path, resp.StatusCode)
+		}
+		if path == "/" || path == "/ui/" || path == "/ui" || path == "/some/deep/route" {
+			if !strings.Contains(string(body[:n]), "<title>") {
+				t.Fatalf("GET %s: expected app shell, got %.80q", path, body)
+			}
+		}
+	}
+	// API routes must not be shadowed by the UI catch-all.
+	for _, path := range []string{"/healthz", "/v1/stats"} {
+		resp, err := http.Get(ts.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET %s: status %d (UI shadowed the API?)", path, resp.StatusCode)
+		}
+	}
+}

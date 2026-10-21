@@ -43,6 +43,13 @@ import (
 	"cryptalyst/core/internal/refdata"
 )
 
+// staticFS holds the embedded registry explorer (the viewer app), served by
+// this binary the same way the envelope explorer is: one process, one port,
+// API under /v1, app everywhere else.
+//
+//go:embed static
+var staticFS embed.FS
+
 // decodeBody reads a write request. Callers may send the bare payload or an
 // envelope wrapping it; the answer is always enveloped, so the request side
 // stays permissive for bus-side clients.
