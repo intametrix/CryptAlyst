@@ -147,6 +147,27 @@ class Book:
         raw = (px / p["entry"] - 1.0) * 100.0
         return raw if p["side"] == "buy" else -raw
 
+    def close(self, sym, mark, _unused=None, reason="stop_loss"):
+        """Close one position now. Used by the risk plane's requests."""
+        p = self.positions.get(sym)
+        if not p or not mark:
+            return False
+        chg = (mark / p["entry"] - 1) * 100
+        if p["side"] == "sell":
+            chg = -chg
+        net = chg - 200 * FEE
+        self.equity += p["notional"] * net / 100
+        self.trades.append({"symbol": sym, "side": p["side"], "entry": p["entry"],
+                            "exit": mark, "gross_pct": round(chg, 3),
+                            "net_pct": round(net, 3), "peak_pct": round(p.get("peak", 0), 3),
+                            "reason": reason, "held_s": round(time.time() - p["opened"], 1),
+                            "notional": round(p["notional"], 2),
+                            "pnl_usd": round(p["notional"] * net / 100, 2),
+                            "entry_ms": int(p["opened"] * 1000),
+                            "exit_ms": int(time.time() * 1000)})
+        self.positions.pop(sym, None)
+        return True
+
     def manage(self, px):
         for sym in list(self.positions):
             p = self.positions[sym]
@@ -341,6 +362,21 @@ def main():
             if _tactics.is_disabled(name):
                 continue          # A6: a disabled model is never used
             b = books.get(name)
+            if b is not None:
+                try:
+                    import glob as _g
+                    for fp in _g.glob(os.path.join(STATE, "close_%s_*.flag" % name)):
+                        sym = os.path.basename(fp)[len("close_%s_" % name):-5].upper()
+                        pos = b.positions.get(sym)
+                        if pos and sym in px:
+                            b.close(sym, px[sym], None, "stop_loss")
+                            log("%-16s CLOSED %-12s by request" % (name, sym))
+                        try:
+                            os.remove(fp)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
             if b is None:
                 b = books[name] = Book(name, cfg)
                 log("new lineage member: %-18s %s" % (name, cfg))

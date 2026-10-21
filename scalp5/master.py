@@ -627,7 +627,8 @@ def _owner_is_multi(engine):
     try:
         import re as _re
         for src, marker in (("alpha_signals.py", r"MODELS\s*=\s*\{(.*?)\n\}"),
-                            ("crypto_pack.py", r"CFG\s*=\s*\{(.*?)\n\}")):
+                            ("crypto_pack.py", r"CFG\s*=\s*\{(.*?)\n\}"),
+                            ("crypto_strategies.py", r"STRATEGIES\s*=\s*\[(.*?)\n\]")):
             blob = open(os.path.join(HERE, src)).read()
             m = _re.search(marker, blob, _re.S)
             if m and ('"%s"' % engine) in m.group(1):
