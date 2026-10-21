@@ -2859,6 +2859,11 @@ async function renderModels(){
   var books=(d1.engines||[]).filter(function(e){return e.equity!=null;});
   if(note) note.textContent=books.length+" books · "+disabled.length+" stopped";
   if(!books.length){ box.innerHTML='<div class="panel"><div class="empty">no books reporting</div></div>'; return; }
+  books.sort(function(a,b){
+    var da=disabled.indexOf(a.key)>=0, db=disabled.indexOf(b.key)>=0;
+    if(da!==db) return da?1:-1;                 // live books first, remembered disables last
+    return (b.total||0)-(a.total||0);
+  });
   var rows=books.map(function(e){
     var tr=e.trades||[], n=tr.length;
     var wins=tr.filter(function(t){return (t.net_pct||0)>0;}).length;
@@ -2885,6 +2890,16 @@ async function renderModels(){
         esc(e.key)+'\','+(off?'true':'false')+')">'+(off?'enable':'disable')+'</button></td>'+
       '</tr>';
   }).join("");
+  var cut = books.findIndex(function(e){ return disabled.indexOf(e.key)>=0; });
+  if(cut>0){
+    var before=rows.slice(0,0); // rows is a string; split by the section marker instead
+    var parts=rows.split("</tr>");
+    rows=parts.slice(0,cut).join("</tr>")+"</tr>"+
+      '<tr><td colspan="12" style="padding-top:14px;color:#7c8b9d;font-family:var(--mono);'+
+      'font-size:11px;border-top:1px solid #1d2733">REMEMBERED DISABLES — these will not '+
+      'start, on any launch path (A6). Re-enabling is a human act.</td></tr>'+
+      parts.slice(cut).join("</tr>");
+  }
   box.innerHTML='<table class="wide"><thead><tr><th>model</th><th>curve</th>'+
     '<th style="text-align:right">equity</th><th style="text-align:right">return</th>'+
     '<th style="text-align:right">realised</th><th style="text-align:right">unrealised</th>'+

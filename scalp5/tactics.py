@@ -464,3 +464,34 @@ def capital(engine):
         _CAP["ts"] = now
     row = _CAP["v"].get(engine) or {}
     return float(row.get("risk_mult", 1.0)), int(row.get("slots", 1))
+
+
+# ---------------------------------------------------------------- A6: remembered disables
+DISABLED_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state", "disabled.json")
+
+
+def _norm(name):
+    return str(name or "").replace("_", "").lower()
+
+
+def disabled_books():
+    """The remembered disable list, normalised so every spelling matches."""
+    try:
+        with open(DISABLED_PATH) as fh:
+            raw = json.load(fh).get("books") or []
+    except Exception:
+        return set()
+    return {_norm(b) for b in raw if b}
+
+
+def is_disabled(*names):
+    """True if ANY of the given names is disabled. Callers pass engine and script."""
+    dis = disabled_books()
+    return any(_norm(n) in dis for n in names if n)
+
+
+def require_enabled(engine, script=None):
+    """A6: a disabled book must not run at all, on any launch path."""
+    if is_disabled(engine, script):
+        raise SystemExit("%s is disabled (state/disabled.json). Re-enabling is a human "
+                         "act; remove it from the list to run it." % engine)
