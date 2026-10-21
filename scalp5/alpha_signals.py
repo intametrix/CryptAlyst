@@ -203,6 +203,41 @@ def main():
                         log("%-15s CLOSE %-10s %-4s %+6.3f%% net %+6.3f%% %s" % (
                             bk.name, sym, p["side"], chg, net, reason))
                         bk.pos.pop(sym)
+                # a single-position close requested from the dashboard
+                import glob as _g
+                for fp in _g.glob(os.path.join(STATE, "close_%s_*.flag" % bk.name)):
+                    sym = os.path.basename(fp)[len("close_%s_" % bk.name):-5].upper()
+                    pos = bk.pos.get(sym)
+                    if pos:
+                        try:
+                            cur = float(T.jget(
+                                "https://api.binance.com/api/v3/ticker/price?symbol=" + sym,
+                                6)["price"])
+                        except Exception:
+                            cur = None
+                        if cur:
+                            chg = (cur / pos["entry"] - 1) * 100 if pos["side"] == "buy" \
+                                  else (1 - cur / pos["entry"]) * 100
+                            net = chg - FEE
+                            bk.equity += pos["notional"] * net / 100
+                            bk.trades.append({"symbol": sym, "side": pos["side"],
+                                              "entry": pos["entry"], "exit": cur,
+                                              "gross_pct": chg, "net_pct": net,
+                                              "peak_pct": max(0.0, chg),
+                                              "reason": "position_close",
+                                              "held_s": time.time() - pos["t"],
+                                              "entry_ms": int(pos["t"] * 1000),
+                                              "exit_ms": int(time.time() * 1000),
+                                              "notional": pos["notional"],
+                                              "pnl_usd": pos["notional"] * net / 100,
+                                              "why": pos["why"]})
+                            bk.pos.pop(sym, None)
+                            log("%-15s CLOSED %-10s by request %+6.3f%% net %+6.3f%%" % (
+                                bk.name, sym, chg, net))
+                    try:
+                        os.remove(fp)
+                    except Exception:
+                        pass
                 write(bk)
 
             # entries

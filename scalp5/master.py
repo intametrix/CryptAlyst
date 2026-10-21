@@ -582,6 +582,98 @@ def check_cashins():
     return done
 
 
+def _owner_is_multi(engine):
+    """True when a shared process owns this book and must be asked, not edited."""
+    try:
+        import re as _re
+        for src, marker in (("alpha_signals.py", r"MODELS\s*=\s*\{(.*?)\n\}"),
+                            ("crypto_pack.py", r"CFG\s*=\s*\{(.*?)\n\}")):
+            blob = open(os.path.join(HERE, src)).read()
+            m = _re.search(marker, blob, _re.S)
+            if m and ('"%s"' % engine) in m.group(1):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def flatten_position(engine, symbol, reason="position_close"):
+    """Close one position. A shared owner is asked by flag; a standalone book is edited
+    and its process restarted, so memory and pack cannot disagree."""
+    symbol = symbol.upper()
+    if _owner_is_multi(engine):
+        flag = os.path.join(HERE, "state", "close_%s_%s.flag" % (engine, symbol))
+        with open(flag, "w") as fh:
+            fh.write(str(int(time.time() * 1000)))
+        return {"requested": True, "engine": engine, "symbol": symbol}
+
+    prices = _prices_now()
+    pack_path = os.path.join(HERE, "state", "pack_%s.json" % engine)
+    try:
+        import json as _json
+        pack = _json.load(open(pack_path))
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+    kept, closed, realised = [], 0, 0.0
+    for pos in (pack.get("positions") or []):
+        sym = (pos.get("symbol") or "").upper()
+        if sym != symbol:
+            kept.append(pos)
+            continue
+        entry = float(pos.get("entry") or 0)
+        px = float(prices.get(sym) or 0)
+        if not entry or not px:
+            kept.append(pos)
+            continue
+        chg = (px / entry - 1.0) * 100.0
+        if str(pos.get("side") or "buy").lower() in ("sell", "short"):
+            chg = -chg
+        pnl = float(pos.get("notional") or 0) * chg / 100.0
+        pack.setdefault("trades", []).append({
+            "ts": int(pos.get("entry_ms") or time.time() * 1000), "symbol": sym,
+            "side": pos.get("side", "buy"), "entry": entry, "exit": px,
+            "gross_pct": round(chg, 4), "net_pct": round(chg, 4),
+            "held_s": pos.get("held_s"), "reason": reason,
+            "notional": float(pos.get("notional") or 0), "pnl_usd": round(pnl, 2),
+            "exit_ms": int(time.time() * 1000)})
+        closed += 1
+        realised += pnl
+    pack["positions"] = kept
+    pack["trades"] = (pack.get("trades") or [])[-400:]
+    pack["equity"] = round(float(pack.get("equity") or 0) + realised, 2)
+    pack["ts"] = int(time.time() * 1000)
+    # the engine owns its pack and may rewrite it; the close is also written to a
+    # ledger we own, so the record cannot be lost by a later pack write
+    try:
+        import json as _json2
+        with open(os.path.join(HERE, "state", "position_closes.jsonl"), "a") as fh:
+            fh.write(_json2.dumps({"ts": int(time.time() * 1000), "engine": engine,
+                                   "symbol": symbol, "closed": closed,
+                                   "realised_usd": round(realised, 2),
+                                   "by": "operator"}) + "\n")
+    except Exception:
+        pass
+    with open(pack_path + ".t", "w") as fh:
+        _json.dump(pack, fh)
+    os.replace(pack_path + ".t", pack_path)
+
+    # the process holds the position in memory; restart it so it cannot put it back
+    import subprocess as _sp
+    for pat in ("%s.py" % engine, engine.replace("_", "") + ".py"):
+        _sp.run(["pkill", "-f", pat], capture_output=True)
+    try:
+        import supervisor as _sup
+        for key in _sup.ENGINES:
+            if os.path.basename(_sup.ENGINES[key][2]) in ("%s.py" % engine,
+                                                          engine.replace("_", "") + ".py"):
+                _sup.start(key)
+                break
+    except Exception:
+        pass
+    return {"closed": closed, "realised": round(realised, 2), "engine": engine,
+            "symbol": symbol}
+
+
 def _flatten_book(engine, reason="operator_close", disable=True):
     """Flatten a book at the last price. Banking and closing share this body."""
     import json as _json, subprocess as _sp
@@ -2279,7 +2371,7 @@ async function drillOpen(kind){
   var t=document.getElementById("drilltitle");
   if(t) t.textContent = ({
       realised:"Total realised — every book, banked only",
-      unrealised:"Current trading — open positions marked at the last price",
+      unrealised:"Unrealized — every open position, marked at the last price",
       total:"Total — realised plus unrealised",
       equity:"Equity — every book's account",
       return:"Return — every book, % of its start",
@@ -2341,6 +2433,19 @@ async function drillRender(){
   es.sort(function(a,b){ return (b[key]||0)-(a[key]||0); });
   var sum=es.reduce(function(a,e){ return a+(e[key]||0); },0);
   var rows=es.map(function(e){
+    var posRows="";
+    if(kind==="unrealised" && (e.positions_detail||[]).length){
+      posRows=(e.positions_detail||[]).map(function(p){
+        return '<tr style="background:#0a0f15"><td style="padding-left:26px;color:#8095ab">'+
+          esc(p.symbol)+'</td><td>'+esc(String(p.side).toUpperCase())+'</td>'+
+          '<td class="num">'+money(p.entry)+'</td><td class="num">'+money(p.mark)+'</td>'+
+          '<td class="num">'+money(p.notional)+'</td>'+
+          '<td class="num '+(((p.pnl||0)>=0)?"up":"down")+'"><b>'+sgn(p.pnl||0)+'</b></td>'+
+          '<td class="num">'+(p.held_s?Math.round(p.held_s)+"s":"—")+'</td>'+
+          '<td><button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
+            'onclick="closePosition(\''+esc(e.name)+'\',\''+esc(p.symbol)+'\',this)">close</button></td></tr>';
+      }).join("");
+    }
     return '<tr><td>'+esc(e.name)+'</td>'+
       '<td>'+((e.disabled)?"disabled":(e.alive?"running":"stopped"))+'</td>'+
       '<td class="num '+((e.realised||0)>=0?"up":"down")+'">'+sgn(e.realised||0)+'</td>'+
@@ -2348,17 +2453,30 @@ async function drillRender(){
       '<td class="num '+((e.total||0)>=0?"up":"down")+'"><b>'+sgn(e.total||0)+'</b></td>'+
       '<td class="num">'+(e.open||0)+'</td>'+
       '<td style="white-space:nowrap">'+
+        '<button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
+          'onclick="closeBook(\''+e.name+'\',this)">close all</button> '+
         '<button class="tbtn" onclick="setCashIn(\''+e.name+'\')">cash in</button> '+
         '<button class="tbtn" onclick="reloadEngine(\''+e.name+'\')">reload</button> '+
         '<button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
           'onclick="closeBook(\''+e.name+'\').then?closeBook(\''+e.name+'\'):0">close</button>'+
-      '</td></tr>';
+      '</td></tr>'+posRows;
   }).join("");
   box.innerHTML='<div style="margin-bottom:8px;color:#9fb0c4;font-family:var(--mono);font-size:11px">'+
       es.length+' books · '+key+' total '+sgn(sum)+'</div>'+
     '<table class="wide"><thead><tr><th>book</th><th>state</th>'+
-    '<th class="num">total realised</th><th class="num">current trading</th><th class="num">total</th>'+
+    '<th class="num">total realised</th><th class="num">unrealized</th><th class="num">total</th>'+
     '<th class="num">open</th><th>actions</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+async function closePosition(engine, symbol, btn){
+  if(!confirm("Close "+symbol+" in "+engine+"?\n\nIt is flattened at the last traded price "+
+              "and recorded with reason position_close.")) return;
+  if(btn){ btn.disabled=true; btn.textContent="closing…"; }
+  try{
+    await fetch("/api/position_close?engine="+encodeURIComponent(engine)+
+                "&symbol="+encodeURIComponent(symbol),{cache:"no-store"});
+  }catch(e){}
+  setTimeout(function(){ if(window.DRILL) drillRender(); }, 2500);
 }
 
 async function reloadEngine(name){
@@ -2428,7 +2546,7 @@ async function renderEngines(){
   var note = document.getElementById("engnote");
   if(note) note.textContent = es.filter(function(e){return e.alive;}).length+"/"+es.length+" running";
   var head = '<tr><th>engine</th><th>status</th><th class="num">equity</th>'+
-             '<th class="num">total realised</th><th class="num">current trading</th><th class="num">total</th>'+
+             '<th class="num">total realised</th><th class="num">unrealized</th><th class="num">total</th>'+
              '<th class="num">trades</th><th class="num">open</th>'+
              '<th class="num">long</th><th class="num">short</th><th class="num">risk</th>'+
              '<th class="num">slots</th><th>action</th></tr>';
@@ -3001,7 +3119,7 @@ async function renderBooks(){
     _sideTile("closed short", d.closed_short||0, "#f85149", "closed_short")+
     UI.stat("closed trades", d.closed||0)+
     _drillTile("realised", ((d.realised||0)>=0?"+":"")+money(d.realised||0), ((d.realised||0)>=0?"#3fb950":"#f85149"), "total realised")+
-    _drillTile("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"), "current trading")+
+    _drillTile("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"), "unrealized")+
     _drillTile("total", ((d.total||0)>=0?"+":"")+money(d.total||0), ((d.total||0)>=0?"#3fb950":"#f85149"))+
     '</div>'+
     '<div class="mk" style="margin-top:6px">'+books.length+' books each start at $'+
@@ -3388,7 +3506,7 @@ async function renderModels(){
   }
   box.innerHTML='<table class="wide"><thead><tr><th>model</th><th>curve</th>'+
     '<th style="text-align:right">equity</th><th style="text-align:right">return</th>'+
-    '<th style="text-align:right">total realised</th><th style="text-align:right">current trading</th>'+
+    '<th style="text-align:right">total realised</th><th style="text-align:right">unrealized</th>'+
     '<th style="text-align:right">total</th><th style="text-align:right">trades</th>'+
     '<th style="text-align:right">long</th><th style="text-align:right">short</th>'+
     '<th style="text-align:right">win</th><th style="text-align:right">open</th>'+
@@ -5054,7 +5172,7 @@ async function tick(){
   const KPI=[["combined equity","$"+money(eq),"equity"],
              ["combined return",pct(base?100*(eq/base-1):null),"return"],
              ["total realised","$"+money(real),"realised"],
-             ["current trading","$"+money(unreal),"unrealised"],
+             ["unrealized","$"+money(unreal),"unrealised"],
              ["open positions",open,"open"],
              ["closed trades",closed,"closed"]];
   $("totals").innerHTML=KPI.map(([k,v,kind])=>
@@ -6356,6 +6474,15 @@ class H(BaseHTTPRequestHandler):
                     "equity": round(eq, 2), "start": round(start, 2),
                     "realised": round(eq - start, 2), "unrealised": unreal,
                     "total": round(eq - start + unreal, 2),
+                    "positions_detail": [
+                        {"symbol": (q.get("symbol") or "").upper(),
+                         "side": q.get("side") or "buy",
+                         "entry": q.get("entry"),
+                         "notional": q.get("notional"),
+                         "mark": prices.get((q.get("symbol") or "").upper()),
+                         "pnl": round(_mark([q], prices)[0], 2),
+                         "held_s": q.get("held_s")}
+                        for q in (b.get("positions") or [])[:25]],
                     "trades": len(b.get("trades") or []), "open": len(b.get("positions") or []),
                     **_sides(b.get("positions") or [], b.get("trades") or []),
                     "risk_mult": c.get("risk_mult"), "slots": c.get("slots"),
@@ -6365,6 +6492,20 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, _json.dumps({"engines": out,
                                                 "alive": sum(1 for r in out if r["alive"])}),
                               "application/json")
+        if p == "/api/position_close":
+            import json as _json
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            engine = (q.get("engine", [""])[0] or "").strip()
+            symbol = (q.get("symbol", [""])[0] or "").strip().upper()
+            if not engine or not symbol:
+                return self._send(400, _json.dumps({"error": "engine and symbol required"}),
+                                  "application/json")
+            try:
+                out = flatten_position(engine, symbol)
+                out["ok"] = True
+            except Exception as e:
+                out = {"ok": False, "error": str(e)}
+            return self._send(200, _json.dumps(out), "application/json")
         if p == "/api/model_books":
             import glob as _g, json as _json, re as _re
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
