@@ -36,6 +36,8 @@ type Segmented struct {
 	deleted    int64
 	stop       chan struct{}
 	once       sync.Once
+	tracker    *spanTracker
+	openedAt   int64
 }
 
 func OpenSegmented(cfg RetentionConfig) (*Segmented, error) {
@@ -45,7 +47,7 @@ func OpenSegmented(cfg RetentionConfig) (*Segmented, error) {
 	if err := os.MkdirAll(cfg.Dir, 0o755); err != nil {
 		return nil, err
 	}
-	s := &Segmented{cfg: cfg, stop: make(chan struct{})}
+	s := &Segmented{cfg: cfg, stop: make(chan struct{}), tracker: newSpanTracker()}
 	if err := s.rotate(); err != nil {
 		return nil, err
 	}
@@ -71,6 +73,7 @@ func (s *Segmented) Write(r Record) error {
 		return err
 	}
 	s.size += int64(len(line)) + 1
+	s.tracker.add(r.Topic, r.TS, int64(len(line))+1)
 	atomic.AddInt64(&s.writes, 1)
 	return nil
 }
@@ -83,8 +86,16 @@ func (s *Segmented) rotate() error {
 
 func (s *Segmented) rotateLocked() error {
 	if s.file != nil {
+		// seal: write the sidecar before closing, so a reader never meets a
+		// segment without its index
+		if recs, bytes, spans := s.tracker.snapshot(); recs > 0 {
+			_ = writeSidecar(s.segments[len(s.segments)-1], s.openedAt,
+				SegmentStats{OpenedAt: s.openedAt, Records: recs, Bytes: bytes, Topics: spans})
+		}
 		_ = s.file.Close()
 	}
+	s.tracker.reset()
+	s.openedAt = time.Now().UnixMilli()
 	name := filepath.Join(s.cfg.Dir, fmt.Sprintf("seg-%d.jsonl", time.Now().UnixNano()))
 	f, err := os.OpenFile(name, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
@@ -196,6 +207,12 @@ func (s *Segmented) Close() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if s.file != nil {
+			// the last segment is sealed like any other: a reader must never meet
+			// a segment without its index
+			if recs, bytes, spans := s.tracker.snapshot(); recs > 0 && len(s.segments) > 0 {
+				_ = writeSidecar(s.segments[len(s.segments)-1], s.openedAt,
+					SegmentStats{OpenedAt: s.openedAt, Records: recs, Bytes: bytes, Topics: spans})
+			}
 			err = s.file.Close()
 		}
 	})

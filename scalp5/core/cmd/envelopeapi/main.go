@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"cryptalyst/core/internal/lake"
 	"cryptalyst/core/internal/operator"
 )
 
@@ -228,6 +229,15 @@ var planes = map[string]string{
 
 // parse turns a lake line into an explorer document, tolerating both the older
 // records (payload only) and the newer ones that carry the envelope.
+// payloadOf reads a lake record's payload, which new segments derive from the
+// envelope rather than store twice.
+func payloadOf(payload, envelope []byte) json.RawMessage {
+	if p, err := lake.DerivePayload(lake.Record{Payload: payload, Envelope: envelope}); err == nil {
+		return p
+	}
+	return nil
+}
+
 func parse(line []byte) (envelopeDoc, bool) {
 	var rec struct {
 		Topic    string          `json:"topic"`
@@ -240,7 +250,7 @@ func parse(line []byte) (envelopeDoc, bool) {
 		return envelopeDoc{}, false
 	}
 	d := envelopeDoc{Topic: rec.Topic, Key: rec.Key, TS: rec.TS,
-		Payload: rec.Payload, Plane: planes[rec.Topic], Size: len(line)}
+		Payload: payloadOf(rec.Payload, rec.Envelope), Plane: planes[rec.Topic], Size: len(line)}
 	// an inner producer wins: it is the component that actually computed the data
 	var inner struct {
 		Producer string `json:"producer"`
@@ -250,7 +260,7 @@ func parse(line []byte) (envelopeDoc, bool) {
 		} `json:"data"`
 	}
 	innerProducer := ""
-	if json.Unmarshal(rec.Payload, &inner) == nil {
+	if json.Unmarshal(payloadOf(rec.Payload, rec.Envelope), &inner) == nil {
 		innerProducer = inner.Producer
 		if innerProducer == "" {
 			innerProducer = inner.Data.Producer

@@ -6,6 +6,7 @@ package lake
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -14,10 +15,16 @@ import (
 
 // Record is one stored envelope, kept verbatim so replay is exact.
 type Record struct {
-	Topic   string          `json:"topic"`
-	Key     string          `json:"key"`
-	TS      int64           `json:"ts"`
-	Payload json.RawMessage `json:"payload"`
+	Topic string `json:"topic"`
+	Key   string `json:"key"`
+	TS    int64  `json:"ts"`
+	// Payload is not written any more: it is the same bytes as envelope.data and
+	// used to double every line. It is kept in the struct so callers and old
+	// segments still work, and DerivePayload fills it on read.
+	Payload json.RawMessage `json:"payload,omitempty"`
+	// PayloadVersion records how the payload was encoded, so a reader knows it can
+	// derive it from the envelope rather than expecting the field.
+	PayloadVersion int `json:"pv,omitempty"`
 	// Envelope is the wrapped form recorded alongside the payload. Replay keeps
 	// publishing Payload, so consumers are unaffected; the explorer reads this.
 	Envelope json.RawMessage `json:"envelope,omitempty"`
@@ -99,7 +106,63 @@ func OpenJournal(path string) (*Journal, error) {
 
 func (j *Journal) Name() string { return "journal" }
 
+// DerivePayload returns the payload of a record, from the stored field when it is
+// there (old segments) and from envelope.data when it is not (new ones).
+func DerivePayload(r Record) (json.RawMessage, error) {
+	if len(r.Payload) > 0 {
+		return r.Payload, nil
+	}
+	if len(r.Envelope) == 0 {
+		return nil, fmt.Errorf("record has neither payload nor envelope")
+	}
+	var env struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(r.Envelope, &env); err != nil {
+		return nil, fmt.Errorf("deriving payload: %w", err)
+	}
+	if len(env.Data) == 0 {
+		return nil, fmt.Errorf("envelope has no data member")
+	}
+	return env.Data, nil
+}
+
+// stripPayload returns the form written to disk: the envelope, no duplicate body.
+// One record per process is checked byte-for-byte, so a shape the derivation cannot
+// reproduce is caught at the first write rather than at the thousandth read.
+var stripChecked int32
+
+// KeepPayload turns the strip off, so M1 can be rolled back without a rebuild.
+var KeepPayload = os.Getenv("LAKE_KEEP_PAYLOAD") == "1"
+
+func stripPayload(r Record) (Record, error) {
+	if KeepPayload {
+		return r, nil
+	}
+	if len(r.Envelope) == 0 || len(r.Payload) == 0 {
+		return r, nil
+	}
+	out := r
+	out.Payload = nil
+	out.PayloadVersion = 1
+	if atomic.CompareAndSwapInt32(&stripChecked, 0, 1) {
+		derived, err := DerivePayload(out)
+		if err != nil {
+			return r, err
+		}
+		if len(derived) != len(r.Payload) {
+			return r, fmt.Errorf("payload derivation mismatch: stored %d bytes, derived %d", len(r.Payload), len(derived))
+		}
+	}
+	return out, nil
+}
+
 func (j *Journal) Write(r Record) error {
+	sp, err := stripPayload(r)
+	if err != nil {
+		return err
+	}
+	r = sp
 	line, err := json.Marshal(r)
 	if err != nil {
 		return err

@@ -9,7 +9,15 @@ import (
 	"strings"
 )
 
-func marshalRecord(r Record) ([]byte, error) { return json.Marshal(r) }
+// marshalRecord strips the duplicate payload, exactly as the plain journal does:
+// sealed segments should not double every line either.
+func marshalRecord(r Record) ([]byte, error) {
+	stripped, err := stripPayload(r)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(stripped)
+}
 
 func copyAll(dst io.Writer, src io.Reader) (int64, error) { return io.Copy(dst, src) }
 

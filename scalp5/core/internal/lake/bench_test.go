@@ -2,67 +2,64 @@ package lake
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 )
 
+// A market-depth record, about the size the feed actually produces.
 func benchRecord(i int) Record {
-	body, _ := json.Marshal(map[string]any{
-		"symbol": "BTCUSDT", "bid": 82750.12, "ask": 82750.13,
-		"bids": [][2]float64{{82750.12, 0.5}, {82749.9, 1.2}}, "i": i,
-	})
-	return Record{Topic: "market.depth", Key: "BTCUSDT", TS: int64(i), Payload: body}
+	body := []byte(fmt.Sprintf(
+		`{"symbol":"BTCUSDT","bids":[{"p":%d.1,"q":2.5},{"p":%d.2,"q":1.5}],"asks":[{"p":%d.3,"q":3.5}],"imbalance":0.12,"ts":%d}`,
+		i, i, i, i))
+	env, _ := json.Marshal(map[string]any{"data": json.RawMessage(body),
+		"meta": map[string]any{"topic": "market.depth", "cid": "cid-abcdef0123456789", "gen": i}})
+	return Record{Topic: "market.depth", Key: "BTCUSDT", TS: int64(i), Payload: body, Envelope: env}
 }
 
-func BenchmarkMemoryWrite(b *testing.B) {
-	m := NewMemory(1000)
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_ = m.Write(benchRecord(i))
-	}
-}
-
-func BenchmarkJournalWrite(b *testing.B) {
-	j, err := OpenJournal(filepath.Join(b.TempDir(), "bench.jsonl"))
+// BenchmarkJournalAppend is the hot path: one line per envelope, thousands a second.
+func BenchmarkJournalAppend(b *testing.B) {
+	j, err := OpenJournal(filepath.Join(b.TempDir(), "j.jsonl"))
 	if err != nil {
 		b.Fatal(err)
 	}
 	defer j.Close()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_ = j.Write(benchRecord(i))
-	}
-	_ = j.Flush()
-}
-
-func BenchmarkLakeFanOut(b *testing.B) {
-	j, err := OpenJournal(filepath.Join(b.TempDir(), "fan.jsonl"))
-	if err != nil {
-		b.Fatal(err)
-	}
-	defer j.Close()
-	l := New(NewMemory(1000), j)
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_ = l.Write(benchRecord(i))
-	}
-	_ = j.Flush()
-}
-
-func BenchmarkReplay(b *testing.B) {
-	const records = 20000
-	path := filepath.Join(b.TempDir(), "replay.jsonl")
-	j, _ := OpenJournal(path)
-	for i := 0; i < records; i++ {
-		_ = j.Write(benchRecord(i))
-	}
-	_ = j.Close()
+	rec := benchRecord(1)
+	b.SetBytes(int64(len(rec.Envelope) + len(rec.Payload)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		n, err := Replay(path, func(r Record) error { return nil })
-		if err != nil || n != records {
-			b.Fatalf("replay failed: %v %d", err, n)
+		if err := j.Write(rec); err != nil {
+			b.Fatal(err)
 		}
 	}
-	b.SetBytes(int64(records))
+}
+
+// BenchmarkLakeWrite measures the composite: journal plus placement, which is what
+// the recorder actually calls.
+func BenchmarkLakeWrite(b *testing.B) {
+	j, err := OpenJournal(filepath.Join(b.TempDir(), "j.jsonl"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer j.Close()
+	lk := New(j)
+	rec := benchRecord(1)
+	b.SetBytes(int64(len(rec.Envelope) + len(rec.Payload)))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := lk.Write(rec); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkPlacementDecision is the routing decision alone: it must stay in-memory
+// and allocation-light, because it runs for every record.
+func BenchmarkPlacementDecision(b *testing.B) {
+	sql, docs, kv := newSinks()
+	p := NewPlacement(DefaultPolicy(), sql, docs, kv)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = p.Route("model.fill")
+	}
 }
