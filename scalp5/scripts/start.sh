@@ -78,7 +78,7 @@ if [ "$KILL" = "1" ]; then
     alpha_signals.py skim_pump.py curve_rider.py churn.py multi_models.py stats_models.py \
     sympathy_lag.py slow_edges.py crypto_edges.py turtle_multi.py swing_v2.py swing_turtle.py \
     scalp_fast.py skim.py skim_ai.py grid.py hft.py movers.py flash.py fast_ignition.py \
-    market_agent.py signals.py heartbeat.py optimiser_svc.py master.py \
+    market_agent.py signals.py feeds.py heartbeat.py optimiser_svc.py master.py \
     bin/marketdata bin/recorder bin/busconsumer bin/healthpub bin/signalbus bin/envelopeapi
   do
     if pgrep -f "$pat" >/dev/null 2>&1; then
@@ -247,9 +247,11 @@ ok "health publisher and alert intake started"
 
 say "8 · intelligence producers"
 nohup python3 -u signals.py --every 10 --top 30 >"$LOGS/signals.log" 2>&1 &
+nohup python3 -u feeds.py --every 30 --symbols 40 >"$LOGS/feeds.log" 2>&1 &
 [ -x "$ROOT/forecast/forecast" ] && (cd "$ROOT/forecast" && nohup bash -c 'while true; do ./forecast --addr 127.0.0.1:8790; sleep 3; done' >"$LOGS/forecast.log" 2>&1 &)
 sleep 3
 pgrep -f "signals.py --every" >/dev/null && ok "signals publishing" || warn "signals.py did not stay up — see logs/signals.log"
+pgrep -f "feeds.py --every" >/dev/null && ok "feeds publishing" || warn "feeds.py did not stay up — see logs/feeds.log"
 
 say "9 · dashboard"
 nohup python3 -u master.py --host 0.0.0.0 --port 8799 >"$LOGS/master.log" 2>&1 &
