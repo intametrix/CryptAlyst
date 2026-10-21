@@ -30,20 +30,25 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 
 	// resume point
 	off, tracker := int64(0), newSpanTracker()
+	counts := map[string]int{}
 	progPath := segment + ".scan.progress"
 	if body, err := os.ReadFile(progPath); err == nil {
 		var prog struct {
-			Offset  int64       `json:"offset"`
-			Topics  []TopicSpan `json:"topics"`
-			Records int         `json:"records"`
-			Bytes   int64       `json:"bytes"`
+			Offset  int64          `json:"offset"`
+			Topics  []TopicSpan    `json:"topics"`
+			Records int            `json:"records"`
+			Bytes   int64          `json:"bytes"`
+			Counts  map[string]int `json:"counts"`
 		}
 		if json.Unmarshal(body, &prog) == nil && prog.Offset > 0 && prog.Offset < total {
 			off = prog.Offset
 			for _, sp := range prog.Topics {
 				tracker.restore(sp)
 			}
-			tracker.recs, tracker.bytes = prog.Records, prog.Bytes
+			tracker.recs, tracker.bytes, tracker.off = prog.Records, prog.Bytes, prog.Offset
+			if prog.Counts != nil {
+				counts = prog.Counts
+			}
 		}
 	}
 	if off > 0 {
@@ -53,7 +58,6 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 	}
 
 	// independent counter: the reconciliation KIMI required, done in the same pass
-	counts := map[string]int{}
 	r := bufio.NewReaderSize(f, 1<<20)
 	var pos = off
 	var lastGood = off
@@ -79,7 +83,7 @@ func BuildIndexForSegment(segment string, checkpointBytes int64) (SegmentStats, 
 			break
 		}
 		if pos >= nextCheckpoint {
-			_ = writeProgress(progPath, pos, tracker)
+			_ = writeProgress(progPath, pos, tracker, counts)
 			nextCheckpoint = pos + checkpointBytes
 		}
 	}
@@ -124,9 +128,9 @@ func lenCounts(m map[string]int) int {
 	return n
 }
 
-func writeProgress(path string, off int64, t *spanTracker) error {
+func writeProgress(path string, off int64, t *spanTracker, counts map[string]int) error {
 	recs, bytes, spans := t.snapshot()
-	body, err := json.Marshal(map[string]any{"offset": off, "records": recs, "bytes": bytes, "topics": spans})
+	body, err := json.Marshal(map[string]any{"offset": off, "records": recs, "bytes": bytes, "topics": spans, "counts": counts})
 	if err != nil {
 		return err
 	}
