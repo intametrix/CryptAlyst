@@ -207,6 +207,27 @@ def main():
                         log("%-15s CLOSE %-10s %-4s %+6.3f%% net %+6.3f%% %s" % (
                             bk.name, sym, p["side"], chg, net, reason))
                         bk.pos.pop(sym)
+                # a re-assessment requested from the dashboard: archive the book, start
+                # a fresh one and let the next scan pick its symbols again
+                rflag = os.path.join(STATE, "reassess_%s.flag" % bk.name)
+                if os.path.exists(rflag):
+                    try:
+                        import shutil as _sh
+                        _ad = os.path.join(STATE, "archive")
+                        os.makedirs(_ad, exist_ok=True)
+                        _sh.copy2(os.path.join(STATE, "pack_%s.json" % bk.name),
+                                  os.path.join(_ad, "pack_%s_%s.json" % (
+                                      bk.name, time.strftime("%Y%m%dT%H%M%S"))))
+                    except Exception:
+                        pass
+                    bk.pos, bk.trades = {}, []
+                    bk.equity = bk.start
+                    try:
+                        os.remove(rflag)
+                    except Exception:
+                        pass
+                    log("%-15s REASSESSED — new book, equity %.2f, scanning again" % (
+                        bk.name, bk.equity))
                 # a single-position close requested from the dashboard
                 import glob as _g
                 for fp in _g.glob(os.path.join(STATE, "close_%s_*.flag" % bk.name)):

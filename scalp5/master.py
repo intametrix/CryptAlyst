@@ -2586,6 +2586,23 @@ async function setCashIn(name){
   renderEngines();
 }
 
+async function reassessBook(name, btn){
+  if(!confirm("Re-assess "+name+"?\n\nThe current book is archived, its positions are dropped "+
+              "and a fresh book starts with its original equity. The engine then picks "+
+              "symbols again from the live data.")) return;
+  if(btn){ btn.disabled=true; btn.textContent="reassessing…"; }
+  var out={};
+  try{
+    out=await (await fetch("/api/book_reassess?engine="+encodeURIComponent(name),
+                           {cache:"no-store"})).json();
+  }catch(e){ out={error:e.message||String(e)}; }
+  var note=document.getElementById("booksnote");
+  if(note) note.textContent = out.ok
+    ? ("reassessed "+name+(out.requested?" (asked its owner)":" and restarted"))
+    : ("reassess failed: "+(out.error||"?"));
+  setTimeout(function(){ renderBooks(); }, 1500);
+}
+
 async function closeBook(name, btn){
   if(!confirm("Close "+name+"?\n\nEvery open position is flattened at the last traded price,\n"+
               "the trades are recorded as operator_close, and the book is disabled "+
@@ -3244,8 +3261,13 @@ async function renderBooks(){
             ((b.live===false)?("frozen "+Math.round((b.age_s||0)/60)+"m"):"live")+'</span>'+
           '<span style="flex:1"></span>'+
           '<b style="color:'+col+';font-size:14px">'+(tp>0?"+":"")+Number(tp).toFixed(2)+'%</b>'+
-        ' <button class="tbtn" onclick="event.stopPropagation();closeBook(\''+esc(b.engine)+'\',this)" '+
-        'style="border-color:#f85149;color:#ffb3ad;font-size:10px">close</button>'+
+        '<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">'+
+          '<button class="tbtn" onclick="event.stopPropagation();engineAction(\''+esc(b.engine)+'\',\'start\')">start</button>'+
+          '<button class="tbtn" onclick="event.stopPropagation();engineAction(\''+esc(b.engine)+'\',\'stop\')">stop</button>'+
+          '<button class="tbtn" onclick="event.stopPropagation();reassessBook(\''+esc(b.engine)+'\',this)">reassess</button>'+
+          '<button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
+            'onclick="event.stopPropagation();closeBook(\''+esc(b.engine)+'\',this)">close</button>'+
+        '</div>'+
         '</div>'+
         spark+
         '<div style="display:flex;gap:12px;margin-top:6px;font-family:var(--mono);font-size:11px">'+
@@ -6572,6 +6594,63 @@ class H(BaseHTTPRequestHandler):
             out.sort(key=lambda r: -(r["total"] or 0))
             return self._send(200, _json.dumps({"engines": out,
                                                 "alive": sum(1 for r in out if r["alive"])}),
+                              "application/json")
+        if p == "/api/book_reassess":
+            import json as _json, shutil as _sh
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            engine = (q.get("engine", [""])[0] or "").strip()
+            if not engine:
+                return self._send(400, _json.dumps({"error": "engine required"}),
+                                  "application/json")
+            stamp = time.strftime("%Y%m%dT%H%M%S")
+            src = os.path.join(HERE, "state", "pack_%s.json" % engine)
+            arch_dir = os.path.join(HERE, "state", "archive")
+            os.makedirs(arch_dir, exist_ok=True)
+            archived = None
+            if os.path.exists(src):
+                archived = os.path.join(arch_dir, "pack_%s_%s.json" % (engine, stamp))
+                try:
+                    _sh.copy2(src, archived)
+                except Exception:
+                    archived = None
+            if _owner_is_multi(engine):
+                flag = os.path.join(HERE, "state", "reassess_%s.flag" % engine)
+                with open(flag, "w") as fh:
+                    fh.write(str(int(time.time() * 1000)))
+                return self._send(200, _json.dumps({"ok": True, "requested": True,
+                                                    "engine": engine,
+                                                    "archived": archived}),
+                                  "application/json")
+            # standalone: archive, clear the book, restart so it re-picks its symbols
+            try:
+                import json as _json2
+                pack = _json2.load(open(src))
+            except Exception:
+                pack = None
+            if pack is not None:
+                pack["positions"] = []
+                pack["trades"] = []
+                pack["equity"] = pack.get("start_equity") or pack.get("equity")
+                pack["ts"] = int(time.time() * 1000)
+                pack["reassessed_at"] = int(time.time() * 1000)
+                with open(src + ".t", "w") as fh:
+                    _json2.dump(pack, fh)
+                os.replace(src + ".t", src)
+            import subprocess as _sp
+            for pat in ("%s.py" % engine, engine.replace("_", "") + ".py"):
+                _sp.run(["pkill", "-f", pat], capture_output=True)
+            time.sleep(0.5)
+            try:
+                import supervisor as _sup
+                for key in _sup.ENGINES:
+                    if os.path.basename(_sup.ENGINES[key][2]) in (
+                            "%s.py" % engine, engine.replace("_", "") + ".py"):
+                        _sup.start(key)
+                        break
+            except Exception:
+                pass
+            return self._send(200, _json.dumps({"ok": True, "restarted": True,
+                                                "engine": engine, "archived": archived}),
                               "application/json")
         if p == "/api/position_close":
             import json as _json
