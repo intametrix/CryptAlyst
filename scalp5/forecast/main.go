@@ -26,16 +26,16 @@ import (
 )
 
 type bar struct {
-	T int64
+	T             int64
 	O, H, L, C, V float64
 }
 
 type view struct {
 	Agent      string  `json:"agent"`
 	Side       string  `json:"side"`
-	Prob       float64 `json:"prob"`         // probability the trade direction is right
-	MovePct    float64 `json:"move_pct"`     // expected move over the horizon
-	Confidence float64 `json:"confidence"`   // 0..1
+	Prob       float64 `json:"prob"`       // probability the trade direction is right
+	MovePct    float64 `json:"move_pct"`   // expected move over the horizon
+	Confidence float64 `json:"confidence"` // 0..1
 	Note       string  `json:"note"`
 }
 
@@ -54,11 +54,22 @@ type forecast struct {
 	TS         int64   `json:"ts"`
 }
 
+// MIN_BARS is the warm-up floor. The agents read rolling windows (10/20/30/50),
+// and below this a window slice would index past the front of the series and
+// panic (e.g. cl[n-50:] with n=40). One guard, everywhere.
+const MIN_BARS = 50
+
+// neutral is the guarded answer while the series is still warming up.
+func neutral(agent, side string) view {
+	return view{Agent: agent, Side: side, Prob: 0.5, MovePct: 0, Confidence: 0,
+		Note: "warm-up: not enough bars"}
+}
+
 var (
-	mu       sync.Mutex
-	hits     = map[string][2]int{} // agent -> {correct, total}
-	cache    = map[string]cached{}
-	client   = &http.Client{Timeout: 6 * time.Second}
+	mu     sync.Mutex
+	hits   = map[string][2]int{} // agent -> {correct, total}
+	cache  = map[string]cached{}
+	client = &http.Client{Timeout: 6 * time.Second}
 )
 
 type cached struct {
@@ -162,6 +173,10 @@ func stdev(v []float64) float64 {
 
 // momentum: EMA slope plus recent return, direction-aware probability.
 func agentMomentum(bs []bar, side string) view {
+	if len(bs) < MIN_BARS {
+		return neutral("momentum", side)
+	}
+
 	cl := make([]float64, len(bs))
 	for i, b := range bs {
 		cl[i] = b.C
@@ -181,6 +196,10 @@ func agentMomentum(bs []bar, side string) view {
 
 // volume: is participation confirming the move or fading it.
 func agentVolume(bs []bar, side string) view {
+	if len(bs) < MIN_BARS {
+		return neutral("volume", side)
+	}
+
 	n := len(bs)
 	recent, prior := 0.0, 0.0
 	for i := n - 10; i < n; i++ {
@@ -210,6 +229,10 @@ func agentVolume(bs []bar, side string) view {
 
 // volatility: expected range vs the stop/target distances we actually use.
 func agentVolatility(bs []bar, side string, horizon int) view {
+	if len(bs) < MIN_BARS {
+		return neutral("volatility", side)
+	}
+
 	a := atr(bs, 14)
 	px := bs[len(bs)-1].C
 	atrPct := 0.0
@@ -229,11 +252,15 @@ func agentVolatility(bs []bar, side string, horizon int) view {
 	}
 	return view{Agent: "volatility", Side: side, Prob: prob, MovePct: exp,
 		Confidence: conf,
-		Note: fmt.Sprintf("atr %.3f%%, expected %.3f%% over %ds", atrPct, exp, horizon)}
+		Note:       fmt.Sprintf("atr %.3f%%, expected %.3f%% over %ds", atrPct, exp, horizon)}
 }
 
 // reversion: stretched from the mean -> the move is more likely to stall.
 func agentReversion(bs []bar, side string) view {
+	if len(bs) < MIN_BARS {
+		return neutral("reversion", side)
+	}
+
 	n := len(bs)
 	cl := make([]float64, n)
 	for i, b := range bs {
@@ -265,11 +292,15 @@ func agentReversion(bs []bar, side string) view {
 	}
 	return view{Agent: "reversion", Side: side, Prob: prob, MovePct: math.Abs(dev),
 		Confidence: math.Min(1, math.Abs(dev)/1.2),
-		Note: fmt.Sprintf("%.3f%% from 30m vwap", dev)}
+		Note:       fmt.Sprintf("%.3f%% from 30m vwap", dev)}
 }
 
 // ma: classic moving-average structure (20/50 plus price vs them).
 func agentMA(bs []bar, side string) view {
+	if len(bs) < MIN_BARS {
+		return neutral("ma", side)
+	}
+
 	n := len(bs)
 	cl := make([]float64, n)
 	for i, b := range bs {
@@ -294,11 +325,15 @@ func agentMA(bs []bar, side string) view {
 	}
 	return view{Agent: "ma", Side: side, Prob: prob, MovePct: math.Abs(gap),
 		Confidence: math.Min(1, math.Abs(gap)/0.8),
-		Note: fmt.Sprintf("sma20-sma50 %.3f%%, price %s sma20", gap, map[bool]string{true: "above", false: "below"}[above])}
+		Note:       fmt.Sprintf("sma20-sma50 %.3f%%, price %s sma20", gap, map[bool]string{true: "above", false: "below"}[above])}
 }
 
 // breakout: distance to the 20-bar range edge, the level a move must clear.
 func agentBreakout(bs []bar, side string) view {
+	if len(bs) < MIN_BARS {
+		return neutral("breakout", side)
+	}
+
 	n := len(bs)
 	hi, lo := bs[n-20].H, bs[n-20].L
 	for _, b := range bs[n-20:] {
@@ -333,12 +368,16 @@ func agentBreakout(bs []bar, side string) view {
 		}
 	}
 	return view{Agent: "breakout", Side: side, Prob: prob, MovePct: math.Abs(move),
-		Confidence: math.Abs(pos - 0.5) * 2,
-		Note: fmt.Sprintf("%.0f%% of 20-bar range, %.3f%% to the edge", pos*100, math.Abs(move))}
+		Confidence: math.Abs(pos-0.5) * 2,
+		Note:       fmt.Sprintf("%.0f%% of 20-bar range, %.3f%% to the edge", pos*100, math.Abs(move))}
 }
 
 // pressure: where each bar closes inside its own range, averaged.
 func agentPressure(bs []bar, side string) view {
+	if len(bs) < MIN_BARS {
+		return neutral("pressure", side)
+	}
+
 	n := len(bs)
 	sum := 0.0
 	cnt := 0
@@ -357,8 +396,8 @@ func agentPressure(bs []bar, side string) view {
 		prob = 1 - prob
 	}
 	return view{Agent: "pressure", Side: side, Prob: prob, MovePct: 0,
-		Confidence: math.Abs(p - 0.5) * 2,
-		Note: fmt.Sprintf("avg close in range %.2f over 10 bars", p)}
+		Confidence: math.Abs(p-0.5) * 2,
+		Note:       fmt.Sprintf("avg close in range %.2f over 10 bars", p)}
 }
 
 // ---- supervisor ---------------------------------------------------------
@@ -407,7 +446,7 @@ func blend(symbol, side string, horizon int) (forecast, error) {
 		w := 0.5 + acc // 0.5..1.5
 		wsum += w
 		psum += vs[i].Prob * w
-		if vs[i].MovePct > 0 {      // agents that estimate magnitude only
+		if vs[i].MovePct > 0 { // agents that estimate magnitude only
 			msum += vs[i].MovePct * w
 			mw += w
 		}
@@ -499,7 +538,7 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "forecast",
 			"agents": []string{"momentum", "volume", "volatility", "reversion",
 				"ma", "breakout", "pressure"},
-			"ts":     time.Now().UnixMilli()})
+			"ts": time.Now().UnixMilli()})
 	})
 
 	mux.HandleFunc("/forecast", func(w http.ResponseWriter, r *http.Request) {

@@ -247,7 +247,7 @@ ok "health publisher and alert intake started"
 
 say "8 · intelligence producers"
 nohup python3 -u signals.py --every 10 --top 30 >"$LOGS/signals.log" 2>&1 &
-[ -x "$ROOT/forecast/forecast" ] && (cd "$ROOT/forecast" && nohup ./forecast --addr 127.0.0.1:8790 >"$LOGS/forecast.log" 2>&1 &)
+[ -x "$ROOT/forecast/forecast" ] && (cd "$ROOT/forecast" && nohup bash -c 'while true; do ./forecast --addr 127.0.0.1:8790; sleep 3; done' >"$LOGS/forecast.log" 2>&1 &)
 sleep 3
 pgrep -f "signals.py --every" >/dev/null && ok "signals publishing" || warn "signals.py did not stay up — see logs/signals.log"
 

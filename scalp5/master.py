@@ -7249,6 +7249,7 @@ class H(BaseHTTPRequestHandler):
             probe("market data", "http://127.0.0.1:8796/health")
             probe("recorder", "http://127.0.0.1:8801/stats")
             probe("explorer", "http://127.0.0.1:8802/api/stats")
+            probe("forecast", "http://127.0.0.1:8790/forecast?symbol=BTCUSDT&side=buy&horizon=300")
             try:
                 a = jget("http://127.0.0.1:8799/api/all", timeout=10.0)
                 live = sum(1 for e in a.get("engines", []) if e.get("alive"))
