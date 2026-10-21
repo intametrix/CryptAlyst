@@ -1,31 +1,30 @@
-// Real RocksDB — disabled by default because it needs librocksdb and CGO.
+//go:build rocksdb
+
+// Real RocksDB, linked through CGO. The library is built by scripts/build-rocksdb.sh
+// into third_party/rocksdb-src/librocksdb.a; build with:
 //
-// To enable it:
-//   brew install rocksdb              (or build librocksdb from source)
-//   go get github.com/linxGnu/grocksdb
-//   git mv rocksdb.go.disabled rocksdb.go
-//   go build -tags rocksdb ./...
-//
-//
-//	go get github.com/linxGnu/grocksdb
-//	brew install rocksdb            # or build librocksdb from source
+//	CGO_CFLAGS="-I$PWD/third_party/rocksdb-src/include" \
+//	CGO_LDFLAGS="$PWD/third_party/rocksdb-src/librocksdb.a -lstdc++ -lm" \
 //	go build -tags rocksdb ./...
 //
 // The interface is identical to the LSM store, so switching is a flag, not a
 // rewrite. Kept in the tree so the claim "we use RocksDB" is either true or
 // provably one library install away — not a diagram.
 
+package store
+
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/linxGnu/grocksdb"
 )
 
 type Rocks struct {
-	db  *grocksdb.DB
-	ro  *grocksdb.ReadOptions
-	wo  *grocksdb.WriteOptions
+	db *grocksdb.DB
+	ro *grocksdb.ReadOptions
+	wo *grocksdb.WriteOptions
 }
 
 func OpenRocks(path string) (*Rocks, error) {
@@ -84,10 +83,14 @@ func (r *Rocks) Get(id string) (Envelope, bool, error) {
 }
 
 func (r *Rocks) Count() (int, error) {
+	// only the byid/ keyspace: latest/ keys hold the same envelopes
 	it := r.db.NewIterator(r.ro)
 	defer it.Close()
 	n := 0
 	for it.Seek([]byte(prefixByID)); it.Valid(); it.Next() {
+		if !strings.HasPrefix(string(it.Key().Data()), prefixByID) {
+			break
+		}
 		n++
 	}
 	return n, it.Err()

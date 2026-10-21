@@ -22,7 +22,8 @@ func main() {
 	kvPath := flag.String("kv", "", "kv store path")
 	sqlPath := flag.String("sql", "", "sqlite path")
 	docsDir := flag.String("docs", "", "documents directory")
-	lsmPath := flag.String("lsm", "", "rocksdb-class store (pebble) directory")
+	lsmPath := flag.String("lsm", "", "lsm store (pebble) directory")
+	rocksPath := flag.String("rocksdb", "", "rocksdb directory (needs -tags rocksdb build)")
 	topic := flag.String("topic", "", "topic for latest")
 	key := flag.String("key", "", "key for latest")
 	packsDir := flag.String("packs", "", "directory holding pack_*.json for sync")
@@ -46,6 +47,15 @@ func main() {
 				s.Close()
 			} else {
 				fmt.Fprintf(os.Stderr, "sql: %v\n", err)
+			}
+		}
+		if *rocksPath != "" {
+			if r, err := store.OpenRocks(*rocksPath); err == nil {
+				n, _ := r.Count()
+				fmt.Printf("rocks  %-40s %d envelopes\n", *rocksPath, n)
+				r.Close()
+			} else {
+				fmt.Fprintf(os.Stderr, "rocksdb: %v\n", err)
 			}
 		}
 		if *lsmPath != "" {

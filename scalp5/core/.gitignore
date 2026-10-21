@@ -1,0 +1,3 @@
+
+# RocksDB build output: 770 MB of library, reproduced by scripts/build-rocksdb.sh
+third_party/

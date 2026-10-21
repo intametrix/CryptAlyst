@@ -59,24 +59,32 @@ timeout and say so rather than hanging.
 
 ## RocksDB, precisely
 
-**RocksDB is not in the build.** It needs `librocksdb` and CGO, and this machine has
-neither (no Homebrew, no library). What is in the build is **Pebble**, CockroachDB's
-pure-Go LSM — the same shape as RocksDB: sorted keys, point lookups, range scans,
-snapshots, write batches.
-
-The real adapter is parked in `rocksdb.go.disabled`, complete and compiling once the
-library exists:
+**RocksDB is built and linked.** `scripts/build-rocksdb.sh` compiles v10.10.1 into
+`third_party/rocksdb10/librocksdb.a` (770 MB, not committed), and
+`scripts/run-with-rocksdb.sh` sets the CGO flags so `-tags rocksdb` links it.
 
 ```bash
-brew install rocksdb
-go get github.com/linxGnu/grocksdb
-git mv rocksdb.go.disabled rocksdb.go
-go build -tags rocksdb ./...
+./scripts/build-rocksdb.sh                       # once, ~10 minutes
+./scripts/run-with-rocksdb.sh go test -tags rocksdb ./internal/store/
+./scripts/run-with-rocksdb.sh go build -tags rocksdb -o bin/recorder ./cmd/recorder
 ```
 
-Saying "we use RocksDB" when the binary links Pebble would be false; saying "we use a
-RocksDB-class LSM, and here is the RocksDB adapter one install away" is true, so that
-is what the platform says.
+Three details that cost time to discover, so they are written down:
+
+- **v10.10.1 is the version that matches grocksdb v1.10.8.** v1.11 wants a newer
+  C API, v1.9 wants an older one; either way the build fails with
+  "could not determine what C.rocksdb_… refers to".
+- **Snappy is disabled** (`USE_SNAPPY=0`) because the machine has no libsnappy, but
+  the binding still asks for `-lsnappy`, so a one-symbol stub library satisfies the
+  linker. Everything else (zstd, lz4, bz2, zlib) comes from /opt/homebrew/lib.
+- **`DISABLE_WARNING_AS_ERROR=1`** is required: RocksDB's Makefile turns the modern
+  SDK's libc++ deprecation warnings into errors.
+
+Without the tag the platform still builds and runs; `--rocksdb` is then accepted and
+declines politely rather than the binary failing to exist.
+
+Pebble remains available as `--lsm`: same interface, no C++ toolchain, useful on a
+machine where the library has not been built.
 
 ## Durability of the projections
 
