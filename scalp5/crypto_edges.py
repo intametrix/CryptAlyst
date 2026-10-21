@@ -26,6 +26,7 @@ import random
 import time
 import urllib.error
 import urllib.request
+from lib import equity
 
 try:
     import tactics as _tactics
@@ -161,7 +162,7 @@ def jget(url, timeout=10.0, attempt=0):
 class Book:
     def __init__(self, name, cfg):
         self.name, self.cfg = name, cfg
-        self.equity = 2000.0
+        self.equity = equity.for_book(name, 2000.0)
         self.positions, self.trades = {}, []
         self.opened = 0
 

@@ -17,6 +17,7 @@ All targets are >= 0.5%, so the 0.2% round trip is a third of the edge or less.
     python3 alpha.py --seconds 86400
 """
 import argparse, json, os, statistics, time, urllib.request
+from lib import equity
 
 try:
     import tactics as _tactics
@@ -51,7 +52,7 @@ def jget(u, t=8.0, timeout=None):
 class Book:
     def __init__(self, name):
         self.name, self.cfg = name, CFG[name]
-        self.equity = 5000.0; self.pos = {}; self.trades = []; self.opened = 0
+        self.equity = equity.for_book(name, 5000.0); self.pos = {}; self.trades = []; self.opened = 0
 
     def mark(self, sym, px):
         p = self.pos.get(sym)

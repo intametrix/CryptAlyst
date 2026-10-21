@@ -346,15 +346,19 @@ def main():
     ap.add_argument("--seconds", type=int, default=86400)
     ap.add_argument("--tick", type=float, default=0.5)
     ap.add_argument("--max-positions", type=int, default=6)
+    ap.add_argument("--only", default="", help="comma separated strategies")
     args = ap.parse_args()
+
+    only = [x.strip() for x in (args.only or "").split(",") if x.strip()]
+    strats = [s for s in load_lineage_strategies() if (not only or s[0] in only)]
 
     seed_lineage()
     log("CRYPTO STRATEGIES — paper only, fed by the platform signal stream")
-    for name, _, cfg in load_lineage_strategies():
+    for name, _, cfg in strats:
         log("  %-16s tp %.1f sl %.1f hold %ds risk %.1f%%" % (
             name, cfg["tp"], cfg["sl"], cfg["hold"], cfg["risk"]))
 
-    books = {name: Book(name, cfg) for name, _, cfg in load_lineage_strategies()}
+    books = {name: Book(name, cfg) for name, _, cfg in strats}
     started = time.time()
     last = 0.0
 

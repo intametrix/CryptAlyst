@@ -331,9 +331,12 @@ def main():
     ap.add_argument("--top", type=int, default=40)
     ap.add_argument("--loop", type=float, default=30.0)
     ap.add_argument("--probation", type=float, default=PROBATION_S)
+    ap.add_argument("--only", default="", help="comma separated books")
     a = ap.parse_args()
 
-    books = {n: Book(n, a.start) for n in NAMES}
+    only = [x.strip() for x in (a.only or "").split(",") if x.strip()]
+    names = [n for n in NAMES if (not only or n in only)]
+    books = {n: Book(n, a.start) for n in names}
     # each model gets a different slice of the liquid universe
     log("MODELS10 — %d strategies, probation %.0fs, risk %.2f%%" % (len(books), a.probation, RISK))
     while True:
@@ -348,7 +351,7 @@ def main():
             continue
         baskets = {}
         per = 10          # turbo: ten names per model basket
-        for i, n in enumerate(NAMES):
+        for i, n in enumerate(names):
             baskets[n] = syms[i * per:(i + 1) * per] or syms[:per]
 
         px = {}
