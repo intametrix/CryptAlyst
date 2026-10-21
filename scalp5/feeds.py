@@ -16,6 +16,48 @@ import argparse, json, os, time, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 BACKEND = "http://127.0.0.1:8799"; FAPI = "https://fapi.binance.com"
+OI_HIST_PATH = os.path.join(STATE, "oi_history.json")
+OI_MAX_AGE_S = 3600.0   # keep one hour of OI samples per symbol
+
+
+def oi_change_pct(hist, now, window_s):
+    """Percent change in OI over window_s, from the oldest sample inside the window.
+
+    hist is [(ts, oi)] oldest-first; now and window_s are epoch seconds. Returns
+    None when there is no sample old enough to define the window.
+    """
+    if not hist:
+        return None
+    if len(hist) < 2:
+        return None
+    cutoff = now - window_s
+    base = None
+    for ts, val in hist:
+        if ts >= cutoff:
+            base = val
+            break
+    if base in (None, 0):
+        return None
+    return 100.0 * (hist[-1][1] / base - 1.0)
+
+
+def load_oi_history():
+    try:
+        with open(OI_HIST_PATH) as fh:
+            d = json.load(fh)
+        return {k: [(float(t), float(v)) for t, v in v] for k, v in (d.get("hist") or {}).items()}
+    except Exception:
+        return {}
+
+
+def save_oi_history(hist):
+    try:
+        os.makedirs(STATE, exist_ok=True)
+        with open(OI_HIST_PATH + ".t", "w") as fh:
+            json.dump({"ts": int(time.time() * 1000), "hist": hist}, fh)
+        os.replace(OI_HIST_PATH + ".t", OI_HIST_PATH)
+    except Exception:
+        pass
 
 def jget(u, t=8.0):
     with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "feeds/1"}), timeout=t) as r:
@@ -51,7 +93,7 @@ def main():
     ap.add_argument("--symbols", type=int, default=12)
     a = ap.parse_args()
     print("FEEDS — open interest, book imbalance, taker ratio", flush=True)
-    prev_oi = {}
+    hist = load_oi_history()
     while True:
         t0 = time.time()
         try:
@@ -60,26 +102,32 @@ def main():
             uni = []
         syms = [u["s"] for u in uni if str(u.get("s", "")).endswith("USDT")][:a.symbols]
         out = {}
+        now = time.time()
         for s in syms:
             b = safe(lambda s=s: book(s))
             if not b: continue
             cur = safe(lambda s=s: oi(s))
-            chg = None
-            if cur is not None and prev_oi.get(s):
-                chg = 100 * (cur / prev_oi[s] - 1)
-            if cur is not None: prev_oi[s] = cur
-            print("  " + s, flush=True) if False else None
+            if cur is not None:
+                h = hist.setdefault(s, [])
+                h.append((now, cur))
+                hist[s] = [(ts, v) for ts, v in h if now - ts <= OI_MAX_AGE_S]
+            h = hist.get(s, [])
             out[s] = {"mid": b["mid"], "imbalance": round(b["imbalance"], 4),
                       "bid": round(b["bid"], 2), "ask": round(b["ask"], 2),
-                      "oi": cur, "oi_chg_pct": None if chg is None else round(chg, 3),
+                      "oi": cur,
+                      "oi_chg_5m": round(oi_change_pct(h, now, 300), 3) if len(h) > 1 else None,
+                      "oi_chg_15m": round(oi_change_pct(h, now, 900), 3) if len(h) > 1 else None,
+                      "oi_chg_1h": round(oi_change_pct(h, now, 3600), 3) if len(h) > 1 else None,
+                      "oi_chg_pct": round(oi_change_pct(h, now, 300), 3) if len(h) > 1 else None,
                       "taker_ratio": safe(lambda s=s: taker(s))}
+        save_oi_history(hist)
         os.makedirs(STATE, exist_ok=True)
         with open(os.path.join(STATE, "features.json.t"), "w") as fh:
             json.dump({"ts": int(time.time() * 1000), "features": out}, fh)
         os.replace(os.path.join(STATE, "features.json.t"), os.path.join(STATE, "features.json"))
         print("%s  %d symbols  imbalance %.3f  oi tracked %d" % (
             time.strftime("%H:%M:%S"), len(out),
-            sum(v["imbalance"] for v in out.values()) / max(1, len(out)), len(prev_oi)), flush=True)
+            sum(v["imbalance"] for v in out.values()) / max(1, len(out)), len(hist)), flush=True)
         time.sleep(max(5.0, a.every - (time.time() - t0)))
 
 if __name__ == "__main__": main()
