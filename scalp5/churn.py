@@ -41,6 +41,8 @@ def main():
         for s in list(pos):
             p = pos[s]
             if time.time() - p["t"] >= a.hold and s in px:
+                if not p.get("entry"):
+                    continue   # zero entry means no real fill price; never divide by it
                 chg = (px[s] / p["entry"] - 1) * 100 * (1 if p["side"] == "buy" else -1)
                 if chg <= 0:
                     continue          # profit-only: a short waits until it is green
