@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="780" viewBox="0 0 1660 780" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1660" height="780" fill="#0b1118"/>
+<marker id="a-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="a-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="40" y="46" fill="#e6eef8" font-size="20" font-weight="700">How the lake chooses — a decision tree</text>
+<text x="40" y="68" fill="#8ea0b6" font-size="12">what lands where, how long it stays, and when a segment is sealed</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">every branch is a rule, not a habit</text>
+<polygon points="830,78.0 1040.0,120 830,162.0 620.0,120" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="830" y="124.0" fill="#e6eef8" font-size="10" text-anchor="middle">an envelope reaches the recorder</text>
+<path d="M 830,162 L 830,208" fill="none" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-control)"/>
+<polygon points="830,208.0 1040.0,250 830,292.0 620.0,250" fill="#221a10" stroke="#f5b544" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="830" y="254.0" fill="#e6eef8" font-size="10" text-anchor="middle">is it a trading outcome?</text>
+<path d="M 620,250 L 520,250" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
+<rect x="120" y="195" width="400" height="110" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="132" y="215" fill="#f5b544" font-size="8.5" font-weight="700" letter-spacing="0.08em">SILVER — THE TRADE RECORD</text>
+<text x="132" y="233" fill="#e6eef8" font-size="11.5" font-weight="600">ledger/&lt;engine&gt;.jsonl</text>
+<text x="508" y="233" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="132" y="250" fill="#e6eef8" font-size="11.5" font-weight="600">state/fills.jsonl</text>
+<text x="508" y="250" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="132" y="267" fill="#8ea0b6" font-size="11.5" font-weight="400">append only, never expired</text>
+<text x="508" y="267" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="536" y="240" fill="#8ea0b6" font-size="9.5" text-anchor="end" font-weight="400">yes</text>
+<path d="M 830,292 L 830,338" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-evidence)"/>
+<text x="842" y="320" fill="#8ea0b6" font-size="9.5" text-anchor="start" font-weight="400">no</text>
+<polygon points="830,338.0 1060.0,380 830,422.0 600.0,380" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="830" y="384.0" fill="#e6eef8" font-size="10" text-anchor="middle">is it a market or intel topic?</text>
+<path d="M 1060,380 L 1150,380" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
+<rect x="1150" y="325" width="420" height="110" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1162" y="345" fill="#a879ff" font-size="9.5" font-weight="700" letter-spacing="0.08em">BRONZE — THE JOURNAL</text>
+<text x="1162" y="363" fill="#8ea0b6" font-size="11.5" font-weight="400">one JSONL line per envelope</text>
+<text x="1558" y="363" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1162" y="380" fill="#8ea0b6" font-size="11.5" font-weight="400">read by the explorer and the historian</text>
+<text x="1558" y="380" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1130" y="370" fill="#8ea0b6" font-size="9.5" text-anchor="end" font-weight="400">yes</text>
+<path d="M 600,380 L 520,380" fill="none" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-control)"/>
+<rect x="120" y="325" width="400" height="110" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="132" y="345" fill="#7f8ea3" font-size="9.5" font-weight="700" letter-spacing="0.08em">CONTROL AND HEALTH</text>
+<text x="132" y="363" fill="#8ea0b6" font-size="11.5" font-weight="400">seven-day retention</text>
+<text x="508" y="363" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="132" y="380" fill="#8ea0b6" font-size="11.5" font-weight="400">small, high value, short lived</text>
+<text x="508" y="380" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="540" y="370" fill="#8ea0b6" font-size="9.5" text-anchor="start" font-weight="400">no</text>
+<path d="M 830,422 L 830,500" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-evidence)"/>
+<polygon points="830,503.0 1040.0,545 830,587.0 620.0,545" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.85" stroke-width="1.2"/>
+<text x="830" y="549.0" fill="#e6eef8" font-size="10" text-anchor="middle">is the segment over 1 GB?</text>
+<path d="M 1040,545 L 1150,545" fill="none" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-control)"/>
+<rect x="1150" y="495" width="420" height="100" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1162" y="515" fill="#7f8ea3" font-size="10.5" font-weight="700" letter-spacing="0.08em">SEAL AND GZIP</text>
+<text x="1162" y="533" fill="#8ea0b6" font-size="11.5" font-weight="400">the segment becomes immutable</text>
+<text x="1558" y="533" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1162" y="550" fill="#8ea0b6" font-size="11.5" font-weight="400">byte offsets in the index stay valid</text>
+<text x="1558" y="550" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1130" y="535" fill="#8ea0b6" font-size="9.5" text-anchor="end" font-weight="400">yes</text>
+<path d="M 620,545 L 520,545" fill="none" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-intel)"/>
+<rect x="120" y="495" width="400" height="100" rx="9" fill="#0d1f1a" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="132" y="515" fill="#38d39f" font-size="10.5" font-weight="700" letter-spacing="0.08em">KEEP APPENDING</text>
+<text x="132" y="533" fill="#8ea0b6" font-size="11.5" font-weight="400">the hot file stays small</text>
+<text x="508" y="533" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="132" y="550" fill="#8ea0b6" font-size="11.5" font-weight="400">a cold query reads its tail</text>
+<text x="508" y="550" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="540" y="535" fill="#8ea0b6" font-size="9.5" text-anchor="start" font-weight="400">no</text>
+<text x="120" y="650" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">Each level answers one question: what is it, how long does it live, is it big enough to seal.</text>
+<text x="120" y="672" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">Nothing is deleted by a rule that is not drawn here — and the tree is deliberately short enough to check.</text>
+</svg>

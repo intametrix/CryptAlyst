@@ -183,7 +183,7 @@
 <text x="1124.25" y="989" fill="#7f8ea3" font-size="17" text-anchor="middle" letter-spacing="0.12em">CONTROL</text>
 <line x1="150" y1="1420" x2="2250" y2="1420" stroke="#24374f"/>
 <text x="150" y="1470" fill="#8ea0b6" font-size="22">Platform build 1.0.0 · 823eb7a · 2026-10-21</text>
-<text x="150" y="1512" fill="#5a6b80" font-size="19">© 2026 CryptAlyst · designed and built by the CryptAlyst engineering team · prepared for the operator</text>
+<text x="150" y="1512" fill="#5a6b80" font-size="19">© 2026 CryptAlyst · designed by Andrew Preston · built by the CryptAlyst engineering team</text>
 <text x="2250" y="1470" fill="#5a6b80" font-size="19" text-anchor="end">seven contexts · eight figures · four levels</text>
 <text x="2250" y="1512" fill="#3f4d60" font-size="17" text-anchor="end">domain model · revision 1.0</text>
 <path d="M52,70 L88,70 M70,52 L70,88" stroke="#2c405a" stroke-width="1.4"/>

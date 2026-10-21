@@ -4,7 +4,7 @@
 
 Seven bounded contexts, one contract between them, and a record that can be read without the platform running.
 
-**Platform build 1.0.0 · 823eb7a · 2026-10-21**  ·  domain model · revision 1.0  ·  © 2026 CryptAlyst · designed and built by the CryptAlyst engineering team · prepared for the operator
+**Platform build 1.0.0 · 823eb7a · 2026-10-21**  ·  domain model · revision 1.0  ·  © 2026 CryptAlyst · designed by Andrew Preston · built by the CryptAlyst engineering team
 
 ## Contents
 
@@ -17,9 +17,11 @@ Seven bounded contexts, one contract between them, and a record that can be read
 7. [Level 2 — the recorder, the only writer](#recorder) — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
 8. [Level 3 — the lake, what is actually on disk](#lake) — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
 9. [Level 4 — beneath the lake](#beneath) — The filesystem properties that let a case file be called evidence a year later.
-10. [Level 2 — control, what may change behaviour](#control) — What may change behaviour — supervise and stop — and what STOP must never touch.
-11. [Crossing concerns — time, identity and generations](#crossing) — Time, identity and generations, modelled once in the envelope rather than per context.
-12. [What the model deliberately refuses to do](#failures) — The boundaries the model will not pretend to cross, stated so they can be argued with.
+10. [Level 3 — the data stores, as they exist](#stores) — Every place data is actually written on this machine, in which format, by which process, for how long.
+11. [Level 3 — how the lake chooses](#tree) — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
+12. [Level 2 — control, what may change behaviour](#control) — What may change behaviour — supervise and stop — and what STOP must never touch.
+13. [Crossing concerns — time, identity and generations](#crossing) — Time, identity and generations, modelled once in the envelope rather than per context.
+14. [What the model deliberately refuses to do](#failures) — The boundaries the model will not pretend to cross, stated so they can be argued with.
 
 ### Figures
 
@@ -33,6 +35,8 @@ Seven bounded contexts, one contract between them, and a record that can be read
 | 6 | The recorder | one writer, hops recorded, derived references attached |
 | 7 | The lake | journal, line format, index, retention, replay |
 | 8 | Control | supervise, stop, and what STOP must never touch |
+| 9 | Data stores | every store on disk: format, writer, reader, lifetime |
+| 10 | How the lake chooses | the rules that decide where data lands and how long it lives |
 
 ---
 
@@ -215,6 +219,50 @@ Underneath the lake there is a filesystem and nothing else. The properties that 
 | offsets in memory, rebuilt on boot | the index is disposable, the journal is not |
 
 The separation matters architecturally: the journal is the durable fact, the index is a convenience that can be thrown away and rebuilt. A corruption in the index costs a restart; a corruption in the journal costs history. Only the second one is serious, and the design keeps them apart.
+
+---
+
+## Level 3 — the data stores, as they exist
+
+> **What this shows** — Every place data is actually written on this machine, in which format, by which process, for how long.
+
+![Eight stores. The journal is the only one that is a record; the rest are derived, cached, archived or diagnostic.](fig/09-stores.png)
+
+*Eight stores. The journal is the only one that is a record; the rest are derived, cached, archived or diagnostic.*
+
+It is worth being literal about storage, because most architectures hide their stores behind services. Here there are eight, and every one of them is a file you can open.
+
+The journal is the record: 60 GB of JSONL, one envelope per line, written by the recorder alone. The datasets are derived from it by the historian. Live state is what the books currently hold, rewritten in place and explicitly not a record. Ledgers are the per-engine trade files, appended by the engines themselves. Archives are copies taken before a reset. The index is memory, rebuilt at boot. Logs are diagnostic. Older journals are kept for replay comparison.
+
+| Store | Format | Written by | Lifetime |
+|---|---|---|---|
+| state/lake3/envelopes.jsonl | JSONL | recorder | the record; rotated and expired by policy |
+| datasets/ | CSV + JSON | historian | rebuilt on demand |
+| state/pack_*.json | JSON | each book | until the next write |
+| ledger/*.jsonl | JSONL | each engine | append only, never expired |
+| state/archive_* | JSON | control on reset | kept for recovery |
+| state/lake, lake2, lake4 | JSONL | older recorders | cold, for comparison |
+| index (memory) | offsets | the explorer | rebuilt on boot |
+| logs/ | text | every process | diagnostic |
+
+---
+
+## Level 3 — how the lake chooses
+
+> **What this shows** — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
+
+![One question per level: what is it, how long does it live, is it big enough to seal. Nothing is deleted by a rule that is not drawn here.](fig/10-decision-tree.png)
+
+*One question per level: what is it, how long does it live, is it big enough to seal. Nothing is deleted by a rule that is not drawn here.*
+
+Retention is not a setting in a configuration file; it is a short tree. An envelope arrives, and the first question is whether it is a trading outcome. Outcomes go to the silver record — the ledger and the fills file — which is never rotated and never expired, because a trade record that disappears is not a record.
+
+Everything else goes to the bronze journal. There the topic class decides the lifetime: market and intelligence traffic is the bulk of the volume and lives long enough to replay; control and health messages are small, high-value and short-lived. Finally the segment is measured: past a gigabyte it is sealed and compressed, and the index keeps pointing into it.
+
+- a trading outcome is never expired; it is the part of the record that must survive
+- the journal is the default, and its lifetime is decided by topic class, not by age alone
+- sealing is about the size of the hot file, not about the calendar
+- sealing never invalidates the index: offsets stay valid because the line does not change
 
 ---
 

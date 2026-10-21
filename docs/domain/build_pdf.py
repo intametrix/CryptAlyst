@@ -116,6 +116,7 @@ def table(head, rows, size=8.8):
             cells[i].text = ""
             run = cells[i].paragraphs[0].add_run(val)
             run.font.size = Pt(size)
+    # no trailing paragraph: it is what pushes a blank page when a table ends a page
 
 
 def figure(name, caption, max_h=3.95):
@@ -253,7 +254,7 @@ shows("Where this document comes from, and how to regenerate it.")
 para(content.VERSION + "   ·   " + content.REVISION, size=9.6, colour=INK)
 para(content.COPYRIGHT, size=9.2, colour=MUTED)
 para("The text lives once in content.py; the Markdown and this PDF are both generated from it, so "
-     "they cannot disagree. The nine figures are drawn as SVG by diagrams.py and cover.py, rendered "
+     "they cannot disagree. The figures are drawn as SVG by diagrams.py and cover.py, rendered "
      "to PNG by render_figs.py, and placed here by build_pdf.py.", size=9.4)
 table(["Artifact", "Command"], [
     ["figures", "python3 diagrams.py && python3 cover.py && python3 render_figs.py"],

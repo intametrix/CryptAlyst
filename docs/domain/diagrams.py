@@ -79,6 +79,18 @@ class Fig:
             yy += 17
         return self
 
+    def diamond(self, cx, cy, w, h, text, colour):
+        c = COLOUR[colour]
+        pts = f"{cx},{cy-h/2} {cx+w/2},{cy} {cx},{cy+h/2} {cx-w/2},{cy}"
+        self.parts.append(f'<polygon points="{pts}" fill="{FILL[colour]}" stroke="{c}" '
+                          f'stroke-opacity="0.85" stroke-width="1.2"/>')
+        words = text.split("\n")
+        for i, word in enumerate(words):
+            dy = (i - (len(words) - 1) / 2) * 14 + 4
+            self.parts.append(f'<text x="{cx}" y="{cy+dy}" fill="{INK}" font-size="10" '
+                              f'text-anchor="middle">{html.escape(word)}</text>')
+        return self
+
     def arrow(self, pts, colour, dashed=False, width=1.4, label=None, lx=0, ly=0, anchor="start"):
         d = "M " + " L ".join(f"{a},{b}" for a, b in pts)
         dash = ' stroke-dasharray="5 4"' if dashed else ""
@@ -406,7 +418,123 @@ def control():
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "08-control.svg"))
 
 
-ALL = [context_map, envelope, market_data, book_aggregate, risk_gate, recorder, lake, control]
+
+# ---------------------------------------------------------------- 9 · data stores
+def stores():
+    f = Fig(1660, 700, "Data stores, as they exist on this machine",
+            "what is written where, in which format, who writes it and who may read it",
+            "60 GB of journal · 105 state files · 8 ledgers")
+    top, bottom = 110, 380
+
+    f.box(40, top, 380, 150, "The lake", [
+        ("state/lake3/envelopes.jsonl", "entity"),
+        ("60.2 GB · one journal", "value"),
+        ("JSONL, one envelope per line", "value"),
+        ("writer: the recorder", "service")], "evidence", tag="bronze")
+
+    f.box(470, top, 380, 150, "Derived datasets", [
+        ("datasets/features.csv", "entity"),
+        ("datasets/manifest.json", "entity"),
+        ("datasets/model/*.json", "entity"),
+        ("writer: the historian", "service")], "intel", tag="silver · gold")
+
+    f.box(900, top, 340, 150, "Live state", [
+        ("state/pack_*.json", "entity"),
+        ("state/strategy_*.json", "entity"),
+        ("105 files, rewritten in place", "value")], "model", tag="not a record")
+
+    f.box(1290, top, 330, 150, "Observability", [
+        ("logs/*.log", "entity"), ("104 MB · 115 files", "value"),
+        ("bridge/messages.jsonl", "entity")], "control", tag="diagnostic")
+
+    f.box(40, bottom, 380, 150, "Older journals", [
+        ("state/lake/", "entity"), ("state/lake2/", "entity"),
+        ("state/lake4/", "entity"),
+        ("kept for replay comparison", "value")], "evidence", tag="cold")
+
+    f.box(470, bottom, 380, 150, "Ledgers", [
+        ("ledger/*.jsonl", "entity"),
+        ("one file per engine, written by the engine", "value"),
+        ("state/fills.jsonl", "entity")], "model", tag="append only")
+
+    f.box(900, bottom, 340, 150, "Archives", [
+        ("state/archive_stop_*", "entity"),
+        ("state/archive_*", "entity"),
+        ("a copy before every reset", "value")], "control", tag="recoverable")
+
+    f.box(1290, bottom, 330, 150, "In memory", [
+        ("topic → byte offsets", "entity"),
+        ("the newest 20,000 envelopes", "value"),
+        ("disposable, rebuilt on boot", "value")], "evidence", tag="index")
+
+    # only the relationships that actually exist
+    f.arrow([(420, 185), (470, 185)], "intel")
+    f.note(470, 292, "the historian reads the journal and writes the datasets", size=9.5)
+    f.arrow([(1240, 300), (1240, 380)], "control", label="before a reset", lx=1250, ly=340)
+
+    f.note(40, 590, "The journal is the record. Everything else here is derived from it, a cache of it, "
+                    "or a copy taken before something was reset.", size=10)
+    f.note(40, 612, "Only the ledgers and the logs are written by more than one process, and both are "
+                    "append-only.", size=10)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "09-stores.svg"))
+
+
+def decision_tree():
+    f = Fig(1660, 780, "How the lake chooses — a decision tree",
+            "what lands where, how long it stays, and when a segment is sealed",
+            "every branch is a rule, not a habit")
+    cx = 830
+
+    f.diamond(cx, 120, 420, 84, "an envelope reaches the recorder", "control")
+    f.arrow([(cx, 162), (cx, 208)], "control")
+
+    f.diamond(cx, 250, 420, 84, "is it a trading outcome?", "model")
+    f.arrow([(cx - 210, 250), (520, 250)], "model")
+    f.box(120, 195, 400, 110, "Silver — the trade record", [
+        ("ledger/<engine>.jsonl", "entity"), ("state/fills.jsonl", "entity"),
+        ("append only, never expired", "value")], "model")
+    f.note(536, 240, "yes", size=9.5, anchor="end")
+
+    f.arrow([(cx, 292), (cx, 338)], "evidence")
+    f.note(cx + 12, 320, "no", size=9.5)
+
+    f.diamond(cx, 380, 460, 84, "is it a market or intel topic?", "market")
+    f.arrow([(cx + 230, 380), (1150, 380)], "market")
+    f.box(1150, 325, 420, 110, "Bronze — the journal", [
+        ("one JSONL line per envelope", "value"),
+        ("read by the explorer and the historian", "value")], "evidence")
+    f.note(1130, 370, "yes", size=9.5, anchor="end")
+
+    f.arrow([(cx - 230, 380), (520, 380)], "control")
+    f.box(120, 325, 400, 110, "Control and health", [
+        ("seven-day retention", "value"),
+        ("small, high value, short lived", "value")], "control")
+    f.note(540, 370, "no", size=9.5)
+
+    f.arrow([(cx, 422), (cx, 500)], "evidence")
+    f.diamond(cx, 545, 420, 84, "is the segment over 1 GB?", "risk")
+
+    f.arrow([(cx + 210, 545), (1150, 545)], "control")
+    f.box(1150, 495, 420, 100, "Seal and gzip", [
+        ("the segment becomes immutable", "value"),
+        ("byte offsets in the index stay valid", "value")], "control")
+    f.note(1130, 535, "yes", size=9.5, anchor="end")
+
+    f.arrow([(cx - 210, 545), (520, 545)], "intel")
+    f.box(120, 495, 400, 100, "Keep appending", [
+        ("the hot file stays small", "value"),
+        ("a cold query reads its tail", "value")], "intel")
+    f.note(540, 535, "no", size=9.5)
+
+    f.note(120, 650, "Each level answers one question: what is it, how long does it live, "
+                     "is it big enough to seal.", size=10)
+    f.note(120, 672, "Nothing is deleted by a rule that is not drawn here — and the tree is "
+                     "deliberately short enough to check.", size=10)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "10-decision-tree.svg"))
+
+
+ALL = [context_map, envelope, market_data, book_aggregate, risk_gate, recorder, lake,
+       control, stores, decision_tree]
 
 if __name__ == "__main__":
     for fn in ALL:

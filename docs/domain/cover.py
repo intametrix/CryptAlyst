@@ -78,8 +78,8 @@ for name, colour in chips:
 # footer plate
 p.append(f'<line x1="150" y1="1420" x2="{W-150}" y2="1420" stroke="#24374f"/>')
 p.append(f'<text x="150" y="1470" fill="#8ea0b6" font-size="22">Platform build 1.0.0 · 823eb7a · 2026-10-21</text>')
-p.append(f'<text x="150" y="1512" fill="#5a6b80" font-size="19">© 2026 CryptAlyst · designed and built by '
-         f'the CryptAlyst engineering team · prepared for the operator</text>')
+p.append(f'<text x="150" y="1512" fill="#5a6b80" font-size="19">© 2026 CryptAlyst · designed by '
+         f'Andrew Preston · built by the CryptAlyst engineering team</text>')
 p.append(f'<text x="{W-150}" y="1470" fill="#5a6b80" font-size="19" text-anchor="end">'
          f'seven contexts · eight figures · four levels</text>')
 p.append(f'<text x="{W-150}" y="1512" fill="#3f4d60" font-size="17" text-anchor="end">'
