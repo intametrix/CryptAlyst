@@ -351,3 +351,21 @@ async function runSearch() {
 loadInstruments().catch((e) => ($("#inst-count").textContent = e.message));
 loadDocuments().catch(() => {});
 loadEdges().catch(() => {});
+
+/* Deep links: ?resolve=<anything> tries a registry resolution first and
+   selects the hit; otherwise it lands in the filter box. This is the one-hop
+   target for external tools (e.g. the envelope explorer symbol links). */
+(async () => {
+  const target = new URLSearchParams(location.search).get("resolve");
+  if (!target) return;
+  $("#f-q").value = target;
+  renderInstruments();
+  try {
+    const hits = await api(`/v1/resolve?value=${encodeURIComponent(target)}`);
+    if (hits.length) selectInstrument(hits[0].id);
+    else {
+      const r = await api(`/v1/search?q=${encodeURIComponent(target)}`);
+      if (r.instruments && r.instruments.length) selectInstrument(r.instruments[0].id);
+    }
+  } catch { /* leave the filter populated */ }
+})();

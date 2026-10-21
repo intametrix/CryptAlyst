@@ -10,40 +10,40 @@
 <text x="40" y="68" fill="#8ea0b6" font-size="12">data · meta · refs, and the hops that prove what happened to it</text>
 <text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">version 1, one predecessor accepted</text>
 <rect x="60" y="120" width="420" height="300" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="72" y="140" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">DATA</text>
+<text x="70" y="142" fill="#4f9bff" font-size="15.0" font-weight="700" letter-spacing="0.06em">DATA</text>
 <text x="468" y="140" fill="#5a6b80" font-size="8.5" text-anchor="end">never rewritten</text>
-<text x="72" y="158" fill="#8ea0b6" font-size="11.5" font-weight="400">the payload the producer computed</text>
-<text x="468" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="72" y="175" fill="#8ea0b6" font-size="11.5" font-weight="400">shape owned by the topic</text>
-<text x="468" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="72" y="192" fill="#8ea0b6" font-size="11.5" font-weight="400">stored verbatim</text>
-<text x="468" y="192" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="70" y="160" fill="#8ea0b6" font-size="16.0" font-weight="400">the payload the producer computed</text>
+<text x="470" y="160" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="70" y="184.0" fill="#8ea0b6" font-size="16.0" font-weight="400">shape owned by the topic</text>
+<text x="470" y="184.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="70" y="208.0" fill="#8ea0b6" font-size="16.0" font-weight="400">stored verbatim</text>
+<text x="470" y="208.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="510" y="120" width="520" height="300" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="522" y="140" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">META</text>
+<text x="520" y="142" fill="#a879ff" font-size="15.0" font-weight="700" letter-spacing="0.06em">META</text>
 <text x="1018" y="140" fill="#5a6b80" font-size="8.5" text-anchor="end">provenance</text>
-<text x="522" y="158" fill="#8ea0b6" font-size="11.5" font-weight="400">version · plane · topic · key</text>
-<text x="1018" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="522" y="175" fill="#8ea0b6" font-size="11.5" font-weight="400">producer · generation · sequence</text>
-<text x="1018" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="522" y="192" fill="#8ea0b6" font-size="11.5" font-weight="400">cid · computed_at · received_at</text>
-<text x="1018" y="192" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="522" y="209" fill="#8ea0b6" font-size="11.5" font-weight="400">compute_ms</text>
-<text x="1018" y="209" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="522" y="226" fill="#8ea0b6" font-size="11.5" font-weight="400">extra — free-form markers</text>
-<text x="1018" y="226" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="520" y="160" fill="#8ea0b6" font-size="16.0" font-weight="400">version · plane · topic · key</text>
+<text x="1020" y="160" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="520" y="184.0" fill="#8ea0b6" font-size="16.0" font-weight="400">producer · generation · sequence</text>
+<text x="1020" y="184.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="520" y="208.0" fill="#8ea0b6" font-size="16.0" font-weight="400">cid · computed_at · received_at</text>
+<text x="1020" y="208.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="520" y="232.0" fill="#8ea0b6" font-size="16.0" font-weight="400">compute_ms</text>
+<text x="1020" y="232.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="520" y="256.0" fill="#8ea0b6" font-size="16.0" font-weight="400">extra — free-form markers</text>
+<text x="1020" y="256.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="1060" y="120" width="520" height="300" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="1072" y="140" fill="#f5b544" font-size="10.5" font-weight="700" letter-spacing="0.08em">REFS AND HOPS</text>
+<text x="1070" y="142" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">REFS AND HOPS</text>
 <text x="1568" y="140" fill="#5a6b80" font-size="8.5" text-anchor="end">the journey</text>
-<text x="1072" y="158" fill="#e6eef8" font-size="11.5" font-weight="600">ref: topic, key, generation, cid</text>
-<text x="1568" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
-<text x="1072" y="175" fill="#8ea0b6" font-size="11.5" font-weight="400">ref: derived, age_ms</text>
-<text x="1568" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="1072" y="192" fill="#e6eef8" font-size="11.5" font-weight="600">hop: interceptor, name, outcome</text>
-<text x="1568" y="192" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
-<text x="1072" y="209" fill="#e6eef8" font-size="11.5" font-weight="600">hop: operator, transformer</text>
-<text x="1568" y="209" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
-<text x="1072" y="226" fill="#8ea0b6" font-size="11.5" font-weight="400">hop: ms, detail</text>
-<text x="1568" y="226" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1070" y="160" fill="#e6eef8" font-size="16.0" font-weight="600">ref: topic, key, generation, cid</text>
+<text x="1570" y="160" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1070" y="184.0" fill="#8ea0b6" font-size="16.0" font-weight="400">ref: derived, age_ms</text>
+<text x="1570" y="184.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1070" y="208.0" fill="#e6eef8" font-size="16.0" font-weight="600">hop: interceptor, name, outcome</text>
+<text x="1570" y="208.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1070" y="232.0" fill="#e6eef8" font-size="16.0" font-weight="600">hop: operator, transformer</text>
+<text x="1570" y="232.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1070" y="256.0" fill="#8ea0b6" font-size="16.0" font-weight="400">hop: ms, detail</text>
+<text x="1570" y="256.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <path d="M 480,270 L 510,270" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2" marker-end="url(#a-market)"/>
 <path d="M 1030,270 L 1060,270" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2" marker-end="url(#a-evidence)"/>
 <text x="60" y="470" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">Unknown top-level member is refused; unknown meta key is ignored; version N-1 is accepted so a writer can be rolled forward.</text>

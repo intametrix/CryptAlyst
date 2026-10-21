@@ -116,16 +116,23 @@ def table(head, rows, size=8.8):
             cells[i].text = ""
             run = cells[i].paragraphs[0].add_run(val)
             run.font.size = Pt(size)
-    # no trailing paragraph: it is what pushes a blank page when a table ends a page
+    # rows never split across pages, and the header repeats if the table does
+    for i, row in enumerate(t.rows):
+        trPr = row._tr.get_or_add_trPr()
+        cant = OxmlElement("w:cantSplit"); trPr.append(cant)
+        if i == 0:
+            hdr = OxmlElement("w:tblHeader"); trPr.append(hdr)
 
 
-def figure(name, caption, max_h=3.95):
+def figure(name, caption, max_h=None):
     path = os.path.join(FIG, name)
     with Image.open(path) as im:
         w, h = im.size
-    width = min(CONTENT_W, 10.0)
+    # full content width: the labels inside the diagram are the point of it, and at
+    # 10.2 in a 16 px label prints at roughly 7 pt instead of 5 pt
+    width = min(CONTENT_W, 10.2)
     height = width * h / w
-    if height > max_h:
+    if max_h and height > max_h:
         height = max_h
         width = height * w / h
     doc.add_picture(path, width=Inches(width))
@@ -232,8 +239,7 @@ for n, s in enumerate(sections, 1):
     if s.get("figure"):
         name, caption = s["figure"]
         fig_no = next((f[0] for f in content.FIGURES if f[1] == name), "")
-        height = 3.15 if s.get("table") else 3.7
-        figure(name, "Figure %s — %s" % (fig_no, caption), max_h=height)
+        figure(name, "Figure %s — %s" % (fig_no, caption))
     body = s.get("body", [])
     if body and s.get("bullets"):
         two_columns(body[0], s["bullets"])

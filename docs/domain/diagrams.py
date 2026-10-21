@@ -32,6 +32,26 @@ FILL = {
 FONT = "-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif"
 
 
+
+def text_w(text, size):
+    """Approximate rendered width, in the same units as the layout.
+
+    Enough to keep a label inside its box: wide glyphs, narrow glyphs and digits
+    differ by nearly a factor of two, and guessing one width for all of them is how
+    labels end up over the border.
+    """
+    wide = sum(1 for c in text if c in "MWmw@")
+    narrow = sum(1 for c in text if c in "iljt.,;:'!| ")
+    other = len(text) - wide - narrow
+    return size * (0.86 * wide + 0.34 * narrow + 0.56 * other)
+
+
+def fit(text, size, avail, floor):
+    """Largest size at or below `size` that fits `avail`, never below `floor`."""
+    while size > floor and text_w(text, size) > avail:
+        size -= 0.5
+    return size
+
 class Fig:
     def __init__(self, w, h, title, subtitle=None, corner=None):
         self.w, self.h = w, h
@@ -58,25 +78,30 @@ class Fig:
         self.parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="9" '
                           f'fill="{FILL[colour]}" stroke="{c}" stroke-opacity="0.8" '
                           f'stroke-width="1.2"{dash}/>')
-        size = 10.5 if len(title) <= 16 else (9.5 if len(title) <= 22 else 8.5)
-        self.parts.append(f'<text x="{x+12}" y="{y+20}" fill="{c}" font-size="{size}" '
-                          f'font-weight="700" letter-spacing="0.08em">{html.escape(title.upper())}</text>')
+        title_size = fit(title.upper(), 15.0, w - 26, 9.5)
+        self.parts.append(f'<text x="{x+10}" y="{y+22}" fill="{c}" font-size="{title_size}" '
+                          f'font-weight="700" letter-spacing="0.06em">{html.escape(title.upper())}</text>')
         if tag:
             ty = y + 20 if len(title) <= 16 else y + h - 10
             self.parts.append(f'<text x="{x+w-12}" y="{ty}" fill="{FAINT}" font-size="8.5" '
                               f'text-anchor="end">{html.escape(tag)}</text>')
-        yy = y + 38
+        yy = y + 40
+        # the tallest size that fits both the width and the number of rows
+        by_height = ((h - 46) / max(len(rows), 1)) - 8 if rows else 16
         for row in rows:
             name, kind = row if isinstance(row, tuple) else (row, "")
             bold = kind in ("aggregate", "entity", "state")
+            tag_w = text_w(kind.upper(), 10) + 14 if kind else 0
+            size = fit(name, min(16.0, by_height), w - 24 - tag_w, 9.5)
             self.parts.append(
-                f'<text x="{x+12}" y="{yy}" fill="{INK if bold else DIM}" font-size="11.5" '
+                f'<text x="{x+10}" y="{yy}" fill="{INK if bold else DIM}" font-size="{size}" '
                 f'font-weight="{600 if bold else 400}">{html.escape(name)}</text>')
             if kind:
-                self.parts.append(f'<text x="{x+w-12}" y="{yy}" fill="{FAINT}" font-size="8" '
-                                  f'text-anchor="end" letter-spacing="0.05em">'
+                ts = fit(kind.upper(), 9, tag_w - 8, 7.0)
+                self.parts.append(f'<text x="{x+w-10}" y="{yy}" fill="{FAINT}" font-size="{ts}" '
+                                  f'text-anchor="end" letter-spacing="0.04em">'
                                   f'{html.escape(kind.upper())}</text>')
-            yy += 17
+            yy += size + 8
         return self
 
     def diamond(self, cx, cy, w, h, text, colour):
@@ -85,9 +110,10 @@ class Fig:
         self.parts.append(f'<polygon points="{pts}" fill="{FILL[colour]}" stroke="{c}" '
                           f'stroke-opacity="0.85" stroke-width="1.2"/>')
         words = text.split("\n")
+        size = min(fit(wd, 14, w * 0.62, 9.5) for wd in words) if words else 12
         for i, word in enumerate(words):
-            dy = (i - (len(words) - 1) / 2) * 14 + 4
-            self.parts.append(f'<text x="{cx}" y="{cy+dy}" fill="{INK}" font-size="10" '
+            dy = (i - (len(words) - 1) / 2) * (size + 4) + size * 0.36
+            self.parts.append(f'<text x="{cx}" y="{cy+dy}" fill="{INK}" font-size="{size}" '
                               f'text-anchor="middle">{html.escape(word)}</text>')
         return self
 
@@ -102,7 +128,7 @@ class Fig:
                               f'text-anchor="{anchor}">{html.escape(label)}</text>')
         return self
 
-    def note(self, x, y, text, size=9.5, colour=DIM, anchor="start", weight="400"):
+    def note(self, x, y, text, size=13, colour=DIM, anchor="start", weight="400"):
         self.parts.append(f'<text x="{x}" y="{y}" fill="{colour}" font-size="{size}" '
                           f'text-anchor="{anchor}" font-weight="{weight}">'
                           f'{html.escape(text)}</text>')
@@ -258,12 +284,15 @@ def book_aggregate():
         ("the rule that stopped it", "value"),
         ("the number that tripped it", "value"),
         ("the input's age", "value")], "risk", tag="a first-class outcome")
-    f.arrow([(520, 180), (600, 180)], "model", label="holds", lx=528, ly=170)
-    f.arrow([(520, 260), (560, 260), (560, 470), (600, 470)], "model",
-            label="closes into", lx=568, ly=392)
-    f.arrow([(1060, 470), (1080, 470)], "risk", label="or is refused", lx=1002, ly=490)
-    f.arrow([(1080, 200), (1060, 200), (1060, 180), (1020, 180)], "model",
-            label="authorises", lx=1032, ly=170, anchor="end")
+    f.arrow([(520, 180), (600, 180)], "model")
+    f.note(560, 170, "holds", size=10.5, anchor="middle")
+    f.arrow([(1080, 300), (1000, 300)], "model")
+    f.note(1040, 290, "authorises", size=10.5, anchor="middle")
+    f.arrow([(560, 370), (560, 520), (600, 520)], "model")
+    f.note(474, 552, "closes into", size=10.5)
+    f.arrow([(1006, 520), (1080, 520)], "risk")
+    f.note(1043, 508, "refused", size=10.5, anchor="middle")
+
     f.note(60, 430, "Invariants the aggregate keeps:", size=10.5, weight="600", colour=INK)
     f.note(60, 452, "· a position is never opened without an allowed decision", size=10)
     f.note(60, 470, "· a trade is only born from a position that existed", size=10)

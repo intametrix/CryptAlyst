@@ -10,60 +10,60 @@
 <text x="40" y="68" fill="#8ea0b6" font-size="12">one equity, a set of positions, and the decisions that produced them</text>
 <text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">every book is one aggregate</text>
 <rect x="60" y="110" width="460" height="260" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="72" y="130" fill="#f5b544" font-size="10.5" font-weight="700" letter-spacing="0.08em">BOOK</text>
+<text x="70" y="132" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">BOOK</text>
 <text x="508" y="130" fill="#5a6b80" font-size="8.5" text-anchor="end">aggregate root</text>
-<text x="72" y="148" fill="#8ea0b6" font-size="11.5" font-weight="400">equity</text>
-<text x="508" y="148" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="72" y="165" fill="#8ea0b6" font-size="11.5" font-weight="400">start_equity</text>
-<text x="508" y="165" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="72" y="182" fill="#e6eef8" font-size="11.5" font-weight="600">positions: symbol → Position</text>
-<text x="508" y="182" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
-<text x="72" y="199" fill="#e6eef8" font-size="11.5" font-weight="600">trades: the closed record</text>
-<text x="508" y="199" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
-<text x="72" y="216" fill="#8ea0b6" font-size="11.5" font-weight="400">strategy · risk size</text>
-<text x="508" y="216" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="70" y="150" fill="#8ea0b6" font-size="16.0" font-weight="400">equity</text>
+<text x="510" y="150" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="70" y="174.0" fill="#8ea0b6" font-size="16.0" font-weight="400">start_equity</text>
+<text x="510" y="174.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="70" y="198.0" fill="#e6eef8" font-size="16.0" font-weight="600">positions: symbol → Position</text>
+<text x="510" y="198.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="70" y="222.0" fill="#e6eef8" font-size="16.0" font-weight="600">trades: the closed record</text>
+<text x="510" y="222.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="70" y="246.0" fill="#8ea0b6" font-size="16.0" font-weight="400">strategy · risk size</text>
+<text x="510" y="246.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="600" y="110" width="400" height="200" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="612" y="130" fill="#f5b544" font-size="10.5" font-weight="700" letter-spacing="0.08em">POSITION</text>
+<text x="610" y="132" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">POSITION</text>
 <text x="988" y="130" fill="#5a6b80" font-size="8.5" text-anchor="end">inside the boundary</text>
-<text x="612" y="148" fill="#8ea0b6" font-size="11.5" font-weight="400">symbol · side</text>
-<text x="988" y="148" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="612" y="165" fill="#8ea0b6" font-size="11.5" font-weight="400">entry · notional · qty</text>
-<text x="988" y="165" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="612" y="182" fill="#8ea0b6" font-size="11.5" font-weight="400">opened_at · peak</text>
-<text x="988" y="182" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="610" y="150" fill="#8ea0b6" font-size="16.0" font-weight="400">symbol · side</text>
+<text x="990" y="150" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="610" y="174.0" fill="#8ea0b6" font-size="16.0" font-weight="400">entry · notional · qty</text>
+<text x="990" y="174.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="610" y="198.0" fill="#8ea0b6" font-size="16.0" font-weight="400">opened_at · peak</text>
+<text x="990" y="198.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="600" y="380" width="400" height="210" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="612" y="400" fill="#a879ff" font-size="9.5" font-weight="700" letter-spacing="0.08em">TRADE (MODEL.FILL)</text>
+<text x="610" y="402" fill="#a879ff" font-size="15.0" font-weight="700" letter-spacing="0.06em">TRADE (MODEL.FILL)</text>
 <text x="988" y="580" fill="#5a6b80" font-size="8.5" text-anchor="end">published</text>
-<text x="612" y="418" fill="#8ea0b6" font-size="11.5" font-weight="400">gross_pct · net_pct</text>
-<text x="988" y="418" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="612" y="435" fill="#8ea0b6" font-size="11.5" font-weight="400">held_s · reason</text>
-<text x="988" y="435" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="612" y="452" fill="#8ea0b6" font-size="11.5" font-weight="400">pnl_usd · entry_ms/exit_ms</text>
-<text x="988" y="452" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="610" y="420" fill="#8ea0b6" font-size="16.0" font-weight="400">gross_pct · net_pct</text>
+<text x="990" y="420" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="610" y="444.0" fill="#8ea0b6" font-size="16.0" font-weight="400">held_s · reason</text>
+<text x="990" y="444.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="610" y="468.0" fill="#8ea0b6" font-size="16.0" font-weight="400">pnl_usd · entry_ms/exit_ms</text>
+<text x="990" y="468.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="1080" y="110" width="400" height="200" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="1092" y="130" fill="#f5b544" font-size="10.5" font-weight="700" letter-spacing="0.08em">DECISION</text>
+<text x="1090" y="132" fill="#f5b544" font-size="15.0" font-weight="700" letter-spacing="0.06em">DECISION</text>
 <text x="1468" y="130" fill="#5a6b80" font-size="8.5" text-anchor="end">model.decision</text>
-<text x="1092" y="148" fill="#8ea0b6" font-size="11.5" font-weight="400">engine · symbol · side</text>
-<text x="1468" y="148" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="1092" y="165" fill="#8ea0b6" font-size="11.5" font-weight="400">allowed · reason · confidence</text>
-<text x="1468" y="165" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1090" y="150" fill="#8ea0b6" font-size="16.0" font-weight="400">engine · symbol · side</text>
+<text x="1470" y="150" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1090" y="174.0" fill="#8ea0b6" font-size="16.0" font-weight="400">allowed · reason · confidence</text>
+<text x="1470" y="174.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="1080" y="380" width="400" height="210" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="1092" y="400" fill="#ef6b6b" font-size="10.5" font-weight="700" letter-spacing="0.08em">REFUSAL</text>
+<text x="1090" y="402" fill="#ef6b6b" font-size="15.0" font-weight="700" letter-spacing="0.06em">REFUSAL</text>
 <text x="1468" y="400" fill="#5a6b80" font-size="8.5" text-anchor="end">a first-class outcome</text>
-<text x="1092" y="418" fill="#8ea0b6" font-size="11.5" font-weight="400">the rule that stopped it</text>
-<text x="1468" y="418" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="1092" y="435" fill="#8ea0b6" font-size="11.5" font-weight="400">the number that tripped it</text>
-<text x="1468" y="435" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="1092" y="452" fill="#8ea0b6" font-size="11.5" font-weight="400">the input&#x27;s age</text>
-<text x="1468" y="452" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1090" y="420" fill="#8ea0b6" font-size="16.0" font-weight="400">the rule that stopped it</text>
+<text x="1470" y="420" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1090" y="444.0" fill="#8ea0b6" font-size="16.0" font-weight="400">the number that tripped it</text>
+<text x="1470" y="444.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1090" y="468.0" fill="#8ea0b6" font-size="16.0" font-weight="400">the input&#x27;s age</text>
+<text x="1470" y="468.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <path d="M 520,180 L 600,180" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
-<text x="528" y="170" fill="#8ea0b6" font-size="9.5" text-anchor="start">holds</text>
-<path d="M 520,260 L 560,260 L 560,470 L 600,470" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
-<text x="568" y="392" fill="#8ea0b6" font-size="9.5" text-anchor="start">closes into</text>
-<path d="M 1060,470 L 1080,470" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-risk)"/>
-<text x="1002" y="490" fill="#8ea0b6" font-size="9.5" text-anchor="start">or is refused</text>
-<path d="M 1080,200 L 1060,200 L 1060,180 L 1020,180" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
-<text x="1032" y="170" fill="#8ea0b6" font-size="9.5" text-anchor="end">authorises</text>
+<text x="560" y="170" fill="#8ea0b6" font-size="10.5" text-anchor="middle" font-weight="400">holds</text>
+<path d="M 1080,300 L 1000,300" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
+<text x="1040" y="290" fill="#8ea0b6" font-size="10.5" text-anchor="middle" font-weight="400">authorises</text>
+<path d="M 560,370 L 560,520 L 600,520" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
+<text x="474" y="552" fill="#8ea0b6" font-size="10.5" text-anchor="start" font-weight="400">closes into</text>
+<path d="M 1006,520 L 1080,520" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-risk)"/>
+<text x="1043" y="508" fill="#8ea0b6" font-size="10.5" text-anchor="middle" font-weight="400">refused</text>
 <text x="60" y="430" fill="#e6eef8" font-size="10.5" text-anchor="start" font-weight="600">Invariants the aggregate keeps:</text>
 <text x="60" y="452" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· a position is never opened without an allowed decision</text>
 <text x="60" y="470" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· a trade is only born from a position that existed</text>

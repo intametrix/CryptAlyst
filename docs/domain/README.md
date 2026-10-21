@@ -12,6 +12,11 @@
 
 Format rules, matching the Design and Architecture Reference:
 
+- box text is measured against the box: width *and* height, so a label is set as
+  large as it fits and never crosses its border
+- figures run at full content width (10.2 in), which prints a 16 px label at about
+  7 pt instead of 5 pt
+
 - every figure is numbered and captioned where it appears, and listed in the contents
 - every section opens with **What this shows**, one sentence, before the figure
 - page numbers in the footer on every page **except the cover**

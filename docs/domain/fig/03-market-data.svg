@@ -10,51 +10,51 @@
 <text x="40" y="68" fill="#8ea0b6" font-size="12">400 symbols, sharded, parsed once, published once</text>
 <text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">the only process that talks to the exchange</text>
 <rect x="40" y="120" width="300" height="120" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="52" y="140" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">EXCHANGE</text>
-<text x="52" y="158" fill="#8ea0b6" font-size="11.5" font-weight="400">stream.binance.com</text>
-<text x="328" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
-<text x="52" y="175" fill="#8ea0b6" font-size="11.5" font-weight="400">combined streams</text>
-<text x="328" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="50" y="142" fill="#4f9bff" font-size="15.0" font-weight="700" letter-spacing="0.06em">EXCHANGE</text>
+<text x="50" y="160" fill="#8ea0b6" font-size="16.0" font-weight="400">stream.binance.com</text>
+<text x="330" y="160" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="50" y="184.0" fill="#8ea0b6" font-size="16.0" font-weight="400">combined streams</text>
+<text x="330" y="184.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="390" y="100" width="330" height="210" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="402" y="120" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">SHARDS</text>
+<text x="400" y="122" fill="#4f9bff" font-size="15.0" font-weight="700" letter-spacing="0.06em">SHARDS</text>
 <text x="708" y="120" fill="#5a6b80" font-size="8.5" text-anchor="end">≤1024 each</text>
-<text x="402" y="138" fill="#8ea0b6" font-size="11.5" font-weight="400">shard 0 — 900 streams</text>
-<text x="708" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
-<text x="402" y="155" fill="#8ea0b6" font-size="11.5" font-weight="400">shard 1 — 701 streams</text>
-<text x="708" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
-<text x="402" y="172" fill="#8ea0b6" font-size="11.5" font-weight="400">reconnect with backoff</text>
-<text x="708" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="400" y="140" fill="#8ea0b6" font-size="16.0" font-weight="400">shard 0 — 900 streams</text>
+<text x="710" y="140" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="400" y="164.0" fill="#8ea0b6" font-size="16.0" font-weight="400">shard 1 — 701 streams</text>
+<text x="710" y="164.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="400" y="188.0" fill="#8ea0b6" font-size="16.0" font-weight="400">reconnect with backoff</text>
+<text x="710" y="188.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="770" y="100" width="330" height="240" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="782" y="120" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">PARSE</text>
-<text x="782" y="138" fill="#8ea0b6" font-size="11.5" font-weight="400">bookTicker → top of book</text>
-<text x="1088" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="782" y="155" fill="#8ea0b6" font-size="11.5" font-weight="400">depth5 → depth book</text>
-<text x="1088" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="782" y="172" fill="#8ea0b6" font-size="11.5" font-weight="400">kline → series, closed flag</text>
-<text x="1088" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="782" y="189" fill="#8ea0b6" font-size="11.5" font-weight="400">miniTicker → 24h stats</text>
-<text x="1088" y="189" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="780" y="122" fill="#4f9bff" font-size="15.0" font-weight="700" letter-spacing="0.06em">PARSE</text>
+<text x="780" y="140" fill="#8ea0b6" font-size="16.0" font-weight="400">bookTicker → top of book</text>
+<text x="1090" y="140" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="780" y="164.0" fill="#8ea0b6" font-size="16.0" font-weight="400">depth5 → depth book</text>
+<text x="1090" y="164.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="780" y="188.0" fill="#8ea0b6" font-size="16.0" font-weight="400">kline → series, closed flag</text>
+<text x="1090" y="188.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="780" y="212.0" fill="#8ea0b6" font-size="16.0" font-weight="400">miniTicker → 24h stats</text>
+<text x="1090" y="212.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="1150" y="100" width="330" height="240" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="1162" y="120" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">STATE</text>
+<text x="1160" y="122" fill="#4f9bff" font-size="15.0" font-weight="700" letter-spacing="0.06em">STATE</text>
 <text x="1468" y="120" fill="#5a6b80" font-size="8.5" text-anchor="end">in memory</text>
-<text x="1162" y="138" fill="#e6eef8" font-size="11.5" font-weight="600">Prices</text>
-<text x="1468" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
-<text x="1162" y="155" fill="#e6eef8" font-size="11.5" font-weight="600">Books</text>
-<text x="1468" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
-<text x="1162" y="172" fill="#e6eef8" font-size="11.5" font-weight="600">Klines</text>
-<text x="1468" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
-<text x="1162" y="189" fill="#e6eef8" font-size="11.5" font-weight="600">Mini stats</text>
-<text x="1468" y="189" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="1160" y="140" fill="#e6eef8" font-size="16.0" font-weight="600">Prices</text>
+<text x="1470" y="140" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1160" y="164.0" fill="#e6eef8" font-size="16.0" font-weight="600">Books</text>
+<text x="1470" y="164.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1160" y="188.0" fill="#e6eef8" font-size="16.0" font-weight="600">Klines</text>
+<text x="1470" y="188.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="1160" y="212.0" fill="#e6eef8" font-size="16.0" font-weight="600">Mini stats</text>
+<text x="1470" y="212.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
 <rect x="1150" y="430" width="330" height="200" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
-<text x="1162" y="450" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">TOPICS</text>
-<text x="1162" y="468" fill="#8ea0b6" font-size="11.5" font-weight="400">market.price</text>
-<text x="1468" y="468" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="1162" y="485" fill="#8ea0b6" font-size="11.5" font-weight="400">market.depth</text>
-<text x="1468" y="485" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="1162" y="502" fill="#8ea0b6" font-size="11.5" font-weight="400">market.candle</text>
-<text x="1468" y="502" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
-<text x="1162" y="519" fill="#8ea0b6" font-size="11.5" font-weight="400">ticks · mini24h</text>
-<text x="1468" y="519" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1160" y="452" fill="#a879ff" font-size="15.0" font-weight="700" letter-spacing="0.06em">TOPICS</text>
+<text x="1160" y="470" fill="#8ea0b6" font-size="16.0" font-weight="400">market.price</text>
+<text x="1470" y="470" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1160" y="494.0" fill="#8ea0b6" font-size="16.0" font-weight="400">market.depth</text>
+<text x="1470" y="494.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1160" y="518.0" fill="#8ea0b6" font-size="16.0" font-weight="400">market.candle</text>
+<text x="1470" y="518.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1160" y="542.0" fill="#8ea0b6" font-size="16.0" font-weight="400">ticks · mini24h</text>
+<text x="1470" y="542.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <path d="M 340,180 L 390,180" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
 <path d="M 720,200 L 770,200" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
 <text x="726" y="190" fill="#8ea0b6" font-size="9.5" text-anchor="start">decode</text>
