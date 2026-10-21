@@ -120,7 +120,12 @@ func TestLeftoverTmpIsResumed(t *testing.T) {
 	hot := s.hot
 	s.mu.Unlock()
 
-	// simulate a crash: drop the handle and the lock without sealing
+	// simulate a crash after the one-second flush: the batch is on disk, the buffer
+	// is empty, and the lock is released. A crash BEFORE the flush loses at most one
+	// second, which is the durability window KIMI accepted and flagged to the owner.
+	if err := s.Flush(); err != nil {
+		t.Fatal(err)
+	}
 	s.mu.Lock()
 	s.file.Close()
 	s.file = nil
