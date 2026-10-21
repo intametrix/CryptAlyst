@@ -161,9 +161,8 @@ done
 ok "all six service binaries present"
 
 # 1c · optional binaries are named when absent, not silently skipped
-for b in tad forecast; do
-  [ -x "$CORE/$b" ] && ok "$b present" || warn "$b not built in this tree — that producer stays off"
-done
+[ -x "$ROOT/tad/tad" ] && ok "tad present" || warn "tad not built — it is built at stage 5b"
+[ -x "$CORE/forecast" ] && ok "forecast present" || warn "forecast not built in this tree — that producer stays off"
 
 command -v python3 >/dev/null || die "python3 not found"
 ok "python3 $(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
@@ -208,7 +207,19 @@ else
   wait_http "http://127.0.0.1:8793/health" 20 "signal bus on :8793" || die "signal bus did not answer"
 fi
 
-say "5 · optimiser (:8795)"
+say "5b · tad — the technical watcher (:8792)"
+if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:8792/health 2>/dev/null; then
+  ok "tad already answering on :8792"
+else
+  if [ ! -x "$ROOT/tad/tad" ]; then
+    warn "building tad"
+    ( cd "$ROOT/tad" && /opt/homebrew/bin/go build -o tad . ) || die "tad build failed"
+  fi
+  ( cd "$ROOT/tad" && nohup ./tad >"$LOGS/tad.log" 2>&1 & )
+  wait_http "http://127.0.0.1:8792/health" 20 "tad on :8792" || die "tad did not answer"
+fi
+
+say "6 · optimiser (:8795)"
 if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:8795/health 2>/dev/null; then
   ok "optimiser already answering on :8795"
 else
@@ -236,7 +247,6 @@ ok "health publisher and alert intake started"
 
 say "8 · intelligence producers"
 nohup python3 -u signals.py --every 10 --top 30 >"$LOGS/signals.log" 2>&1 &
-[ -x "$CORE/tad" ]      && (cd "$CORE" && nohup ./tad --addr 127.0.0.1:61613 --every 5s >"$LOGS/tad.log" 2>&1 &)
 [ -x "$CORE/forecast" ] && (cd "$CORE" && nohup ./forecast --addr 127.0.0.1:61613 >"$LOGS/forecast.log" 2>&1 &)
 sleep 3
 pgrep -f "signals.py --every" >/dev/null && ok "signals publishing" || warn "signals.py did not stay up — see logs/signals.log"
