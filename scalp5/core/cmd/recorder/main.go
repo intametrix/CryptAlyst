@@ -141,54 +141,55 @@ func main() {
 
 	// The journal stays the record. These are projections beside it, and a
 	// failure in any of them is counted, never fatal.
-	var stores []store.Store
+	var sinks []lake.Sink
 	if *kvPath != "" {
 		if kv, err := store.OpenKV(*kvPath); err == nil {
-			stores = append(stores, kv)
+			sinks = append(sinks, &store.LatestSink{Store: kv})
 		} else {
 			log.Printf("kv store disabled: %v", err)
 		}
 	}
 	if *rocksPath != "" {
 		if r, err := store.OpenRocks(*rocksPath); err == nil {
-			stores = append(stores, r)
+			sinks = append(sinks, &store.LatestSink{Store: r})
 		} else {
 			log.Printf("rocksdb store disabled: %v", err)
 		}
 	}
 	if *lsmPath != "" {
 		if l, err := store.OpenLSM(*lsmPath); err == nil {
-			stores = append(stores, l)
+			sinks = append(sinks, &store.LatestSink{Store: l})
 		} else {
 			log.Printf("lsm store disabled: %v", err)
 		}
 	}
 	if *sqlPath != "" {
 		if sq, err := store.OpenSQL(*sqlPath); err == nil {
-			stores = append(stores, sq)
+			sinks = append(sinks, &store.SQLSink{DB: sq}, &store.TradeSink{DB: sq})
 		} else {
 			log.Printf("sql store disabled: %v", err)
 		}
 	}
 	if *docsDir != "" {
 		if d, err := store.OpenFileDocs(*docsDir); err == nil {
-			stores = append(stores, d)
+			sinks = append(sinks, &store.DocsSink{Docs: d})
 		} else {
 			log.Printf("doc store disabled: %v", err)
 		}
 	}
 	if *mongoURI != "" {
 		if m, err := store.OpenMongo(*mongoURI, "cryptalyst", "envelopes"); err == nil {
-			stores = append(stores, m)
+			sinks = append(sinks, &store.DocsSink{Docs: m})
 			log.Printf("mongo documents enabled")
 		} else {
 			log.Printf("mongo disabled: %v", err)
 		}
 	}
-	var proj *store.Multi
-	if len(stores) > 0 {
-		proj = store.NewMulti(stores...)
-		log.Printf("projection stores: %d", len(stores))
+	// placement lives in the lake: the recorder hands over a record and does not
+	// know which store answers for it
+	placement := lake.NewPlacement(lake.PolicyWithTrades(), sinks...)
+	if len(sinks) > 0 {
+		log.Printf("placement sinks: %d", len(sinks))
 	}
 	corr := correlation.New()
 	ctr := &counters{byTopic: map[string]int64{}, started: time.Now()}
@@ -286,8 +287,8 @@ func main() {
 					}
 					err := lk.Write(rec)
 					ctr.bump(topic, err)
-					if proj != nil && err == nil {
-						_ = proj.Put(store.Envelope{
+					if err == nil {
+						_ = placement.Place(store.Envelope{
 							ID:       store.NewID(topic, env.Meta.Key, rec.TS),
 							Topic:    topic,
 							Key:      env.Meta.Key,
