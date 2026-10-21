@@ -39,7 +39,16 @@ let seed = 42;
 const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
 
 const NOW = 1792112572000;
-const ALERTS = Array.isArray(live.LIVE_KLINES_ALERTS) ? live.LIVE_KLINES_ALERTS : [];
+let ALERTS = Array.isArray(live.LIVE_KLINES_ALERTS) ? live.LIVE_KLINES_ALERTS : [];
+// A live capture can legitimately come back alert-free (quiet market). Fall back
+// to the last captured real bursts so the alert surfaces always have truth to show.
+if (ALERTS.length === 0 && existsSync(join(here, 'fixture-alerts.json'))) {
+  try {
+    ALERTS = JSON.parse(readFileSync(join(here, 'fixture-alerts.json'), 'utf8'));
+  } catch {
+    ALERTS = [];
+  }
+}
 const PRICE = ALERTS[0]?.price ?? 5.31;
 
 const bars = [];
