@@ -56,7 +56,13 @@ say "2 · market data (the only process that talks to the exchange)"
 wait_for "http://127.0.0.1:8796/health" 20 "market data on :8796" || exit 1
 
 say "3 · recorder (the only consumer of the bus)"
-(cd "$CORE" && nohup ./bin/recorder --port 8801 --data ../state/lake3 >"$LOGS/recorder.log" 2>&1 &)
+# the specialised stores are optional: set STORE_KV / STORE_SQL / STORE_DOCS / MONGO_URI
+STORE_ARGS=""
+[ -n "${STORE_KV:-}" ]  && STORE_ARGS="$STORE_ARGS --kv $STORE_KV"
+[ -n "${STORE_SQL:-}" ] && STORE_ARGS="$STORE_ARGS --sql $STORE_SQL"
+[ -n "${STORE_DOCS:-}" ] && STORE_ARGS="$STORE_ARGS --docs $STORE_DOCS"
+[ -n "${MONGO_URI:-}" ] && STORE_ARGS="$STORE_ARGS --mongo $MONGO_URI"
+(cd "$CORE" && nohup ./bin/recorder --port 8801 --data ../state/lake3 $STORE_ARGS >"$LOGS/recorder.log" 2>&1 &)
 wait_for "http://127.0.0.1:8801/stats" 15 "recorder on :8801" || exit 1
 
 say "4 · bus services"

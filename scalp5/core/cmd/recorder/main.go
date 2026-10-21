@@ -20,6 +20,7 @@ import (
 	"cryptalyst/core/internal/envelope"
 	"cryptalyst/core/internal/lake"
 	"cryptalyst/core/internal/stomp"
+	"cryptalyst/core/internal/store"
 	"cryptalyst/core/internal/topics"
 )
 
@@ -122,6 +123,10 @@ func main() {
 	port := flag.Int("port", 8801, "http port")
 	addr := flag.String("stomp", "127.0.0.1:61613", "broker address")
 	dataDir := flag.String("data", "../state/lake", "lake directory")
+	kvPath := flag.String("kv", "", "key/value store path (bbolt); empty disables it")
+	sqlPath := flag.String("sql", "", "sqlite path for envelopes, books and trades; empty disables it")
+	docsDir := flag.String("docs", "", "directory for envelope documents; empty disables it")
+	mongoURI := flag.String("mongo", "", "mongodb uri for envelope documents; empty disables it")
 	flag.Parse()
 	log.SetFlags(log.Ltime)
 
@@ -131,6 +136,44 @@ func main() {
 		log.Fatalf("journal: %v", err)
 	}
 	lk := lake.New(mem, journal)
+
+	// The journal stays the record. These are projections beside it, and a
+	// failure in any of them is counted, never fatal.
+	var stores []store.Store
+	if *kvPath != "" {
+		if kv, err := store.OpenKV(*kvPath); err == nil {
+			stores = append(stores, kv)
+		} else {
+			log.Printf("kv store disabled: %v", err)
+		}
+	}
+	if *sqlPath != "" {
+		if sq, err := store.OpenSQL(*sqlPath); err == nil {
+			stores = append(stores, sq)
+		} else {
+			log.Printf("sql store disabled: %v", err)
+		}
+	}
+	if *docsDir != "" {
+		if d, err := store.OpenFileDocs(*docsDir); err == nil {
+			stores = append(stores, d)
+		} else {
+			log.Printf("doc store disabled: %v", err)
+		}
+	}
+	if *mongoURI != "" {
+		if m, err := store.OpenMongo(*mongoURI, "cryptalyst", "envelopes"); err == nil {
+			stores = append(stores, m)
+			log.Printf("mongo documents enabled")
+		} else {
+			log.Printf("mongo disabled: %v", err)
+		}
+	}
+	var proj *store.Multi
+	if len(stores) > 0 {
+		proj = store.NewMulti(stores...)
+		log.Printf("projection stores: %d", len(stores))
+	}
 	corr := correlation.New()
 	ctr := &counters{byTopic: map[string]int64{}, started: time.Now()}
 	fan := newHub()
@@ -227,6 +270,17 @@ func main() {
 					}
 					err := lk.Write(rec)
 					ctr.bump(topic, err)
+					if proj != nil && err == nil {
+						_ = proj.Put(store.Envelope{
+							ID:       store.NewID(topic, env.Meta.Key, rec.TS),
+							Topic:    topic,
+							Key:      env.Meta.Key,
+							Plane:    string(env.Meta.Plane),
+							Producer: env.Meta.Producer,
+							TS:       rec.TS,
+							Data:     m.Body,
+						})
+					}
 					if line, mErr := json.Marshal(rec); mErr == nil {
 						fan.send(line)
 					}

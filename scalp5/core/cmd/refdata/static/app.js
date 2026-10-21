@@ -190,16 +190,21 @@ const INST_COLS = [
   { k: "updated_ms",  label: "updated",     def: true,  w: 150, html: (r) => fmtMS(r.updated_ms), sk: (r) => r.updated_ms || 0 },
 ];
 
+/* Column layout is scoped by the venue filter: pick a venue, arrange the
+   grid, and that layout is remembered for that venue. Unscoped keys remain
+   the fallback, so layouts saved before scoping still apply. */
+function instScope() { return $("#f-venue").value || "all"; }
+function readLS(key) {
+  try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
+}
 function instCols() {
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem("refdata:inst:cols") || "null"); } catch {}
+  const saved = readLS(`refdata:inst:cols:${instScope()}`) ?? readLS("refdata:inst:cols");
   if (Array.isArray(saved) && saved.length)
     return INST_COLS.filter((c) => saved.includes(c.k));
   return INST_COLS.filter((c) => c.def);
 }
 function instWidths() {
-  try { return JSON.parse(localStorage.getItem("refdata:inst:widths") || "{}") || {}; }
-  catch { return {}; }
+  return readLS(`refdata:inst:widths:${instScope()}`) ?? readLS("refdata:inst:widths") ?? {};
 }
 
 const inst = { rows: [], sort: { key: "symbol", dir: "asc" }, sel: null };
@@ -259,7 +264,7 @@ function wireResize() {
         const w = Math.max(48, Math.min(640, Math.round(startW + ev.clientX - startX)));
         const widths = instWidths();
         widths[th.dataset.k] = w;
-        localStorage.setItem("refdata:inst:widths", JSON.stringify(widths));
+        localStorage.setItem(`refdata:inst:widths:${instScope()}`, JSON.stringify(widths));
         if (moved) { suppressSortClick = true; setTimeout(() => (suppressSortClick = false), 0); }
       };
       rz.addEventListener("pointermove", move);
@@ -275,7 +280,7 @@ function renderColMenu() {
     `<label class="colitem"><input type="checkbox" data-col="${c.k}"${visible.has(c.k) ? " checked" : ""}> ${c.label}</label>`).join("");
   $$("#col-menu input").forEach((cb) => cb.addEventListener("change", () => {
     if (!$("#col-menu input:checked")) { cb.checked = true; return; }
-    localStorage.setItem("refdata:inst:cols",
+    localStorage.setItem(`refdata:inst:cols:${instScope()}`,
       JSON.stringify($$("#col-menu input:checked").map((x) => x.dataset.col)));
     renderInstHead();
     renderInstruments();
@@ -305,8 +310,10 @@ function renderInstruments(rows = sorted(filteredInstruments(), inst.sort.key, i
 }
 
 wireSort("#inst-thead", "#inst-table tbody", filteredInstruments, renderInstruments, inst.sort);
-["#f-q", "#f-class", "#f-status", "#f-venue"].forEach((s) =>
+["#f-q", "#f-class", "#f-status"].forEach((s) =>
   $(s).addEventListener("input", () => renderInstruments()));
+/* switching venue switches the persisted column layout too */
+$("#f-venue").addEventListener("input", () => { renderInstHead(); renderInstruments(); });
 
 $("#inst-table tbody").addEventListener("click", (e) => {
   const tr = e.target.closest("tr");
