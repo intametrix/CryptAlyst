@@ -48,9 +48,21 @@ def _ensure_queue(queue, routing_key):
             "Content-Type": "application/json"}
     exchange = routing_key.split(".")[0]
     base = "http://127.0.0.1:15672/api"
+    # a queue created earlier by a STOMP subscription is durable and unbounded; it must
+    # be removed before the bounded declaration, or the broker refuses the new arguments
+    try:
+        req = _url.Request(base + "/queues/%2F/" + queue, method="DELETE", headers=auth)
+        _url.urlopen(req, timeout=5).read()
+    except Exception:
+        pass
     for path, body in (("/queues/%2F/" + queue,
                         {"durable": False, "auto_delete": True,
-                         "arguments": {"x-expires": 600000}}),
+                         "arguments": {
+                             "x-expires": 120000,        # a readerless queue lives 2 min
+                             "x-max-length": 2000,       # and can never hold a backlog
+                             "x-overflow": "drop-head",  # keep the newest, drop the stale
+                             "x-message-ttl": 60000,     # nothing older than a minute
+                         }}),
                        ("/bindings/%2F/e/" + exchange + "/q/" + queue,
                         {"routing_key": routing_key, "arguments": {}})):
         try:

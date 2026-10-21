@@ -110,6 +110,48 @@ def disabled_set():
     return {_norm(n) for n in load_disabled()}
 
 
+def bus_guard():
+    """Keep the bus honest: a readerless queue that fills is a backlog nobody wants.
+
+    Market data is a snapshot. If a queue has no consumer and holds more than a
+    thousand messages, it is deleted rather than left to grow - the lake and the live
+    feed already hold the truth, and a deep queue only makes the health view lie.
+    """
+    import base64 as _b64, json as _json, urllib.request as _u
+    auth = {"Authorization": "Basic " + _b64.b64encode(b"cryptalyst:cryptalyst").decode()}
+    base = "http://127.0.0.1:15672/api"
+    try:
+        req = _u.Request(base + "/queues", headers=auth)
+        queues = _json.loads(_u.urlopen(req, timeout=5).read())
+    except Exception:
+        return []
+    actions = []
+    for q in queues:
+        name = q.get("name") or ""
+        msgs = q.get("messages", 0)
+        if name.startswith("stomp-subscription-"):
+            continue
+        # A STOMP /queue/ subscription creates a durable, unbounded queue. The intel
+        # family must be neither: delete a non-conforming one and let the reader
+        # reconnect, which now declares it bounded and self-expiring.
+        if name.startswith("i.") and not q.get("auto_delete"):
+            try:
+                _u.urlopen(_u.Request(base + "/queues/%%2F/" + name, method="DELETE",
+                                      headers=auth), timeout=5).read()
+                actions.append("bus: reset %s to a bounded queue" % name)
+            except Exception:
+                pass
+            continue
+        if q.get("consumers", 0) == 0 and (msgs >= 1000 or (name.startswith("i.") and msgs)):
+            try:
+                _u.urlopen(_u.Request(base + "/queues/%%2F/" + name, method="DELETE",
+                                      headers=auth), timeout=5).read()
+                actions.append("bus: dropped %s (%d msgs, no consumer)" % (name, msgs))
+            except Exception:
+                pass
+    return actions
+
+
 def load_disabled():
     try:
         return set(json.load(open(DISABLED)).get("books") or [])
@@ -186,6 +228,9 @@ def main():
                 actions.append("restarted %s" % name)
 
         # 2. grade and prune
+        for _a in bus_guard():
+            actions.append(_a)
+
         # earned capital: recompute the allocation table from the packs each tick
         try:
             import capital as _cap

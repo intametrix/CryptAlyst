@@ -90,12 +90,27 @@ class Stomp:
                 "content-length": str(len(body))}, body))
 
     def subscribe_queue(self, queue, handler):
-        """Subscribe to a queue by name (competing consumer semantics)."""
+        """Subscribe to a queue by name (competing consumer semantics).
+
+        A STOMP /queue/ subscription creates a DURABLE queue unless told otherwise,
+        so a reader that dies leaves a queue behind that fills at the publish rate -
+        i.market.depth reached 200k messages that way. The intel family is declared
+        bounded and self-expiring in the subscription itself, so a dead reader's queue
+        disappears and a slow one keeps only the newest messages.
+        """
         sid = "q-" + queue + "-" + uuid.uuid4().hex[:8]
         self.handlers[sid] = handler
+        head = {"destination": "/queue/" + queue, "id": sid, "ack": "auto"}
+        if queue.startswith("i."):
+            head.update({
+                "auto-delete": "true",
+                "x-expires": "120000",       # 2 minutes without a consumer
+                "x-max-length": "2000",      # never a backlog
+                "x-overflow": "drop-head",   # newest win
+                "x-message-ttl": "60000",    # nothing older than a minute
+            })
         with self.lock:
-            self.sock.sendall(self._frame("SUBSCRIBE", {
-                "destination": "/queue/" + queue, "id": sid, "ack": "auto"}))
+            self.sock.sendall(self._frame("SUBSCRIBE", head))
         return sid
 
     def subscribe_topic(self, topic, exchange, handler):
