@@ -84,7 +84,7 @@ class Book:
 
     def open(self, s, side, px, why):
         self.last_open = time.time()
-        n = min(self.equity * (self.cfg["risk"] / 100) / (self.cfg["sl"] / 100), self.equity * 3)
+        n = min(self.equity * (self.cfg["risk"] / 100) / (self.cfg["sl"] / 100), self.equity * 3) * _tactics.size_mult()
         self.pos[s] = {"side": side, "entry": px, "t": time.time(), "notional": n,
                        "peak": 0.0, "mark": 0.0, "why": why}
         self.opened += 1

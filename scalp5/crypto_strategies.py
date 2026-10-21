@@ -218,7 +218,7 @@ class Book:
     def open(self, sym, side, px, why):
         stop_frac = self.cfg["sl"] / 100.0
         notional = min(self.equity * (self.cfg["risk"] / 100.0) / max(stop_frac, 0.002),
-                       self.equity * 0.25)
+                       self.equity * 0.25) * _tactics.size_mult()
         did = emit.decision(self.name, sym, side, True, "strategy") if emit else None
         self.positions[sym] = {"side": side, "entry": px, "opened": time.time(),
                                "notional": notional, "peak": 0.0, "why": why,

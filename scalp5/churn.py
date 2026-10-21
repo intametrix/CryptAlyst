@@ -75,7 +75,7 @@ def main():
                 sd = "buy" if side > 0 else "sell"
                 did = emit.decision("churn", s, sd, True, "churn_demo") if emit else None
                 pos[s] = {"side": sd, "entry": px[s], "t": time.time(),
-                          "notional": min(eq * 0.002 / 0.01, eq * 2), "decision_id": did}
+                          "notional": min(eq * 0.002 / 0.01, eq * 2) * _tactics.size_mult(), "decision_id": did}
                 n += 1
         plist = [{"symbol": s, "side": p["side"], "entry": p["entry"], "price": p["entry"],
                   "gross_pct": 0.0, "net_pct": -0.2, "peak_pct": 0.0,

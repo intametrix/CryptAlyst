@@ -228,6 +228,7 @@ DEFAULT_OPTIONS = {
     "allow_shorts": False,          # owner: no new shorts; entries come from the indicators
     "short_lock_pct": 0.15,         # take a short's profit early: 0.15% and it is banked
     "short_cash_usd": 100.0,        # ...or when the open short book is $100 in profit
+    "size_mult": 1.0,               # position-size multiplier (owner: trade large sizes)
 }
 _OPT = {"ts": 0.0, "v": dict(DEFAULT_OPTIONS)}
 
@@ -509,6 +510,15 @@ def grade(views, made_money):
 def risk_for(base, conf):
     """Conviction sizing: more confirmations, more capital."""
     return round(base * (0.6 + 0.2 * min(conf, 4)), 3)
+
+
+def size_mult():
+    """Position-size multiplier (owner: trade large sizes). Read from options so
+    it is auditable and reversible; default 1.0 leaves sizing unchanged."""
+    try:
+        return float(options().get("size_mult", 1.0) or 1.0)
+    except Exception:
+        return 1.0
 
 
 def exit_reason(chg, peak, lock, trail_arm, trail_gap, stop, held, clock,

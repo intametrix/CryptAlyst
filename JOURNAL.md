@@ -547,3 +547,24 @@ rules, governance, acceptance criteria, and the five immediate next actions.
 The GPU decision recorded there: JAX array semantics first, the cpu-vs-gpu
 timing experiment decides ATLAS's role, and the CPU audit path is the twin
 of every GPU fast path.
+
+---
+
+## Entry 13 — allow_shorts re-enabled (owner directive, A6)
+
+**Who:** the human (owner).
+**Why:** owner directive, 21 Oct — "enable short position trading".
+**Mechanism:** `tactics.set_option('allow_shorts', True)` → `scalp5/state/options.json` now carries `allow_shorts: true`; effective in `options()` within the ≤2s TTL, no restart needed.
+**A6 status:** re-enable is a human act; this was owner-directed, so no conflict. `risk.py:102` remains the single machine-enforced gate.
+**Active short params:** `short_lock_pct 0.15`, `short_cash_usd 100`; the executor halves notional on shorts (unbounded tail).
+**Boundary:** shorts are PAPER positions only — order endpoints remain blocked by design (`market_data_rest_backup.py`).
+**Follow-up (in flight):** fleet-wide sweep for long-only entry paths so "shorts enabled" is real across every engine, not just ungated.
+
+---
+
+## Entry 14 — supervisor launch enforcement hole (A6)
+
+**Found by KIMI (16:24 board review):** my 16:17:50 supervisor relaunch restarted ~22 DISABLED registry engines (alpha_rank, executor, grid, hft, movers, …). They were capital-zeroed so they could not trade, but A6 demands the block at launch, not just at capital.
+**Diagnosis:** `start(name)` in supervisor.py had NO disabled check of its own — the restart loop (supervisor.py:232-242) checked `disabled_set()` before `start()`, but any call path that reached `start()` directly (or a stale first-cycle read of a partially-updated disabled.json) could launch a disabled book. This is a defense-in-depth gap, not a logic failure in the loop.
+**Fix:** `start(name)` now re-checks `_norm(name)`/`_norm(stem)` against `disabled_set()` and returns without launching if disabled — the block is now enforced at the launch site itself, so no call path can start a disabled book.
+**Status:** enforcement verified post-fix — the only registry engines not in disabled.json are the 5 kept books (models10, marketagent, alpha, cryptostrat, churn).

@@ -264,7 +264,7 @@ class Book:
         return self.equity - self.start
 
     def open(self, sym, side, px):
-        notional = min(self.equity * RISK / 100 * 40, self.equity * 0.08)  # cap 8% of book
+        notional = min(self.equity * RISK / 100 * 40, self.equity * 0.08) * T.size_mult()  # cap 8% of book, scaled
         did = emit.decision(self.name, sym, side, True, "model") if emit else None
         self.pos[sym] = {"side": side, "entry": px, "t": time.time(),
                          "notional": notional, "peak": 0.0, "decision_id": did}
@@ -423,7 +423,7 @@ def main():
                         continue
                     if side == "buy" and T.btc_regime() == "down":
                         continue
-                _notional = min(bk.equity * RISK / 100 * 40, bk.equity * 0.08)
+                _notional = min(bk.equity * RISK / 100 * 40, bk.equity * 0.08) * T.size_mult()
                 if side == "sell":
                     _notional *= 0.5      # unbounded tail: shorts carry half the size
                 _fc = forecast(sym, side) or {}
