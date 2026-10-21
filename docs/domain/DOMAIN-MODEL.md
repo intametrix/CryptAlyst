@@ -4,24 +4,41 @@
 
 Seven bounded contexts, one contract between them, and a record that can be read without the platform running.
 
+**Platform build 1.0.0 · 823eb7a · 2026-10-21**  ·  domain model · revision 1.0  ·  © 2026 CryptAlyst · designed and built by the CryptAlyst engineering team · prepared for the operator
+
 ## Contents
 
-1. [How to read this](#how-to-read)
-2. [Level 0 — the context map](#contexts)
-3. [Level 1 — the envelope, the only thing that travels](#envelope)
-4. [Level 2 — market data, the only process that talks to the exchange](#market)
-5. [Level 2 — the book, the aggregate that decides](#books)
-6. [Level 2 — the gate, what must pass before money moves](#risk)
-7. [Level 2 — the recorder, the only writer](#recorder)
-8. [Level 3 — the lake, what is actually on disk](#lake)
-9. [Level 4 — beneath the lake](#beneath)
-10. [Level 2 — control, what may change behaviour](#control)
-11. [Crossing concerns — time, identity and generations](#crossing)
-12. [What the model deliberately refuses to do](#failures)
+1. [How to read this](#how-to-read) — How the document narrows its lens, from the whole platform to a single byte on disk.
+2. [Level 0 — the context map](#contexts) — The seven contexts, the aggregates each owns, and the direction knowledge travels between them.
+3. [Level 1 — the envelope, the only thing that travels](#envelope) — The one object that crosses every boundary, and the hops that record what happened to it.
+4. [Level 2 — market data, the only process that talks to the exchange](#market) — How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.
+5. [Level 2 — the book, the aggregate that decides](#books) — The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.
+6. [Level 2 — the gate, what must pass before money moves](#risk) — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
+7. [Level 2 — the recorder, the only writer](#recorder) — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
+8. [Level 3 — the lake, what is actually on disk](#lake) — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
+9. [Level 4 — beneath the lake](#beneath) — The filesystem properties that let a case file be called evidence a year later.
+10. [Level 2 — control, what may change behaviour](#control) — What may change behaviour — supervise and stop — and what STOP must never touch.
+11. [Crossing concerns — time, identity and generations](#crossing) — Time, identity and generations, modelled once in the envelope rather than per context.
+12. [What the model deliberately refuses to do](#failures) — The boundaries the model will not pretend to cross, stated so they can be argued with.
+
+### Figures
+
+| Fig | Figure | What it shows |
+|---|---|---|
+| 1 | The context map | seven contexts, their aggregates, the flow between them |
+| 2 | The envelope | data, meta, refs, and the hops appended along the way |
+| 3 | Market data | shards, parse, state, topics — and a publisher off the read path |
+| 4 | The book aggregate | equity, positions, trades, decisions, refusals |
+| 5 | The gate | interceptors before arithmetic, and the exit policy |
+| 6 | The recorder | one writer, hops recorded, derived references attached |
+| 7 | The lake | journal, line format, index, retention, replay |
+| 8 | Control | supervise, stop, and what STOP must never touch |
 
 ---
 
 ## How to read this
+
+> **What this shows** — How the document narrows its lens, from the whole platform to a single byte on disk.
 
 A domain model is an argument about what belongs together, not an inventory of files. Each level here narrows the lens: the contexts, then one context at a time, then the record, and finally the bytes underneath the record.
 
@@ -37,6 +54,8 @@ Two rules run through every level. First, exactly one kind of thing travels betw
 ---
 
 ## Level 0 — the context map
+
+> **What this shows** — The seven contexts, the aggregates each owns, and the direction knowledge travels between them.
 
 ![The platform in one picture: contexts, the aggregates they own, and which way knowledge flows.](fig/01-contexts.png)
 
@@ -60,6 +79,8 @@ The arrows are not calls. Each one is a stream of envelopes on one bus, so a con
 
 ## Level 1 — the envelope, the only thing that travels
 
+> **What this shows** — The one object that crosses every boundary, and the hops that record what happened to it.
+
 ![Three members, and the hops that prove what happened to the envelope on the way.](fig/02-envelope.png)
 
 *Three members, and the hops that prove what happened to the envelope on the way.*
@@ -76,6 +97,8 @@ The contract is deliberately strict in one direction and lenient in the other. A
 ---
 
 ## Level 2 — market data, the only process that talks to the exchange
+
+> **What this shows** — How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.
 
 ![Shards, one parse, in-memory state, then topics. Publishing never blocks the socket.](fig/03-market-data.png)
 
@@ -96,6 +119,8 @@ The one design decision worth naming: publishing happens on a goroutine through 
 
 ## Level 2 — the book, the aggregate that decides
 
+> **What this shows** — The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.
+
 ![A book is one aggregate: equity, positions, and the decisions that produced them.](fig/04-book.png)
 
 *A book is one aggregate: equity, positions, and the decisions that produced them.*
@@ -112,6 +137,8 @@ The refusals are the part most systems omit. A refusal carries the rule that sto
 ---
 
 ## Level 2 — the gate, what must pass before money moves
+
+> **What this shows** — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
 
 ![Interceptors, then the arithmetic. Every stage appends a hop, so a refusal explains itself.](fig/05-risk.png)
 
@@ -134,6 +161,8 @@ The exit policy is part of the model, not an implementation detail. The platform
 
 ## Level 2 — the recorder, the only writer
 
+> **What this shows** — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
+
 ![One consumer per topic, hops recorded as they pass, derived references attached at the door.](fig/06-recorder.png)
 
 *One consumer per topic, hops recorded as they pass, derived references attached at the door.*
@@ -150,6 +179,8 @@ Books do not declare their inputs. Rather than leave a decision parentless, the 
 ---
 
 ## Level 3 — the lake, what is actually on disk
+
+> **What this shows** — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
 
 ![A journal, a line format, an index, and the retention that keeps it from growing forever.](fig/07-lake.png)
 
@@ -170,6 +201,8 @@ Reader queries do not scan the journal. An index of topic to byte offsets is bui
 
 ## Level 4 — beneath the lake
 
+> **What this shows** — The filesystem properties that let a case file be called evidence a year later.
+
 Underneath the lake there is a filesystem and nothing else. The properties that follow from that are worth stating plainly, because they are the reason a case file can be called evidence.
 
 | Property | Consequence |
@@ -186,6 +219,8 @@ The separation matters architecturally: the journal is the durable fact, the ind
 ---
 
 ## Level 2 — control, what may change behaviour
+
+> **What this shows** — What may change behaviour — supervise and stop — and what STOP must never touch.
 
 ![The supervisor, the stop flag and the heartbeat, and what STOP must never touch.](fig/08-control.png)
 
@@ -204,6 +239,8 @@ The inverse is equally deliberate: no data path can stop the platform. A feed ou
 
 ## Crossing concerns — time, identity and generations
 
+> **What this shows** — Time, identity and generations, modelled once in the envelope rather than per context.
+
 Three things are shared by every context and are therefore modelled once, in the envelope.
 
 | Concern | Field | Rule |
@@ -219,6 +256,8 @@ A correlation id is minted locally at the boundary, so work can start without a 
 ---
 
 ## What the model deliberately refuses to do
+
+> **What this shows** — The boundaries the model will not pretend to cross, stated so they can be argued with.
 
 A model is also a list of things it will not pretend to know. These are the boundaries, stated so they can be argued with.
 

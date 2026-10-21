@@ -5,10 +5,27 @@ TITLE = "CryptAlyst — a domain model"
 SUBTITLE = "from the first socket message to the byte on disk"
 BLURB = ("Seven bounded contexts, one contract between them, and a record that can be read "
          "without the platform running.")
+VERSION = "Platform build 1.0.0 · 823eb7a · 2026-10-21"
+COPYRIGHT = ("© 2026 CryptAlyst · designed and built by the CryptAlyst engineering team · "
+             "prepared for the operator")
+REVISION = "domain model · revision 1.0"
+
+FIGURES = [
+    ("00", "00-cover.png", "Cover", "build identity and the seven contexts"),
+    ("1", "01-contexts.png", "The context map", "seven contexts, their aggregates, the flow between them"),
+    ("2", "02-envelope.png", "The envelope", "data, meta, refs, and the hops appended along the way"),
+    ("3", "03-market-data.png", "Market data", "shards, parse, state, topics — and a publisher off the read path"),
+    ("4", "04-book.png", "The book aggregate", "equity, positions, trades, decisions, refusals"),
+    ("5", "05-risk.png", "The gate", "interceptors before arithmetic, and the exit policy"),
+    ("6", "06-recorder.png", "The recorder", "one writer, hops recorded, derived references attached"),
+    ("7", "07-lake.png", "The lake", "journal, line format, index, retention, replay"),
+    ("8", "08-control.png", "Control", "supervise, stop, and what STOP must never touch"),
+]
 
 SECTIONS = [
     {
         "id": "how-to-read",
+        "shows": "How the document narrows its lens, from the whole platform to a single byte on disk.",
         "title": "How to read this",
         "body": [
             "A domain model is an argument about what belongs together, not an inventory of files. "
@@ -26,6 +43,7 @@ SECTIONS = [
     },
     {
         "id": "contexts",
+        "shows": "The seven contexts, the aggregates each owns, and the direction knowledge travels between them.",
         "title": "Level 0 — the context map",
         "figure": ("01-contexts.png", "The platform in one picture: contexts, the aggregates they own, and which way knowledge flows."),
         "body": [
@@ -46,6 +64,7 @@ SECTIONS = [
     },
     {
         "id": "envelope",
+        "shows": "The one object that crosses every boundary, and the hops that record what happened to it.",
         "title": "Level 1 — the envelope, the only thing that travels",
         "figure": ("02-envelope.png", "Three members, and the hops that prove what happened to the envelope on the way."),
         "body": [
@@ -68,6 +87,7 @@ SECTIONS = [
     },
     {
         "id": "market",
+        "shows": "How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.",
         "title": "Level 2 — market data, the only process that talks to the exchange",
         "figure": ("03-market-data.png", "Shards, one parse, in-memory state, then topics. Publishing never blocks the socket."),
         "body": [
@@ -88,6 +108,7 @@ SECTIONS = [
     },
     {
         "id": "books",
+        "shows": "The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.",
         "title": "Level 2 — the book, the aggregate that decides",
         "figure": ("04-book.png", "A book is one aggregate: equity, positions, and the decisions that produced them."),
         "body": [
@@ -108,6 +129,7 @@ SECTIONS = [
     },
     {
         "id": "risk",
+        "shows": "The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.",
         "title": "Level 2 — the gate, what must pass before money moves",
         "figure": ("05-risk.png", "Interceptors, then the arithmetic. Every stage appends a hop, so a refusal explains itself."),
         "body": [
@@ -129,6 +151,7 @@ SECTIONS = [
     },
     {
         "id": "recorder",
+        "shows": "The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.",
         "title": "Level 2 — the recorder, the only writer",
         "figure": ("06-recorder.png", "One consumer per topic, hops recorded as they pass, derived references attached at the door."),
         "body": [
@@ -149,6 +172,7 @@ SECTIONS = [
     },
     {
         "id": "lake",
+        "shows": "What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.",
         "title": "Level 3 — the lake, what is actually on disk",
         "figure": ("07-lake.png", "A journal, a line format, an index, and the retention that keeps it from growing forever."),
         "body": [
@@ -168,6 +192,7 @@ SECTIONS = [
     },
     {
         "id": "beneath",
+        "shows": "The filesystem properties that let a case file be called evidence a year later.",
         "title": "Level 4 — beneath the lake",
         "body": [
             "Underneath the lake there is a filesystem and nothing else. The properties that follow "
@@ -190,6 +215,7 @@ SECTIONS = [
     },
     {
         "id": "control",
+        "shows": "What may change behaviour — supervise and stop — and what STOP must never touch.",
         "title": "Level 2 — control, what may change behaviour",
         "figure": ("08-control.png", "The supervisor, the stop flag and the heartbeat, and what STOP must never touch."),
         "body": [
@@ -211,6 +237,7 @@ SECTIONS = [
     },
     {
         "id": "crossing",
+        "shows": "Time, identity and generations, modelled once in the envelope rather than per context.",
         "title": "Crossing concerns — time, identity and generations",
         "body": [
             "Three things are shared by every context and are therefore modelled once, in the envelope.",
@@ -229,6 +256,7 @@ SECTIONS = [
     },
     {
         "id": "failures",
+        "shows": "The boundaries the model will not pretend to cross, stated so they can be argued with.",
         "title": "What the model deliberately refuses to do",
         "body": [
             "A model is also a list of things it will not pretend to know. These are the boundaries, "

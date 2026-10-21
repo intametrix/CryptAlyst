@@ -6,16 +6,29 @@ import content
 HERE = os.path.dirname(os.path.abspath(__file__))
 out = ["# " + content.TITLE, "", "*" + content.SUBTITLE + "*", "", content.BLURB, ""]
 
+out.append("**" + content.VERSION + "**  ·  " + content.REVISION + "  ·  " + content.COPYRIGHT)
+out.append("")
 out.append("## Contents")
 out.append("")
 for i, s in enumerate(content.SECTIONS, 1):
-    out.append("%d. [%s](#%s)" % (i, s["title"], s["id"]))
+    out.append("%d. [%s](#%s) — %s" % (i, s["title"], s["id"], s.get("shows", "")))
+out.append("")
+out.append("### Figures")
+out.append("")
+out.append("| Fig | Figure | What it shows |")
+out.append("|---|---|---|")
+for n, f, title, what in content.FIGURES:
+    if n == "00":
+        continue
+    out.append("| %s | %s | %s |" % (n, title, what))
 out.append("")
 
 for s in content.SECTIONS:
     out.append("---")
     out.append("")
     out.append("## " + s["title"])
+    out.append("")
+    out.append("> **What this shows** — " + s.get("shows", ""))
     out.append("")
     if s.get("figure"):
         name, caption = s["figure"]
