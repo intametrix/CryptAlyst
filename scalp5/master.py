@@ -2527,16 +2527,20 @@ async function renderBooks(){
     UI.stat("books idle", flat, "#7c8b9d")+
     UI.stat("open positions", d.open||0)+
     UI.stat("closed trades", d.closed||0)+
+    UI.stat("realised", ((d.realised||0)>=0?"+":"")+money(d.realised||0), ((d.realised||0)>=0?"#3fb950":"#f85149"))+
+    UI.stat("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"))+
+    UI.stat("total", ((d.total||0)>=0?"+":"")+money(d.total||0), ((d.total||0)>=0?"#3fb950":"#f85149"))+
     '</div>'+
     '<div class="mk" style="margin-top:6px">'+books.length+' books each start at $'+
       Number(books[0].start||5000).toLocaleString()+' · '+(d.open||0)+
       ' positions open across them · '+(d.closed||0)+' trades closed in total</div>'+
     '</div>';
 
-  books.sort(function(a,b){ return b.return_pct-a.return_pct; });
+  books.sort(function(a,b){ return (b.total_pct||0)-(a.total_pct||0); });
   grid.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">'+
     books.map(function(b){
-      var col=b.return_pct>0?"#3fb950":b.return_pct<0?"#f85149":"#7c8b9d";
+      var tp=(b.total_pct==null?b.return_pct:b.total_pct)||0;
+      var col=tp>0?"#3fb950":tp<0?"#f85149":"#7c8b9d";
       var curve=b.curve||[];
       var spark="";
       if(curve.length>1){
@@ -2560,11 +2564,14 @@ async function renderBooks(){
           '<b style="font-size:13px">'+esc(b.engine)+'</b>'+
           '<span class="mk">'+b.trades+' closed · '+b.open+' open</span>'+
           '<span style="flex:1"></span>'+
-          '<b style="color:'+col+';font-size:14px">'+(b.return_pct>0?"+":"")+Number(b.return_pct).toFixed(2)+'%</b>'+
+          '<b style="color:'+col+';font-size:14px">'+(tp>0?"+":"")+Number(tp).toFixed(2)+'%</b>'+
         '</div>'+
         spark+
         '<div style="display:flex;gap:12px;margin-top:6px;font-family:var(--mono);font-size:11px">'+
           '<span style="color:#9fb0c4">$'+Number(b.equity).toLocaleString(undefined,{maximumFractionDigits:0})+'</span>'+
+          '<span style="color:'+((b.realised||0)>=0?"#3fb950":"#f85149")+'">real '+((b.realised||0)>=0?"+":"")+money(b.realised||0)+'</span>'+
+          '<span style="color:'+((b.unrealised||0)>=0?"#3fb950":"#f85149")+'">unreal '+((b.unrealised||0)>=0?"+":"")+money(b.unrealised||0)+'</span>'+
+          '<b style="color:'+((b.total||0)>=0?"#3fb950":"#f85149")+'">total '+((b.total||0)>=0?"+":"")+money(b.total||0)+'</b>'+
           '<span style="color:#7c8b9d">win '+Number(b.win_pct).toFixed(0)+'%</span>'+
           '<span style="color:'+(b.avg_net>=0?"#3fb950":"#f85149")+'">avg '+Number(b.avg_net).toFixed(3)+'%</span>'+
         '</div>'+
@@ -5997,6 +6004,7 @@ class H(BaseHTTPRequestHandler):
                     "total": round(eq - start + unreal, 2),
                     "marked": marked, "unmarked": unmarked,
                     "return_pct": round(100 * (eq / start - 1), 3) if start else 0,
+                    "total_pct": round(100 * (eq - start + unreal) / start, 3) if start else 0,
                     "trades": len(trades), "win_pct": round(100 * wins / len(trades), 1) if trades else 0,
                     "avg_net": round(sum((t.get("net_pct") or 0) for t in trades) / len(trades), 4) if trades else 0,
                     "open": len(b.get("positions") or []),
