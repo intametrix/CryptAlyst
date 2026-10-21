@@ -13,11 +13,14 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"tad/scheduler"
 )
 
 type bar struct {
@@ -41,6 +44,8 @@ var (
 	lastBarT = map[string]int64{} // per-symbol last analysed bar open time
 	mu       sync.Mutex
 	cursor   int64
+	fresh    *freshness
+	sched    *scheduler.Scheduler
 	client   = &http.Client{Timeout: 6 * time.Second}
 )
 
@@ -296,11 +301,14 @@ func loop(every time.Duration) {
 				continue
 			}
 			lastBarT[s] = kb[len(kb)-1].T
+			now := time.Now().UnixMilli()
+			fresh.note("price", s, now) // a fresh bar close is the price input
 			live := analyseNoDedupeBars(s, kb)
 			if live == nil {
 				live = []sig{}
 			}
 			all = append(all, live...)
+			fresh.note("ta", s, now) // tad computed TA for this symbol just now
 			// one message per symbol per cycle, even with nothing firing: the
 			// models need to know *when* it was checked, not only when it tripped
 			if body, err := json.Marshal(map[string]any{"symbol": s,
@@ -308,6 +316,8 @@ func loop(every time.Duration) {
 				"ts": time.Now().UnixMilli()}); err == nil {
 				publish("intel", "intel.ta", body)
 			}
+			// signal completion: pace a per-symbol evaluation pulse to the books
+			sched.Submit(s)
 		}
 		if len(all) > 0 {
 			for _, one := range all {
@@ -339,6 +349,19 @@ func main() {
 	every := flag.Duration("every", 5*time.Second, "scan interval")
 	flag.Parse()
 	log.SetFlags(log.Ltime)
+	fresh = newFreshness()
+	// The pacer: a bounded pool that coalesces per-symbol evaluation pulses so a
+	// minute-boundary herd of bar closes cannot stampede the books. The eval
+	// callback never decides — it publishes one model.evaluate pulse with the
+	// freshness snapshot; books own all decision logic.
+	sched = scheduler.New(64, runtime.GOMAXPROCS(0), 400, func(sym string) {
+		now := time.Now().UnixMilli()
+		body, _ := json.Marshal(map[string]any{
+			"symbol": sym, "reason": "bar_close", "ts_ms": now,
+			"inputs": fresh.snapshot(sym, now),
+		})
+		publish("model", "model.evaluate", body)
+	})
 	go loop(*every)
 
 	mux := http.NewServeMux()
@@ -353,6 +376,11 @@ func main() {
 		out := map[string]any{"ok": true, "service": "tad", "symbols": len(symbols),
 			"buffered": n, "cursor": cursor, "interval": every.String()}
 		mu.Unlock()
+		if sched != nil {
+			dropped, coalesced, evicted, depth := sched.Stats()
+			out["pacer"] = map[string]any{"depth": depth, "dropped": dropped,
+				"coalesced": coalesced, "evicted": evicted}
+		}
 		json.NewEncoder(w).Encode(out)
 	})
 	mux.HandleFunc("/latest", func(w http.ResponseWriter, r *http.Request) {

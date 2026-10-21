@@ -28,6 +28,7 @@ var All = []Topic{
 	{"model.pnl", "model", []string{"alpha_rank", "models10", "crypto_pack", "executor",
 		"alpha_signals", "skim_pump", "curve_rider", "hft", "movers", "grid", "supervisor"}, "5m"},
 	{"model.rank", "model", []string{"alpha_rank"}, "5m"},
+	{"model.evaluate", "model", []string{"tad"}, "60s"},
 	{"risk.state", "risk", []string{"risk"}, "5m"},
 	{"review.verdict", "review", []string{"portfolio_review"}, "5m"},
 	{"exec.quote", "exec", []string{"maker"}, "60s"},
