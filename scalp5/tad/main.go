@@ -20,7 +20,10 @@ import (
 	"time"
 )
 
-type bar struct{ O, H, L, C, V float64 }
+type bar struct {
+	T             int64
+	O, H, L, C, V float64
+}
 
 type sig struct {
 	Cursor   int64   `json:"cursor"`
@@ -33,11 +36,12 @@ type sig struct {
 }
 
 var (
-	cur    atomic.Value // []sig snapshot of recent signals
-	seen   = map[string]bool{}
-	mu     sync.Mutex
-	cursor int64
-	client = &http.Client{Timeout: 6 * time.Second}
+	cur      atomic.Value // []sig snapshot of recent signals
+	seen     = map[string]bool{}
+	lastBarT = map[string]int64{} // per-symbol last analysed bar open time
+	mu       sync.Mutex
+	cursor   int64
+	client   = &http.Client{Timeout: 6 * time.Second}
 )
 
 func fetch(url string) ([]byte, error) {
@@ -73,9 +77,23 @@ func klines(sym string) []bar {
 		if len(r) < 6 {
 			continue
 		}
-		out = append(out, bar{O: f(r[1]), H: f(r[2]), L: f(r[3]), C: f(r[4]), V: f(r[5])})
+		var t int64
+		switch x := r[0].(type) {
+		case float64:
+			t = int64(x)
+		case json.Number:
+			t, _ = x.Int64()
+		}
+		out = append(out, bar{T: t, O: f(r[1]), H: f(r[2]), L: f(r[3]), C: f(r[4]), V: f(r[5])})
 	}
 	return out
+}
+
+// barAdvanced is the incremental gate: a symbol is recomputed only when its own
+// bar open time advanced past the last analysed one. A quiet symbol returns
+// false and is skipped, not recomputed (owner ruling).
+func barAdvanced(lastT, newT int64) bool {
+	return newT > lastT
 }
 
 func emaLast(v []float64, n int) float64 {
@@ -145,7 +163,10 @@ func emit(sym string, out *[]sig, kind, side string, strength float64, note stri
 
 // analyse computes every signal that is true right now for one symbol.
 func analyse(sym string) []sig {
-	bs := klines(sym)
+	return analyseFromBars(sym, klines(sym))
+}
+
+func analyseFromBars(sym string, bs []bar) []sig {
 	if len(bs) < 60 {
 		return nil
 	}
@@ -193,10 +214,10 @@ func analyse(sym string) []sig {
 		emit(sym, &out, "ema_cross_down", "sell", 0.6, fmt.Sprintf("ema9<ema21, price<vwap %.4f", vwap))
 	}
 	if r >= 70 {
-		emit(sym, &out, "rsi_overbought", "sell", (r - 70) / 30, fmt.Sprintf("rsi %.0f", r))
+		emit(sym, &out, "rsi_overbought", "sell", (r-70)/30, fmt.Sprintf("rsi %.0f", r))
 	}
 	if r <= 30 {
-		emit(sym, &out, "rsi_oversold", "buy", (30 - r) / 30, fmt.Sprintf("rsi %.0f", r))
+		emit(sym, &out, "rsi_oversold", "buy", (30-r)/30, fmt.Sprintf("rsi %.0f", r))
 	}
 	if px > hi {
 		emit(sym, &out, "donchian_break_up", "buy", 0.8, fmt.Sprintf("above 20-bar high %.6g", hi))
@@ -265,7 +286,17 @@ func loop(every time.Duration) {
 		}
 		var all []sig = make([]sig, 0)
 		for _, s := range symbols {
-			live := analyseNoDedupe(s)
+			// per-symbol incremental: fetch once, recompute only when this symbol's
+			// own bar advanced. A quiet symbol is skipped, not recomputed.
+			kb := klines(s)
+			if len(kb) == 0 {
+				continue
+			}
+			if !barAdvanced(lastBarT[s], kb[len(kb)-1].T) {
+				continue
+			}
+			lastBarT[s] = kb[len(kb)-1].T
+			live := analyseNoDedupeBars(s, kb)
 			if live == nil {
 				live = []sig{}
 			}
@@ -372,6 +403,20 @@ func analyseNoDedupe(sym string) []sig {
 	seen = map[string]bool{}
 	mu.Unlock()
 	out := analyse(sym)
+	mu.Lock()
+	seen = saved
+	mu.Unlock()
+	return out
+}
+
+// analyseNoDedupeBars is the incremental path: it reuses bars already fetched for
+// the close-time check, so a symbol is fetched once per cycle, not twice.
+func analyseNoDedupeBars(sym string, bs []bar) []sig {
+	mu.Lock()
+	saved := seen
+	seen = map[string]bool{}
+	mu.Unlock()
+	out := analyseFromBars(sym, bs)
 	mu.Lock()
 	seen = saved
 	mu.Unlock()
