@@ -121,3 +121,17 @@ These are the old experiment's records; they are data, they stay.
 - `pumpdump/` + `tools/` (the Python reference implementation and flow
   harness) keep **no durable store** — everything is in-memory or computed.
 - `.comms/*.jsonl` — the agent channel mailbox, 3 messages at census time.
+
+## 4. Reference data service (refdata, new)
+
+- `scalp5/state/refdata/refdata.jsonl` (default `-data`) — the registry's
+  append-only journal: instrument upserts, document upserts (bodies inline,
+  sha256-addressed), and correlation edges. Replayable, last-write-wins per
+  id, edge-triple dedupe. Empty until first boot; seed with
+  `go run ./cmd/refdata -seed cmd/refdata/seed.json` from `scalp5/core`.
+- One logical dataset, one file, anchored by `-data` exactly like the Go
+  backend's `-data-dir` stores; no database engine, no indexes on disk —
+  indexes are in-memory projections rebuilt by replay.
+- Design, API, and the storage swap point (Backend interface: room for
+  SQLite/RocksDB/vector/Mongo adapters, the lake decides placement):
+  `docs/refdata.md`.
