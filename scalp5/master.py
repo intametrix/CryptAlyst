@@ -2283,6 +2283,44 @@ async function drillOpen(kind){
   await drillRender();
 }
 
+
+async function modelBooks(model){
+  var m=document.getElementById("drillmodal");
+  if(!m){
+    m=document.createElement("div");
+    m.id="drillmodal";
+    m.className="sheet";
+    m.style.cssText="position:fixed;inset:0;background:#050a10ee;z-index:60;display:none;"+
+      "overflow:auto;padding:22px";
+    m.innerHTML='<div style="max-width:1200px;margin:0 auto">'+
+      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">'+
+      '<b id="drilltitle" style="font-size:16px">—</b><span class="spacer" style="flex:1"></span>'+
+      '<button class="tbtn" onclick="drillClose()">close</button></div>'+
+      '<div id="drillbody" class="panel" style="padding:10px">loading…</div></div>';
+    document.body.appendChild(m);
+  }
+  m.classList.add("open"); m.style.display="block";
+  var t=document.getElementById("drilltitle"); if(t) t.textContent="books using "+model;
+  var box=document.getElementById("drillbody");
+  var d={};
+  try{ d=await (await fetch("/api/model_books?model="+encodeURIComponent(model),{cache:"no-store"})).json(); }
+  catch(e){ box.innerHTML='<div class="empty">unavailable</div>'; return; }
+  var rows=(d.books||[]).map(function(b){
+    return '<tr><td>'+esc(b.engine)+'</td><td>'+esc(b.basis||"—")+'</td>'+
+      '<td class="num">'+money(b.equity)+'</td><td class="num">'+(b.open||0)+'</td>'+
+      '<td class="num">'+(b.trades||0)+'</td>'+
+      '<td class="num" style="color:'+((b.age_s>120)?"#e3b341":"#7c8b9d")+'">'+(b.age_s|0)+'s</td></tr>';
+  }).join("");
+  var hosts=(d.hosts||[]).map(function(h){ return esc(h.registry)+" ("+esc(h.script)+")"; }).join(", ") || "unknown";
+  box.innerHTML='<div style="color:#9fb0c4;font-family:var(--mono);font-size:11px;margin-bottom:8px">'+
+    'host process: '+hosts+'</div>'+
+    ((d.books||[]).length
+      ? '<table class="wide"><thead><tr><th>book</th><th>basis</th><th class="num">equity</th>'+
+        '<th class="num">open</th><th class="num">trades</th><th class="num">pack age</th></tr></thead>'+
+        '<tbody>'+rows+'</tbody></table>'
+      : '<div class="empty">no book reports this model yet</div>');
+}
+
 async function drillRender(){
   var box=document.getElementById("drillbody"); if(!box) return;
   var kind=window.DRILL||"realised";
@@ -2940,6 +2978,8 @@ async function renderBooks(){
   head.innerHTML='<div class="panel" style="padding:12px 14px;margin-bottom:12px">'+
     '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center">'+
     UI.stat("combined equity","$"+Number(d.equity||0).toLocaleString(undefined,{maximumFractionDigits:0}))+
+    UI.stat("live books", (d.live_books||0)+" live · "+(d.stale_books||0)+" frozen",
+            (d.stale_books? "#e3b341" : "#3fb950"))+
     UI.stat("return",(d.return_pct>=0?"+":"")+Number(d.return_pct||0).toFixed(3)+"%", (d.return_pct>=0?"#3fb950":"#f85149"))+
     UI.stat("books", books.length)+
     UI.stat("books trading", active, "#58a6ff")+
@@ -2961,7 +3001,10 @@ async function renderBooks(){
 
   var allBooks = books.length;
   if(window.BOOKFILTER) books = books.filter(function(b){ return _bookMatches(b, window.BOOKFILTER); });
-  books.sort(function(a,b){ return (b.total_pct||0)-(a.total_pct||0); });
+  books.sort(function(a,b){
+    if((a.live===false)!==(b.live===false)) return a.live===false?1:-1;
+    return (b.total_pct||0)-(a.total_pct||0);
+  });
   if(window.BOOKFILTER){
     grid.insertAdjacentHTML("beforebegin", "");
   }
@@ -2993,11 +3036,15 @@ async function renderBooks(){
           '<span>$'+Number(p.notional||0).toFixed(0)+'</span></div>';
       }).join("");
       var more=b.open-(b.positions||[]).length;
-      return '<div class="panel" style="padding:12px 14px;cursor:pointer" onclick="openBook(\''+esc(b.engine)+'\')">'+
+      return '<div class="panel" style="padding:12px 14px;cursor:pointer;'+
+        (b.live===false?'opacity:.62;border-color:#3a3320;':'')+'" onclick="openBook(\''+esc(b.engine)+'\')">'+
         '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">'+
           '<b style="font-size:13px">'+esc(b.engine)+'</b>'+
           '<span class="mk">'+b.trades+' closed (L'+(b.closed_long||0)+'/S'+(b.closed_short||0)+') · '+
             b.open+' open (L'+(b.open_long||0)+'/S'+(b.open_short||0)+')</span>'+
+          '<span class="mk" title="pack written '+((b.age_s)||0)+'s ago" style="color:'+
+            ((b.live===false)?"#e3b341":"#5c6b7c")+'">'+
+            ((b.live===false)?("frozen "+Math.round((b.age_s||0)/60)+"m"):"live")+'</span>'+
           '<span style="flex:1"></span>'+
           '<b style="color:'+col+';font-size:14px">'+(tp>0?"+":"")+Number(tp).toFixed(2)+'%</b>'+
         ' <button class="tbtn" onclick="event.stopPropagation();closeBook(\''+esc(b.engine)+'\',this)" '+
@@ -3290,8 +3337,9 @@ async function renderModels(){
     var wr=n?(100*wins/n).toFixed(0)+"%":"—";
     var off=disabled.indexOf(e.key)>=0;
     var ret=e.return_pct||0;
-    return '<tr class="sigrow" style="cursor:pointer" onclick="openModel(\''+esc(e.key)+'\')">'+
-      '<td style="color:'+(e.colour||'#c9d6e3')+';font-weight:700">'+esc(e.key)+'</td>'+
+    return '<tr class="sigrow" style="cursor:pointer" onclick="modelBooks(\''+esc(e.key)+'\')">'+
+      '<td style="color:'+(e.colour||'#c9d6e3')+';font-weight:700" title="click: which books use this model">'+
+      esc(e.key)+'</td>'+
       '<td>'+engSpark(e.key,70,15)+'</td>'+
       '<td style="text-align:right">$'+money(e.equity)+'</td>'+
       '<td class="'+(ret>=0?'up':'down')+'" style="text-align:right">'+(ret>=0?'+':'')+ret.toFixed(2)+'%</td>'+
@@ -6306,6 +6354,47 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, _json.dumps({"engines": out,
                                                 "alive": sum(1 for r in out if r["alive"])}),
                               "application/json")
+        if p == "/api/model_books":
+            import glob as _g, json as _json, re as _re
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            model = (q.get("model", [""])[0] or "").strip()
+            if not model:
+                return self._send(400, _json.dumps({"error": "model required"}),
+                                  "application/json")
+            key = model.replace("_", "").lower()
+            books = []
+            for f in _g.glob(os.path.join(HERE, "state", "pack_*.json")):
+                try:
+                    b = _json.load(open(f))
+                except Exception:
+                    continue
+                eng = str(b.get("engine") or "")
+                basis = str(b.get("basis") or "")
+                if key in eng.replace("_", "").lower() or (basis and key in basis.replace("_", "").lower()):
+                    books.append({"engine": eng, "basis": basis,
+                                  "equity": b.get("equity"), "open": len(b.get("positions") or []),
+                                  "trades": len(b.get("trades") or []),
+                                  "age_s": int(time.time() - os.path.getmtime(f))})
+            hosts = []
+            try:
+                import supervisor as _sup
+                for name, argv in _sup.ENGINES.items():
+                    script = os.path.basename(argv[2])
+                    if key in name.replace("_", "").lower() or key in script.replace("_", "").lower():
+                        hosts.append({"registry": name, "script": script})
+            except Exception:
+                pass
+            for src, marker in (("crypto_pack.py", r"CFG\s*=\s*\{(.*?)\n\}"),
+                                ("alpha_signals.py", r"MODELS\s*=\s*\{(.*?)\n\}")):
+                try:
+                    blob = open(os.path.join(HERE, src)).read()
+                    m = _re.search(marker, blob, _re.S)
+                    if m and ('"%s"' % model) in m.group(1):
+                        hosts.append({"registry": src.replace(".py", ""), "script": src})
+                except Exception:
+                    pass
+            return self._send(200, _json.dumps({"model": model, "books": books,
+                                                "hosts": hosts}), "application/json")
         if p == "/api/cashin_now":
             import json as _json
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -6542,6 +6631,7 @@ class H(BaseHTTPRequestHandler):
                     run += (t.get("net_pct") or 0)
                     curve.append(round(run, 4))
                 unreal, marked, unmarked = _mark(b.get("positions") or [], _prices_now())
+                _age = int(time.time() - os.path.getmtime(os.path.join(HERE, "state", fn)))
                 sides = _sides(b.get("positions") or [], trades)
                 out.append({
                     "engine": b.get("engine"),
@@ -6550,6 +6640,7 @@ class H(BaseHTTPRequestHandler):
                     "unrealised": unreal,
                     "total": round(eq - start + unreal, 2),
                     "marked": marked, "unmarked": unmarked,
+                    "age_s": _age, "live": _age < 120,
                     "return_pct": round(100 * (eq / start - 1), 3) if start else 0,
                     "total_pct": round(100 * (eq - start + unreal) / start, 3) if start else 0,
                     "open_long": sides["open_long"], "open_short": sides["open_short"],
@@ -6568,6 +6659,8 @@ class H(BaseHTTPRequestHandler):
                     "ts": b.get("ts")})
             total = sum(r["equity"] for r in out)
             start_total = sum(r["start"] for r in out) or 1
+            live_books = [r for r in out if r.get("live")]
+            stale_books = [r for r in out if not r.get("live")]
             long_open = sum(r["open_long"] for r in out)
             short_open = sum(r["open_short"] for r in out)
             long_closed = sum(r["closed_long"] for r in out)
@@ -6578,6 +6671,11 @@ class H(BaseHTTPRequestHandler):
                 "books": out, "equity": round(total, 2), "start": round(start_total, 2),
                 "realised": round(real_t, 2), "unrealised": round(unreal_t, 2),
                 "total": round(real_t + unreal_t, 2),
+                "live_books": len(live_books),
+                "stale_books": len(stale_books),
+                "live_realised": round(sum(r["realised"] for r in live_books), 2),
+                "live_total": round(sum(r["total"] for r in live_books), 2),
+                "stale_realised": round(sum(r["realised"] for r in stale_books), 2),
                 "return_pct": round(100 * (total / start_total - 1), 3),
                 "open": sum(r["open"] for r in out),
                 "open_long": long_open, "open_short": short_open,
