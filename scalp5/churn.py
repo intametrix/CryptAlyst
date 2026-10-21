@@ -11,6 +11,11 @@ and the losses are real; only the trade rate is artificial.
 import argparse, json, os, random, time, urllib.request
 
 try:
+    from lib import emit
+except Exception:
+    emit = None
+
+try:
     import tactics as _tactics
     _tactics.require_enabled('churn', 'churn.py')   # A6: a disabled book does not run
 except SystemExit:
@@ -48,13 +53,19 @@ def main():
                     continue          # profit-only: a short waits until it is green
                 net = chg - 200 * FEE
                 eq += p["notional"] * net / 100
-                trades.append({"symbol": s, "side": p["side"], "entry": p["entry"],
-                               "gross_pct": round(chg, 4), "net_pct": round(net, 4),
-                               "peak_pct": round(chg, 4), "reason": "churn_hold",
-                               "held_s": round(time.time() - p["t"], 1),
-                               "notional": round(p["notional"], 2),
-                               "entry_ms": int(p["t"] * 1000), "exit_ms": int(time.time() * 1000),
-                               "why": "churn demo"})
+                rec = {"symbol": s, "side": p["side"], "entry": p["entry"],
+                       "gross_pct": round(chg, 4), "net_pct": round(net, 4),
+                       "peak_pct": round(chg, 4), "reason": "churn_hold",
+                       "held_s": round(time.time() - p["t"], 1),
+                       "notional": round(p["notional"], 2),
+                       "entry_ms": int(p["t"] * 1000), "exit_ms": int(time.time() * 1000),
+                       "why": "churn demo", "decision_id": p.get("decision_id")}
+                trades.append(rec)
+                if emit:
+                    try:
+                        emit.fill("churn", rec)
+                    except Exception:
+                        pass
                 pos.pop(s, None)
         # one new fill per tick
         if px:
@@ -62,8 +73,9 @@ def main():
             if s not in pos:
                 side = -side
                 sd = "buy" if side > 0 else "sell"
+                did = emit.decision("churn", s, sd, True, "churn_demo") if emit else None
                 pos[s] = {"side": sd, "entry": px[s], "t": time.time(),
-                          "notional": min(eq * 0.002 / 0.01, eq * 2)}
+                          "notional": min(eq * 0.002 / 0.01, eq * 2), "decision_id": did}
                 n += 1
         plist = [{"symbol": s, "side": p["side"], "entry": p["entry"], "price": p["entry"],
                   "gross_pct": 0.0, "net_pct": -0.2, "peak_pct": 0.0,

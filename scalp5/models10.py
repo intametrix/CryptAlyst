@@ -21,6 +21,7 @@ import argparse, json, os, time, urllib.request
 import tactics as T
 import risk
 import maker
+from lib import emit
 
 try:
     import tactics as _tactics
@@ -264,8 +265,9 @@ class Book:
 
     def open(self, sym, side, px):
         notional = min(self.equity * RISK / 100 * 40, self.equity * 0.08)  # cap 8% of book
+        did = emit.decision(self.name, sym, side, True, "model") if emit else None
         self.pos[sym] = {"side": side, "entry": px, "t": time.time(),
-                         "notional": notional, "peak": 0.0}
+                         "notional": notional, "peak": 0.0, "decision_id": did}
         if self.first_open is None:
             self.first_open = time.time()
 
@@ -284,12 +286,19 @@ class Book:
         p = self.pos.pop(sym)
         net = chg - 200 * FEE
         self.equity += p["notional"] * net / 100
-        self.trades.append({"symbol": sym, "side": p["side"], "entry": p["entry"],
-                            "exit": px, "gross_pct": chg, "net_pct": net,
-                            "peak_pct": p["peak"], "reason": reason,
-                            "held_s": time.time() - p["t"],
-                            "entry_ms": int(p["t"] * 1000), "exit_ms": int(time.time() * 1000),
-                            "notional": p["notional"], "pnl_usd": p["notional"] * net / 100})
+        trade = {"symbol": sym, "side": p["side"], "entry": p["entry"],
+                 "exit": px, "gross_pct": chg, "net_pct": net,
+                 "peak_pct": p["peak"], "reason": reason,
+                 "held_s": time.time() - p["t"],
+                 "entry_ms": int(p["t"] * 1000), "exit_ms": int(time.time() * 1000),
+                 "notional": p["notional"], "pnl_usd": p["notional"] * net / 100,
+                 "decision_id": p.get("decision_id")}
+        self.trades.append(trade)
+        if emit:
+            try:
+                emit.fill(self.name, trade)
+            except Exception:
+                pass
 
     def snapshot(self):
         return {"engine": self.name, "mode": "paper", "state": "running",

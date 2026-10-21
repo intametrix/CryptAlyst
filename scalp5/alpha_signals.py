@@ -9,6 +9,7 @@ same upstream as one.
 """
 import argparse, json, os, time
 import maker, risk, tactics as T
+from lib import emit
 
 try:
     import tactics as _tactics
@@ -164,15 +165,21 @@ def main():
                         net = chg - FEE
                         bk.equity += p["notional"] * net / 100
                         banked += p["notional"] * net / 100
-                        bk.trades.append({"symbol": sym, "side": p["side"], "entry": p["entry"],
-                                          "exit": cur, "gross_pct": chg, "net_pct": net,
-                                          "peak_pct": max(0.0, chg), "reason": "cash_in",
-                                          "held_s": time.time() - p["t"],
-                                          "entry_ms": int(p["t"] * 1000),
-                                          "exit_ms": int(time.time() * 1000),
-                                          "notional": p["notional"],
-                                          "pnl_usd": p["notional"] * net / 100,
-                                          "why": p["why"]})
+                        _tr = {"symbol": sym, "side": p["side"], "entry": p["entry"],
+                               "exit": cur, "gross_pct": chg, "net_pct": net,
+                               "peak_pct": max(0.0, chg), "reason": "cash_in",
+                               "held_s": time.time() - p["t"],
+                               "entry_ms": int(p["t"] * 1000),
+                               "exit_ms": int(time.time() * 1000),
+                               "notional": p["notional"],
+                               "pnl_usd": p["notional"] * net / 100,
+                               "why": p["why"], "decision_id": p.get("decision_id")}
+                        bk.trades.append(_tr)
+                        if emit:
+                            try:
+                                emit.fill(bk.name, _tr)
+                            except Exception:
+                                pass
                         bk.pos.pop(sym, None)
                     try:
                         os.remove(flag)
@@ -203,13 +210,19 @@ def main():
                     if reason:
                         net = chg - FEE
                         bk.equity += p["notional"] * net / 100
-                        bk.trades.append({"symbol": sym, "side": p["side"], "entry": p["entry"],
-                                          "exit": cur, "gross_pct": chg, "net_pct": net,
-                                          "peak_pct": max(0.0, chg), "reason": reason,
-                                          "held_s": held, "entry_ms": int(p["t"] * 1000),
-                                          "exit_ms": int(time.time() * 1000),
-                                          "notional": p["notional"], "pnl_usd": p["notional"] * net / 100,
-                                          "why": p["why"]})
+                        _tr = {"symbol": sym, "side": p["side"], "entry": p["entry"],
+                               "exit": cur, "gross_pct": chg, "net_pct": net,
+                               "peak_pct": max(0.0, chg), "reason": reason,
+                               "held_s": held, "entry_ms": int(p["t"] * 1000),
+                               "exit_ms": int(time.time() * 1000),
+                               "notional": p["notional"], "pnl_usd": p["notional"] * net / 100,
+                               "why": p["why"], "decision_id": p.get("decision_id")}
+                        bk.trades.append(_tr)
+                        if emit:
+                            try:
+                                emit.fill(bk.name, _tr)
+                            except Exception:
+                                pass
                         log("%-15s CLOSE %-10s %-4s %+6.3f%% net %+6.3f%% %s" % (
                             bk.name, sym, p["side"], chg, net, reason))
                         bk.pos.pop(sym)
@@ -243,16 +256,22 @@ def main():
                             net = chg - FEE
                             bk.equity += pos["notional"] * net / 100
                             banked += pos["notional"] * net / 100
-                            bk.trades.append({"symbol": sym, "side": pos["side"],
-                                              "entry": pos["entry"], "exit": cur,
-                                              "gross_pct": chg, "net_pct": net,
-                                              "peak_pct": max(0.0, chg),
-                                              "reason": "disabled", "held_s": time.time() - pos["t"],
-                                              "entry_ms": int(pos["t"] * 1000),
-                                              "exit_ms": int(time.time() * 1000),
-                                              "notional": pos["notional"],
-                                              "pnl_usd": pos["notional"] * net / 100,
-                                              "why": pos["why"]})
+                            _tr = {"symbol": sym, "side": pos["side"],
+                                   "entry": pos["entry"], "exit": cur,
+                                   "gross_pct": chg, "net_pct": net,
+                                   "peak_pct": max(0.0, chg),
+                                   "reason": "disabled", "held_s": time.time() - pos["t"],
+                                   "entry_ms": int(pos["t"] * 1000),
+                                   "exit_ms": int(time.time() * 1000),
+                                   "notional": pos["notional"],
+                                   "pnl_usd": pos["notional"] * net / 100,
+                                   "why": pos["why"], "decision_id": pos.get("decision_id")}
+                            bk.trades.append(_tr)
+                            if emit:
+                                try:
+                                    emit.fill(bk.name, _tr)
+                                except Exception:
+                                    pass
                             bk.pos.pop(sym, None)
                         log("%-15s DISABLED — banked %+.2f, no new trades, still listening" % (
                             bk.name, banked))
@@ -341,8 +360,9 @@ def main():
                     q_px, q_prob, _ = maker.quote(sym, side, notional)
                     if q_px is None or q_prob < 0.30:
                         continue
+                    did = emit.decision(bk.name, sym, side, True, "signal") if emit else None
                     bk.pos[sym] = {"side": side, "entry": q_px, "t": time.time(),
-                                   "notional": notional,
+                                   "notional": notional, "decision_id": did,
                                    "why": "MAKER %s score %+.1f flow %+.0f (lvl %+.2f trd %+.2f div %+.2f) $%.0f" % (
                                        name, sig.get("score") or 0, conf,
                                        (sig.get("flow_parts") or {}).get("level", 0),

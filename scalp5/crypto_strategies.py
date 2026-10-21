@@ -25,6 +25,7 @@ import json
 import os
 import time
 import urllib.request
+from lib import emit
 
 try:
     import tactics as _tactics
@@ -157,14 +158,21 @@ class Book:
             chg = -chg
         net = chg - 200 * FEE
         self.equity += p["notional"] * net / 100
-        self.trades.append({"symbol": sym, "side": p["side"], "entry": p["entry"],
-                            "exit": mark, "gross_pct": round(chg, 3),
-                            "net_pct": round(net, 3), "peak_pct": round(p.get("peak", 0), 3),
-                            "reason": reason, "held_s": round(time.time() - p["opened"], 1),
-                            "notional": round(p["notional"], 2),
-                            "pnl_usd": round(p["notional"] * net / 100, 2),
-                            "entry_ms": int(p["opened"] * 1000),
-                            "exit_ms": int(time.time() * 1000)})
+        _tr = {"symbol": sym, "side": p["side"], "entry": p["entry"],
+               "exit": mark, "gross_pct": round(chg, 3),
+               "net_pct": round(net, 3), "peak_pct": round(p.get("peak", 0), 3),
+               "reason": reason, "held_s": round(time.time() - p["opened"], 1),
+               "notional": round(p["notional"], 2),
+               "pnl_usd": round(p["notional"] * net / 100, 2),
+               "entry_ms": int(p["opened"] * 1000),
+               "exit_ms": int(time.time() * 1000),
+               "decision_id": p.get("decision_id")}
+        self.trades.append(_tr)
+        if emit:
+            try:
+                emit.fill(self.name, _tr)
+            except Exception:
+                pass
         self.positions.pop(sym, None)
         return True
 
@@ -188,25 +196,33 @@ class Book:
                 net = chg - 200 * FEE
                 pnl = p["notional"] * net / 100.0
                 self.equity += pnl
-                self.trades.append({"symbol": sym, "side": p["side"], "entry": p["entry"],
-                                    "exit": mark, "gross_pct": round(chg, 3),
-                                    "net_pct": round(net, 3),
-                                    "peak_pct": round(p["peak"], 3),
-                                    "reason": reason,
-                                    "held_s": round(time.time() - p["opened"], 1),
-                                    "notional": round(p["notional"], 2),
-                                    "pnl_usd": round(pnl, 4),
-                                    "entry_ms": int(p["opened"] * 1000),
-                                    "exit_ms": int(time.time() * 1000),
-                                    "why": p.get("why")})
+                _tr = {"symbol": sym, "side": p["side"], "entry": p["entry"],
+                       "exit": mark, "gross_pct": round(chg, 3),
+                       "net_pct": round(net, 3),
+                       "peak_pct": round(p["peak"], 3),
+                       "reason": reason,
+                       "held_s": round(time.time() - p["opened"], 1),
+                       "notional": round(p["notional"], 2),
+                       "pnl_usd": round(pnl, 4),
+                       "entry_ms": int(p["opened"] * 1000),
+                       "exit_ms": int(time.time() * 1000),
+                       "why": p.get("why"), "decision_id": p.get("decision_id")}
+                self.trades.append(_tr)
+                if emit:
+                    try:
+                        emit.fill(self.name, _tr)
+                    except Exception:
+                        pass
                 self.positions.pop(sym, None)
 
     def open(self, sym, side, px, why):
         stop_frac = self.cfg["sl"] / 100.0
         notional = min(self.equity * (self.cfg["risk"] / 100.0) / max(stop_frac, 0.002),
                        self.equity * 0.25)
+        did = emit.decision(self.name, sym, side, True, "strategy") if emit else None
         self.positions[sym] = {"side": side, "entry": px, "opened": time.time(),
-                               "notional": notional, "peak": 0.0, "why": why}
+                               "notional": notional, "peak": 0.0, "why": why,
+                               "decision_id": did}
         self.opened += 1
 
     def dump(self):
