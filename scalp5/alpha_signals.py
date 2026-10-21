@@ -207,6 +207,40 @@ def main():
                         log("%-15s CLOSE %-10s %-4s %+6.3f%% net %+6.3f%% %s" % (
                             bk.name, sym, p["side"], chg, net, reason))
                         bk.pos.pop(sym)
+                # A6 at the book level: a disabled model is never used, but the process
+                # keeps listening - the moment a human removes it from the list, the next
+                # scan trades it again without a restart.
+                if T.is_disabled(bk.name):
+                    if bk.pos:
+                        banked = 0.0
+                        for sym in list(bk.pos):
+                            pos = bk.pos[sym]
+                            try:
+                                cur = float(T.jget(
+                                    "https://api.binance.com/api/v3/ticker/price?symbol="
+                                    + sym, 6)["price"])
+                            except Exception:
+                                continue
+                            chg = (cur / pos["entry"] - 1) * 100 if pos["side"] == "buy" \
+                                  else (1 - cur / pos["entry"]) * 100
+                            net = chg - FEE
+                            bk.equity += pos["notional"] * net / 100
+                            banked += pos["notional"] * net / 100
+                            bk.trades.append({"symbol": sym, "side": pos["side"],
+                                              "entry": pos["entry"], "exit": cur,
+                                              "gross_pct": chg, "net_pct": net,
+                                              "peak_pct": max(0.0, chg),
+                                              "reason": "disabled", "held_s": time.time() - pos["t"],
+                                              "entry_ms": int(pos["t"] * 1000),
+                                              "exit_ms": int(time.time() * 1000),
+                                              "notional": pos["notional"],
+                                              "pnl_usd": pos["notional"] * net / 100,
+                                              "why": pos["why"]})
+                            bk.pos.pop(sym, None)
+                        log("%-15s DISABLED — banked %+.2f, no new trades, still listening" % (
+                            bk.name, banked))
+                    write(bk)
+                    continue
                 # a re-assessment requested from the dashboard: archive the book, start
                 # a fresh one and let the next scan pick its symbols again
                 rflag = os.path.join(STATE, "reassess_%s.flag" % bk.name)
@@ -270,6 +304,8 @@ def main():
                 sym = sig["symbol"]
                 for name, rule in MODELS.items():
                     bk = books[name]
+                    if T.is_disabled(bk.name):
+                        continue          # A6: a disabled model is never used
                     if sym in bk.pos or len(bk.pos) >= 6:
                         continue
                     side = rule(sig)
