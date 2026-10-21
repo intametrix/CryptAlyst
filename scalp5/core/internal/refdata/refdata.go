@@ -770,6 +770,40 @@ func (s *Service) DocumentsFor(instID string) []Document {
 	return out
 }
 
+// DocFilter selects documents for ListDocuments.
+type DocFilter struct {
+	InstrumentID string
+	Class        Class
+	Kind         string
+	Q            string // case-insensitive substring over id, title
+}
+
+// ListDocuments returns documents matching f, sorted by id.
+func (s *Service) ListDocuments(f DocFilter) []Document {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := []Document{}
+	q := strings.ToLower(f.Q)
+	for _, doc := range s.documents {
+		if f.InstrumentID != "" && doc.InstrumentID != strings.ToLower(f.InstrumentID) {
+			continue
+		}
+		if f.Class != "" && doc.Class != f.Class {
+			continue
+		}
+		if f.Kind != "" && doc.Kind != f.Kind {
+			continue
+		}
+		if q != "" && !strings.Contains(strings.ToLower(doc.ID), q) &&
+			!strings.Contains(strings.ToLower(doc.Title), q) {
+			continue
+		}
+		out = append(out, *doc)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
 // PutEdge records one correlation triple, validated.
 func (s *Service) PutEdge(e Edge) (*Edge, error) {
 	if e.Subject == "" || e.Predicate == "" || e.Object == "" {

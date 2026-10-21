@@ -185,7 +185,7 @@ fld = OxmlElement("w:fldSimple"); fld.set(qn("w:instr"), "PAGE")
 footer._p.append(fld)
 
 # ------------------------------------------------------------------ contents
-h1("Contents", "00")
+h1("Contents", "")
 para("Every section begins with what it shows; every figure is listed here and captioned "
      "where it appears. The document runs from the whole platform down to the filesystem.",
      size=9.8, colour=MUTED, space=10)
@@ -198,14 +198,15 @@ for i, cell in enumerate(t.rows[0].cells):
     cell.width = Inches(5.0)
     cell.text = ""
 
-for col, chunk, start in ((0, sections[:half], 1), (1, sections[half:], half + 1)):
+for col, chunk in ((0, sections[:half]), (1, sections[half:])):
     cell = t.rows[0].cells[col]
     first = True
-    for n, s in enumerate(chunk, start):
+    for s in chunk:
         p = cell.paragraphs[0] if first else cell.add_paragraph()
         first = False
         p.paragraph_format.space_after = Pt(5)
-        r = p.add_run("%02d   " % n); r.font.size = Pt(8.5); r.font.color.rgb = FAINT
+        num = s.get("number") or "—"
+        r = p.add_run("%-5s " % num); r.font.size = Pt(8.5); r.font.color.rgb = FAINT
         r = p.add_run(s["title"]); r.font.size = Pt(9.6); r.bold = True; r.font.color.rgb = INK
         p2 = cell.add_paragraph()
         p2.paragraph_format.left_indent = Inches(0.28)
@@ -215,8 +216,9 @@ for col, chunk, start in ((0, sections[:half], 1), (1, sections[half:], half + 1
             run_.font.color.rgb = MUTED
 
 p = doc.add_paragraph()
-p.paragraph_format.space_before = Pt(10)
-p.paragraph_format.space_after = Pt(2)
+p.paragraph_format.page_break_before = True      # the index gets its own page
+p.paragraph_format.space_before = Pt(0)
+p.paragraph_format.space_after = Pt(4)
 r = p.add_run("FIGURES")
 r.font.size = Pt(8); r.bold = True; r.font.color.rgb = FAINT
 
@@ -225,7 +227,7 @@ table(["Fig", "Figure", "What it shows"], rows, size=7.8)
 
 # ------------------------------------------------------------------ sections
 for n, s in enumerate(sections, 1):
-    h1(s["title"], "%02d" % n, new_page=True)
+    h1(s["title"], s.get("number") or "", new_page=True)
     shows(s.get("shows", ""))
     if s.get("figure"):
         name, caption = s["figure"]

@@ -8,20 +8,20 @@ Seven bounded contexts, one contract between them, and a record that can be read
 
 ## Contents
 
-1. [How to read this](#how-to-read) — How the document narrows its lens, from the whole platform to a single byte on disk.
-2. [Level 1 — the context map](#contexts) — The seven contexts, the aggregates each owns, and the direction knowledge travels between them.
-3. [Level 2 — the envelope, the only thing that travels](#envelope) — The one object that crosses every boundary, and the hops that record what happened to it.
-4. [Level 3 — market data, the only process that talks to the exchange](#market) — How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.
-5. [Level 3 — the book, the aggregate that decides](#books) — The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.
-6. [Level 3 — the gate, what must pass before money moves](#risk) — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
-7. [Level 3 — the recorder, the only writer](#recorder) — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
-8. [Level 3 — control, what may change behaviour](#control) — What may change behaviour — supervise and stop — and what STOP must never touch.
-9. [Level 4 — the lake, what is actually on disk](#lake) — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
-10. [Level 4 — the data stores, as they exist](#stores) — Every place data is actually written on this machine, in which format, by which process, for how long.
-11. [Level 4 — how the lake chooses](#tree) — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
-12. [Level 5 — beneath the lake](#beneath) — The filesystem properties that let a case file be called evidence a year later.
-13. [Crossing concerns — time, identity and generations](#crossing) — Time, identity and generations, modelled once in the envelope rather than per context.
-14. [What the model deliberately refuses to do](#failures) — The boundaries the model will not pretend to cross, stated so they can be argued with.
+- **—** [How to read this](#how-to-read) — How the document narrows its lens, from the whole platform to a single byte on disk.
+- **1** [The context map](#contexts) — The seven contexts, the aggregates each owns, and the direction knowledge travels between them.
+- **2** [The envelope — the only thing that travels](#envelope) — The one object that crosses every boundary, and the hops that record what happened to it.
+- **3.1** [Market data — the only process that talks to the exchange](#market) — How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.
+- **3.2** [The book — the aggregate that decides](#books) — The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.
+- **3.3** [The gate — what must pass before money moves](#risk) — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
+- **3.4** [The recorder — the only writer](#recorder) — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
+- **3.5** [Control — what may change behaviour](#control) — What may change behaviour — supervise and stop — and what STOP must never touch.
+- **4.1** [The lake — what is actually on disk](#lake) — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
+- **4.2** [The data stores, as they exist](#stores) — Every place data is actually written on this machine, in which format, by which process, for how long.
+- **4.3** [How the lake chooses](#tree) — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
+- **5** [Beneath the lake](#beneath) — The filesystem properties that let a case file be called evidence a year later.
+- **—** [Crossing concerns — time, identity and generations](#crossing) — Time, identity and generations, modelled once in the envelope rather than per context.
+- **—** [What the model deliberately refuses to do](#failures) — The boundaries the model will not pretend to cross, stated so they can be argued with.
 
 ### Figures
 
@@ -29,14 +29,14 @@ Seven bounded contexts, one contract between them, and a record that can be read
 |---|---|---|
 | 1 | The context map | seven contexts, their aggregates, the flow between them |
 | 2 | The envelope | data, meta, refs, and the hops appended along the way |
-| 3 | Market data | shards, parse, state, topics — and a publisher off the read path |
-| 4 | The book aggregate | equity, positions, trades, decisions, refusals |
-| 5 | The gate | interceptors before arithmetic, and the exit policy |
-| 6 | The recorder | one writer, hops recorded, derived references attached |
-| 7 | The lake | journal, line format, index, retention, replay |
-| 8 | Control | supervise, stop, and what STOP must never touch |
-| 9 | Data stores | every store on disk: format, writer, reader, lifetime |
-| 10 | How the lake chooses | the rules that decide where data lands and how long it lives |
+| 3.1 | Market data | shards, parse, state, topics — and a publisher off the read path |
+| 3.2 | The book aggregate | equity, positions, trades, decisions, refusals |
+| 3.3 | The gate | interceptors before arithmetic, and the exit policy |
+| 3.4 | The recorder | one writer, hops recorded, derived references attached |
+| 3.5 | Control | supervise, stop, and what STOP must never touch |
+| 4.1 | The lake | journal, line format, index, retention, replay |
+| 4.2 | Data stores | every store on disk: format, writer, reader, lifetime |
+| 4.3 | How the lake chooses | the rules that decide where data lands and how long it lives |
 
 ---
 
@@ -58,7 +58,7 @@ Two rules run through every level. First, exactly one kind of thing travels betw
 
 ---
 
-## Level 1 — the context map
+## 1  The context map
 
 > **What this shows** — The seven contexts, the aggregates each owns, and the direction knowledge travels between them.
 
@@ -82,7 +82,7 @@ The arrows are not calls. Each one is a stream of envelopes on one bus, so a con
 
 ---
 
-## Level 2 — the envelope, the only thing that travels
+## 2  The envelope — the only thing that travels
 
 > **What this shows** — The one object that crosses every boundary, and the hops that record what happened to it.
 
@@ -101,7 +101,7 @@ The contract is deliberately strict in one direction and lenient in the other. A
 
 ---
 
-## Level 3 — market data, the only process that talks to the exchange
+## 3.1  Market data — the only process that talks to the exchange
 
 > **What this shows** — How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.
 
@@ -122,7 +122,7 @@ The one design decision worth naming: publishing happens on a goroutine through 
 
 ---
 
-## Level 3 — the book, the aggregate that decides
+## 3.2  The book — the aggregate that decides
 
 > **What this shows** — The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.
 
@@ -141,7 +141,7 @@ The refusals are the part most systems omit. A refusal carries the rule that sto
 
 ---
 
-## Level 3 — the gate, what must pass before money moves
+## 3.3  The gate — what must pass before money moves
 
 > **What this shows** — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
 
@@ -164,7 +164,7 @@ The exit policy is part of the model, not an implementation detail. The platform
 
 ---
 
-## Level 3 — the recorder, the only writer
+## 3.4  The recorder — the only writer
 
 > **What this shows** — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
 
@@ -183,7 +183,7 @@ Books do not declare their inputs. Rather than leave a decision parentless, the 
 
 ---
 
-## Level 3 — control, what may change behaviour
+## 3.5  Control — what may change behaviour
 
 > **What this shows** — What may change behaviour — supervise and stop — and what STOP must never touch.
 
@@ -202,7 +202,7 @@ The inverse is equally deliberate: no data path can stop the platform. A feed ou
 
 ---
 
-## Level 4 — the lake, what is actually on disk
+## 4.1  The lake — what is actually on disk
 
 > **What this shows** — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
 
@@ -223,7 +223,7 @@ Reader queries do not scan the journal. An index of topic to byte offsets is bui
 
 ---
 
-## Level 4 — the data stores, as they exist
+## 4.2  The data stores, as they exist
 
 > **What this shows** — Every place data is actually written on this machine, in which format, by which process, for how long.
 
@@ -248,7 +248,7 @@ The journal is the record: 60 GB of JSONL, one envelope per line, written by the
 
 ---
 
-## Level 4 — how the lake chooses
+## 4.3  How the lake chooses
 
 > **What this shows** — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
 
@@ -267,7 +267,7 @@ Everything else goes to the bronze journal. There the topic class decides the li
 
 ---
 
-## Level 5 — beneath the lake
+## 5  Beneath the lake
 
 > **What this shows** — The filesystem properties that let a case file be called evidence a year later.
 

@@ -20,14 +20,17 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -109,11 +112,63 @@ func (s *server) routes() *http.ServeMux {
 	mux.HandleFunc("GET /v1/instruments/{id}/correlations", s.correlations)
 	mux.HandleFunc("GET /v1/resolve", s.resolve)
 	mux.HandleFunc("PUT /v1/documents", s.putDocument)
+	mux.HandleFunc("GET /v1/documents", s.listDocuments)
 	mux.HandleFunc("GET /v1/documents/{id}", s.getDocument)
 	mux.HandleFunc("PUT /v1/edges", s.putEdge)
 	mux.HandleFunc("GET /v1/edges", s.edges)
 	mux.HandleFunc("GET /v1/search", s.search)
+	mux.Handle("/", uiHandler())
 	return mux
+}
+
+// uiHandler serves the embedded explorer: static assets under /static/,
+// the app shell at every other non-API path (client-side routing), with
+// index.html as the fallback.
+func uiHandler() http.Handler {
+	sub, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		log.Fatalf("embedded ui: %v", err)
+	}
+	fileServer := http.FileServer(http.FS(sub))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if p == "/" || p == "/ui" || p == "/ui/" {
+			serveUIFile(w, sub, "index.html")
+			return
+		}
+		if strings.HasPrefix(p, "/static/") {
+			r2 := *r
+			r2.URL = cloneURLWithPath(r, strings.TrimPrefix(p, "/static"))
+			fileServer.ServeHTTP(w, &r2)
+			return
+		}
+		// Unknown non-API path: the app shell handles it client-side.
+		serveUIFile(w, sub, "index.html")
+	})
+}
+
+func cloneURLWithPath(r *http.Request, path string) *url.URL {
+	u := *r.URL
+	u.Path = path
+	u.RawPath = ""
+	return &u
+}
+
+func serveUIFile(w http.ResponseWriter, fsys fs.FS, name string) {
+	raw, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "embedded ui missing")
+		return
+	}
+	if strings.HasSuffix(name, ".html") {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	} else if strings.HasSuffix(name, ".css") {
+		w.Header().Set("Content-Type", "text/css")
+	} else if strings.HasSuffix(name, ".js") {
+		w.Header().Set("Content-Type", "text/javascript")
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
 }
 
 func (s *server) stats(w http.ResponseWriter, r *http.Request) {
@@ -217,6 +272,17 @@ func (s *server) getDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, wrap("refdata.document", doc))
+}
+
+func (s *server) listDocuments(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filter := refdata.DocFilter{
+		InstrumentID: q.Get("instrument"),
+		Class:        refdata.Class(q.Get("class")),
+		Kind:         q.Get("kind"),
+		Q:            q.Get("q"),
+	}
+	writeJSON(w, http.StatusOK, wrap("refdata.documents", s.svc.ListDocuments(filter)))
 }
 
 func (s *server) putEdge(w http.ResponseWriter, r *http.Request) {

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CryptAlyst · Reference Data</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="logo">⌘</div>
+    <div>
+      <h1>Reference Data</h1>
+      <p>instrument registry · identifiers · documents · correlations</p>
+    </div>
+  </div>
+  <nav id="tabs">
+    <button data-tab="instruments" class="on">Instruments</button>
+    <button data-tab="documents">Documents</button>
+    <button data-tab="edges">Edges</button>
+    <button data-tab="search">Search</button>
+  </nav>
+  <div class="stats" id="stats"></div>
+</header>
+
+<main>
+  <!-- INSTRUMENTS -->
+  <section id="tab-instruments" class="tab on">
+    <div class="filters" id="inst-filters">
+      <input id="f-q" type="search" placeholder="filter id, symbol, name…">
+      <select id="f-class"><option value="">class: all</option></select>
+      <select id="f-status"><option value="">status: all</option></select>
+      <select id="f-venue"><option value="">venue: all</option></select>
+      <span class="count" id="inst-count"></span>
+    </div>
+    <div class="split">
+      <div class="tablewrap">
+        <table id="inst-table">
+          <thead><tr>
+            <th data-k="id">id</th>
+            <th data-k="class">class</th>
+            <th data-k="symbol">symbol</th>
+            <th data-k="status">status</th>
+            <th data-k="venues">venues</th>
+            <th data-k="nidents" title="registered identifiers">ids</th>
+            <th data-k="updated_ms">updated</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <aside id="inst-detail" class="detail"><p class="placeholder">select an instrument</p></aside>
+    </div>
+  </section>
+
+  <!-- DOCUMENTS -->
+  <section id="tab-documents" class="tab">
+    <div class="filters">
+      <input id="d-q" type="search" placeholder="filter title, id…">
+      <select id="d-kind"><option value="">kind: all</option>
+        <option>definition</option><option>spec</option><option>risk</option>
+        <option>limits</option><option>api</option><option>note</option>
+      </select>
+      <span class="count" id="doc-count"></span>
+    </div>
+    <div class="split">
+      <div class="tablewrap">
+        <table id="doc-table">
+          <thead><tr>
+            <th data-k="title">title</th><th data-k="kind">kind</th>
+            <th data-k="instrument_id">instrument</th><th data-k="updated_ms">updated</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <aside id="doc-detail" class="detail"><p class="placeholder">select a document</p></aside>
+    </div>
+  </section>
+
+  <!-- EDGES -->
+  <section id="tab-edges" class="tab">
+    <div class="filters">
+      <input id="e-q" type="search" placeholder="filter subject, object…">
+      <select id="e-pred"><option value="">predicate: all</option>
+        <option>same_as</option><option>listed_on</option><option>has_document</option>
+        <option>issued_by</option><option>tracks</option><option>derived_from</option>
+      </select>
+      <span class="count" id="edge-count"></span>
+    </div>
+    <div class="tablewrap full">
+      <table id="edge-table">
+        <thead><tr>
+          <th data-k="subject">subject</th><th data-k="predicate">predicate</th>
+          <th data-k="object">object</th><th data-k="created_ms">recorded</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SEARCH -->
+  <section id="tab-search" class="tab">
+    <div class="filters">
+      <input id="s-q" type="search" placeholder="registry-wide search: ticker, ISIN, title, symbol…">
+      <span class="hint">hits identifiers, instruments and document titles — click a result to jump</span>
+    </div>
+    <div id="search-results"></div>
+  </section>
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

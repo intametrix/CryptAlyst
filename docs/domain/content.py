@@ -27,6 +27,7 @@ FIGURES = [
 SECTIONS = [
     {
         "id": "how-to-read",
+        "level": 0,
         "shows": "How the document narrows its lens, from the whole platform to a single byte on disk.",
         "title": "How to read this",
         "body": [
@@ -46,8 +47,9 @@ SECTIONS = [
     },
     {
         "id": "contexts",
+        "level": 1,
         "shows": "The seven contexts, the aggregates each owns, and the direction knowledge travels between them.",
-        "title": "Level 1 — the context map",
+        "title": "The context map",
         "figure": ("01-contexts.png", "The platform in one picture: contexts, the aggregates they own, and which way knowledge flows."),
         "body": [
             "Seven contexts, arranged by the direction knowledge travels. Market data observes. "
@@ -67,8 +69,9 @@ SECTIONS = [
     },
     {
         "id": "envelope",
+        "level": 2,
         "shows": "The one object that crosses every boundary, and the hops that record what happened to it.",
-        "title": "Level 2 — the envelope, the only thing that travels",
+        "title": "The envelope — the only thing that travels",
         "figure": ("02-envelope.png", "Three members, and the hops that prove what happened to the envelope on the way."),
         "body": [
             "An envelope is data, meta and refs. The data is the payload a producer computed and is "
@@ -90,8 +93,9 @@ SECTIONS = [
     },
     {
         "id": "market",
+        "level": 3,
         "shows": "How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.",
-        "title": "Level 3 — market data, the only process that talks to the exchange",
+        "title": "Market data — the only process that talks to the exchange",
         "figure": ("03-market-data.png", "Shards, one parse, in-memory state, then topics. Publishing never blocks the socket."),
         "body": [
             "The feed streams the top symbols by 24-hour quote volume, four streams each, sharded so "
@@ -111,8 +115,9 @@ SECTIONS = [
     },
     {
         "id": "books",
+        "level": 3,
         "shows": "The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.",
-        "title": "Level 3 — the book, the aggregate that decides",
+        "title": "The book — the aggregate that decides",
         "figure": ("04-book.png", "A book is one aggregate: equity, positions, and the decisions that produced them."),
         "body": [
             "A book is the unit of consistency. Its equity moves only when a position closes, by that "
@@ -132,8 +137,9 @@ SECTIONS = [
     },
     {
         "id": "risk",
+        "level": 3,
         "shows": "The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.",
-        "title": "Level 3 — the gate, what must pass before money moves",
+        "title": "The gate — what must pass before money moves",
         "figure": ("05-risk.png", "Interceptors, then the arithmetic. Every stage appends a hop, so a refusal explains itself."),
         "body": [
             "The gate is ordered deliberately: identity and freshness before arithmetic. There is no "
@@ -154,8 +160,9 @@ SECTIONS = [
     },
     {
         "id": "recorder",
+        "level": 3,
         "shows": "The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.",
-        "title": "Level 3 — the recorder, the only writer",
+        "title": "The recorder — the only writer",
         "figure": ("06-recorder.png", "One consumer per topic, hops recorded as they pass, derived references attached at the door."),
         "body": [
             "The recorder owns one queue per topic, so it sees every message exactly once. It runs the "
@@ -175,8 +182,9 @@ SECTIONS = [
     },
     {
         "id": "lake",
+        "level": 4,
         "shows": "What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.",
-        "title": "Level 4 — the lake, what is actually on disk",
+        "title": "The lake — what is actually on disk",
         "figure": ("07-lake.png", "A journal, a line format, an index, and the retention that keeps it from growing forever."),
         "body": [
             "The lake is a directory of JSONL journals. One line is one envelope. The line carries the "
@@ -195,8 +203,9 @@ SECTIONS = [
     },
     {
         "id": "beneath",
+        "level": 5,
         "shows": "The filesystem properties that let a case file be called evidence a year later.",
-        "title": "Level 5 — beneath the lake",
+        "title": "Beneath the lake",
         "body": [
             "Underneath the lake there is a filesystem and nothing else. The properties that follow "
             "from that are worth stating plainly, because they are the reason a case file can be "
@@ -218,7 +227,8 @@ SECTIONS = [
     },
     {
         "id": "stores",
-        "title": "Level 4 — the data stores, as they exist",
+        "level": 4,
+        "title": "The data stores, as they exist",
         "shows": "Every place data is actually written on this machine, in which format, by which process, for how long.",
         "figure": ("09-stores.png", "Eight stores. The journal is the only one that is a record; the rest are derived, cached, archived or diagnostic."),
         "body": [
@@ -243,7 +253,8 @@ SECTIONS = [
     },
     {
         "id": "tree",
-        "title": "Level 4 — how the lake chooses",
+        "level": 4,
+        "title": "How the lake chooses",
         "shows": "The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.",
         "figure": ("10-decision-tree.png", "One question per level: what is it, how long does it live, is it big enough to seal. Nothing is deleted by a rule that is not drawn here."),
         "body": [
@@ -265,8 +276,9 @@ SECTIONS = [
     },
     {
         "id": "control",
+        "level": 3,
         "shows": "What may change behaviour — supervise and stop — and what STOP must never touch.",
-        "title": "Level 3 — control, what may change behaviour",
+        "title": "Control — what may change behaviour",
         "figure": ("08-control.png", "The supervisor, the stop flag and the heartbeat, and what STOP must never touch."),
         "body": [
             "STOP is the most important verb in the platform, so it is defined precisely. It kills "
@@ -287,6 +299,7 @@ SECTIONS = [
     },
     {
         "id": "crossing",
+        "level": 0,
         "shows": "Time, identity and generations, modelled once in the envelope rather than per context.",
         "title": "Crossing concerns — time, identity and generations",
         "body": [
@@ -306,6 +319,7 @@ SECTIONS = [
     },
     {
         "id": "failures",
+        "level": 0,
         "shows": "The boundaries the model will not pretend to cross, stated so they can be argued with.",
         "title": "What the model deliberately refuses to do",
         "body": [
@@ -328,3 +342,41 @@ SECTIONS = [
 ORDER = ["how-to-read", "contexts", "envelope", "market", "books", "risk", "recorder",
          "control", "lake", "stores", "tree", "beneath", "crossing", "failures"]
 SECTIONS.sort(key=lambda s: ORDER.index(s["id"]) if s["id"] in ORDER else len(ORDER))
+
+# Numbering: a level with one section is "3"; a level with several is "3.1", "3.2".
+# Level 0 is front matter and carries no number.
+def _number_sections():
+    seen = {}
+    counters = {}
+    for s in SECTIONS:
+        lvl = s.get("level", 0)
+        counters[lvl] = counters.get(lvl, 0) + 1
+        s["_order"] = counters[lvl]
+    for lvl in counters:
+        seen[lvl] = counters[lvl]
+    for s in SECTIONS:
+        lvl = s.get("level", 0)
+        if lvl == 0:
+            s["number"] = ""
+        elif seen.get(lvl, 0) == 1:
+            s["number"] = str(lvl)
+        else:
+            s["number"] = "%d.%d" % (lvl, s["_order"])
+
+
+_number_sections()
+
+# A figure is numbered after the section that uses it, and listed in section order.
+def _number_figures():
+    meta = {f[1]: (f[2], f[3]) for f in FIGURES if f[0] != "00"}
+    out = []
+    for s in SECTIONS:
+        if not s.get("figure"):
+            continue
+        fname = s["figure"][0]
+        title, what = meta.get(fname, ("Figure", ""))
+        out.append((s["number"], fname, title, what))
+    return out
+
+
+FIGURES = [("00", "00-cover.png", "Cover", "build identity and the seven contexts")] + _number_figures()
