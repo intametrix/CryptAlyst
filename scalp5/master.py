@@ -659,11 +659,13 @@ def flatten_position(engine, symbol, reason="position_close", prices=None):
     except Exception as e:
         return {"ok": False, "error": str(e)}
     kept, closed, realised = [], 0, 0.0
+    seen = False
     for pos in (pack.get("positions") or []):
         sym = (pos.get("symbol") or "").upper()
         if sym != symbol:
             kept.append(pos)
             continue
+        seen = True
         entry = float(pos.get("entry") or 0)
         px = float(prices.get(sym) or 0)
         if not entry or not px:
@@ -682,6 +684,10 @@ def flatten_position(engine, symbol, reason="position_close", prices=None):
             "exit_ms": int(time.time() * 1000)})
         closed += 1
         realised += pnl
+    if not seen:
+        # idempotent: a second request for the same position is refused, not re-recorded
+        return {"closed": 0, "realised": 0.0, "engine": engine, "symbol": symbol,
+                "absent": True}
     pack["positions"] = kept
     pack["trades"] = (pack.get("trades") or [])[-400:]
     pack["equity"] = round(float(pack.get("equity") or 0) + realised, 2)
