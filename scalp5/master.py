@@ -2284,6 +2284,7 @@ async function drillOpen(kind){
       equity:"Equity — every book's account",
       return:"Return — every book, % of its start",
       open:"Open positions — only books holding one",
+      closed:"Closed trades — only books that have closed one",
     })[kind] || kind;
   await drillRender();
 }
@@ -2333,9 +2334,10 @@ async function drillRender(){
   try{ d=await (await fetch("/api/engines",{cache:"no-store"})).json(); }
   catch(e){ box.innerHTML='<div class="empty">engines unavailable</div>'; return; }
   var key = ({unrealised:"unrealised", total:"total", equity:"equity",
-              return:"return_pct", open:"open"})[kind] || "realised";
+              return:"return_pct", open:"open", closed:"trades"})[kind] || "realised";
   var es=(d.engines||[]).slice();
   if(kind==="open") es=es.filter(function(e){ return (e.open||0)>0; });
+  if(kind==="closed") es=es.filter(function(e){ return (e.trades||0)>0; });
   es.sort(function(a,b){ return (b[key]||0)-(a[key]||0); });
   var sum=es.reduce(function(a,e){ return a+(e[key]||0); },0);
   var rows=es.map(function(e){
@@ -5049,14 +5051,15 @@ async function tick(){
   const unreal=alive.reduce((a,e)=>a+(e.unrealised||0),0);
   const open=alive.reduce((a,e)=>a+(e.positions||[]).length,0);
   const closed=(d.totals&&d.totals.closed)||alive.reduce((a,e)=>a+(e.closed||0),0);
-  $("totals").innerHTML=[
-    ["combined equity","$"+money(eq)],
-    ["combined return",pct(base?100*(eq/base-1):null)],
-    ["realised","$"+money(real)],
-    ["unrealised","$"+money(unreal)],
-    ["open positions",open],
-    ["closed trades",closed],
-  ].map(([k,v])=>`<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+  const KPI=[["combined equity","$"+money(eq),"equity"],
+             ["combined return",pct(base?100*(eq/base-1):null),"return"],
+             ["realised","$"+money(real),"realised"],
+             ["unrealised","$"+money(unreal),"unrealised"],
+             ["open positions",open,"open"],
+             ["closed trades",closed,"closed"]];
+  $("totals").innerHTML=KPI.map(([k,v,kind])=>
+    `<div class="kpi" style="cursor:pointer" title="click to see every book behind this" `+
+    `onclick="drillOpen('${kind}')"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
 
   LAST=es;
   try{ histPush(es); }catch(e){}
