@@ -14,10 +14,14 @@ Everything here is public, no keys.
 """
 import argparse, json, os, time, urllib.request
 
+import oi_gate
+
 HERE = os.path.dirname(os.path.abspath(__file__)); STATE = os.path.join(HERE, "state")
 BACKEND = "http://127.0.0.1:8799"; FAPI = "https://fapi.binance.com"
 OI_HIST_PATH = os.path.join(STATE, "oi_history.json")
 OI_MAX_AGE_S = 3600.0   # keep one hour of OI samples per symbol
+PX_HIST_PATH = os.path.join(STATE, "price_history.json")
+PX_MAX_AGE_S = 3600.0   # keep one hour of mid-price samples per symbol
 
 
 def oi_change_pct(hist, now, window_s):
@@ -59,6 +63,25 @@ def save_oi_history(hist):
     except Exception:
         pass
 
+
+def load_price_history():
+    try:
+        with open(PX_HIST_PATH) as fh:
+            d = json.load(fh)
+        return {k: [(float(t), float(v)) for t, v in v] for k, v in (d.get("hist") or {}).items()}
+    except Exception:
+        return {}
+
+
+def save_price_history(hist):
+    try:
+        os.makedirs(STATE, exist_ok=True)
+        with open(PX_HIST_PATH + ".t", "w") as fh:
+            json.dump({"ts": int(time.time() * 1000), "hist": hist}, fh)
+        os.replace(PX_HIST_PATH + ".t", PX_HIST_PATH)
+    except Exception:
+        pass
+
 def jget(u, t=8.0):
     with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "feeds/1"}), timeout=t) as r:
         return json.loads(r.read().decode())
@@ -94,6 +117,7 @@ def main():
     a = ap.parse_args()
     print("FEEDS — open interest, book imbalance, taker ratio", flush=True)
     hist = load_oi_history()
+    px_hist = load_price_history()
     while True:
         t0 = time.time()
         try:
@@ -112,15 +136,23 @@ def main():
                 h.append((now, cur))
                 hist[s] = [(ts, v) for ts, v in h if now - ts <= OI_MAX_AGE_S]
             h = hist.get(s, [])
+            ph = px_hist.setdefault(s, [])
+            ph.append((now, b["mid"]))
+            px_hist[s] = [(ts, v) for ts, v in ph if now - ts <= PX_MAX_AGE_S]
+            oi15 = round(oi_change_pct(h, now, 900), 3) if len(h) > 1 else None
+            px15 = round(oi_change_pct(px_hist[s], now, 900), 3) if len(px_hist[s]) > 1 else None
+            q = oi_gate.quadrant(px15 or 0.0, oi15 or 0.0) if (px15 is not None and oi15 is not None) else None
             out[s] = {"mid": b["mid"], "imbalance": round(b["imbalance"], 4),
                       "bid": round(b["bid"], 2), "ask": round(b["ask"], 2),
                       "oi": cur,
                       "oi_chg_5m": round(oi_change_pct(h, now, 300), 3) if len(h) > 1 else None,
-                      "oi_chg_15m": round(oi_change_pct(h, now, 900), 3) if len(h) > 1 else None,
+                      "oi_chg_15m": oi15,
                       "oi_chg_1h": round(oi_change_pct(h, now, 3600), 3) if len(h) > 1 else None,
                       "oi_chg_pct": round(oi_change_pct(h, now, 300), 3) if len(h) > 1 else None,
+                      "px_chg_15m": px15, "oi_quadrant": q,
                       "taker_ratio": safe(lambda s=s: taker(s))}
         save_oi_history(hist)
+        save_price_history(px_hist)
         os.makedirs(STATE, exist_ok=True)
         with open(os.path.join(STATE, "features.json.t"), "w") as fh:
             json.dump({"ts": int(time.time() * 1000), "features": out}, fh)
