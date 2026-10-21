@@ -303,6 +303,10 @@ func main() {
 						Envelope: wrapped,
 					}
 					err := lk.Write(rec)
+					if err != nil && writeErrSeen < 3 {
+						writeErrSeen++
+						log.Printf("WRITE ERROR %-18s %v", topic, err)
+					}
 					ctr.bump(topic, err)
 					if err == nil {
 						_ = placement.Place(store.Envelope{
@@ -416,8 +420,9 @@ func main() {
 }
 
 var (
-	refusedMu   sync.Mutex
-	refusedSeen = map[string]int{}
+	refusedMu    sync.Mutex
+	refusedSeen  = map[string]int{}
+	writeErrSeen int64
 )
 
 // latestRef is the most recent envelope of one topic for one symbol.

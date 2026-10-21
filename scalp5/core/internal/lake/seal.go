@@ -108,7 +108,10 @@ func OpenSealed(cfg RetentionConfig, policy RotationPolicy) (*Sealed, error) {
 			return nil, err
 		}
 		info, _ := f.Stat()
-		s.file, s.bw, s.hot, s.size, s.opened = f, bufio.NewWriterSize(f, flushBuffer), hot, info.Size(), time.Now()
+		// s.hot must be the BARE filename (openHotLocked sets it bare, and
+		// sealLocked joins s.dir + s.hot). Storing the full glob path here would
+		// double the directory on the rename and fail the rotation.
+		s.file, s.bw, s.hot, s.size, s.opened = f, bufio.NewWriterSize(f, flushBuffer), filepath.Base(hot), info.Size(), time.Now()
 	} else if err := s.openHotLocked(); err != nil {
 		lock.Close()
 		return nil, err

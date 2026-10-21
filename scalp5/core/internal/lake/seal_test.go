@@ -151,6 +151,36 @@ func TestLeftoverTmpIsResumed(t *testing.T) {
 	}
 }
 
+// TestResumeThenRotateSucceeds pins the reopen-then-rotate bug: the resume path
+// used to store the FULL glob path in s.hot, so sealLocked's join(s.dir, s.hot)
+// doubled the directory and the rotation failed with "no such file or directory".
+func TestResumeThenRotateSucceeds(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := OpenSealed(RetentionConfig{Dir: dir}, HourlyOrCeiling{Age: time.Hour, Bytes: 1 << 30})
+	writeN(t, s, 5, "market.price", 1_700_000_000_000)
+	if err := s.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	s.mu.Lock()
+	s.file.Close()
+	s.file = nil
+	s.mu.Unlock()
+	syscall.Flock(int(s.lock.Fd()), syscall.LOCK_UN)
+
+	// resume the leftover, then force a rotation with a near-zero age so the very
+	// next write must seal (age > 1ns, size > 0). The write must not fail.
+	s2, err := OpenSealed(RetentionConfig{Dir: dir}, HourlyOrCeiling{Age: time.Nanosecond, Bytes: 1 << 30})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	rec := Record{Topic: "market.price", Key: "BTCUSDT", TS: 1_700_000_000_500,
+		Payload: []byte(`{"x":1}`), Envelope: []byte(`{"data":{"x":1}}`)}
+	if err := s2.Write(rec); err != nil {
+		t.Fatalf("rotation after resume failed: %v", err)
+	}
+}
+
 // (g) a one-hour window plans exactly one segment, and reading it returns the rows
 func TestPlanOneHourOpensOneSegment(t *testing.T) {
 	dir := t.TempDir()
