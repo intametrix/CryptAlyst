@@ -162,7 +162,7 @@ ok "all six service binaries present"
 
 # 1c · optional binaries are named when absent, not silently skipped
 [ -x "$ROOT/tad/tad" ] && ok "tad present" || warn "tad not built — it is built at stage 5b"
-[ -x "$CORE/forecast" ] && ok "forecast present" || warn "forecast not built in this tree — that producer stays off"
+[ -x "$ROOT/forecast/forecast" ] && ok "forecast present" || warn "forecast not built in this tree — that producer stays off"
 
 command -v python3 >/dev/null || die "python3 not found"
 ok "python3 $(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
@@ -185,11 +185,11 @@ say "2 · the Go backend (detectors and alerts, :8787)"
 if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:8787/health 2>/dev/null; then
   ok "backend already answering on :8787"
 else
-  if [ ! -x "$ROOT/backend/bin/server" ]; then
+  if [ ! -x "$ROOT/../backend/bin/server" ]; then
     warn "building the backend"
-    ( cd "$ROOT/backend" && /opt/homebrew/bin/go build -o bin/server ./cmd/server ) || die "backend build failed"
+    ( cd "$ROOT/../backend" && /opt/homebrew/bin/go build -o bin/server ./cmd/server ) || die "backend build failed"
   fi
-  ( cd "$ROOT/backend" && nohup ./bin/server --addr 127.0.0.1:8787 --timeframes 1d,4h,1h,30m \
+  ( cd "$ROOT/../backend" && nohup ./bin/server --addr 127.0.0.1:8787 --timeframes 1d,4h,1h,30m \
       --alert-history "$ROOT/alerts.jsonl" --ledger "$ROOT/ledger/backend.jsonl" \
       >"$LOGS/backend.log" 2>&1 & )
   wait_http "http://127.0.0.1:8787/health" 60 "backend on :8787" || die "backend did not answer"
@@ -235,7 +235,7 @@ STORE_ARGS=""
 [ -n "${STORE_DOCS:-}" ] && STORE_ARGS="$STORE_ARGS --docs $STORE_DOCS"
 [ -n "${MONGO_URI:-}" ]  && STORE_ARGS="$STORE_ARGS --mongo $MONGO_URI"
 [ -n "${STORE_ROCKS:-}" ] && STORE_ARGS="$STORE_ARGS --rocksdb $STORE_ROCKS"
-(cd "$CORE" && nohup ./bin/recorder --port 8801 --data ../state/lake3 $STORE_ARGS >"$LOGS/recorder.log" 2>&1 &)
+(cd "$CORE" && nohup ./bin/recorder --port 8801 --segments --data ../state/lake3 $STORE_ARGS >"$LOGS/recorder.log" 2>&1 &)
 wait_http "http://127.0.0.1:8801/stats" 20 "recorder on :8801" || die "recorder did not answer"
 
 say "7 · bus services"
@@ -247,7 +247,7 @@ ok "health publisher and alert intake started"
 
 say "8 · intelligence producers"
 nohup python3 -u signals.py --every 10 --top 30 >"$LOGS/signals.log" 2>&1 &
-[ -x "$CORE/forecast" ] && (cd "$CORE" && nohup ./forecast --addr 127.0.0.1:61613 >"$LOGS/forecast.log" 2>&1 &)
+[ -x "$ROOT/forecast/forecast" ] && (cd "$ROOT/forecast" && nohup ./forecast --addr 127.0.0.1:8790 >"$LOGS/forecast.log" 2>&1 &)
 sleep 3
 pgrep -f "signals.py --every" >/dev/null && ok "signals publishing" || warn "signals.py did not stay up — see logs/signals.log"
 
