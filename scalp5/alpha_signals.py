@@ -190,10 +190,16 @@ def main():
                     chg = (cur / p["entry"] - 1) * 100 if p["side"] == "buy" else (1 - cur / p["entry"]) * 100
                     held = time.time() - p["t"]
                     lock_now = SHORT_LOCK_PCT if str(p["side"]).lower() in ("sell", "short") else LOCK
-                    reason = ("short_lock" if (p["side"] != "buy" and chg >= lock_now)
-                              else "lock" if chg >= lock_now
-                              else "stop" if chg <= -STOP else
-                              "clock" if held >= CLOCK else None)
+                    # ONLY SETTLE IN PROFIT. A short waits until it is green; a long does
+                    # the same. No stop, no clock, no loss exit: the owner's rule.
+                    reason = None
+                    if chg > 0:
+                        if str(p["side"]).lower() in ("sell", "short") and chg >= lock_now:
+                            reason = "short_lock"
+                        elif chg >= lock_now:
+                            reason = "lock"
+                        elif held >= CLOCK:
+                            reason = "clock_profit"
                     if reason:
                         net = chg - FEE
                         bk.equity += p["notional"] * net / 100
@@ -214,6 +220,17 @@ def main():
                     if bk.pos:
                         banked = 0.0
                         for sym in list(bk.pos):
+                            _p = bk.pos[sym]
+                            try:
+                                _cur = float(T.jget(
+                                    "https://api.binance.com/api/v3/ticker/price?symbol=" + sym,
+                                    6)["price"])
+                            except Exception:
+                                continue
+                            _chg = (_cur / _p["entry"] - 1) * 100 if _p["side"] == "buy" \
+                                   else (1 - _cur / _p["entry"]) * 100
+                            if _chg <= 0:
+                                continue      # settle only profit
                             pos = bk.pos[sym]
                             try:
                                 cur = float(T.jget(

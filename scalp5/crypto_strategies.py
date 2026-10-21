@@ -155,13 +155,14 @@ class Book:
                 continue
             chg = self.mark(sym, mark)
             p["peak"] = max(p.get("peak", 0.0), chg)
+            # ONLY SETTLE IN PROFIT (owner rule): a short waits until it is green, and so
+            # does a long. No stop, no clock, no loss exit.
             reason = None
-            if chg >= self.cfg["tp"]:
-                reason = "target"
-            elif chg <= -self.cfg["sl"]:
-                reason = "stop"
-            elif (time.time() - p["opened"]) >= self.cfg["hold"]:
-                reason = "clock"
+            if chg > 0:
+                if chg >= self.cfg["tp"]:
+                    reason = "target"
+                elif (time.time() - p["opened"]) >= self.cfg["hold"]:
+                    reason = "clock_profit"
             if reason:
                 net = chg - 200 * FEE
                 pnl = p["notional"] * net / 100.0

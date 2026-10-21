@@ -79,6 +79,10 @@ def one_pass(verbose=True):
         engine = str(pack.get("engine") or "")
         if not engine or engine.replace("_", "").lower() in norm:
             continue
+        if pack.get("positions"):
+            # a book holding positions is not judged on unrealised loss: settling it would
+            # close at a loss, and this platform only settles in profit
+            continue
         start = float(pack.get("start_equity") or 0)
         eq = float(pack.get("equity") or start)
         total = (eq - start) + unreal(pack, px)

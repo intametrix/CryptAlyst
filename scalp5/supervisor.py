@@ -110,6 +110,19 @@ def disabled_set():
     return {_norm(n) for n in load_disabled()}
 
 
+def _holds_positions(engine):
+    import glob as _g, json as _j
+    for pattern in ("pack_%s.json", "strategy_%s.json"):
+        p = os.path.join(STATE, pattern % engine)
+        try:
+            d = _j.load(open(p))
+        except Exception:
+            continue
+        if d.get("positions"):
+            return True
+    return False
+
+
 def bus_guard():
     """Keep the bus honest: a readerless queue that fills is a backlog nobody wants.
 
@@ -267,6 +280,11 @@ def main():
         for r in rows:
             eng = r["engine"]
             if eng in dis or r["trades"] < MIN_TRADES:
+                continue
+            # a book holding positions is left alone: disabling it would settle a loss
+            if _holds_positions(eng):
+                continue
+            if False:
                 continue
             if r["return_pct"] <= STOP_RETURN:
                 dis.add(eng); actions.append("DISABLED %s (return %.2f%%)" % (eng, r["return_pct"]))
