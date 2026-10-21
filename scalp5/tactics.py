@@ -281,9 +281,91 @@ TA_BUS = "http://127.0.0.1:8792"
 _ta_cur = {"v": 0}
 TA_LIVE = {}
 
+# ---- shared TA state: crypto_pack is the sole writer of state/ta_live.json ----
+# Per-process TA_LIVE was the structural bug: only crypto_pack filled it, so every
+# other engine's ta_vote returned (0,0) forever and its contradiction gate was
+# inert. The signal state now lives in one atomic file; readers share it. This is
+# state (the latest snapshot), not an event stream, which is why it is a file and
+# not the bus.
+_TA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state", "ta_live.json")
+_TA_WRITE_MIN_S = 5.0     # writer cadence: at most one rewrite per 5s while running
+_TA_READ_TTL_S = 5.0      # reader cache
+_TA_STALE_S = 60.0        # file older than this = no-vote
+_ta_write_ts = 0.0
+_ta_cache = {"ts": 0.0, "symbols": None}
+_ta_stale = False         # staleness episode latch (log once)
+_ta_fresh = True          # recovery latch (start fresh, no spurious recovery line)
+
+
+def _ta_log(msg):
+    print("%s  %s" % (time.strftime("%H:%M:%S"), msg), flush=True)
+
+
+def _write_ta_live():
+    """Persist TA_LIVE to state/ta_live.json, atomically, at most once per 5s.
+
+    ts_ms is file-global and refreshed on every write, so a reader distinguishes
+    a live writer from one that has stopped. On clean shutdown the file is NOT
+    deleted; it ages out and staleness takes over.
+    """
+    global _ta_write_ts
+    now = time.time()
+    if now - _ta_write_ts < _TA_WRITE_MIN_S:
+        return
+    _ta_write_ts = now
+    payload = {"ts_ms": int(now * 1000), "symbols": TA_LIVE}
+    tmp = _TA_FILE + ".%d.t" % os.getpid()
+    try:
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp, _TA_FILE)
+    except Exception:
+        pass
+
+
+def _read_ta_live():
+    """Read state/ta_live.json with a short cache. Returns symbols or None.
+
+    None means no-vote: file missing, or the file-global ts_ms is older than 60s.
+    A symbol missing from an otherwise-fresh file is a no-vote handled by the
+    caller, without logging. Staleness logs once per episode; recovery logs once
+    when the file turns fresh again, so a flapping writer cannot go silent.
+    """
+    global _ta_cache, _ta_stale, _ta_fresh
+    now = time.time()
+    if _ta_cache["symbols"] is not None and now - _ta_cache["ts"] < _TA_READ_TTL_S:
+        return _ta_cache["symbols"]
+    symbols = None
+    try:
+        with open(_TA_FILE) as fh:
+            doc = json.load(fh)
+        age = now - (doc.get("ts_ms") or 0) / 1000.0
+        if age <= _TA_STALE_S:
+            symbols = doc.get("symbols") or {}
+    except Exception:
+        symbols = None
+    _ta_cache["ts"] = now
+    _ta_cache["symbols"] = symbols
+    if symbols is None and not _ta_stale:
+        _ta_stale = True
+        _ta_fresh = False
+        _ta_log("TA_LIVE STALE — no-vote (writer gone or file older than 60s)")
+    elif symbols is not None and not _ta_fresh:
+        _ta_fresh = True
+        _ta_stale = False
+        _ta_log("TA_LIVE FRESH — writer back")
+    return symbols
+
 
 def ta_signals():
-    """Pull the TA daemon's new signals. Returns the list; fills TA_LIVE."""
+    """Pull the TA daemon's new signals. Returns the list; fills TA_LIVE.
+
+    Heartbeats state/ta_live.json only on a SUCCESSFUL fetch, so the shared file
+    stays fresh while crypto_pack runs even when the feed is quiet. A fetch
+    failure means no write: the file ages out and the designed staleness (60s)
+    turns the vote to no-vote, rather than a dead bus re-voting stale convictions
+    forever.
+    """
     try:
         d = jget(TA_BUS + "/latest?since=%d" % _ta_cur["v"], 2) if False else json.loads(
             __import__("urllib.request", fromlist=["request"]).urlopen(
@@ -295,6 +377,7 @@ def ta_signals():
     for sig in out:
         TA_LIVE.setdefault(sig["symbol"], []).append(sig)
         TA_LIVE[sig["symbol"]] = TA_LIVE[sig["symbol"]][-12:]
+    _write_ta_live()
     return out
 
 
@@ -346,6 +429,111 @@ def ext_signals(sym=None):
     return _EXT["rows"].get(sym)
 
 
+# ------------------------------------------------------------ gate, vote, sizing
+#
+# RESTORED 2026-10-21. These seven functions were deleted by e1a574e ("Envelope
+# architecture, recorder, explorer and design documentation") while five call
+# sites kept calling them, so executor and crypto_pack have crash-looped on
+# AttributeError ever since. They are restored verbatim from e1a574e~1, the last
+# tree that had them; the only edit is the removal of an unreachable duplicate
+# tail on exit_reason. Rule A1: a refactor may reorganise, never remove.
+
+def ext_gate(sym, side):
+    """(allowed, score) - block trades the extended signals strongly oppose."""
+    s = ext_signals(sym)
+    if not s:
+        return True, 0.0
+    sc = s.get("score") or 0.0
+    if side == "buy" and sc <= -35:
+        return False, sc
+    if side == "sell" and sc >= 35:
+        return False, sc
+    return True, sc
+
+
+def ta_vote(sym, side):
+    """Net TA stream support for this direction, read from the shared file.
+
+    Returns (n_for, n_against). A stale or missing file, or a symbol missing from
+    the file, is a no-vote: (0, 0).
+    """
+    symbols = _read_ta_live()
+    if not symbols:
+        return 0, 0
+    for_ = against = 0
+    for sig in symbols.get(sym, []):
+        if sig.get("side") == side:
+            for_ += 1
+        elif sig.get("side") in ("buy", "sell"):
+            against += 1
+    return for_, against
+
+
+def post(url, payload, timeout=4.0):
+    try:
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(),
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=timeout).read()
+        return True
+    except Exception:
+        return False
+
+
+def consensus_dead(fc, against=0.45, need=3, blend_below=0.42):
+    """True only when several independent agents agree the thesis is dead.
+
+    A losing trade is not closed because price dipped; it is closed when the
+    forecast supervisor's blend AND a majority of its agents turn against it.
+    """
+    if not fc:
+        return False, 0
+    views = fc.get("views") or []
+    n_against = sum(1 for v in views if (v.get("prob") or 0.5) < against)
+    blend = fc.get("prob") or 0.5
+    dead = (blend <= blend_below and n_against >= need)
+    return dead, n_against
+
+
+def grade(views, made_money):
+    """Report each agent's call back to the supervisor so it can reweight."""
+    if not views:
+        return
+    for v in views:
+        prob = v.get("prob") or 0.5
+        called_long = prob >= 0.5
+        correct = (called_long == bool(made_money))
+        post(FC_API + "/grade", {"agent": v.get("agent"), "hit": correct})
+
+
+def risk_for(base, conf):
+    """Conviction sizing: more confirmations, more capital."""
+    return round(base * (0.6 + 0.2 * min(conf, 4)), 3)
+
+
+def exit_reason(chg, peak, lock, trail_arm, trail_gap, stop, held, clock,
+                skim=None, skim_after=2.5, hard_stop=None, opposing=False):
+    """Asymmetric policy: skim winners fast, give losers room.
+
+    winners : skim once chg >= skim and held >= skim_after, or the full lock
+    losers  : no stop until hard_stop; if an opposing signal appears, re-measure
+              and close; otherwise run to the clock
+    """
+    if opposing and chg < 0:
+        return "signal_flip"
+    if chg >= lock:
+        return "lock"
+    if skim is not None and chg >= skim and held >= skim_after:
+        return "skim"
+    if peak >= trail_arm and chg <= peak - trail_gap:
+        return "trail"
+    if hard_stop is not None:
+        if chg <= -hard_stop:
+            return "hard_stop"
+    elif chg <= -stop:
+        return "stop"
+    if held >= clock:
+        return "clock"
+    return None
 
 
 # ---------------------------------------------------------------- model-owned exits
