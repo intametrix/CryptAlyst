@@ -182,6 +182,17 @@ def main():
                 actions.append("restarted %s" % name)
 
         # 2. grade and prune
+        # earned capital: recompute the allocation table from the packs each tick
+        try:
+            import capital as _cap
+            _rows = _cap.compute()
+            _cap.write(_rows)
+            promoted = [r["engine"] for r in _rows if r["risk_mult"] > 1.0]
+            if promoted:
+                actions.append("capital: %s" % ", ".join(promoted[:6]))
+        except Exception as _e:
+            actions.append("capital: %s" % _e)
+
         rows = grade()
         dis = load_disabled()
         for r in rows:

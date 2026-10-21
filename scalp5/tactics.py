@@ -441,3 +441,26 @@ def classify_reason(reason):
     if r.startswith("session_end:") or r in _LEGACY_END:
         return SESSION_END
     return MODEL
+
+
+# ---------------------------------------------------------------- earned capital
+CAP_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "state", "capital.json")
+_CAP = {"ts": 0.0, "v": {}}
+
+
+def capital(engine):
+    """(risk_mult, slots) for a book, from state/capital.json, cached 5 seconds.
+
+    Default is 1.0 and 1 slot: a book with no allocation record trades its baseline.
+    A disabled book is 0.0 - it must not act at all (A6).
+    """
+    now = time.time()
+    if now - _CAP["ts"] > 5.0:
+        try:
+            with open(CAP_PATH) as fh:
+                _CAP["v"] = json.load(fh) or {}
+        except Exception:
+            _CAP["v"] = {}
+        _CAP["ts"] = now
+    row = _CAP["v"].get(engine) or {}
+    return float(row.get("risk_mult", 1.0)), int(row.get("slots", 1))

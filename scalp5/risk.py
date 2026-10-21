@@ -83,11 +83,29 @@ def size_for(notional, confidence):
     return notional * (0.5 + (c + 100) / 200.0)
 
 
+def _engine():
+    """Which book is asking: the script name is the engine name everywhere else."""
+    import os as _os, sys as _sys
+    return _os.path.basename(_sys.argv[0] or "").replace(".py", "")
+
+
 def allow(symbol, side, notional, book_equity, expected_move_pct=None, slippage_bps=None,
           confidence=None, bar_age_s=None, signal_age_s=None, book_positions=None):
     """Return (allowed, reason). Records the decision for the dashboard."""
     if notional <= 0:
         return False, "zero size"
+
+    # earned capital: a promoted book may size up, a demoted one or a disabled one may
+    # only size down, and a disabled book is refused outright (A6)
+    try:
+        import tactics as _T
+        _mult, _slots = _T.capital(_engine())
+        if _mult <= 0:
+            return False, "no capital allocation (disabled book)"
+        if _mult != 1.0:
+            notional = notional * _mult
+    except Exception:
+        pass
     # STOP is global: every engine honours the flag even if it is still running
     import os as _os
     if _os.path.exists(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "state", "STOP")):
