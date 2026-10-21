@@ -65,6 +65,38 @@ class Book:
         self.equity = self.start = start
         self.pos, self.trades, self.opened = {}, [], 0
 
+    def _cashin_requested(self):
+        return os.path.exists(os.path.join(STATE, "cashin_%s.flag" % self.name))
+
+    def cash_in(self, px):
+        """Bank the book: close every position now, record it, keep trading."""
+        banked = 0.0
+        for s in list(self.pos):
+            p = self.pos[s]; m = px.get(s)
+            if not m:
+                continue
+            chg = (m / p["entry"] - 1) * 100
+            if p["side"] == "sell":
+                chg = -chg
+            net = chg - 200 * T.FEE
+            self.equity += p["notional"] * net / 100
+            banked += p["notional"] * net / 100
+            self.trades.append({"symbol": s, "side": p["side"], "entry": p["entry"],
+                                "gross_pct": round(chg, 4), "net_pct": round(net, 4),
+                                "peak_pct": round(p.get("peak", 0), 4),
+                                "reason": "cash_in", "held_s": round(time.time() - p["t"], 1),
+                                "notional": round(p["notional"], 2),
+                                "entry_ms": int(p["t"] * 1000),
+                                "exit_ms": int(time.time() * 1000), "why": p["why"]})
+            self.pos.pop(s, None)
+        try:
+            os.remove(os.path.join(STATE, "cashin_%s.flag" % self.name))
+        except Exception:
+            pass
+        log("%-16s CASH IN  banked %+.2f  equity %.2f  scanning again" % (
+            self.name, banked, self.equity))
+        return banked
+
     def manage(self, px):
         for s in list(self.pos):
             p = self.pos[s]; m = px.get(s)
@@ -232,6 +264,8 @@ def main():
             for sym2, p2 in b.pos.items():
                 pass
         for b in books.values():
+            if b._cashin_requested():
+                b.cash_in(px)
             b.manage(px)
 
         T.ta_signals()

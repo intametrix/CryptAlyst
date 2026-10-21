@@ -148,6 +148,37 @@ def main():
         if rows:
             px = {r["symbol"]: None for r in rows}
             for bk in books.values():
+                flag = os.path.join(STATE, "cashin_%s.flag" % bk.name)
+                if os.path.exists(flag):
+                    banked = 0.0
+                    for sym in list(bk.pos):
+                        p = bk.pos[sym]
+                        try:
+                            cur = float(T.jget("https://api.binance.com/api/v3/ticker/price?symbol="
+                                               + sym, 6)["price"])
+                        except Exception:
+                            continue
+                        chg = (cur / p["entry"] - 1) * 100 if p["side"] == "buy" \
+                              else (1 - cur / p["entry"]) * 100
+                        net = chg - FEE
+                        bk.equity += p["notional"] * net / 100
+                        banked += p["notional"] * net / 100
+                        bk.trades.append({"symbol": sym, "side": p["side"], "entry": p["entry"],
+                                          "exit": cur, "gross_pct": chg, "net_pct": net,
+                                          "peak_pct": max(0.0, chg), "reason": "cash_in",
+                                          "held_s": time.time() - p["t"],
+                                          "entry_ms": int(p["t"] * 1000),
+                                          "exit_ms": int(time.time() * 1000),
+                                          "notional": p["notional"],
+                                          "pnl_usd": p["notional"] * net / 100,
+                                          "why": p["why"]})
+                        bk.pos.pop(sym, None)
+                    try:
+                        os.remove(flag)
+                    except Exception:
+                        pass
+                    log("%-15s CASH IN banked %+.2f equity %.2f scanning again" % (
+                        bk.name, banked, bk.equity))
                 # exits
                 for sym in list(bk.pos):
                     p = bk.pos[sym]

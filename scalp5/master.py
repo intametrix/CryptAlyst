@@ -442,33 +442,167 @@ def _prices_now():
     return _PX["p"]
 
 
-def close_book(engine):
-    """Close a book: flatten it at the last price, stop it, and write the post-mortem.
+CASHIN_PATH = os.path.join(HERE, "state", "cashin.json")
 
-    Order matters. The book is disabled FIRST, so the supervisor cannot restart it
-    between the flatten and the kill; then the process is stopped; then the pack is
-    flattened and the trades are recorded with an operator reason. A6 requires the
-    post-mortem to be written at the moment of disabling, not later.
+
+def _cashin_rules():
+    try:
+        import json as _json
+        with open(CASHIN_PATH) as fh:
+            return _json.load(fh) or {}
+    except Exception:
+        return {}
+
+
+def _save_cashin(rules):
+    import json as _json
+    tmp = CASHIN_PATH + ".t"
+    with open(tmp, "w") as fh:
+        _json.dump(rules, fh, sort_keys=True)
+    os.replace(tmp, CASHIN_PATH)
+
+
+def cash_in(engine, reason="cash_in"):
+    """Bank a book's profit, then let it start over.
+
+    Flatten at the last price, record the trades, add the realised pnl to equity, and
+    restart the engine so it begins a fresh scan with a clean book. The rule is
+    re-armed from the new equity, so the next cash-in needs another full threshold of
+    profit rather than firing on the same profit every tick.
     """
+    # A book owned by a multi-strategy process must be asked, not edited: that process
+    # holds the positions in memory and rewrites the pack every loop. The flag is the
+    # request; the owner flattens its own book and keeps scanning.
+    flag = os.path.join(HERE, "state", "cashin_%s.flag" % engine)
+    owner_pack = os.path.join(HERE, "state", "pack_%s.json" % engine)
+    owned_externally = False
+    pack0 = {}
+    try:
+        import json as _json
+        pack0 = _json.load(open(owner_pack))
+        owned_externally = "crypto pack" in str(pack0.get("basis") or "")
+    except Exception:
+        pass
+    if not owned_externally:
+        # alpha_signals runs many books in one process; its MODELS lists them by name
+        try:
+            import re as _re2
+            src2 = open(os.path.join(HERE, "alpha_signals.py")).read()
+            m2 = _re2.search(r"MODELS\s*=\s*\{(.*?)\n\}", src2, _re2.S)
+            if m2 and ('"%s"' % engine) in m2.group(1):
+                owned_externally = True
+        except Exception:
+            pass
+    if not owned_externally:
+        # crypto_pack runs many books in one process; its CFG lists them by name
+        try:
+            import re as _re
+            src = open(os.path.join(HERE, "crypto_pack.py")).read()
+            m = _re.search(r"CFG\s*=\s*\{(.*?)\n\}", src, _re.S)
+            if m and ('"%s"' % engine) in m.group(1):
+                owned_externally = True
+        except Exception:
+            pass
+    if owned_externally:
+        try:
+            with open(flag, "w") as fh:
+                fh.write(str(int(time.time() * 1000)))
+        except Exception:
+            pass
+        return {"closed": 0, "unpriced": 0, "realised": 0.0, "killed": False,
+                "equity": (pack0 or {}).get("equity"), "requested": True}
+    out = _flatten_book(engine, reason, disable=False)
+    # start the book again: a fresh scan, flat book, same equity
+    try:
+        import subprocess as _sp
+        for pat in ("%s.py" % engine, engine.replace("_", "") + ".py"):
+            _sp.run(["pkill", "-f", pat], capture_output=True)
+        try:
+            import supervisor as _sup
+            for key in _sup.ENGINES:
+                script = os.path.basename(_sup.ENGINES[key][2])
+                if script in ("%s.py" % engine, engine.replace("_", "") + ".py"):
+                    _sup.start(key)
+                    out["restarted"] = key
+                    break
+        except Exception:
+            pass
+    except Exception:
+        pass
+    # re-arm: the threshold counts from here
+    try:
+        rules = _cashin_rules()
+        if engine in rules:
+            rules[engine]["armed_at"] = float(out.get("equity") or 0)
+            _save_cashin(rules)
+    except Exception:
+        pass
+    try:
+        with open(os.path.join(HERE, "state", "cashins.jsonl"), "a") as fh:
+            import json as _json
+            fh.write(_json.dumps({"ts": int(time.time() * 1000), "engine": engine,
+                                  "closed": out["closed"], "realised_usd": out["realised"],
+                                  "equity_after": out["equity"]}) + "\n")
+    except Exception:
+        pass
+    return out
+
+
+def check_cashins():
+    """Run the owners' rules: a book at or past its threshold cashes in."""
+    rules = _cashin_rules()
+    if not rules:
+        return []
+    prices = _prices_now()
+    done = []
+    for engine, rule in rules.items():
+        mode = (rule or {}).get("mode")
+        try:
+            value = float((rule or {}).get("value") or 0)
+        except Exception:
+            continue
+        if mode not in ("pct", "usd") or value <= 0:
+            continue
+        try:
+            import json as _json
+            pack = _json.load(open(os.path.join(HERE, "state", "pack_%s.json" % engine)))
+        except Exception:
+            continue
+        start = float(pack.get("start_equity") or 0)
+        eq = float(pack.get("equity") or start)
+        baseline = float(rule.get("armed_at") or start)
+        realised = eq - baseline
+        pct = (100.0 * realised / baseline) if baseline else 0.0
+        hit = (mode == "pct" and pct >= value) or (mode == "usd" and realised >= value)
+        if not hit or not (pack.get("positions") or []):
+            continue
+        out = cash_in(engine)
+        done.append("cash-in %s at %s%s: %d positions, %+.2f banked" % (
+            engine, value, "%" if mode == "pct" else " usd", out["closed"], out["realised"]))
+    return done
+
+
+def _flatten_book(engine, reason="operator_close", disable=True):
+    """Flatten a book at the last price. Banking and closing share this body."""
     import json as _json, subprocess as _sp
     here = HERE
-    path = os.path.join(here, "state", "disabled.json")
-    try:
-        cur = _json.load(open(path))
-    except Exception:
-        cur = {"books": []}
-    books = [b for b in (cur.get("books") or []) if b]
-    if engine not in books:
-        books.append(engine)
-    tmp = path + ".t"
-    with open(tmp, "w") as fh:
-        _json.dump({"books": books, "ts": int(time.time() * 1000)}, fh)
-    os.replace(tmp, path)
-
     killed = False
-    for pat in ("%s.py" % engine, engine.replace("_", "") + ".py"):
-        if _sp.run(["pkill", "-f", pat], capture_output=True).returncode == 0:
-            killed = True
+    if disable:
+        path = os.path.join(here, "state", "disabled.json")
+        try:
+            cur = _json.load(open(path))
+        except Exception:
+            cur = {"books": []}
+        books = [b for b in (cur.get("books") or []) if b]
+        if engine not in books:
+            books.append(engine)
+        tmp = path + ".t"
+        with open(tmp, "w") as fh:
+            _json.dump({"books": books, "ts": int(time.time() * 1000)}, fh)
+        os.replace(tmp, path)
+        for pat in ("%s.py" % engine, engine.replace("_", "") + ".py"):
+            if _sp.run(["pkill", "-f", pat], capture_output=True).returncode == 0:
+                killed = True
 
     prices = _prices_now()
     pack_path = os.path.join(here, "state", "pack_%s.json" % engine)
@@ -479,13 +613,15 @@ def close_book(engine):
         pack = None
     if pack is not None:
         trades = pack.get("trades") or []
-        for pos in list(pack.get("positions") or []):
+        remaining = []
+        for pos in (pack.get("positions") or []):
             sym = (pos.get("symbol") or "").upper()
             entry = float(pos.get("entry") or 0)
             px = float(prices.get(sym) or 0)
             notional = float(pos.get("notional") or 0)
             if not entry or not px:
                 kept += 1
+                remaining.append(pos)
                 continue
             chg = (px / entry - 1.0) * 100.0
             if str(pos.get("side") or "buy").lower() in ("sell", "short"):
@@ -495,20 +631,46 @@ def close_book(engine):
                            "symbol": sym, "side": pos.get("side", "buy"),
                            "entry": entry, "exit": px, "gross_pct": round(chg, 4),
                            "net_pct": round(chg, 4), "held_s": pos.get("held_s"),
-                           "reason": "operator_close", "notional": notional,
+                           "reason": reason, "notional": notional,
                            "pnl_usd": round(pnl, 2),
                            "exit_ms": int(time.time() * 1000)})
             realised += pnl
             closed += 1
-        pack["positions"] = [p for p in (pack.get("positions") or [])
-                             if (p.get("symbol") or "").upper() not in prices]
+        pack["positions"] = remaining
         pack["trades"] = trades[-400:]
         pack["equity"] = round(float(pack.get("equity") or 0) + realised, 2)
-        pack["closed_by"] = "operator"
+        if disable:
+            pack["closed_by"] = "operator"
         pack["ts"] = int(time.time() * 1000)
         with open(pack_path + ".t", "w") as fh:
             _json.dump(pack, fh)
         os.replace(pack_path + ".t", pack_path)
+    return {"closed": closed, "unpriced": kept, "realised": round(realised, 2),
+            "killed": killed, "equity": (pack or {}).get("equity")}
+
+
+def close_book(engine):
+    """Close a book: flatten it at the last price, stop it, and write the post-mortem.
+
+    Order matters. The book is disabled FIRST, so the supervisor cannot restart it
+    between the flatten and the kill; then the process is stopped; then the pack is
+    flattened and the trades are recorded with an operator reason. A6 requires the
+    post-mortem to be written at the moment of disabling, not later.
+    """
+    import json as _json
+    here = HERE
+    out = _flatten_book(engine, "operator_close", disable=True)
+    closed, realised, kept = out["closed"], out["realised"], out["unpriced"]
+    pack = {}
+    try:
+        pack = _json.load(open(os.path.join(here, "state", "pack_%s.json" % engine)))
+    except Exception:
+        pass
+    books = []
+    try:
+        books = _json.load(open(os.path.join(here, "state", "disabled.json"))).get("books") or []
+    except Exception:
+        pass
 
     post = os.path.join(here, "state", "postmortems.jsonl")
     with open(post, "a") as fh:
@@ -521,7 +683,7 @@ def close_book(engine):
             "note": "flattened at the last traded price, then stopped; A6 post-mortem",
         }) + "\n")
     return {"ok": True, "engine": engine, "closed": closed, "unpriced": kept,
-            "realised": round(realised, 2), "killed": killed, "disabled": books}
+            "realised": round(realised, 2), "killed": out["killed"], "disabled": books}
 
 
 def _sides(positions, trades):
@@ -2095,6 +2257,30 @@ async function engineAction(name, act){
   if(note) note.textContent = act+": "+name+(d.ok?" · done":" · "+(d.error||"failed"));
   renderEngines();
 }
+async function setCashIn(name){
+  var r = prompt("Cash in "+name+" when profit reaches…\n\n"+
+                 "  a percentage of equity, e.g. 3  ->  type  3%\n"+
+                 "  a dollar amount,      e.g. 150 ->  type  $150\n"+
+                 "  blank to clear the rule", "");
+  if(r===null) return;
+  r=String(r).trim();
+  var mode="off", value="0";
+  if(r!==""){ if(r.endsWith("%")){ mode="pct"; value=parseFloat(r); }
+              else { mode="usd"; value=parseFloat(r.replace(/[$\s]/g,"")); } }
+  var out={};
+  try{
+    out=await (await fetch("/api/cashin?engine="+encodeURIComponent(name)+
+                           "&mode="+mode+"&value="+encodeURIComponent(value||0),
+                           {cache:"no-store"})).json();
+  }catch(e){ out={error:e.message||String(e)}; }
+  var note=document.getElementById("engnote");
+  if(note) note.textContent = out.ok
+    ? (out.rule ? ("cash-in "+name+": at "+out.rule.value+(out.rule.mode==="pct"?"%":" usd"))
+                : ("cash-in cleared for "+name))
+    : ("cash-in failed: "+(out.error||"?"));
+  renderEngines();
+}
+
 async function closeBook(name, btn){
   if(!confirm("Close "+name+"?\n\nEvery open position is flattened at the last traded price,\n"+
               "the trades are recorded as operator_close, and the book is disabled "+
@@ -2135,7 +2321,9 @@ async function renderEngines(){
       ? '<button class="tbtn" onclick="engineAction(\''+e.name+'\',\'start\')">start</button>'
       : '<button class="tbtn" onclick="engineAction(\''+e.name+'\',\'stop\')">stop</button>')+
       ' <button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
-      'onclick="closeBook(\''+e.name+'\',this)">close book</button>';
+      'onclick="closeBook(\''+e.name+'\',this)">close book</button>'+
+      ' <button class="tbtn" style="border-color:#3fb950;color:#7ee2a8" '+
+      'onclick="setCashIn(\''+e.name+'\')">cash in at…</button>';
     return '<tr><td>'+esc(e.name)+'</td>'+
       '<td class="'+cls+'">'+state+'</td>'+
       '<td class="num">'+money(e.equity)+'</td>'+
@@ -6042,6 +6230,45 @@ class H(BaseHTTPRequestHandler):
             out.sort(key=lambda r: -(r["total"] or 0))
             return self._send(200, _json.dumps({"engines": out,
                                                 "alive": sum(1 for r in out if r["alive"])}),
+                              "application/json")
+        if p == "/api/cashin_now":
+            import json as _json
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            engine = (q.get("engine", [""])[0] or "").strip()
+            if not engine:
+                return self._send(400, _json.dumps({"error": "engine required"}),
+                                  "application/json")
+            try:
+                out = cash_in(engine)
+                out["ok"] = True
+            except Exception as e:
+                out = {"ok": False, "error": str(e)}
+            return self._send(200, _json.dumps(out), "application/json")
+        if p == "/api/cashin":
+            import json as _json
+            q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            engine = (q.get("engine", [""])[0] or "").strip()
+            mode = (q.get("mode", ["off"])[0] or "off").strip()
+            raw = (q.get("value", ["0"])[0] or "0").strip()
+            if not engine:
+                return self._send(400, _json.dumps({"error": "engine required"}),
+                                  "application/json")
+            rules = _cashin_rules()
+            if mode == "off":
+                rules.pop(engine, None)
+            else:
+                if mode not in ("pct", "usd"):
+                    return self._send(400, _json.dumps({"error": "mode must be pct or usd"}),
+                                      "application/json")
+                try:
+                    value = float(raw)
+                except Exception:
+                    return self._send(400, _json.dumps({"error": "value must be a number"}),
+                                      "application/json")
+                rules[engine] = {"mode": mode, "value": value}
+            _save_cashin(rules)
+            return self._send(200, _json.dumps({"ok": True, "engine": engine,
+                                                "rule": rules.get(engine)}),
                               "application/json")
         if p == "/api/book_close":
             import json as _json, subprocess as _sp

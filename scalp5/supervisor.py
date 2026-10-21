@@ -228,6 +228,14 @@ def main():
                 actions.append("restarted %s" % name)
 
         # 2. grade and prune
+        # owners' cash-in rules: bank a book that reached its % or its dollar target
+        try:
+            import master as _m
+            for _a in _m.check_cashins():
+                actions.append(_a)
+        except Exception as _e:
+            actions.append("cashin: %s" % _e)
+
         for _a in bus_guard():
             actions.append(_a)
 
