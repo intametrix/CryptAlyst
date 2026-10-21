@@ -101,3 +101,4 @@ web/node_modules/
 
 # dependencies are installed, never committed
 node_modules/
+tools/kimi_err.log
