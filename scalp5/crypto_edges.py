@@ -17,10 +17,14 @@ Each edge has its own $2,000 book and writes state/edge_<name>.json.
 """
 
 import argparse
+import datetime
+import email.utils
 import json
 import math
 import os
+import random
 import time
+import urllib.error
 import urllib.request
 
 try:
@@ -52,10 +56,106 @@ def log(m):
     print("%s  %s" % (time.strftime("%H:%M:%S"), m), flush=True)
 
 
-def jget(url, timeout=10.0):
+# ---------------------------------------------------------------- rate limit
+#
+# Binance answers 418 when it has decided the caller is abusing it, and the
+# answer to 418 is to stop asking. Before this, the 418 was an unhandled
+# exception in btc_regime(), so the engine died and the supervisor restarted it
+# into the same wall every 30 seconds - a restart loop that never let the ban
+# expire and never let anything else run.
+#
+# The shape now: one cooldown shared by the whole process, set from Retry-After
+# when the server sends one, exponential otherwise. Every caller raises
+# RateLimited instead of talking to the network while the cooldown is live, and
+# the loop sleeps the cooldown. Block, do not drop: a skipped tick is honest, a
+# hammered ban is not.
+
+RETRY_CODES = (418, 429, 500, 502, 503, 504)
+RETRY_BASE_S = 4.0
+MAX_RETRY_AFTER_S = 300.0
+_cooldown = {"until": 0.0}
+
+
+class RateLimited(Exception):
+    """The process is in a rate-limit cooldown; no request was made."""
+
+    def __init__(self, wait_s, url=""):
+        self.wait_s = float(wait_s)
+        self.url = url
+        super().__init__("rate limited, %.0fs left" % self.wait_s)
+
+
+def retry_after(headers, now=None):
+    """Seconds to wait from a Retry-After header: delta-seconds or an HTTP-date."""
+    if not headers:
+        return None
+    raw = headers.get("Retry-After") or headers.get("retry-after")
+    if raw is None:
+        return None
+    raw = str(raw).strip()
+    try:
+        return max(0.0, float(raw))
+    except ValueError:
+        pass
+    try:
+        dt = email.utils.parsedate_to_datetime(raw)
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return max(0.0, dt.timestamp() - (now if now is not None else time.time()))
+    except Exception:
+        return None
+
+
+def rate_cooldown(now=None):
+    """Seconds left on the process-wide cooldown."""
+    return max(0.0, _cooldown["until"] - (now if now is not None else time.time()))
+
+
+def backoff_seconds(attempt, retry_after_s=None, rnd=None):
+    """Wait for this attempt: Retry-After if the server said, else exponential.
+
+    Jitter keeps a fleet of engines from resuming in lockstep after a shared ban;
+    the cap is applied after jitter so the bound is real.
+    """
+    if retry_after_s is not None:
+        wait = float(retry_after_s)
+    else:
+        wait = RETRY_BASE_S * (2 ** max(0, attempt))
+    rnd = rnd or random.random
+    wait = wait * (0.9 + 0.2 * rnd())
+    return min(MAX_RETRY_AFTER_S, max(0.0, wait))
+
+
+def _fetch(url, timeout=10.0):
+    """One request, no policy. Separated so tests can drive it without a socket."""
     with urllib.request.urlopen(urllib.request.Request(
             url, headers={"User-Agent": "crypto-edges/1.0"}), timeout=timeout) as r:
         return json.loads(r.read().decode())
+
+
+def jget(url, timeout=10.0, attempt=0):
+    """Fetch JSON, or raise RateLimited when the ban is live.
+
+    Retry-After is honoured to the second. A non-retryable error (401, 404, a
+    malformed body) is raised as itself: only the codes Binance uses for
+    backpressure are absorbed here.
+    """
+    wait = rate_cooldown()
+    if wait > 0:
+        raise RateLimited(wait, url)
+    try:
+        return _fetch(url, timeout)
+    except urllib.error.HTTPError as e:
+        if e.code not in RETRY_CODES:
+            raise
+        ra = retry_after(getattr(e, "headers", None))
+        w = backoff_seconds(attempt, ra)
+        _cooldown["until"] = time.time() + w
+        log("RATE LIMITED HTTP %d on %s - holding %.0fs%s" % (
+            e.code, url.split("?")[0], w, " (Retry-After)" if ra is not None else ""))
+        raise RateLimited(w, url)
 
 
 class Book:
@@ -187,8 +287,11 @@ def is_active_session(now=None):
 
 
 def btc_regime():
-    """+1 above the 1h EMA50, -1 below."""
-    bars = klines("BTCUSDT", "1h", 120)
+    """+1 above the 1h EMA50, -1 below. 0 when the feed is unavailable."""
+    try:
+        bars = klines("BTCUSDT", "1h", 120)
+    except Exception:
+        return 0
     if len(bars) < 60:
         return 0
     e = ema([b["c"] for b in bars], 50)
@@ -211,6 +314,11 @@ def main():
     cache = {}
 
     while time.time() - started < args.seconds:
+        hold = rate_cooldown()
+        if hold > 0:
+            log("COOLDOWN %.0fs - not asking, the ban is still live" % hold)
+            time.sleep(min(hold, MAX_RETRY_AFTER_S))
+            continue
         try:
             raw = jget(BACKEND + "/api/universe").get("symbols") or []
         except Exception:
