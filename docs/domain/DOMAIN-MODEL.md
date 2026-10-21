@@ -9,17 +9,17 @@ Seven bounded contexts, one contract between them, and a record that can be read
 ## Contents
 
 1. [How to read this](#how-to-read) — How the document narrows its lens, from the whole platform to a single byte on disk.
-2. [Level 0 — the context map](#contexts) — The seven contexts, the aggregates each owns, and the direction knowledge travels between them.
-3. [Level 1 — the envelope, the only thing that travels](#envelope) — The one object that crosses every boundary, and the hops that record what happened to it.
-4. [Level 2 — market data, the only process that talks to the exchange](#market) — How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.
-5. [Level 2 — the book, the aggregate that decides](#books) — The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.
-6. [Level 2 — the gate, what must pass before money moves](#risk) — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
-7. [Level 2 — the recorder, the only writer](#recorder) — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
-8. [Level 3 — the lake, what is actually on disk](#lake) — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
-9. [Level 4 — beneath the lake](#beneath) — The filesystem properties that let a case file be called evidence a year later.
-10. [Level 3 — the data stores, as they exist](#stores) — Every place data is actually written on this machine, in which format, by which process, for how long.
-11. [Level 3 — how the lake chooses](#tree) — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
-12. [Level 2 — control, what may change behaviour](#control) — What may change behaviour — supervise and stop — and what STOP must never touch.
+2. [Level 1 — the context map](#contexts) — The seven contexts, the aggregates each owns, and the direction knowledge travels between them.
+3. [Level 2 — the envelope, the only thing that travels](#envelope) — The one object that crosses every boundary, and the hops that record what happened to it.
+4. [Level 3 — market data, the only process that talks to the exchange](#market) — How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.
+5. [Level 3 — the book, the aggregate that decides](#books) — The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.
+6. [Level 3 — the gate, what must pass before money moves](#risk) — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
+7. [Level 3 — the recorder, the only writer](#recorder) — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
+8. [Level 3 — control, what may change behaviour](#control) — What may change behaviour — supervise and stop — and what STOP must never touch.
+9. [Level 4 — the lake, what is actually on disk](#lake) — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
+10. [Level 4 — the data stores, as they exist](#stores) — Every place data is actually written on this machine, in which format, by which process, for how long.
+11. [Level 4 — how the lake chooses](#tree) — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
+12. [Level 5 — beneath the lake](#beneath) — The filesystem properties that let a case file be called evidence a year later.
 13. [Crossing concerns — time, identity and generations](#crossing) — Time, identity and generations, modelled once in the envelope rather than per context.
 14. [What the model deliberately refuses to do](#failures) — The boundaries the model will not pretend to cross, stated so they can be argued with.
 
@@ -50,14 +50,15 @@ Two rules run through every level. First, exactly one kind of thing travels betw
 
 | Level | Question it answers | Where |
 |---|---|---|
-| 0 | what is this platform about? | the context map |
-| 1 | what are the parts, and what do they own? | the seven contexts |
-| 2 | what is inside one part? | a figure per context |
-| 3 | what is the record, and what is beneath it? | the lake and the filesystem |
+| 1 | what is this platform about? | the context map |
+| 2 | what travels between the parts? | the envelope |
+| 3 | what is inside one part? | one figure per context |
+| 4 | what is the record, and where does it live? | the lake and the data stores |
+| 5 | what is beneath the record? | the filesystem |
 
 ---
 
-## Level 0 — the context map
+## Level 1 — the context map
 
 > **What this shows** — The seven contexts, the aggregates each owns, and the direction knowledge travels between them.
 
@@ -81,7 +82,7 @@ The arrows are not calls. Each one is a stream of envelopes on one bus, so a con
 
 ---
 
-## Level 1 — the envelope, the only thing that travels
+## Level 2 — the envelope, the only thing that travels
 
 > **What this shows** — The one object that crosses every boundary, and the hops that record what happened to it.
 
@@ -100,7 +101,7 @@ The contract is deliberately strict in one direction and lenient in the other. A
 
 ---
 
-## Level 2 — market data, the only process that talks to the exchange
+## Level 3 — market data, the only process that talks to the exchange
 
 > **What this shows** — How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.
 
@@ -121,7 +122,7 @@ The one design decision worth naming: publishing happens on a goroutine through 
 
 ---
 
-## Level 2 — the book, the aggregate that decides
+## Level 3 — the book, the aggregate that decides
 
 > **What this shows** — The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.
 
@@ -140,7 +141,7 @@ The refusals are the part most systems omit. A refusal carries the rule that sto
 
 ---
 
-## Level 2 — the gate, what must pass before money moves
+## Level 3 — the gate, what must pass before money moves
 
 > **What this shows** — The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.
 
@@ -163,7 +164,7 @@ The exit policy is part of the model, not an implementation detail. The platform
 
 ---
 
-## Level 2 — the recorder, the only writer
+## Level 3 — the recorder, the only writer
 
 > **What this shows** — The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.
 
@@ -182,7 +183,26 @@ Books do not declare their inputs. Rather than leave a decision parentless, the 
 
 ---
 
-## Level 3 — the lake, what is actually on disk
+## Level 3 — control, what may change behaviour
+
+> **What this shows** — What may change behaviour — supervise and stop — and what STOP must never touch.
+
+![The supervisor, the stop flag and the heartbeat, and what STOP must never touch.](fig/08-control.png)
+
+*The supervisor, the stop flag and the heartbeat, and what STOP must never touch.*
+
+STOP is the most important verb in the platform, so it is defined precisely. It kills every trading process, writes a flag that every gate reads, publishes a control envelope on the bus, and resets books and statistics after archiving them. It must never stop market data, the recorder or the explorer: an operator needs the record most at the moment they stop trading.
+
+The inverse is equally deliberate: no data path can stop the platform. A feed outage, a dead book or a missing consumer degrades what you see; only the control plane changes what the platform will do next.
+
+- STOP kills trading, writes the flag, publishes system.control, resets the books
+- STOP leaves market data, the recorder and the explorer running
+- starting the platform does not start trading unless it is asked to
+- a stopped book is visibly stopped; it does not linger as a row on a dashboard
+
+---
+
+## Level 4 — the lake, what is actually on disk
 
 > **What this shows** — What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.
 
@@ -203,26 +223,7 @@ Reader queries do not scan the journal. An index of topic to byte offsets is bui
 
 ---
 
-## Level 4 — beneath the lake
-
-> **What this shows** — The filesystem properties that let a case file be called evidence a year later.
-
-Underneath the lake there is a filesystem and nothing else. The properties that follow from that are worth stating plainly, because they are the reason a case file can be called evidence.
-
-| Property | Consequence |
-|---|---|
-| one line, one envelope, append only | a line never changes after it is written |
-| plain UTF-8 JSON | grep, jq, awk and a shell are enough to read it |
-| no service dependency to read | an investigator does not need the platform running |
-| rotation by size, then gzip | the working journal stays small and fast |
-| expiry by window | the record has a stated lifetime, not an accidental one |
-| offsets in memory, rebuilt on boot | the index is disposable, the journal is not |
-
-The separation matters architecturally: the journal is the durable fact, the index is a convenience that can be thrown away and rebuilt. A corruption in the index costs a restart; a corruption in the journal costs history. Only the second one is serious, and the design keeps them apart.
-
----
-
-## Level 3 — the data stores, as they exist
+## Level 4 — the data stores, as they exist
 
 > **What this shows** — Every place data is actually written on this machine, in which format, by which process, for how long.
 
@@ -247,7 +248,7 @@ The journal is the record: 60 GB of JSONL, one envelope per line, written by the
 
 ---
 
-## Level 3 — how the lake chooses
+## Level 4 — how the lake chooses
 
 > **What this shows** — The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.
 
@@ -266,22 +267,22 @@ Everything else goes to the bronze journal. There the topic class decides the li
 
 ---
 
-## Level 2 — control, what may change behaviour
+## Level 5 — beneath the lake
 
-> **What this shows** — What may change behaviour — supervise and stop — and what STOP must never touch.
+> **What this shows** — The filesystem properties that let a case file be called evidence a year later.
 
-![The supervisor, the stop flag and the heartbeat, and what STOP must never touch.](fig/08-control.png)
+Underneath the lake there is a filesystem and nothing else. The properties that follow from that are worth stating plainly, because they are the reason a case file can be called evidence.
 
-*The supervisor, the stop flag and the heartbeat, and what STOP must never touch.*
+| Property | Consequence |
+|---|---|
+| one line, one envelope, append only | a line never changes after it is written |
+| plain UTF-8 JSON | grep, jq, awk and a shell are enough to read it |
+| no service dependency to read | an investigator does not need the platform running |
+| rotation by size, then gzip | the working journal stays small and fast |
+| expiry by window | the record has a stated lifetime, not an accidental one |
+| offsets in memory, rebuilt on boot | the index is disposable, the journal is not |
 
-STOP is the most important verb in the platform, so it is defined precisely. It kills every trading process, writes a flag that every gate reads, publishes a control envelope on the bus, and resets books and statistics after archiving them. It must never stop market data, the recorder or the explorer: an operator needs the record most at the moment they stop trading.
-
-The inverse is equally deliberate: no data path can stop the platform. A feed outage, a dead book or a missing consumer degrades what you see; only the control plane changes what the platform will do next.
-
-- STOP kills trading, writes the flag, publishes system.control, resets the books
-- STOP leaves market data, the recorder and the explorer running
-- starting the platform does not start trading unless it is asked to
-- a stopped book is visibly stopped; it does not linger as a row on a dashboard
+The separation matters architecturally: the journal is the durable fact, the index is a convenience that can be thrown away and rebuilt. A corruption in the index costs a restart; a corruption in the journal costs history. Only the second one is serious, and the design keeps them apart.
 
 ---
 

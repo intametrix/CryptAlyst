@@ -38,15 +38,16 @@ SECTIONS = [
             "does; data may inform a decision but never stop the machinery.",
         ],
         "table": (["Level", "Question it answers", "Where"],
-                  [["0", "what is this platform about?", "the context map"],
-                   ["1", "what are the parts, and what do they own?", "the seven contexts"],
-                   ["2", "what is inside one part?", "a figure per context"],
-                   ["3", "what is the record, and what is beneath it?", "the lake and the filesystem"]]),
+                  [["1", "what is this platform about?", "the context map"],
+                   ["2", "what travels between the parts?", "the envelope"],
+                   ["3", "what is inside one part?", "one figure per context"],
+                   ["4", "what is the record, and where does it live?", "the lake and the data stores"],
+                   ["5", "what is beneath the record?", "the filesystem"]]),
     },
     {
         "id": "contexts",
         "shows": "The seven contexts, the aggregates each owns, and the direction knowledge travels between them.",
-        "title": "Level 0 — the context map",
+        "title": "Level 1 — the context map",
         "figure": ("01-contexts.png", "The platform in one picture: contexts, the aggregates they own, and which way knowledge flows."),
         "body": [
             "Seven contexts, arranged by the direction knowledge travels. Market data observes. "
@@ -67,7 +68,7 @@ SECTIONS = [
     {
         "id": "envelope",
         "shows": "The one object that crosses every boundary, and the hops that record what happened to it.",
-        "title": "Level 1 — the envelope, the only thing that travels",
+        "title": "Level 2 — the envelope, the only thing that travels",
         "figure": ("02-envelope.png", "Three members, and the hops that prove what happened to the envelope on the way."),
         "body": [
             "An envelope is data, meta and refs. The data is the payload a producer computed and is "
@@ -90,7 +91,7 @@ SECTIONS = [
     {
         "id": "market",
         "shows": "How an exchange socket becomes topics: shards, a single parse, in-memory state, and a publisher that cannot block the read.",
-        "title": "Level 2 — market data, the only process that talks to the exchange",
+        "title": "Level 3 — market data, the only process that talks to the exchange",
         "figure": ("03-market-data.png", "Shards, one parse, in-memory state, then topics. Publishing never blocks the socket."),
         "body": [
             "The feed streams the top symbols by 24-hour quote volume, four streams each, sharded so "
@@ -111,7 +112,7 @@ SECTIONS = [
     {
         "id": "books",
         "shows": "The aggregate that decides: equity, positions, the decisions that opened them and the refusals that did not.",
-        "title": "Level 2 — the book, the aggregate that decides",
+        "title": "Level 3 — the book, the aggregate that decides",
         "figure": ("04-book.png", "A book is one aggregate: equity, positions, and the decisions that produced them."),
         "body": [
             "A book is the unit of consistency. Its equity moves only when a position closes, by that "
@@ -132,7 +133,7 @@ SECTIONS = [
     {
         "id": "risk",
         "shows": "The order of the gate — identity and freshness before arithmetic — and the exit policy that books losses.",
-        "title": "Level 2 — the gate, what must pass before money moves",
+        "title": "Level 3 — the gate, what must pass before money moves",
         "figure": ("05-risk.png", "Interceptors, then the arithmetic. Every stage appends a hop, so a refusal explains itself."),
         "body": [
             "The gate is ordered deliberately: identity and freshness before arithmetic. There is no "
@@ -154,7 +155,7 @@ SECTIONS = [
     {
         "id": "recorder",
         "shows": "The only writer of the record, and the derived references it attaches when a producer did not declare its inputs.",
-        "title": "Level 2 — the recorder, the only writer",
+        "title": "Level 3 — the recorder, the only writer",
         "figure": ("06-recorder.png", "One consumer per topic, hops recorded as they pass, derived references attached at the door."),
         "body": [
             "The recorder owns one queue per topic, so it sees every message exactly once. It runs the "
@@ -175,7 +176,7 @@ SECTIONS = [
     {
         "id": "lake",
         "shows": "What is actually on disk: the journal, its line format, the index that avoids scanning it, and retention.",
-        "title": "Level 3 — the lake, what is actually on disk",
+        "title": "Level 4 — the lake, what is actually on disk",
         "figure": ("07-lake.png", "A journal, a line format, an index, and the retention that keeps it from growing forever."),
         "body": [
             "The lake is a directory of JSONL journals. One line is one envelope. The line carries the "
@@ -195,7 +196,7 @@ SECTIONS = [
     {
         "id": "beneath",
         "shows": "The filesystem properties that let a case file be called evidence a year later.",
-        "title": "Level 4 — beneath the lake",
+        "title": "Level 5 — beneath the lake",
         "body": [
             "Underneath the lake there is a filesystem and nothing else. The properties that follow "
             "from that are worth stating plainly, because they are the reason a case file can be "
@@ -217,7 +218,7 @@ SECTIONS = [
     },
     {
         "id": "stores",
-        "title": "Level 3 — the data stores, as they exist",
+        "title": "Level 4 — the data stores, as they exist",
         "shows": "Every place data is actually written on this machine, in which format, by which process, for how long.",
         "figure": ("09-stores.png", "Eight stores. The journal is the only one that is a record; the rest are derived, cached, archived or diagnostic."),
         "body": [
@@ -242,7 +243,7 @@ SECTIONS = [
     },
     {
         "id": "tree",
-        "title": "Level 3 — how the lake chooses",
+        "title": "Level 4 — how the lake chooses",
         "shows": "The decision tree that decides which store receives an envelope, how long it lives, and when a segment is sealed.",
         "figure": ("10-decision-tree.png", "One question per level: what is it, how long does it live, is it big enough to seal. Nothing is deleted by a rule that is not drawn here."),
         "body": [
@@ -265,7 +266,7 @@ SECTIONS = [
     {
         "id": "control",
         "shows": "What may change behaviour — supervise and stop — and what STOP must never touch.",
-        "title": "Level 2 — control, what may change behaviour",
+        "title": "Level 3 — control, what may change behaviour",
         "figure": ("08-control.png", "The supervisor, the stop flag and the heartbeat, and what STOP must never touch."),
         "body": [
             "STOP is the most important verb in the platform, so it is defined precisely. It kills "
@@ -320,3 +321,10 @@ SECTIONS = [
         ],
     },
 ]
+
+# The document runs top to bottom: the whole, then the contract, then each context,
+# then the record and what is under it. Order is declared here, not left to the
+# order the sections happen to be written in.
+ORDER = ["how-to-read", "contexts", "envelope", "market", "books", "risk", "recorder",
+         "control", "lake", "stores", "tree", "beneath", "crossing", "failures"]
+SECTIONS.sort(key=lambda s: ORDER.index(s["id"]) if s["id"] in ORDER else len(ORDER))
