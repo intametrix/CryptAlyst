@@ -7237,19 +7237,27 @@ class H(BaseHTTPRequestHandler):
         if p in ("/healthz", "/api/health"):
             out = {"app": "ok", "checks": {}}
             def probe(name, url):
-                try:
-                    t0 = time.time()
-                    d = jget(url, timeout=6.0)
-                    out["checks"][name] = {"ok": True, "ms": int((time.time() - t0) * 1000),
-                                           "detail": d}
-                except Exception as exc:
-                    out["checks"][name] = {"ok": False, "error": str(exc)[:120]}
+                # a transient restart (the forecast watchdog) must not paint the
+                # panel red: try once, and on failure retry once after 5s.
+                for attempt in (0, 1):
+                    try:
+                        t0 = time.time()
+                        d = jget(url, timeout=6.0)
+                        out["checks"][name] = {"ok": True,
+                                               "ms": int((time.time() - t0) * 1000),
+                                               "detail": d}
+                        return
+                    except Exception as exc:
+                        if attempt == 0:
+                            time.sleep(5.0)
+                            continue
+                        out["checks"][name] = {"ok": False, "error": str(exc)[:120]}
             # health is about the platform this build actually runs. The legacy
             # python backend is not part of it, so it is reported, not required.
             probe("market data", "http://127.0.0.1:8796/health")
             probe("recorder", "http://127.0.0.1:8801/stats")
             probe("explorer", "http://127.0.0.1:8802/api/stats")
-            probe("forecast", "http://127.0.0.1:8790/forecast?symbol=BTCUSDT&side=buy&horizon=300")
+            probe("forecast", "http://127.0.0.1:8790/health")
             try:
                 a = jget("http://127.0.0.1:8799/api/all", timeout=10.0)
                 live = sum(1 for e in a.get("engines", []) if e.get("alive"))
