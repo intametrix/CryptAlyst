@@ -2277,9 +2277,14 @@ async function drillOpen(kind){
   m.classList.add("open");
   m.style.display="block";
   var t=document.getElementById("drilltitle");
-  if(t) t.textContent = (kind==="realised" ? "Realised — every book, banked only"
-        : kind==="unrealised" ? "Unrealised — every book, marked at the last price"
-        : "Total — realised plus unrealised");
+  if(t) t.textContent = ({
+      realised:"Realised — every book, banked only",
+      unrealised:"Unrealised — every book, marked at the last price",
+      total:"Total — realised plus unrealised",
+      equity:"Equity — every book's account",
+      return:"Return — every book, % of its start",
+      open:"Open positions — only books holding one",
+    })[kind] || kind;
   await drillRender();
 }
 
@@ -2327,8 +2332,11 @@ async function drillRender(){
   var d={};
   try{ d=await (await fetch("/api/engines",{cache:"no-store"})).json(); }
   catch(e){ box.innerHTML='<div class="empty">engines unavailable</div>'; return; }
-  var key = kind==="unrealised" ? "unrealised" : kind==="total" ? "total" : "realised";
-  var es=(d.engines||[]).slice().sort(function(a,b){ return (b[key]||0)-(a[key]||0); });
+  var key = ({unrealised:"unrealised", total:"total", equity:"equity",
+              return:"return_pct", open:"open"})[kind] || "realised";
+  var es=(d.engines||[]).slice();
+  if(kind==="open") es=es.filter(function(e){ return (e.open||0)>0; });
+  es.sort(function(a,b){ return (b[key]||0)-(a[key]||0); });
   var sum=es.reduce(function(a,e){ return a+(e[key]||0); },0);
   var rows=es.map(function(e){
     return '<tr><td>'+esc(e.name)+'</td>'+
@@ -2977,14 +2985,14 @@ async function renderBooks(){
   var flat=books.length-active;
   head.innerHTML='<div class="panel" style="padding:12px 14px;margin-bottom:12px">'+
     '<div style="display:flex;gap:26px;flex-wrap:wrap;align-items:center">'+
-    UI.stat("combined equity","$"+Number(d.equity||0).toLocaleString(undefined,{maximumFractionDigits:0}))+
+    _drillTile("equity","$"+Number(d.equity||0).toLocaleString(undefined,{maximumFractionDigits:0}),"#c9d6e3")+
     UI.stat("live books", (d.live_books||0)+" live · "+(d.stale_books||0)+" frozen",
             (d.stale_books? "#e3b341" : "#3fb950"))+
-    UI.stat("return",(d.return_pct>=0?"+":"")+Number(d.return_pct||0).toFixed(3)+"%", (d.return_pct>=0?"#3fb950":"#f85149"))+
+    _drillTile("return",(d.return_pct>=0?"+":"")+Number(d.return_pct||0).toFixed(3)+"%", (d.return_pct>=0?"#3fb950":"#f85149"))+
     UI.stat("books", books.length)+
     UI.stat("books trading", active, "#58a6ff")+
     UI.stat("books idle", flat, "#7c8b9d")+
-    UI.stat("open positions", d.open||0)+
+    _drillTile("open", d.open||0, "#58a6ff")+
     _sideTile("open long", d.open_long||0, "#3fb950", "open_long")+
     _sideTile("open short", d.open_short||0, "#f85149", "open_short")+
     _sideTile("closed long", d.closed_long||0, "#3fb950", "closed_long")+
