@@ -1548,6 +1548,8 @@ header{margin-left:186px}
   <span class="pill" id="hz" title="service health">health —</span>
   <span class="pill" id="beat" title="platform heartbeat">beat —</span>
   <span class="pill ok" id="toteq" title="total equity across every book">total —</span>
+  <span class="pill up" id="pill-long" title="open long positions / long trades closed">L —</span>
+  <span class="pill down" id="pill-short" title="open short positions / short trades closed">S —</span>
   <button id="tradebtn" class="tbtn" onclick="toggleTrading()">▶ start trading</button>
   <span class="pill" id="modelsbadge">—</span>
   <span class="spacer"></span>
@@ -4551,6 +4553,17 @@ async function beat(){
   }catch(e){ el.textContent="beat \u2014"; el.className="pill bad"; }
 }
 
+async function sidePills(){
+  try{
+    var d=await (await fetch("/api/books",{cache:"no-store"})).json();
+    var L=document.getElementById("pill-long"), S=document.getElementById("pill-short");
+    if(L) L.textContent="L "+(d.open_long||0)+" open · "+(d.closed_long||0)+" closed";
+    if(S) S.textContent="S "+(d.open_short||0)+" open · "+(d.closed_short||0)+" closed";
+    if(L) L.title="long: "+(d.open_long||0)+" positions open, "+(d.closed_long||0)+" trades closed";
+    if(S) S.title="short: "+(d.open_short||0)+" positions open, "+(d.closed_short||0)+" trades closed";
+  }catch(e){}
+}
+
 async function tick(){
   let d;
   try{ d=await (await fetch("/api/all",{cache:"no-store"})).json(); }
@@ -4912,6 +4925,7 @@ setInterval(labelTickers, 2000);
 restoreSide();
 loadTickers(); setInterval(loadTickers,60000);
 tick(); setInterval(tick,2000);
+sidePills(); setInterval(sidePills,4000);
 health(); setInterval(health,5000);
 var PAGE_BUILD=null;
 async function watchBuild(){
