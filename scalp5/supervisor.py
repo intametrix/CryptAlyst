@@ -233,6 +233,8 @@ def main():
             import master as _m
             for _a in _m.check_cashins():
                 actions.append(_a)
+            for _a in _m.check_short_bank():
+                actions.append(_a)
         except Exception as _e:
             actions.append("cashin: %s" % _e)
 

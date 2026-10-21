@@ -22,6 +22,7 @@ except Exception:
 HERE = os.path.dirname(os.path.abspath(__file__))
 STATE = os.path.join(HERE, "state")
 SIG = os.path.join(STATE, "signals.json")
+SHORT_LOCK_PCT = float(__import__("tactics").options().get("short_lock_pct", 0.15))
 LOCK = 1.00
 STOP = 1.50
 CLOCK = 3600
@@ -188,7 +189,10 @@ def main():
                         continue
                     chg = (cur / p["entry"] - 1) * 100 if p["side"] == "buy" else (1 - cur / p["entry"]) * 100
                     held = time.time() - p["t"]
-                    reason = ("lock" if chg >= LOCK else "stop" if chg <= -STOP else
+                    lock_now = SHORT_LOCK_PCT if str(p["side"]).lower() in ("sell", "short") else LOCK
+                    reason = ("short_lock" if (p["side"] != "buy" and chg >= lock_now)
+                              else "lock" if chg >= lock_now
+                              else "stop" if chg <= -STOP else
                               "clock" if held >= CLOCK else None)
                     if reason:
                         net = chg - FEE

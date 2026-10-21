@@ -548,6 +548,46 @@ def cash_in(engine, reason="cash_in"):
     return out
 
 
+def check_short_bank():
+    """Shorts are banked aggressively: once the open short book is up by the configured
+    dollar amount, those shorts are closed. Longs are left alone - this is the rule the
+    owner asked for, not a general cash-in."""
+    try:
+        import json as _json
+        target = float(tactics_options().get("short_cash_usd", 100.0))
+    except Exception:
+        target = 100.0
+    prices = _prices_now()
+    done = []
+    for f in __import__("glob").glob(os.path.join(HERE, "state", "pack_*.json")):
+        try:
+            pack = _json.load(open(f))
+        except Exception:
+            continue
+        engine = pack.get("engine") or ""
+        shorts = [p for p in (pack.get("positions") or [])
+                  if str(p.get("side") or "").lower() in ("sell", "short")]
+        if not shorts:
+            continue
+        unreal, _m, _u = _mark(shorts, prices)
+        if unreal < target or not engine:
+            continue
+        for p in shorts:
+            try:
+                flatten_position(engine, p.get("symbol"))
+            except Exception:
+                pass
+        done.append("short bank %s: %+.2f on %d shorts" % (engine, unreal, len(shorts)))
+    return done
+
+
+def tactics_options():
+    import importlib
+    import tactics as _t
+    importlib.reload(_t) if getattr(_t, "_stale", False) else None
+    return _t.options(True)
+
+
 def check_cashins():
     """Run the owners' rules: a book at or past its threshold cashes in."""
     rules = _cashin_rules()
