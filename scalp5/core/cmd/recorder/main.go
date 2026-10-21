@@ -126,6 +126,9 @@ func main() {
 	kvPath := flag.String("kv", "", "key/value store path (bbolt); empty disables it")
 	lsmPath := flag.String("lsm", "", "lsm store (pebble) directory; empty disables it")
 	rocksPath := flag.String("rocksdb", "", "rocksdb directory (needs -tags rocksdb); empty disables it")
+	rotateAge := flag.Duration("rotate-age", time.Hour, "seal the hot segment after this long")
+	rotateBytes := flag.Int64("rotate-bytes", 16<<30, "seal the hot segment at this size")
+	segmented := flag.Bool("segments", false, "write rotating, indexed, compressed segments instead of one journal file")
 	sqlPath := flag.String("sql", "", "sqlite path for envelopes, books and trades; empty disables it")
 	docsDir := flag.String("docs", "", "directory for envelope documents; empty disables it")
 	mongoURI := flag.String("mongo", "", "mongodb uri for envelope documents; empty disables it")
@@ -133,9 +136,23 @@ func main() {
 	log.SetFlags(log.Ltime)
 
 	mem := lake.NewMemory(2000)
-	journal, err := lake.OpenJournal(filepath.Join(*dataDir, "envelopes.jsonl"))
-	if err != nil {
-		log.Fatalf("journal: %v", err)
+	var journal lake.Backend
+	var flusher interface{ Flush() error }
+	if *segmented {
+		sealed, err := lake.OpenSealed(lake.RetentionConfig{Dir: *dataDir},
+			lake.HourlyOrCeiling{Age: *rotateAge, Bytes: *rotateBytes})
+		if err != nil {
+			log.Fatalf("segments: %v", err)
+		}
+		journal, flusher = sealed, sealed
+		sealedN, failed, rebuilt := sealed.Stats()
+		log.Printf("segments in %s (sealed %d, gzip failed %d, index rebuilt %d)", *dataDir, sealedN, failed, rebuilt)
+	} else {
+		j, err := lake.OpenJournal(filepath.Join(*dataDir, "envelopes.jsonl"))
+		if err != nil {
+			log.Fatalf("journal: %v", err)
+		}
+		journal, flusher = j, j
 	}
 	lk := lake.New(mem, journal)
 
@@ -198,7 +215,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Second)
-			_ = journal.Flush()
+			_ = flusher.Flush()
 		}
 	}()
 
@@ -338,7 +355,7 @@ func main() {
 		out["lake_errors"] = errs
 		out["memory_writes"] = memW
 		out["memory_drops"] = memD
-		out["journal_writes"] = journal.Writes()
+		out["journal_writes"] = writes
 		out["backends"] = lk.BackendNames()
 		out["correlation_docs"] = docs
 		out["correlation_steps"] = steps

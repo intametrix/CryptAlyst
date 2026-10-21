@@ -73,7 +73,7 @@ func (s *Segmented) Write(r Record) error {
 		return err
 	}
 	s.size += int64(len(line)) + 1
-	s.tracker.add(r.Topic, r.TS, int64(len(line))+1)
+	s.tracker.add(r.Topic, r.Key, r.TS, int64(len(line))+1)
 	atomic.AddInt64(&s.writes, 1)
 	return nil
 }
@@ -89,8 +89,8 @@ func (s *Segmented) rotateLocked() error {
 		// seal: write the sidecar before closing, so a reader never meets a
 		// segment without its index
 		if recs, bytes, spans := s.tracker.snapshot(); recs > 0 {
-			_ = writeSidecar(s.segments[len(s.segments)-1], s.openedAt,
-				SegmentStats{OpenedAt: s.openedAt, Records: recs, Bytes: bytes, Topics: spans})
+			_ = writeSidecar(s.segments[len(s.segments)-1],
+				SegmentStats{OpenedAt: s.openedAt, SealedAt: time.Now().UnixMilli(), Records: recs, Bytes: bytes, Topics: spans})
 		}
 		_ = s.file.Close()
 	}
@@ -210,8 +210,8 @@ func (s *Segmented) Close() error {
 			// the last segment is sealed like any other: a reader must never meet
 			// a segment without its index
 			if recs, bytes, spans := s.tracker.snapshot(); recs > 0 && len(s.segments) > 0 {
-				_ = writeSidecar(s.segments[len(s.segments)-1], s.openedAt,
-					SegmentStats{OpenedAt: s.openedAt, Records: recs, Bytes: bytes, Topics: spans})
+				_ = writeSidecar(s.segments[len(s.segments)-1],
+					SegmentStats{OpenedAt: s.openedAt, SealedAt: time.Now().UnixMilli(), Records: recs, Bytes: bytes, Topics: spans})
 			}
 			err = s.file.Close()
 		}

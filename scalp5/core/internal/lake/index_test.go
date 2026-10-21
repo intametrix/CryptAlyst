@@ -39,7 +39,7 @@ func TestFindSegmentsPicksTheRightSegment(t *testing.T) {
 	}
 	sg2.Close()
 
-	found, err := FindSegments(dir, "model.decision", 1_000_000, 1_040_000)
+	found, err := Plan(dir, "model.decision", 1_000_000, 1_040_000, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,19 +47,15 @@ func TestFindSegmentsPicksTheRightSegment(t *testing.T) {
 		t.Fatal("no segments found for model.decision; the sidecars are not being written")
 	}
 	var decisions int
-	for _, st := range found {
-		for _, sp := range st.Topics {
-			if sp.Topic == "model.decision" {
-				decisions += sp.Records
-			}
-		}
+	for _, p := range found {
+		decisions += p.Records
 	}
 	if decisions == 0 {
 		t.Fatalf("index reports no model.decision records across %d segments", len(found))
 	}
 
 	// a topic that was never written must resolve to nothing
-	none, err := FindSegments(dir, "risk.state", 0, 9_999_999_999_999)
+	none, err := Plan(dir, "risk.state", 0, 9_999_999_999_999, "")
 	if err != nil {
 		t.Fatal(err)
 	}
