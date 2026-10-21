@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="700" viewBox="0 0 1660 700" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1660" height="700" fill="#0b1118"/>
+<marker id="a-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="a-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="40" y="46" fill="#e6eef8" font-size="20" font-weight="700">Market data — from the exchange socket to a topic</text>
+<text x="40" y="68" fill="#8ea0b6" font-size="12">400 symbols, sharded, parsed once, published once</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">the only process that talks to the exchange</text>
+<rect x="40" y="120" width="300" height="120" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="52" y="140" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">EXCHANGE</text>
+<text x="52" y="158" fill="#8ea0b6" font-size="11.5" font-weight="400">stream.binance.com</text>
+<text x="328" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
+<text x="52" y="175" fill="#8ea0b6" font-size="11.5" font-weight="400">combined streams</text>
+<text x="328" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="390" y="100" width="330" height="210" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="402" y="120" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">SHARDS</text>
+<text x="708" y="120" fill="#5a6b80" font-size="8.5" text-anchor="end">≤1024 each</text>
+<text x="402" y="138" fill="#8ea0b6" font-size="11.5" font-weight="400">shard 0 — 900 streams</text>
+<text x="708" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
+<text x="402" y="155" fill="#8ea0b6" font-size="11.5" font-weight="400">shard 1 — 701 streams</text>
+<text x="708" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
+<text x="402" y="172" fill="#8ea0b6" font-size="11.5" font-weight="400">reconnect with backoff</text>
+<text x="708" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="770" y="100" width="330" height="240" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="782" y="120" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">PARSE</text>
+<text x="782" y="138" fill="#8ea0b6" font-size="11.5" font-weight="400">bookTicker → top of book</text>
+<text x="1088" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="782" y="155" fill="#8ea0b6" font-size="11.5" font-weight="400">depth5 → depth book</text>
+<text x="1088" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="782" y="172" fill="#8ea0b6" font-size="11.5" font-weight="400">kline → series, closed flag</text>
+<text x="1088" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="782" y="189" fill="#8ea0b6" font-size="11.5" font-weight="400">miniTicker → 24h stats</text>
+<text x="1088" y="189" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="1150" y="100" width="330" height="240" rx="9" fill="#0f1a28" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1162" y="120" fill="#4f9bff" font-size="10.5" font-weight="700" letter-spacing="0.08em">STATE</text>
+<text x="1468" y="120" fill="#5a6b80" font-size="8.5" text-anchor="end">in memory</text>
+<text x="1162" y="138" fill="#e6eef8" font-size="11.5" font-weight="600">Prices</text>
+<text x="1468" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="1162" y="155" fill="#e6eef8" font-size="11.5" font-weight="600">Books</text>
+<text x="1468" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="1162" y="172" fill="#e6eef8" font-size="11.5" font-weight="600">Klines</text>
+<text x="1468" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="1162" y="189" fill="#e6eef8" font-size="11.5" font-weight="600">Mini stats</text>
+<text x="1468" y="189" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<rect x="1150" y="430" width="330" height="200" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1162" y="450" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">TOPICS</text>
+<text x="1162" y="468" fill="#8ea0b6" font-size="11.5" font-weight="400">market.price</text>
+<text x="1468" y="468" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1162" y="485" fill="#8ea0b6" font-size="11.5" font-weight="400">market.depth</text>
+<text x="1468" y="485" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1162" y="502" fill="#8ea0b6" font-size="11.5" font-weight="400">market.candle</text>
+<text x="1468" y="502" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1162" y="519" fill="#8ea0b6" font-size="11.5" font-weight="400">ticks · mini24h</text>
+<text x="1468" y="519" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<path d="M 340,180 L 390,180" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
+<path d="M 720,200 L 770,200" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
+<text x="726" y="190" fill="#8ea0b6" font-size="9.5" text-anchor="start">decode</text>
+<path d="M 1100,200 L 1150,200" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
+<text x="1106" y="190" fill="#8ea0b6" font-size="9.5" text-anchor="start">apply</text>
+<path d="M 1315,340 L 1315,430" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
+<text x="1325" y="392" fill="#8ea0b6" font-size="9.5" text-anchor="start">publish</text>
+<text x="40" y="320" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">Publishing happens on its own goroutine through a bounded queue:</text>
+<text x="40" y="340" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">a blocked broker write must never stop the socket read, or Binance closes it.</text>
+<text x="40" y="380" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">Depth is sampled: under pressure a sample is dropped and counted,</text>
+<text x="40" y="398" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">because a stale price chart is worse than a missing tick.</text>
+</svg>

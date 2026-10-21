@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="720" viewBox="0 0 1660 720" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1660" height="720" fill="#0b1118"/>
+<marker id="a-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="a-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="40" y="46" fill="#e6eef8" font-size="20" font-weight="700">The lake — what is actually on disk</text>
+<text x="40" y="68" fill="#8ea0b6" font-size="12">one journal per era, one line per envelope, rotated, compressed, expired</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">the record is a file</text>
+<rect x="40" y="110" width="420" height="210" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="52" y="130" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">DIRECTORY</text>
+<text x="448" y="130" fill="#5a6b80" font-size="8.5" text-anchor="end">append only</text>
+<text x="52" y="148" fill="#e6eef8" font-size="11.5" font-weight="600">state/lake3/</text>
+<text x="448" y="148" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="52" y="165" fill="#e6eef8" font-size="11.5" font-weight="600">envelopes.jsonl</text>
+<text x="448" y="165" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="52" y="182" fill="#e6eef8" font-size="11.5" font-weight="600">seg-*.jsonl</text>
+<text x="448" y="182" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="52" y="199" fill="#e6eef8" font-size="11.5" font-weight="600">*.gz — sealed segments</text>
+<text x="448" y="199" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<rect x="520" y="110" width="460" height="210" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="532" y="130" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">LINE FORMAT</text>
+<text x="532" y="148" fill="#8ea0b6" font-size="11.5" font-weight="400">one JSON object per line</text>
+<text x="968" y="148" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="532" y="165" fill="#8ea0b6" font-size="11.5" font-weight="400">{topic, key, ts, payload}</text>
+<text x="968" y="165" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="532" y="182" fill="#8ea0b6" font-size="11.5" font-weight="400">payload is the envelope</text>
+<text x="968" y="182" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="1040" y="110" width="580" height="210" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1052" y="130" fill="#f5b544" font-size="10.5" font-weight="700" letter-spacing="0.08em">INDEX</text>
+<text x="1608" y="130" fill="#5a6b80" font-size="8.5" text-anchor="end">in memory</text>
+<text x="1052" y="148" fill="#e6eef8" font-size="11.5" font-weight="600">topic → byte offsets</text>
+<text x="1608" y="148" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="1052" y="165" fill="#8ea0b6" font-size="11.5" font-weight="400">built once, extended on append</text>
+<text x="1608" y="165" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1052" y="182" fill="#8ea0b6" font-size="11.5" font-weight="400">refresh throttled to 30 s</text>
+<text x="1608" y="182" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1052" y="199" fill="#8ea0b6" font-size="11.5" font-weight="400">cold query reads a handful of lines</text>
+<text x="1608" y="199" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<path d="M 460,200 L 520,200" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-evidence)"/>
+<path d="M 980,200 L 1040,200" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
+<text x="986" y="190" fill="#8ea0b6" font-size="9.5" text-anchor="start">offsets</text>
+<rect x="40" y="380" width="300" height="190" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="52" y="400" fill="#7f8ea3" font-size="10.5" font-weight="700" letter-spacing="0.08em">RETENTION</text>
+<text x="52" y="418" fill="#8ea0b6" font-size="11.5" font-weight="400">rotate at a size</text>
+<text x="328" y="418" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="52" y="435" fill="#8ea0b6" font-size="11.5" font-weight="400">gzip the sealed file</text>
+<text x="328" y="435" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="52" y="452" fill="#8ea0b6" font-size="11.5" font-weight="400">expire after a window</text>
+<text x="328" y="452" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="380" y="380" width="380" height="190" rx="9" fill="#0d1f1a" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="392" y="400" fill="#38d39f" font-size="10.5" font-weight="700" letter-spacing="0.08em">TIERS</text>
+<text x="392" y="418" fill="#e6eef8" font-size="11.5" font-weight="600">bronze — raw journal</text>
+<text x="748" y="418" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">STATE</text>
+<text x="392" y="435" fill="#e6eef8" font-size="11.5" font-weight="600">silver — features</text>
+<text x="748" y="435" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">STATE</text>
+<text x="392" y="452" fill="#e6eef8" font-size="11.5" font-weight="600">gold — datasets</text>
+<text x="748" y="452" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">STATE</text>
+<text x="392" y="469" fill="#e6eef8" font-size="11.5" font-weight="600">archive — cold</text>
+<text x="748" y="469" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">STATE</text>
+<rect x="800" y="380" width="380" height="190" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="812" y="400" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">REPLAY</text>
+<text x="812" y="418" fill="#8ea0b6" font-size="11.5" font-weight="400">replay a window</text>
+<text x="1168" y="418" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
+<text x="812" y="435" fill="#8ea0b6" font-size="11.5" font-weight="400">same envelopes, same order</text>
+<text x="1168" y="435" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="812" y="452" fill="#8ea0b6" font-size="11.5" font-weight="400">rebuild derived state</text>
+<text x="1168" y="452" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="1220" y="380" width="400" height="190" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="1232" y="400" fill="#7f8ea3" font-size="10.5" font-weight="700" letter-spacing="0.08em">BENEATH THE LAKE</text>
+<text x="1232" y="418" fill="#8ea0b6" font-size="11.5" font-weight="400">the filesystem, and nothing else</text>
+<text x="1608" y="418" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1232" y="435" fill="#8ea0b6" font-size="11.5" font-weight="400">no database, no queue, no cache</text>
+<text x="1608" y="435" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1232" y="452" fill="#8ea0b6" font-size="11.5" font-weight="400">readable with grep and jq</text>
+<text x="1608" y="452" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="40" y="620" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">A lake that cannot be read with grep is not a record; it is a service dependency. This one is plain JSONL, so an investigator can read it</text>
+<text x="40" y="640" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">without the platform running — which is precisely what makes it evidence.</text>
+</svg>

@@ -1,19 +1,22 @@
-# Domain model
+# Domain model — documents and sources
 
-`domain-model.svg` is the source; `domain-model.png` is the rendered copy;
-`build_domain_model.py` draws both.
+| File | What it is |
+|---|---|
+| `DOMAIN-MODEL.md` | the model as Markdown, figures inline |
+| `CryptAlyst-Domain-Model.pdf` | the same, typeset for reading |
+| `CryptAlyst-Domain-Model.docx` | the source of the PDF |
+| `content.py` | the text, once — both outputs are generated from it |
+| `diagrams.py` | the eight figures, drawn as SVG |
+| `render_figs.py` | SVG → PNG through headless Chrome |
+| `build_md.py`, `build_pdf.py` | the two builders |
 
-The model answers four questions:
+Regenerate everything:
 
-1. **What are the things?** Market data, intelligence, books, risk, recording,
-   forensics, control — seven contexts, each with its aggregates.
-2. **What travels between them?** Exactly one thing: an envelope, on one bus.
-3. **What may change behaviour?** Only the control plane, and only through the
-   kill switch and the interceptor chain — never by a side channel.
-4. **What is the record?** The lake, written by the recorder alone, read by the
-   explorer alone, and never reconstructed after the fact.
+```bash
+cd docs/domain
+python3 diagrams.py && python3 render_figs.py
+python3 build_md.py && python3 build_pdf.py
+```
 
-Bold names are aggregates: the units that must stay consistent. Dashed arrows are
-control, not data.
-
-Regenerate with `python3 docs/domain/build_domain_model.py`.
+The figures are hand-laid-out on purpose: a domain model is an argument about what
+belongs together, and an automatic layout cannot make that argument.

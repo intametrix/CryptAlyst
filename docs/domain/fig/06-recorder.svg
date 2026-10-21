@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="680" viewBox="0 0 1660 680" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1660" height="680" fill="#0b1118"/>
+<marker id="a-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="a-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="40" y="46" fill="#e6eef8" font-size="20" font-weight="700">The recorder — the only writer of the record</text>
+<text x="40" y="68" fill="#8ea0b6" font-size="12">one consumer per topic, interceptors run one by one, hops recorded as they pass</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">read-only elsewhere</text>
+<rect x="40" y="120" width="300" height="170" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="52" y="140" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">BUS</text>
+<text x="52" y="158" fill="#8ea0b6" font-size="11.5" font-weight="400">topic exchange</text>
+<text x="328" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="52" y="175" fill="#e6eef8" font-size="11.5" font-weight="600">q.rec.&lt;topic&gt;</text>
+<text x="328" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<rect x="390" y="100" width="360" height="220" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="402" y="120" fill="#ef6b6b" font-size="10.5" font-weight="700" letter-spacing="0.08em">INTERCEPTORS</text>
+<text x="738" y="120" fill="#5a6b80" font-size="8.5" text-anchor="end">each hop recorded</text>
+<text x="402" y="138" fill="#e6eef8" font-size="11.5" font-weight="600">authority — pass / refuse</text>
+<text x="738" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="402" y="155" fill="#e6eef8" font-size="11.5" font-weight="600">keying</text>
+<text x="738" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="402" y="172" fill="#e6eef8" font-size="11.5" font-weight="600">freshness</text>
+<text x="738" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="402" y="189" fill="#e6eef8" font-size="11.5" font-weight="600">correlation</text>
+<text x="738" y="189" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<rect x="800" y="100" width="340" height="220" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="812" y="120" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">RECORD</text>
+<text x="812" y="138" fill="#8ea0b6" font-size="11.5" font-weight="400">attach derived refs</text>
+<text x="1128" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="812" y="155" fill="#e6eef8" font-size="11.5" font-weight="600">append to the journal</text>
+<text x="1128" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="812" y="172" fill="#8ea0b6" font-size="11.5" font-weight="400">publish to the live feed</text>
+<text x="1128" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
+<rect x="1190" y="100" width="420" height="220" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1202" y="120" fill="#a879ff" font-size="10.5" font-weight="700" letter-spacing="0.08em">LAKE</text>
+<text x="1598" y="120" fill="#5a6b80" font-size="8.5" text-anchor="end">append only</text>
+<text x="1202" y="138" fill="#8ea0b6" font-size="11.5" font-weight="400">one line, one envelope</text>
+<text x="1598" y="138" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1202" y="155" fill="#e6eef8" font-size="11.5" font-weight="600">state/lake3/*.jsonl</text>
+<text x="1598" y="155" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="1202" y="172" fill="#8ea0b6" font-size="11.5" font-weight="400">indexed by topic offsets</text>
+<text x="1598" y="172" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<path d="M 340,200 L 390,200" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-evidence)"/>
+<text x="346" y="190" fill="#8ea0b6" font-size="9.5" text-anchor="start">consume</text>
+<path d="M 750,200 L 800,200" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-risk)"/>
+<text x="756" y="190" fill="#8ea0b6" font-size="9.5" text-anchor="start">pass</text>
+<path d="M 1140,200 L 1190,200" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-evidence)"/>
+<text x="1146" y="190" fill="#8ea0b6" font-size="9.5" text-anchor="start">append</text>
+<text x="40" y="340" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">A refused envelope is recorded too, with extra.refused = true. The record therefore contains what did not happen.</text>
+<rect x="40" y="400" width="500" height="190" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="52" y="420" fill="#a879ff" font-size="9.5" font-weight="700" letter-spacing="0.08em">DERIVED REFERENCES</text>
+<text x="52" y="438" fill="#8ea0b6" font-size="11.5" font-weight="400">newest input per topic, within 5 minutes</text>
+<text x="528" y="438" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="52" y="455" fill="#8ea0b6" font-size="11.5" font-weight="400">marked derived: true</text>
+<text x="528" y="455" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="52" y="472" fill="#8ea0b6" font-size="11.5" font-weight="400">carries age_ms at decision time</text>
+<text x="528" y="472" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="580" y="400" width="500" height="190" rx="9" fill="#221a10" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="592" y="420" fill="#f5b544" font-size="9.5" font-weight="700" letter-spacing="0.08em">WHY DERIVED EXISTS</text>
+<text x="592" y="438" fill="#8ea0b6" font-size="11.5" font-weight="400">books do not declare their inputs</text>
+<text x="1068" y="438" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="592" y="455" fill="#8ea0b6" font-size="11.5" font-weight="400">without it, a decision has no parents</text>
+<text x="1068" y="455" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="592" y="472" fill="#8ea0b6" font-size="11.5" font-weight="400">with it, a chain can be walked</text>
+<text x="1068" y="472" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="1120" y="400" width="490" height="190" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="1132" y="420" fill="#7f8ea3" font-size="10.5" font-weight="700" letter-spacing="0.08em">WHAT IT IS NOT</text>
+<text x="1132" y="438" fill="#8ea0b6" font-size="11.5" font-weight="400">not a claim the producer made</text>
+<text x="1598" y="438" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1132" y="455" fill="#8ea0b6" font-size="11.5" font-weight="400">not a substitute for declared refs</text>
+<text x="1598" y="455" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1132" y="472" fill="#8ea0b6" font-size="11.5" font-weight="400">always labelled, never implied</text>
+<text x="1598" y="472" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+</svg>

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1660" height="660" viewBox="0 0 1660 660" font-family="-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif">
+<rect width="1660" height="660" fill="#0b1118"/>
+<marker id="a-market" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4f9bff"/></marker>
+<marker id="a-intel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#38d39f"/></marker>
+<marker id="a-model" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#f5b544"/></marker>
+<marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
+<marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
+<marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
+<text x="40" y="46" fill="#e6eef8" font-size="20" font-weight="700">Control — what may change behaviour</text>
+<text x="40" y="68" fill="#8ea0b6" font-size="12">supervise, stop, and nothing else</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">no data path may stop the platform</text>
+<rect x="60" y="120" width="420" height="220" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="72" y="140" fill="#7f8ea3" font-size="10.5" font-weight="700" letter-spacing="0.08em">SUPERVISOR</text>
+<text x="72" y="158" fill="#e6eef8" font-size="11.5" font-weight="600">engine registry</text>
+<text x="468" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="72" y="175" fill="#8ea0b6" font-size="11.5" font-weight="400">restart on exit</text>
+<text x="468" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
+<text x="72" y="192" fill="#8ea0b6" font-size="11.5" font-weight="400">equity and open counts</text>
+<text x="468" y="192" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<rect x="540" y="120" width="460" height="220" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="552" y="140" fill="#ef6b6b" font-size="10.5" font-weight="700" letter-spacing="0.08em">TRADING STATE</text>
+<text x="988" y="140" fill="#5a6b80" font-size="8.5" text-anchor="end">aggregate</text>
+<text x="552" y="158" fill="#e6eef8" font-size="11.5" font-weight="600">on / off</text>
+<text x="988" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">STATE</text>
+<text x="552" y="175" fill="#e6eef8" font-size="11.5" font-weight="600">stop flag on disk</text>
+<text x="988" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">ENTITY</text>
+<text x="552" y="192" fill="#8ea0b6" font-size="11.5" font-weight="400">reset books and stats</text>
+<text x="988" y="192" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">SERVICE</text>
+<rect x="1060" y="120" width="460" height="220" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
+<text x="1072" y="140" fill="#7f8ea3" font-size="10.5" font-weight="700" letter-spacing="0.08em">HEARTBEAT</text>
+<text x="1072" y="158" fill="#8ea0b6" font-size="11.5" font-weight="400">what is alive now</text>
+<text x="1508" y="158" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1072" y="175" fill="#8ea0b6" font-size="11.5" font-weight="400">equity from the books</text>
+<text x="1508" y="175" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="1072" y="192" fill="#8ea0b6" font-size="11.5" font-weight="400">wins / losses</text>
+<text x="1508" y="192" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<path d="M 480,230 L 540,230" fill="none" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-control)"/>
+<path d="M 1000,230 L 1060,230" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-risk)"/>
+<text x="60" y="400" fill="#e6eef8" font-size="10.5" text-anchor="start" font-weight="600">STOP means stop:</text>
+<text x="60" y="422" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· kills every trading process</text>
+<text x="60" y="440" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· writes the flag every gate reads</text>
+<text x="60" y="458" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· publishes system.control on the bus</text>
+<text x="60" y="476" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· resets books and statistics, archived first</text>
+<text x="60" y="520" fill="#e6eef8" font-size="10.5" text-anchor="start" font-weight="600">and what STOP must never touch:</text>
+<text x="60" y="542" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· market data</text>
+<text x="60" y="560" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· the recorder</text>
+<text x="60" y="578" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">· the explorer</text>
+<rect x="860" y="380" width="660" height="240" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2" stroke-dasharray="6 5"/>
+<text x="872" y="400" fill="#7f8ea3" font-size="10.5" font-weight="700" letter-spacing="0.08em">THE INVARIANT</text>
+<text x="872" y="418" fill="#8ea0b6" font-size="11.5" font-weight="400">no data path can stop the platform</text>
+<text x="1508" y="418" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="872" y="435" fill="#8ea0b6" font-size="11.5" font-weight="400">no control path can invent data</text>
+<text x="1508" y="435" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="872" y="452" fill="#8ea0b6" font-size="11.5" font-weight="400">a stopped book is visibly stopped</text>
+<text x="1508" y="452" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+<text x="872" y="469" fill="#8ea0b6" font-size="11.5" font-weight="400">a refused trade is visibly refused</text>
+<text x="1508" y="469" fill="#5a6b80" font-size="8" text-anchor="end" letter-spacing="0.05em">VALUE</text>
+</svg>

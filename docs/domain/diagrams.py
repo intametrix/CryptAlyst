@@ -1,0 +1,413 @@
+#!/usr/bin/env python3
+"""Draw the domain-model figures as SVG, one function per figure.
+
+The figures are hand-laid-out on purpose: a domain model is an argument about what
+belongs together, and an automatic layout cannot make that argument.
+"""
+import html
+import os
+
+BG = "#0b1118"
+INK = "#e6eef8"
+DIM = "#8ea0b6"
+FAINT = "#5a6b80"
+LINE = "#233244"
+
+COLOUR = {
+    "market": "#4f9bff",
+    "intel": "#38d39f",
+    "model": "#f5b544",
+    "risk": "#ef6b6b",
+    "evidence": "#a879ff",
+    "control": "#7f8ea3",
+}
+FILL = {
+    "market": "#0f1a28",
+    "intel": "#0d1f1a",
+    "model": "#221a10",
+    "risk": "#251315",
+    "evidence": "#1a1528",
+    "control": "#151b24",
+}
+FONT = "-apple-system, BlinkMacSystemFont, Helvetica, Arial, sans-serif"
+
+
+class Fig:
+    def __init__(self, w, h, title, subtitle=None, corner=None):
+        self.w, self.h = w, h
+        self.parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+                      f'viewBox="0 0 {w} {h}" font-family="{FONT}">',
+                      f'<rect width="{w}" height="{h}" fill="{BG}"/>']
+        for k, c in COLOUR.items():
+            self.parts.append(
+                f'<marker id="a-{k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" '
+                f'markerHeight="7" orient="auto-start-reverse">'
+                f'<path d="M 0 0 L 10 5 L 0 10 z" fill="{c}"/></marker>')
+        self.parts.append(f'<text x="40" y="46" fill="{INK}" font-size="20" font-weight="700">'
+                          f'{html.escape(title)}</text>')
+        if subtitle:
+            self.parts.append(f'<text x="40" y="68" fill="{DIM}" font-size="12">'
+                              f'{html.escape(subtitle)}</text>')
+        if corner:
+            self.parts.append(f'<text x="{w-40}" y="46" fill="{FAINT}" font-size="10.5" '
+                              f'text-anchor="end">{html.escape(corner)}</text>')
+
+    def box(self, x, y, w, h, title, rows, colour, dashed=False, tag=None):
+        c = COLOUR[colour]
+        dash = ' stroke-dasharray="6 5"' if dashed else ""
+        self.parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="9" '
+                          f'fill="{FILL[colour]}" stroke="{c}" stroke-opacity="0.8" '
+                          f'stroke-width="1.2"{dash}/>')
+        size = 10.5 if len(title) <= 16 else (9.5 if len(title) <= 22 else 8.5)
+        self.parts.append(f'<text x="{x+12}" y="{y+20}" fill="{c}" font-size="{size}" '
+                          f'font-weight="700" letter-spacing="0.08em">{html.escape(title.upper())}</text>')
+        if tag:
+            ty = y + 20 if len(title) <= 16 else y + h - 10
+            self.parts.append(f'<text x="{x+w-12}" y="{ty}" fill="{FAINT}" font-size="8.5" '
+                              f'text-anchor="end">{html.escape(tag)}</text>')
+        yy = y + 38
+        for row in rows:
+            name, kind = row if isinstance(row, tuple) else (row, "")
+            bold = kind in ("aggregate", "entity", "state")
+            self.parts.append(
+                f'<text x="{x+12}" y="{yy}" fill="{INK if bold else DIM}" font-size="11.5" '
+                f'font-weight="{600 if bold else 400}">{html.escape(name)}</text>')
+            if kind:
+                self.parts.append(f'<text x="{x+w-12}" y="{yy}" fill="{FAINT}" font-size="8" '
+                                  f'text-anchor="end" letter-spacing="0.05em">'
+                                  f'{html.escape(kind.upper())}</text>')
+            yy += 17
+        return self
+
+    def arrow(self, pts, colour, dashed=False, width=1.4, label=None, lx=0, ly=0, anchor="start"):
+        d = "M " + " L ".join(f"{a},{b}" for a, b in pts)
+        dash = ' stroke-dasharray="5 4"' if dashed else ""
+        self.parts.append(f'<path d="{d}" fill="none" stroke="{COLOUR[colour]}" '
+                          f'stroke-opacity="0.8" stroke-width="{width}"{dash} '
+                          f'marker-end="url(#a-{colour})"/>')
+        if label:
+            self.parts.append(f'<text x="{lx}" y="{ly}" fill="{DIM}" font-size="9.5" '
+                              f'text-anchor="{anchor}">{html.escape(label)}</text>')
+        return self
+
+    def note(self, x, y, text, size=9.5, colour=DIM, anchor="start", weight="400"):
+        self.parts.append(f'<text x="{x}" y="{y}" fill="{colour}" font-size="{size}" '
+                          f'text-anchor="{anchor}" font-weight="{weight}">'
+                          f'{html.escape(text)}</text>')
+        return self
+
+    def bar(self, x, y, w, h, ratio, colour, label=None):
+        self.parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="2" fill="#141d28"/>')
+        self.parts.append(f'<rect x="{x}" y="{y}" width="{max(2, w*ratio):.0f}" height="{h}" '
+                          f'rx="2" fill="{COLOUR[colour]}"/>')
+        if label:
+            self.note(x + w + 8, y + h - 1, label, size=9)
+        return self
+
+    def save(self, path):
+        self.parts.append("</svg>")
+        with open(path, "w") as fh:
+            fh.write("\n".join(self.parts))
+        return path
+
+
+# ---------------------------------------------------------------- 1 · context map
+def context_map():
+    f = Fig(1660, 760, "Domain model, level 1 — the contexts",
+            "what the platform is about, and which way knowledge flows",
+            "one envelope contract · one bus · one record")
+    f.box(40, 110, 300, 190, "Market data", [
+        ("Symbol universe", "value"), ("Kline series", "entity"),
+        ("Depth book", "entity"), ("Feed shard", "service")], "market", tag="ingest")
+    f.box(40, 470, 300, 170, "Intelligence", [
+        ("Signal", "entity"), ("Flow window", "entity"),
+        ("TA reading", "entity"), ("Forecast", "entity")], "intel", tag="derived")
+
+    f.box(420, 110, 320, 240, "Books", [
+        ("Book", "aggregate"), ("Position", "entity"), ("Trade", "entity"),
+        ("Decision", "entity"), ("Refusal", "entity")], "model", tag="decides")
+    f.box(420, 450, 320, 190, "Risk & execution", [
+        ("Kill switch", "aggregate"), ("Risk gate", "service"),
+        ("Sizing rule", "value"), ("Exit policy", "value")], "risk", tag="refuses")
+
+    f.box(820, 110, 320, 200, "Recording", [
+        ("Envelope", "aggregate"), ("Recorder", "service"),
+        ("Lake segment", "entity"), ("Derived reference", "value")], "evidence", tag="writes")
+    f.box(820, 430, 320, 210, "Forensics", [
+        ("Case file", "aggregate"), ("Book report", "aggregate"),
+        ("Search", "service"), ("Journey", "service")], "evidence", tag="reads")
+
+    f.box(1220, 110, 400, 530, "Control", [
+        ("Trading state", "aggregate"), ("Supervisor", "service"),
+        ("Heartbeat", "service"), ("Stop flag", "entity"),
+        ("Topic registry", "aggregate"), ("Interceptor chain", "service"),
+        ("Operator registry", "service")], "control", dashed=True, tag="may stop")
+
+    f.arrow([(340, 200), (420, 200)], "market", label="market.*", lx=346, ly=190)
+    f.arrow([(340, 545), (385, 545), (385, 330), (420, 330)], "intel", width=1.2,
+            label="intel.*", lx=346, ly=562)
+    f.arrow([(580, 350), (580, 450)], "model", label="proposed order", lx=590, ly=404)
+    f.arrow([(470, 450), (470, 350)], "risk", dashed=True, width=1.2,
+            label="allowed / refused", lx=468, ly=404, anchor="end")
+    f.arrow([(740, 230), (786, 230), (786, 190), (820, 190)], "model",
+            label="decision · fill", lx=748, ly=252)
+    f.arrow([(340, 92), (820, 92)], "market", dashed=True, width=1.0)
+    f.note(352, 84, "every topic is recorded, not only trades", size=9)
+    f.arrow([(1140, 310), (1140, 430)], "evidence", label="read-only replay", lx=1150, ly=376)
+    f.arrow([(1220, 330), (1140, 330)], "control", dashed=True, width=1.0)
+    f.note(1210, 350, "supervises, publishes system.control", size=9, anchor="end")
+    f.note(1210, 600, "STOP resets books and stats", size=9, anchor="end")
+    f.note(1210, 616, "and leaves market data running.", size=9, anchor="end")
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "01-contexts.svg"))
+
+
+# ---------------------------------------------------------------- 2 · envelope
+def envelope():
+    f = Fig(1660, 700, "The envelope — the only thing that travels",
+            "data · meta · refs, and the hops that prove what happened to it",
+            "version 1, one predecessor accepted")
+    f.box(60, 120, 420, 300, "data", [
+        ("the payload the producer computed", "value"),
+        ("shape owned by the topic", "value"),
+        ("stored verbatim", "value")], "market", tag="never rewritten")
+    f.box(510, 120, 520, 300, "meta", [
+        ("version · plane · topic · key", "value"),
+        ("producer · generation · sequence", "value"),
+        ("cid · computed_at · received_at", "value"),
+        ("compute_ms", "value"),
+        ("extra — free-form markers", "value")], "evidence", tag="provenance")
+    f.box(1060, 120, 520, 300, "refs and hops", [
+        ("ref: topic, key, generation, cid", "entity"),
+        ("ref: derived, age_ms", "value"),
+        ("hop: interceptor, name, outcome", "entity"),
+        ("hop: operator, transformer", "entity"),
+        ("hop: ms, detail", "value")], "model", tag="the journey")
+    f.arrow([(480, 270), (510, 270)], "market", width=1.2)
+    f.arrow([(1030, 270), (1060, 270)], "evidence", width=1.2)
+    f.note(60, 470, "Unknown top-level member is refused; unknown meta key is ignored; "
+                    "version N-1 is accepted so a writer can be rolled forward.", size=10)
+    f.note(60, 492, "A reference is declared by a producer or derived by the recorder — "
+                    "and either way it carries its age, so staleness is a number, not an opinion.", size=10)
+    f.arrow([(300, 560), (1300, 560)], "control", dashed=True, width=1.0)
+    f.note(300, 550, "interceptors → operator → transformers, each appending a hop", size=9.5)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "02-envelope.svg"))
+
+
+# ---------------------------------------------------------------- 3 · market data
+def market_data():
+    f = Fig(1660, 700, "Market data — from the exchange socket to a topic",
+            "400 symbols, sharded, parsed once, published once",
+            "the only process that talks to the exchange")
+    f.box(40, 120, 300, 120, "Exchange", [
+        ("stream.binance.com", "service"), ("combined streams", "value")], "market")
+    f.box(390, 100, 330, 210, "Shards", [
+        ("shard 0 — 900 streams", "service"), ("shard 1 — 701 streams", "service"),
+        ("reconnect with backoff", "value")], "market", tag="≤1024 each")
+    f.box(770, 100, 330, 240, "Parse", [
+        ("bookTicker → top of book", "value"), ("depth5 → depth book", "value"),
+        ("kline → series, closed flag", "value"), ("miniTicker → 24h stats", "value")], "market")
+    f.box(1150, 100, 330, 240, "State", [
+        ("Prices", "entity"), ("Books", "entity"), ("Klines", "entity"),
+        ("Mini stats", "entity")], "market", tag="in memory")
+    f.box(1150, 430, 330, 200, "Topics", [
+        ("market.price", "value"), ("market.depth", "value"),
+        ("market.candle", "value"), ("ticks · mini24h", "value")], "evidence")
+    f.arrow([(340, 180), (390, 180)], "market")
+    f.arrow([(720, 200), (770, 200)], "market", label="decode", lx=726, ly=190)
+    f.arrow([(1100, 200), (1150, 200)], "market", label="apply", lx=1106, ly=190)
+    f.arrow([(1315, 340), (1315, 430)], "market", label="publish", lx=1325, ly=392)
+    f.note(40, 320, "Publishing happens on its own goroutine through a bounded queue:", size=10)
+    f.note(40, 340, "a blocked broker write must never stop the socket read, or Binance closes it.", size=10)
+    f.note(40, 380, "Depth is sampled: under pressure a sample is dropped and counted,", size=10)
+    f.note(40, 398, "because a stale price chart is worse than a missing tick.", size=10)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "03-market-data.svg"))
+
+
+# ---------------------------------------------------------------- 4 · book
+def book_aggregate():
+    f = Fig(1660, 700, "Book — the aggregate that decides",
+            "one equity, a set of positions, and the decisions that produced them",
+            "every book is one aggregate")
+    f.box(60, 110, 460, 260, "Book", [
+        ("equity", "value"), ("start_equity", "value"),
+        ("positions: symbol → Position", "entity"),
+        ("trades: the closed record", "entity"),
+        ("strategy · risk size", "value")], "model", tag="aggregate root")
+    f.box(600, 110, 400, 200, "Position", [
+        ("symbol · side", "value"), ("entry · notional · qty", "value"),
+        ("opened_at · peak", "value")], "model", tag="inside the boundary")
+    f.box(600, 380, 400, 210, "Trade (model.fill)", [
+        ("gross_pct · net_pct", "value"), ("held_s · reason", "value"),
+        ("pnl_usd · entry_ms/exit_ms", "value")], "evidence", tag="published")
+    f.box(1080, 110, 400, 200, "Decision", [
+        ("engine · symbol · side", "value"),
+        ("allowed · reason · confidence", "value")], "model", tag="model.decision")
+    f.box(1080, 380, 400, 210, "Refusal", [
+        ("the rule that stopped it", "value"),
+        ("the number that tripped it", "value"),
+        ("the input's age", "value")], "risk", tag="a first-class outcome")
+    f.arrow([(520, 180), (600, 180)], "model", label="holds", lx=528, ly=170)
+    f.arrow([(520, 260), (560, 260), (560, 470), (600, 470)], "model",
+            label="closes into", lx=568, ly=392)
+    f.arrow([(1060, 470), (1080, 470)], "risk", label="or is refused", lx=1002, ly=490)
+    f.arrow([(1080, 200), (1060, 200), (1060, 180), (1020, 180)], "model",
+            label="authorises", lx=1032, ly=170, anchor="end")
+    f.note(60, 430, "Invariants the aggregate keeps:", size=10.5, weight="600", colour=INK)
+    f.note(60, 452, "· a position is never opened without an allowed decision", size=10)
+    f.note(60, 470, "· a trade is only born from a position that existed", size=10)
+    f.note(60, 488, "· equity moves only by a closed trade's net, never by opinion", size=10)
+    f.note(60, 506, "· a refusal is recorded even though nothing was bought", size=10)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "04-book.svg"))
+
+
+# ---------------------------------------------------------------- 5 · risk
+def risk_gate():
+    f = Fig(1660, 660, "The gate — what must pass before money moves",
+            "authority, keying, freshness, correlation, then the arithmetic of risk",
+            "every refusal names the rule")
+    steps = [("authority", "interceptor", "market"), ("keying", "interceptor", "market"),
+             ("freshness", "interceptor", "market"), ("correlation", "interceptor", "evidence"),
+             ("risk.allow", "operator", "model"), ("size_for", "operator", "model"),
+             ("hold_loser / exit policy", "operator", "risk")]
+    x = 40
+    for i, (name, kind, col) in enumerate(steps):
+        f.box(x, 130, 200, 110, name, [(kind, "value")], col, tag=str(i + 1))
+        if i:
+            f.arrow([(x - 22, 185), (x, 185)], col, width=1.2)
+        x += 222
+    f.note(40, 300, "Each stage appends a hop. A refusal is a hop with outcome=refuse and the rule "
+                    "in its detail — so 'why not' is answered by the same object as 'why'.", size=10)
+    f.box(40, 360, 500, 180, "What the gate checks", [
+        ("size above zero", "value"), ("forecast age ≤ limit", "value"),
+        ("signal age ≤ limit", "value"), ("kill switch clear", "value"),
+        ("gross multiple ≤ limit", "value"), ("symbol share ≤ limit", "value")], "risk")
+    f.box(580, 360, 500, 180, "What the book then does", [
+        ("size = equity · risk / stop", "value"),
+        ("cap at a quarter of equity", "value"),
+        ("take profit above the cost floor", "value"),
+        ("stop, time cap, or target", "value")], "model")
+    f.box(1120, 360, 500, 180, "What is never true", [
+        ("a losing exit is not refused", "value"),
+        ("a stop is not widened", "value"),
+        ("a stopped book does not trade", "value"),
+        ("a refusal is not silent", "value")], "control", dashed=True)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "05-risk.svg"))
+
+
+# ---------------------------------------------------------------- 6 · recorder
+def recorder():
+    f = Fig(1660, 680, "The recorder — the only writer of the record",
+            "one consumer per topic, interceptors run one by one, hops recorded as they pass",
+            "read-only elsewhere")
+    f.box(40, 120, 300, 170, "Bus", [
+        ("topic exchange", "value"), ("q.rec.<topic>", "entity")], "evidence")
+    f.box(390, 100, 360, 220, "Interceptors", [
+        ("authority — pass / refuse", "entity"), ("keying", "entity"),
+        ("freshness", "entity"), ("correlation", "entity")], "risk", tag="each hop recorded")
+    f.box(800, 100, 340, 220, "Record", [
+        ("attach derived refs", "value"),
+        ("append to the journal", "entity"),
+        ("publish to the live feed", "service")], "evidence")
+    f.box(1190, 100, 420, 220, "Lake", [
+        ("one line, one envelope", "value"),
+        ("state/lake3/*.jsonl", "entity"),
+        ("indexed by topic offsets", "value")], "evidence", tag="append only")
+    f.arrow([(340, 200), (390, 200)], "evidence", label="consume", lx=346, ly=190)
+    f.arrow([(750, 200), (800, 200)], "risk", label="pass", lx=756, ly=190)
+    f.arrow([(1140, 200), (1190, 200)], "evidence", label="append", lx=1146, ly=190)
+    f.note(40, 340, "A refused envelope is recorded too, with extra.refused = true. "
+                    "The record therefore contains what did not happen.", size=10)
+    f.box(40, 400, 500, 190, "Derived references", [
+        ("newest input per topic, within 5 minutes", "value"),
+        ("marked derived: true", "value"),
+        ("carries age_ms at decision time", "value")], "evidence")
+    f.box(580, 400, 500, 190, "Why derived exists", [
+        ("books do not declare their inputs", "value"),
+        ("without it, a decision has no parents", "value"),
+        ("with it, a chain can be walked", "value")], "model")
+    f.box(1120, 400, 490, 190, "What it is not", [
+        ("not a claim the producer made", "value"),
+        ("not a substitute for declared refs", "value"),
+        ("always labelled, never implied", "value")], "control", dashed=True)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "06-recorder.svg"))
+
+
+# ---------------------------------------------------------------- 7 · lake
+def lake():
+    f = Fig(1660, 720, "The lake — what is actually on disk",
+            "one journal per era, one line per envelope, rotated, compressed, expired",
+            "the record is a file")
+    f.box(40, 110, 420, 210, "Directory", [
+        ("state/lake3/", "entity"), ("envelopes.jsonl", "entity"),
+        ("seg-*.jsonl", "entity"), ("*.gz — sealed segments", "entity")], "evidence", tag="append only")
+    f.box(520, 110, 460, 210, "Line format", [
+        ("one JSON object per line", "value"),
+        ("{topic, key, ts, payload}", "value"),
+        ("payload is the envelope", "value")], "evidence")
+    f.box(1040, 110, 580, 210, "Index", [
+        ("topic → byte offsets", "entity"),
+        ("built once, extended on append", "value"),
+        ("refresh throttled to 30 s", "value"),
+        ("cold query reads a handful of lines", "value")], "model", tag="in memory")
+    f.arrow([(460, 200), (520, 200)], "evidence")
+    f.arrow([(980, 200), (1040, 200)], "model", label="offsets", lx=986, ly=190)
+
+    f.box(40, 380, 300, 190, "Retention", [
+        ("rotate at a size", "value"), ("gzip the sealed file", "value"),
+        ("expire after a window", "value")], "control")
+    f.box(380, 380, 380, 190, "Tiers", [
+        ("bronze — raw journal", "state"), ("silver — features", "state"),
+        ("gold — datasets", "state"), ("archive — cold", "state")], "intel")
+    f.box(800, 380, 380, 190, "Replay", [
+        ("replay a window", "service"),
+        ("same envelopes, same order", "value"),
+        ("rebuild derived state", "value")], "evidence")
+    f.box(1220, 380, 400, 190, "Beneath the lake", [
+        ("the filesystem, and nothing else", "value"),
+        ("no database, no queue, no cache", "value"),
+        ("readable with grep and jq", "value")], "control", dashed=True)
+
+    f.note(40, 620, "A lake that cannot be read with grep is not a record; it is a service dependency. "
+                    "This one is plain JSONL, so an investigator can read it", size=10)
+    f.note(40, 640, "without the platform running — which is precisely what makes it evidence.", size=10)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "07-lake.svg"))
+
+
+# ---------------------------------------------------------------- 8 · control
+def control():
+    f = Fig(1660, 660, "Control — what may change behaviour",
+            "supervise, stop, and nothing else",
+            "no data path may stop the platform")
+    f.box(60, 120, 420, 220, "Supervisor", [
+        ("engine registry", "entity"), ("restart on exit", "service"),
+        ("equity and open counts", "value")], "control")
+    f.box(540, 120, 460, 220, "Trading state", [
+        ("on / off", "state"), ("stop flag on disk", "entity"),
+        ("reset books and stats", "service")], "risk", tag="aggregate")
+    f.box(1060, 120, 460, 220, "Heartbeat", [
+        ("what is alive now", "value"), ("equity from the books", "value"),
+        ("wins / losses", "value")], "control")
+    f.arrow([(480, 230), (540, 230)], "control")
+    f.arrow([(1000, 230), (1060, 230)], "risk")
+    f.note(60, 400, "STOP means stop:", size=10.5, weight="600", colour=INK)
+    for i, line in enumerate(["kills every trading process",
+                              "writes the flag every gate reads",
+                              "publishes system.control on the bus",
+                              "resets books and statistics, archived first"]):
+        f.note(60, 422 + i * 18, "· " + line, size=10)
+    f.note(60, 520, "and what STOP must never touch:", size=10.5, weight="600", colour=INK)
+    for i, line in enumerate(["market data", "the recorder", "the explorer"]):
+        f.note(60, 542 + i * 18, "· " + line, size=10)
+    f.box(860, 380, 660, 240, "The invariant", [
+        ("no data path can stop the platform", "value"),
+        ("no control path can invent data", "value"),
+        ("a stopped book is visibly stopped", "value"),
+        ("a refused trade is visibly refused", "value")], "control", dashed=True)
+    return f.save(os.path.join(os.path.dirname(__file__), "fig", "08-control.svg"))
+
+
+ALL = [context_map, envelope, market_data, book_aggregate, risk_gate, recorder, lake, control]
+
+if __name__ == "__main__":
+    for fn in ALL:
+        print("wrote", fn())
