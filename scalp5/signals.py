@@ -299,6 +299,13 @@ def main():
         try:
             mv = jget(MD + "/movers?limit=%d" % a.top, 20)
             syms = [x["s"] for x in mv.get("most_traded", [])]
+            # republish the movers list: intel.movers is registered for this and
+            # was a dead topic — the movers surface never reached the bus
+            if _bus:
+                try:
+                    _bus.pub("intel.movers", "most_traded", mv, "signals")
+                except Exception:
+                    pass
             # only analyse symbols we actually stream: anything else has no
             # candles, so its taker ratio and confidence are unknowable
             try:

@@ -15,6 +15,7 @@ Score components (each normalised, weighted, then summed):
     python3 market_agent.py --every 5
 """
 import argparse, json, os, statistics, time, urllib.request
+from lib import bus as _bus
 
 try:
     import tactics as _tactics
@@ -120,6 +121,12 @@ def main():
         os.makedirs(STATE, exist_ok=True)
         with open(OUT + ".t", "w") as fh: json.dump(board, fh)
         os.replace(OUT + ".t", OUT)
+        # the owner-critical board must also reach the bus (intel.board), not just
+        # the file — bus-fed consumers and the recorder see it now
+        try:
+            _bus.pub("intel.board", "board", board, "market_agent")
+        except Exception:
+            pass
         top = rows[:3]
         print("%s  %d scored | top: %s" % (time.strftime("%H:%M:%S"), len(rows),
               ", ".join("%s %.2f" % (r["symbol"], r["score"]) for r in top)), flush=True)

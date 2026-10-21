@@ -18,6 +18,7 @@ var All = []Topic{
 	{"intel.signal", "intel", []string{"signals"}, "60s"},
 	{"intel.flow", "intel", []string{"signals"}, "60s"},
 	{"intel.movers", "intel", []string{"market_data", "signals"}, "60s"},
+	{"intel.board", "intel", []string{"market_agent"}, "60s"},
 	{"intel.ta", "intel", []string{"tad"}, "60s"},
 	{"intel.forecast", "intel", []string{"forecast"}, "60s"},
 	{"alert.pumpdump", "alert", []string{"backend", "signal_bus"}, "300s"},
