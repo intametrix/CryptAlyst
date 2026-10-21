@@ -2278,8 +2278,8 @@ async function drillOpen(kind){
   m.style.display="block";
   var t=document.getElementById("drilltitle");
   if(t) t.textContent = ({
-      realised:"Realised — every book, banked only",
-      unrealised:"Unrealised — every book, marked at the last price",
+      realised:"Total realised — every book, banked only",
+      unrealised:"Current trading — open positions marked at the last price",
       total:"Total — realised plus unrealised",
       equity:"Equity — every book's account",
       return:"Return — every book, % of its start",
@@ -2357,7 +2357,7 @@ async function drillRender(){
   box.innerHTML='<div style="margin-bottom:8px;color:#9fb0c4;font-family:var(--mono);font-size:11px">'+
       es.length+' books · '+key+' total '+sgn(sum)+'</div>'+
     '<table class="wide"><thead><tr><th>book</th><th>state</th>'+
-    '<th class="num">realised</th><th class="num">unrealised</th><th class="num">total</th>'+
+    '<th class="num">total realised</th><th class="num">current trading</th><th class="num">total</th>'+
     '<th class="num">open</th><th>actions</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
@@ -2428,7 +2428,7 @@ async function renderEngines(){
   var note = document.getElementById("engnote");
   if(note) note.textContent = es.filter(function(e){return e.alive;}).length+"/"+es.length+" running";
   var head = '<tr><th>engine</th><th>status</th><th class="num">equity</th>'+
-             '<th class="num">realised</th><th class="num">unrealised</th><th class="num">total</th>'+
+             '<th class="num">total realised</th><th class="num">current trading</th><th class="num">total</th>'+
              '<th class="num">trades</th><th class="num">open</th>'+
              '<th class="num">long</th><th class="num">short</th><th class="num">risk</th>'+
              '<th class="num">slots</th><th>action</th></tr>';
@@ -2949,10 +2949,10 @@ async function optApply(m){
 
 
 window.BOOKFILTER = window.BOOKFILTER || null;
-function _drillTile(label, value, colour){
-  return '<span onclick="drillOpen(\''+label+'\')" title="click to see every book behind this" '+
+function _drillTile(kind, value, colour, label){
+  return '<span onclick="drillOpen(\''+kind+'\')" title="click to see every book behind this" '+
     'style="cursor:pointer;display:inline-block;border-radius:8px;padding:1px 4px">'+
-    UI.stat(label, value, colour)+'</span>';
+    UI.stat(label||kind, value, colour)+'</span>';
 }
 function _sideTile(label, value, colour, kind){
   var on = (window.BOOKFILTER === kind);
@@ -3000,8 +3000,8 @@ async function renderBooks(){
     _sideTile("closed long", d.closed_long||0, "#3fb950", "closed_long")+
     _sideTile("closed short", d.closed_short||0, "#f85149", "closed_short")+
     UI.stat("closed trades", d.closed||0)+
-    _drillTile("realised", ((d.realised||0)>=0?"+":"")+money(d.realised||0), ((d.realised||0)>=0?"#3fb950":"#f85149"))+
-    _drillTile("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"))+
+    _drillTile("realised", ((d.realised||0)>=0?"+":"")+money(d.realised||0), ((d.realised||0)>=0?"#3fb950":"#f85149"), "total realised")+
+    _drillTile("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"), "current trading")+
     _drillTile("total", ((d.total||0)>=0?"+":"")+money(d.total||0), ((d.total||0)>=0?"#3fb950":"#f85149"))+
     '</div>'+
     '<div class="mk" style="margin-top:6px">'+books.length+' books each start at $'+
@@ -3388,7 +3388,7 @@ async function renderModels(){
   }
   box.innerHTML='<table class="wide"><thead><tr><th>model</th><th>curve</th>'+
     '<th style="text-align:right">equity</th><th style="text-align:right">return</th>'+
-    '<th style="text-align:right">realised</th><th style="text-align:right">unrealised</th>'+
+    '<th style="text-align:right">total realised</th><th style="text-align:right">current trading</th>'+
     '<th style="text-align:right">total</th><th style="text-align:right">trades</th>'+
     '<th style="text-align:right">long</th><th style="text-align:right">short</th>'+
     '<th style="text-align:right">win</th><th style="text-align:right">open</th>'+
@@ -5053,8 +5053,8 @@ async function tick(){
   const closed=(d.totals&&d.totals.closed)||alive.reduce((a,e)=>a+(e.closed||0),0);
   const KPI=[["combined equity","$"+money(eq),"equity"],
              ["combined return",pct(base?100*(eq/base-1):null),"return"],
-             ["realised","$"+money(real),"realised"],
-             ["unrealised","$"+money(unreal),"unrealised"],
+             ["total realised","$"+money(real),"realised"],
+             ["current trading","$"+money(unreal),"unrealised"],
              ["open positions",open,"open"],
              ["closed trades",closed,"closed"]];
   $("totals").innerHTML=KPI.map(([k,v,kind])=>
@@ -5238,7 +5238,7 @@ function openDetail(key){
     <div class="body2">
       <div class="tiles">
         <div class="tile"><div class="k">equity</div><div class="v">$${money(e.equity)}</div></div>
-        <div class="tile"><div class="k">realised</div><div class="v ${cls(e.realised)}">$${money(e.realised)}</div></div>
+        <div class="tile"><div class="k">total realised</div><div class="v ${cls(e.realised)}">$${money(e.realised)}</div></div>
         <div class="tile"><div class="k">unrealised</div><div class="v ${cls(e.unrealised)}">$${money(e.unrealised)}</div></div>
         <div class="tile"><div class="k">win rate</div><div class="v">${wr==null?"—":wr.toFixed(0)+"%"}</div></div>
         <div class="tile"><div class="k">avg net</div><div class="v ${cls(avg)}">${avg==null?"—":pct(avg)}</div></div>
