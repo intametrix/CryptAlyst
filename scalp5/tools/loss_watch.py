@@ -22,6 +22,7 @@ WATCH = os.path.join(STATE, "loss_watch.json")
 DISABLED = os.path.join(STATE, "disabled.json")
 POST = os.path.join(STATE, "postmortems.jsonl")
 LOSS_SECONDS = float(os.environ.get("LOSS_SECONDS", "30"))
+LOSS_USD = float(os.environ.get("LOSS_USD", "20"))   # cents are not a reason
 POLL = float(os.environ.get("LOSS_POLL", "5"))
 
 
@@ -87,7 +88,7 @@ def one_pass(verbose=True):
         eq = float(pack.get("equity") or start)
         total = (eq - start) + unreal(pack, px)
         row = watch.get(engine) or {}
-        if total < 0:
+        if total <= -LOSS_USD:
             row.setdefault("since", now)
             row["total"] = round(total, 2)
             watch[engine] = row

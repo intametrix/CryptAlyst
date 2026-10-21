@@ -82,6 +82,7 @@ ENGINES = {
 # pruning rules - evidence, not noise
 MIN_TRADES = 10
 STOP_RETURN = -2.0          # percent of its own book
+STOP_USD = -200.0           # and at least this much in money, so cents never disable
 STOP_STREAK = 6             # consecutive losses
 GRACE_S = 600               # never judge a book in its first 10 minutes
 
@@ -286,7 +287,7 @@ def main():
                 continue
             if False:
                 continue
-            if r["return_pct"] <= STOP_RETURN:
+            if r["return_pct"] <= STOP_RETURN and (r.get("pnl") or 0) <= STOP_USD:
                 dis.add(eng); actions.append("DISABLED %s (return %.2f%%)" % (eng, r["return_pct"]))
             elif r["streak"] >= STOP_STREAK:
                 dis.add(eng); actions.append("DISABLED %s (%d straight losses)" % (eng, r["streak"]))
