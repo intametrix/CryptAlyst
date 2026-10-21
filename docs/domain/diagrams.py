@@ -57,6 +57,8 @@ def fit(text, size, avail, floor):
 class Fig:
     def __init__(self, w, h, title, subtitle=None, corner=None):
         self.w, self.h = w, h
+        self.boxes = []
+        self.notes = []
         self.parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
                       f'viewBox="0 0 {w} {h}" font-family="{FONT}">',
                       f'<rect width="{w}" height="{h}" fill="{BG}"/>']
@@ -79,6 +81,7 @@ class Fig:
 
     def box(self, x, y, w, h, title, rows, colour, dashed=False, tag=None):
         c = COLOUR[colour]
+        self.boxes.append((x, y, w, h))
         dash = ' stroke-dasharray="6 5"' if dashed else ""
         self.parts.append(f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="9" '
                           f'fill="{FILL[colour]}" stroke="{c}" stroke-opacity="0.8" '
@@ -135,9 +138,29 @@ class Fig:
                               f'text-anchor="{anchor}">{html.escape(label)}</text>')
         return self
 
-    def note(self, x, y, text, size=13, colour=DIM, anchor="start", weight="400"):
+    def note(self, x, y, text, size=20, colour=DIM, anchor="start", weight="400"):
         room = (self.w - x - 30) if anchor == "start" else (x - 30)
-        size = fit(text, size, room, 8.5)
+        size = fit(text, min(size, 22), room, 12)
+        width = text_w(text, size)
+        x0 = x if anchor == "start" else x - width
+        h = size + 4
+
+        def blocked(at):
+            """Lowest y this note must move to, or None if the line is clear."""
+            for bx, by, bw, bh in self.boxes:
+                if x0 < bx + bw and x0 + width > bx and at - size < by + bh and at > by:
+                    return by + bh + size + 10
+            for nx, ny, nw, nh in self.notes:
+                if x0 < nx + nw and x0 + width > nx and at - size < ny + nh and at > ny:
+                    return ny + nh + 8
+            return None
+
+        for _ in range(14):
+            nxt = blocked(y)
+            if nxt is None:
+                break
+            y = max(y, nxt)
+        self.notes.append((x0, y - size, width, h))
         self.parts.append(f'<text x="{x}" y="{y}" fill="{colour}" font-size="{size}" '
                           f'text-anchor="{anchor}" font-weight="{weight}">'
                           f'{html.escape(text)}</text>')
@@ -148,7 +171,7 @@ class Fig:
         self.parts.append(f'<rect x="{x}" y="{y}" width="{max(2, w*ratio):.0f}" height="{h}" '
                           f'rx="2" fill="{COLOUR[colour]}"/>')
         if label:
-            self.note(x + w + 8, y + h - 1, label, size=9)
+            self.note(x + w + 8, y + h - 1, label, size=19)
         return self
 
     def save(self, path):
@@ -195,13 +218,13 @@ def context_map():
     f.arrow([(340, 545), (385, 545), (385, 330), (420, 330)], "intel", width=1.2,
             label="intel.*", lx=346, ly=562)
     f.arrow([(580, 350), (580, 450)], "model")
-    f.note(592, 424, "proposed order", size=12)
+    f.note(592, 424, "proposed order", size=20)
     f.arrow([(470, 450), (470, 350)], "risk", dashed=True, width=1.2)
-    f.note(458, 424, "allowed / refused", size=12, anchor="end")
+    f.note(458, 424, "allowed / refused", size=20, anchor="end")
     f.arrow([(740, 230), (786, 230), (786, 190), (820, 190)], "model",
             label="decision · fill", lx=748, ly=252)
     f.arrow([(340, 92), (820, 92)], "market", dashed=True, width=1.0)
-    f.note(352, 84, "every topic is recorded, not only trades", size=9)
+    f.note(352, 84, "every topic is recorded, not only trades", size=19)
     f.arrow([(1140, 310), (1140, 430)], "evidence", label="read-only replay", lx=1150, ly=376)
     f.arrow([(1330, 360), (1140, 360)], "control", dashed=True, width=1.0)
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "01-contexts.svg"))
@@ -231,11 +254,11 @@ def envelope():
     f.arrow([(480, 270), (510, 270)], "market", width=1.2)
     f.arrow([(1030, 270), (1060, 270)], "evidence", width=1.2)
     f.note(60, 470, "Unknown top-level member is refused; unknown meta key is ignored; "
-                    "version N-1 is accepted so a writer can be rolled forward.", size=10)
+                    "version N-1 is accepted so a writer can be rolled forward.", size=19)
     f.note(60, 492, "A reference is declared by a producer or derived by the recorder — "
-                    "and either way it carries its age, so staleness is a number, not an opinion.", size=10)
+                    "and either way it carries its age, so staleness is a number, not an opinion.", size=19)
     f.arrow([(300, 560), (1300, 560)], "control", dashed=True, width=1.0)
-    f.note(300, 550, "interceptors → operator → transformers, each appending a hop", size=9.5)
+    f.note(300, 550, "interceptors → operator → transformers, each appending a hop", size=19)
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "02-envelope.svg"))
 
 
@@ -262,10 +285,10 @@ def market_data():
     f.arrow([(720, 200), (770, 200)], "market", label="decode", lx=726, ly=190)
     f.arrow([(1100, 200), (1150, 200)], "market", label="apply", lx=1106, ly=190)
     f.arrow([(1315, 340), (1315, 430)], "market", label="publish", lx=1325, ly=392)
-    f.note(40, 320, "Publishing happens on its own goroutine through a bounded queue:", size=10)
-    f.note(40, 340, "a blocked broker write must never stop the socket read, or Binance closes it.", size=10)
-    f.note(40, 380, "Depth is sampled: under pressure a sample is dropped and counted,", size=10)
-    f.note(40, 398, "because a stale price chart is worse than a missing tick.", size=10)
+    f.note(40, 320, "Publishing happens on its own goroutine through a bounded queue:", size=19)
+    f.note(40, 340, "a blocked broker write must never stop the socket read, or Binance closes it.", size=19)
+    f.note(40, 380, "Depth is sampled: under pressure a sample is dropped and counted,", size=19)
+    f.note(40, 398, "because a stale price chart is worse than a missing tick.", size=19)
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "03-market-data.svg"))
 
 
@@ -293,19 +316,19 @@ def book_aggregate():
         ("the number that tripped it", "value"),
         ("the input's age", "value")], "risk", tag="a first-class outcome")
     f.arrow([(520, 180), (600, 180)], "model")
-    f.note(560, 170, "holds", size=10.5, anchor="middle")
+    f.note(560, 170, "holds", size=19, anchor="middle")
     f.arrow([(1080, 300), (1000, 300)], "model")
-    f.note(1040, 290, "authorises", size=10.5, anchor="middle")
+    f.arrow([], "model") if False else None
+    f.note(1040, 352, "authorises", size=13, anchor="middle")
     f.arrow([(560, 370), (560, 520), (600, 520)], "model")
-    f.note(474, 552, "closes into", size=10.5)
+    f.note(474, 552, "closes into", size=19)
     f.arrow([(1006, 520), (1080, 520)], "risk")
-    f.note(1043, 508, "refused", size=10.5, anchor="middle")
-
-    f.note(60, 430, "Invariants the aggregate keeps:", size=10.5, weight="600", colour=INK)
-    f.note(60, 452, "· a position is never opened without an allowed decision", size=10)
-    f.note(60, 470, "· a trade is only born from a position that existed", size=10)
-    f.note(60, 488, "· equity moves only by a closed trade's net, never by opinion", size=10)
-    f.note(60, 506, "· a refusal is recorded even though nothing was bought", size=10)
+    
+    f.note(60, 430, "Invariants the aggregate keeps:", size=19, weight="600", colour=INK)
+    f.note(60, 458, "· a position is never opened without an allowed decision", size=19)
+    f.note(60, 482, "· a trade is only born from a position that existed", size=19)
+    f.note(60, 506, "· equity moves only by a closed trade's net, never by opinion", size=19)
+    f.note(60, 530, "· a refusal is recorded even though nothing was bought", size=19)
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "04-book.svg"))
 
 
@@ -325,7 +348,7 @@ def risk_gate():
             f.arrow([(x - 22, 185), (x, 185)], col, width=1.2)
         x += 222
     f.note(40, 300, "Each stage appends a hop. A refusal is a hop with outcome=refuse and the rule "
-                    "in its detail — so 'why not' is answered by the same object as 'why'.", size=10)
+                    "in its detail — so 'why not' is answered by the same object as 'why'.", size=19)
     f.box(40, 360, 500, 180, "What the gate checks", [
         ("size above zero", "value"), ("forecast age ≤ limit", "value"),
         ("signal age ≤ limit", "value"), ("kill switch clear", "value"),
@@ -365,7 +388,7 @@ def recorder():
     f.arrow([(750, 200), (800, 200)], "risk", label="pass", lx=756, ly=190)
     f.arrow([(1140, 200), (1190, 200)], "evidence", label="append", lx=1146, ly=190)
     f.note(40, 340, "A refused envelope is recorded too, with extra.refused = true. "
-                    "The record therefore contains what did not happen.", size=10)
+                    "The record therefore contains what did not happen.", size=19)
     f.box(40, 400, 500, 190, "Derived references", [
         ("newest input per topic, within 5 minutes", "value"),
         ("marked derived: true", "value"),
@@ -417,8 +440,8 @@ def lake():
         ("readable with grep and jq", "value")], "control", dashed=True)
 
     f.note(40, 620, "A lake that cannot be read with grep is not a record; it is a service dependency. "
-                    "This one is plain JSONL, so an investigator can read it", size=10)
-    f.note(40, 640, "without the platform running — which is precisely what makes it evidence.", size=10)
+                    "This one is plain JSONL, so an investigator can read it", size=19)
+    f.note(40, 640, "without the platform running — which is precisely what makes it evidence.", size=19)
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "07-lake.svg"))
 
 
@@ -438,15 +461,15 @@ def control():
         ("wins / losses", "value")], "control")
     f.arrow([(480, 230), (540, 230)], "control")
     f.arrow([(1000, 230), (1060, 230)], "risk")
-    f.note(60, 400, "STOP means stop:", size=10.5, weight="600", colour=INK)
+    f.note(60, 400, "STOP means stop:", size=19, weight="600", colour=INK)
     for i, line in enumerate(["kills every trading process",
                               "writes the flag every gate reads",
                               "publishes system.control on the bus",
                               "resets books and statistics, archived first"]):
-        f.note(60, 422 + i * 18, "· " + line, size=10)
-    f.note(60, 520, "and what STOP must never touch:", size=10.5, weight="600", colour=INK)
+        f.note(60, 422 + i * 18, "· " + line, size=19)
+    f.note(60, 520, "and what STOP must never touch:", size=19, weight="600", colour=INK)
     for i, line in enumerate(["market data", "the recorder", "the explorer"]):
-        f.note(60, 542 + i * 18, "· " + line, size=10)
+        f.note(60, 542 + i * 18, "· " + line, size=19)
     f.box(860, 380, 660, 240, "The invariant", [
         ("no data path can stop the platform", "value"),
         ("no control path can invent data", "value"),
@@ -506,13 +529,13 @@ def stores():
 
     # only the relationships that actually exist
     f.arrow([(420, 185), (470, 185)], "intel")
-    f.note(470, 292, "the historian reads the journal and writes the datasets", size=9.5)
+    f.note(470, 292, "the historian reads the journal and writes the datasets", size=19)
     f.arrow([(1240, 300), (1240, 380)], "control", label="before a reset", lx=1250, ly=340)
 
     f.note(40, 590, "The journal is the record. Everything else here is derived from it, a cache of it, "
-                    "or a copy taken before something was reset.", size=10)
+                    "or a copy taken before something was reset.", size=19)
     f.note(40, 612, "Only the ledgers and the logs are written by more than one process, and both are "
-                    "append-only.", size=10)
+                    "append-only.", size=19)
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "09-stores.svg"))
 
 
@@ -526,47 +549,41 @@ def decision_tree():
     f.arrow([(cx, 162), (cx, 208)], "control")
 
     f.diamond(cx, 250, 420, 84, "is it a trading outcome?", "model")
-    f.arrow([(cx - 210, 250), (520, 250)], "model")
+    f.arrow([(cx - 210, 250), (520, 250)], "model", label="yes", lx=566, ly=240)
     f.box(120, 195, 400, 110, "Silver — the trade record", [
         ("ledger/<engine>.jsonl", "entity"), ("state/fills.jsonl", "entity"),
         ("append only, never expired", "value")], "model")
-    f.note(536, 240, "yes", size=9.5, anchor="end")
 
-    f.arrow([(cx, 292), (cx, 338)], "evidence")
-    f.note(cx + 12, 320, "no", size=9.5)
+    f.arrow([(cx, 292), (cx, 338)], "evidence", label="no", lx=cx + 14, ly=318)
 
     f.diamond(cx, 380, 460, 84, "is it a market or intel topic?", "market")
-    f.arrow([(cx + 230, 380), (1150, 380)], "market")
+    f.arrow([(cx + 230, 380), (1150, 380)], "market", label="yes", lx=1122, ly=370)
     f.box(1150, 325, 420, 110, "Bronze — the journal", [
         ("one JSONL line per envelope", "value"),
         ("read by the explorer and the historian", "value")], "evidence")
-    f.note(1130, 370, "yes", size=9.5, anchor="end")
 
-    f.arrow([(cx - 230, 380), (520, 380)], "control")
+    f.arrow([(cx - 230, 380), (520, 380)], "control", label="no", lx=566, ly=370)
     f.box(120, 325, 400, 110, "Control and health", [
         ("seven-day retention", "value"),
         ("small, high value, short lived", "value")], "control")
-    f.note(540, 370, "no", size=9.5)
 
     f.arrow([(cx, 422), (cx, 500)], "evidence")
     f.diamond(cx, 545, 420, 84, "is the segment over 1 GB?", "risk")
 
-    f.arrow([(cx + 210, 545), (1150, 545)], "control")
+    f.arrow([(cx + 210, 545), (1150, 545)], "control", label="yes", lx=1122, ly=535)
     f.box(1150, 495, 420, 100, "Seal and gzip", [
         ("the segment becomes immutable", "value"),
         ("byte offsets in the index stay valid", "value")], "control")
-    f.note(1130, 535, "yes", size=9.5, anchor="end")
 
-    f.arrow([(cx - 210, 545), (520, 545)], "intel")
+    f.arrow([(cx - 210, 545), (520, 545)], "intel", label="no", lx=566, ly=535)
     f.box(120, 495, 400, 100, "Keep appending", [
         ("the hot file stays small", "value"),
         ("a cold query reads its tail", "value")], "intel")
-    f.note(540, 535, "no", size=9.5)
 
-    f.note(120, 650, "Each level answers one question: what is it, how long does it live, "
-                     "is it big enough to seal.", size=10)
-    f.note(120, 672, "Nothing is deleted by a rule that is not drawn here — and the tree is "
-                     "deliberately short enough to check.", size=10)
+    f.note(120, 660, "Each level answers one question: what is it, how long does it live, "
+                     "is it big enough to seal.", size=19)
+    f.note(120, 686, "Nothing is deleted by a rule that is not drawn here — and the tree is "
+                     "deliberately short enough to check.", size=19)
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "10-decision-tree.svg"))
 
 

@@ -76,6 +76,6 @@
 <text x="1610" y="444.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <text x="1230" y="468.0" fill="#8ea0b6" font-size="16.0" font-weight="400">readable with grep and jq</text>
 <text x="1610" y="468.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
-<text x="40" y="620" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">A lake that cannot be read with grep is not a record; it is a service dependency. This one is plain JSONL, so an investigator can read it</text>
-<text x="40" y="640" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">without the platform running — which is precisely what makes it evidence.</text>
+<text x="40" y="620" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">A lake that cannot be read with grep is not a record; it is a service dependency. This one is plain JSONL, so an investigator can read it</text>
+<text x="40" y="640" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">without the platform running — which is precisely what makes it evidence.</text>
 </svg>

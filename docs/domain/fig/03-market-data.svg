@@ -62,8 +62,8 @@
 <text x="1106" y="190" fill="#8ea0b6" font-size="13" text-anchor="start">apply</text>
 <path d="M 1315,340 L 1315,430" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-market)"/>
 <text x="1325" y="392" fill="#8ea0b6" font-size="13" text-anchor="start">publish</text>
-<text x="40" y="320" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">Publishing happens on its own goroutine through a bounded queue:</text>
-<text x="40" y="340" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">a blocked broker write must never stop the socket read, or Binance closes it.</text>
-<text x="40" y="380" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">Depth is sampled: under pressure a sample is dropped and counted,</text>
-<text x="40" y="398" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">because a stale price chart is worse than a missing tick.</text>
+<text x="40" y="339" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">Publishing happens on its own goroutine through a bounded queue:</text>
+<text x="40" y="351" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">a blocked broker write must never stop the socket read, or Binance closes it.</text>
+<text x="40" y="380" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">Depth is sampled: under pressure a sample is dropped and counted,</text>
+<text x="40" y="398" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">because a stale price chart is worse than a missing tick.</text>
 </svg>

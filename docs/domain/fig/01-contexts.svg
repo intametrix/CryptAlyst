@@ -103,13 +103,13 @@
 <path d="M 340,545 L 385,545 L 385,330 L 420,330" fill="none" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.2" marker-end="url(#a-intel)"/>
 <text x="346" y="562" fill="#8ea0b6" font-size="13" text-anchor="start">intel.*</text>
 <path d="M 580,350 L 580,450" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
-<text x="592" y="424" fill="#8ea0b6" font-size="12" text-anchor="start" font-weight="400">proposed order</text>
+<text x="592" y="424" fill="#8ea0b6" font-size="20" text-anchor="start" font-weight="400">proposed order</text>
 <path d="M 470,450 L 470,350" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2" stroke-dasharray="5 4" marker-end="url(#a-risk)"/>
-<text x="458" y="424" fill="#8ea0b6" font-size="12" text-anchor="end" font-weight="400">allowed / refused</text>
+<text x="458" y="424" fill="#8ea0b6" font-size="20" text-anchor="end" font-weight="400">allowed / refused</text>
 <path d="M 740,230 L 786,230 L 786,190 L 820,190" fill="none" stroke="#f5b544" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-model)"/>
 <text x="748" y="252" fill="#8ea0b6" font-size="9.5" text-anchor="start">decision · fill</text>
 <path d="M 340,92 L 820,92" fill="none" stroke="#4f9bff" stroke-opacity="0.8" stroke-width="1.0" stroke-dasharray="5 4" marker-end="url(#a-market)"/>
-<text x="352" y="84" fill="#8ea0b6" font-size="9" text-anchor="start" font-weight="400">every topic is recorded, not only trades</text>
+<text x="352" y="84" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">every topic is recorded, not only trades</text>
 <path d="M 1140,310 L 1140,430" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-evidence)"/>
 <text x="1150" y="376" fill="#8ea0b6" font-size="12.0" text-anchor="start">read-only replay</text>
 <path d="M 1330,360 L 1140,360" fill="none" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.0" stroke-dasharray="5 4" marker-end="url(#a-control)"/>

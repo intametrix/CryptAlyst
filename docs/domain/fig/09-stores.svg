@@ -88,9 +88,9 @@
 <text x="1300" y="468.0" fill="#8ea0b6" font-size="16.0" font-weight="400">disposable, rebuilt on boot</text>
 <text x="1610" y="468.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <path d="M 420,185 L 470,185" fill="none" stroke="#38d39f" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-intel)"/>
-<text x="470" y="292" fill="#8ea0b6" font-size="9.5" text-anchor="start" font-weight="400">the historian reads the journal and writes the datasets</text>
+<text x="470" y="292" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">the historian reads the journal and writes the datasets</text>
 <path d="M 1240,300 L 1240,380" fill="none" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-control)"/>
 <text x="1250" y="340" fill="#8ea0b6" font-size="9.0" text-anchor="start">before a reset</text>
-<text x="40" y="590" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">The journal is the record. Everything else here is derived from it, a cache of it, or a copy taken before something was reset.</text>
-<text x="40" y="612" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">Only the ledgers and the logs are written by more than one process, and both are append-only.</text>
+<text x="40" y="590" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">The journal is the record. Everything else here is derived from it, a cache of it, or a copy taken before something was reset.</text>
+<text x="40" y="612" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">Only the ledgers and the logs are written by more than one process, and both are append-only.</text>
 </svg>

@@ -49,7 +49,7 @@
 <text x="756" y="190" fill="#8ea0b6" font-size="13" text-anchor="start">pass</text>
 <path d="M 1140,200 L 1190,200" fill="none" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-evidence)"/>
 <text x="1146" y="190" fill="#8ea0b6" font-size="13" text-anchor="start">append</text>
-<text x="40" y="340" fill="#8ea0b6" font-size="10" text-anchor="start" font-weight="400">A refused envelope is recorded too, with extra.refused = true. The record therefore contains what did not happen.</text>
+<text x="40" y="340" fill="#8ea0b6" font-size="19" text-anchor="start" font-weight="400">A refused envelope is recorded too, with extra.refused = true. The record therefore contains what did not happen.</text>
 <rect x="40" y="400" width="500" height="190" rx="9" fill="#1a1528" stroke="#a879ff" stroke-opacity="0.8" stroke-width="1.2"/>
 <text x="50" y="422" fill="#a879ff" font-size="15.0" font-weight="700" letter-spacing="0.06em">DERIVED REFERENCES</text>
 <text x="50" y="440" fill="#8ea0b6" font-size="16.0" font-weight="400">newest input per topic, within 5 minutes</text>

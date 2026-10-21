@@ -13,7 +13,9 @@
 Format rules, matching the Design and Architecture Reference:
 
 - every text layer is measured and fitted: box titles, box rows, the tag column,
-  diamond labels, arrow labels, notes and the figure header. Each is set as large as
+  diamond labels, arrow labels, notes and the figure header. Notes are prose, so they
+  run at 19-22 px, twice the label size, and the layout moves them below any box or
+  other note they would touch instead of shrinking them. Each is set as large as
   its space allows (up to 25 px for the header, 16 px for a row) and never larger,
   with a 6% safety margin so a line never touches the border it is measured against
 - figures run at full content width (10.2 in), which prints a 16 px label at about
