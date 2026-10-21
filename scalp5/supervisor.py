@@ -53,6 +53,7 @@ ENGINES = {
     "flash":       [PY_, "-u", "flash.py", "--risk", "10"],
     "cryptostrat": [PY_, "-u", "crypto_strategies.py", "--only", "model_stack"],
     "cryptoedges": [PY_, "-u", "crypto_edges.py"],
+    "portfolioreview": [PY_, "-u", "portfolio_review.py", "--every", "60"],
     "churn":       [PY_, "-u", "churn.py", "--every", "10"],
     "slowedges":   [PY_, "-u", "slow_edges.py"],
         "hybrid_trend_pullback": [PY_, "-u", "hybrids.py", "--strategy", "trend_pullback", "--start", "5000", "--risk", "10", "--top", "300"],

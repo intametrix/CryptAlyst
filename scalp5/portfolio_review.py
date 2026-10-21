@@ -74,8 +74,16 @@ def main():
         with open(os.path.join(STATE, "review.json.t"), "w") as fh:
             json.dump(payload, fh)
         os.replace(os.path.join(STATE, "review.json.t"), os.path.join(STATE, "review.json"))
+        # read-modify-union: the owner's disable list is never clobbered by this
+        # reviewer's own stop list (A6 — a disabled-book write must not overwrite
+        # the owner config).
+        try:
+            existing = set(json.load(open(os.path.join(STATE, "disabled.json"))).get("books") or [])
+        except Exception:
+            existing = set()
+        union = sorted(existing | set(stop))
         with open(os.path.join(STATE, "disabled.json.t"), "w") as fh:
-            json.dump({"books": stop, "ts": payload["ts"]}, fh)
+            json.dump({"books": union, "ts": payload["ts"]}, fh)
         os.replace(os.path.join(STATE, "disabled.json.t"), os.path.join(STATE, "disabled.json"))
 
         newly = set(stop) - prev
@@ -84,8 +92,14 @@ def main():
                 print("%s  STOP %-14s %s" % (time.strftime("%H:%M:%S"), k,
                       [r for r in payload["books"] if r["engine"] == k][0]), flush=True)
         prev = set(stop)
+
+        # publish the verdicts (was a dead stub: 'if not a.dry: pass' never called
+        # publish_verdict, so review.verdict never reached the bus)
+        verdicts = [{"engine": k, "action": "stop" if k in stop else "keep",
+                     "why": "below loss threshold" if k in stop else "within tolerance",
+                     "return_pct": round(r, 3)} for k, n, r, s in rows]
         if not a.dry:
-            pass
+            publish_verdict(verdicts)
         time.sleep(a.every)
 
 
