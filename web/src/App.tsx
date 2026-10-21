@@ -6,6 +6,7 @@ import type { ChartZoomControls } from './components/chart/ChartPopup';
 import { ChartOverlay } from './components/ChartOverlay';
 import { SplitPane } from './components/Panel';
 import { FlowLeaderboard } from './components/FlowLeaderboard';
+import { PumpRadar } from './components/PumpRadar';
 import { FlowSplit } from './components/FlowSplit';
 import { Header } from './components/Header';
 import { ScreenTable } from './components/ScreenTable';
@@ -51,6 +52,18 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   const heat = useHeatContext();
   const selection = useSelection();
   const [activeHeat, setActiveHeat] = useState(0);
+  // Top-level surface switch: the full overview, or the dedicated pump/dump
+  // dashboard (owner ruling 2026-10-21: pump and dump is a first-class view).
+  // Hash-addressable so the view is linkable and screenshot-able: #pumpdump.
+  const [view, setViewState] = useState<'main' | 'pumpdump'>(() =>
+    typeof window !== 'undefined' && window.location.hash === '#pumpdump' ? 'pumpdump' : 'main',
+  );
+  const setView = useCallback((v: 'main' | 'pumpdump') => {
+    setViewState(v);
+    if (typeof window !== 'undefined') {
+      window.location.hash = v === 'pumpdump' ? 'pumpdump' : '';
+    }
+  }, []);
 
   /**
    * The drill-down subject and the feed filter.
@@ -422,6 +435,50 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
 
         <StatStrip stats={alertStats} status={status} tools={tools} />
 
+        <nav className="view-bar" aria-label="dashboard view">
+          <button
+            type="button"
+            className={`view-btn${view === 'main' ? ' active' : ''}`}
+            aria-pressed={view === 'main'}
+            onClick={() => setView('main')}
+          >
+            overview
+          </button>
+          <button
+            type="button"
+            className={`view-btn${view === 'pumpdump' ? ' active' : ''}`}
+            aria-pressed={view === 'pumpdump'}
+            onClick={() => setView('pumpdump')}
+          >
+            pump &amp; dump
+          </button>
+        </nav>
+
+        {view === 'pumpdump' ? (
+          <div className="pd-grid">
+            <AlertFeed
+              alerts={feedAlerts}
+              flashIds={flashIds}
+              paused={paused}
+              pending={pendingAlerts}
+              onTogglePause={togglePause}
+              onClear={clearAlerts}
+              maxAlerts={MAX_ALERTS}
+              tools={tools}
+              canon={canon}
+              filter={filter}
+              onFilterChange={setFilter}
+              onFilterToggle={handleFilterToggle}
+              onDrill={drillInto}
+            />
+            <div className="pd-side">
+              <FlowLeaderboard flow={flow} tools={tools} />
+              <FlowSplit flow={flow} tools={tools} onDrill={drillInto} />
+            </div>
+            <PumpRadar flow={flow} />
+          </div>
+        ) : (
+        <>
         <div className="main-grid">
           <SplitPane
             id="main.columns"
@@ -474,6 +531,8 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
         <ModelsPanel tools={tools} />
 
         <TurtlePanel tools={tools} />
+        </>
+        )}
 
         {/*
           The chart is a floating overlay, not a grid cell: opening it must not
