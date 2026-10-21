@@ -442,6 +442,18 @@ def _prices_now():
     return _PX["p"]
 
 
+def _sides(positions, trades):
+    """Long and short counts, for open positions and closed trades."""
+    def is_short(side):
+        return str(side or "buy").lower() in ("sell", "short")
+
+    pl = sum(1 for p in (positions or []) if not is_short(p.get("side")))
+    ps = sum(1 for p in (positions or []) if is_short(p.get("side")))
+    cl = sum(1 for t in (trades or []) if not is_short(t.get("side")))
+    cs = sum(1 for t in (trades or []) if is_short(t.get("side")))
+    return {"open_long": pl, "open_short": ps, "closed_long": cl, "closed_short": cs}
+
+
 def _mark(positions, prices):
     """Unrealised PnL of open positions at the last trade: (total, marked, unmarked)."""
     total, marked, unmarked = 0.0, 0, 0
@@ -2012,7 +2024,8 @@ async function renderEngines(){
   if(note) note.textContent = es.filter(function(e){return e.alive;}).length+"/"+es.length+" running";
   var head = '<tr><th>engine</th><th>status</th><th class="num">equity</th>'+
              '<th class="num">realised</th><th class="num">unrealised</th><th class="num">total</th>'+
-             '<th class="num">trades</th><th class="num">open</th><th class="num">risk</th>'+
+             '<th class="num">trades</th><th class="num">open</th>'+
+             '<th class="num">long</th><th class="num">short</th><th class="num">risk</th>'+
              '<th class="num">slots</th><th>action</th></tr>';
   var rows = es.map(function(e){
     var cls = e.disabled ? "down" : (e.alive ? "up" : "flat");
@@ -2027,6 +2040,8 @@ async function renderEngines(){
       '<td class="num '+((e.unrealised||0)>=0?"up":"down")+'">'+sgn(e.unrealised)+'</td>'+
       '<td class="num '+((e.total||0)>=0?"up":"down")+'"><b>'+sgn(e.total)+'</b></td>'+
       '<td class="num">'+(e.trades||0)+'</td><td class="num">'+(e.open||0)+'</td>'+
+      '<td class="num up">'+(e.open_long||0)+' / '+(e.closed_long||0)+'</td>'+
+      '<td class="num down">'+(e.open_short||0)+' / '+(e.closed_short||0)+'</td>'+
       '<td class="num">'+(e.risk_mult==null?"—":Number(e.risk_mult).toFixed(2)+"x")+'</td>'+
       '<td class="num">'+(e.slots==null?"—":e.slots)+'</td>'+
       '<td>'+btn+'</td></tr>';
@@ -2543,6 +2558,10 @@ async function renderBooks(){
     UI.stat("books trading", active, "#58a6ff")+
     UI.stat("books idle", flat, "#7c8b9d")+
     UI.stat("open positions", d.open||0)+
+    UI.stat("open long", d.open_long||0, "#3fb950")+
+    UI.stat("open short", d.open_short||0, "#f85149")+
+    UI.stat("closed long", d.closed_long||0, "#3fb950")+
+    UI.stat("closed short", d.closed_short||0, "#f85149")+
     UI.stat("closed trades", d.closed||0)+
     UI.stat("realised", ((d.realised||0)>=0?"+":"")+money(d.realised||0), ((d.realised||0)>=0?"#3fb950":"#f85149"))+
     UI.stat("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"))+
@@ -2579,7 +2598,8 @@ async function renderBooks(){
       return '<div class="panel" style="padding:12px 14px;cursor:pointer" onclick="openBook(\''+esc(b.engine)+'\')">'+
         '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">'+
           '<b style="font-size:13px">'+esc(b.engine)+'</b>'+
-          '<span class="mk">'+b.trades+' closed · '+b.open+' open</span>'+
+          '<span class="mk">'+b.trades+' closed (L'+(b.closed_long||0)+'/S'+(b.closed_short||0)+') · '+
+            b.open+' open (L'+(b.open_long||0)+'/S'+(b.open_short||0)+')</span>'+
           '<span style="flex:1"></span>'+
           '<b style="color:'+col+';font-size:14px">'+(tp>0?"+":"")+Number(tp).toFixed(2)+'%</b>'+
         '</div>'+
@@ -2884,6 +2904,14 @@ async function renderModels(){
       '<td style="text-align:right">'+n+'</td>'+
       '<td style="text-align:right">'+wr+'</td>'+
       '<td style="text-align:right">'+((e.positions||[]).length)+'</td>'+
+      '<td style="text-align:right" class="up">'+(function(){
+         var p=(e.positions||[]).filter(function(x){return String(x.side||"buy").toLowerCase()!=="sell";}).length;
+         var t=(e.trades||[]).filter(function(x){return String(x.side||"buy").toLowerCase()!=="sell";}).length;
+         return p+" open / "+t+" closed";})()+'</td>'+
+      '<td style="text-align:right" class="down">'+(function(){
+         var p=(e.positions||[]).filter(function(x){return String(x.side||"").toLowerCase()==="sell";}).length;
+         var t=(e.trades||[]).filter(function(x){return String(x.side||"").toLowerCase()==="sell";}).length;
+         return p+" open / "+t+" closed";})()+'</td>'+
       '<td style="text-align:right">'+(off?'<span class="pill bad">stopped</span>':
         '<span class="pill ok">running</span>')+'</td>'+
       '<td style="text-align:right"><button class="tbtn" onclick="event.stopPropagation();toggleModel(\''+
@@ -2904,6 +2932,7 @@ async function renderModels(){
     '<th style="text-align:right">equity</th><th style="text-align:right">return</th>'+
     '<th style="text-align:right">realised</th><th style="text-align:right">unrealised</th>'+
     '<th style="text-align:right">total</th><th style="text-align:right">trades</th>'+
+    '<th style="text-align:right">long</th><th style="text-align:right">short</th>'+
     '<th style="text-align:right">win</th><th style="text-align:right">open</th>'+
     '<th style="text-align:right">status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
@@ -5857,6 +5886,7 @@ class H(BaseHTTPRequestHandler):
                     "realised": round(eq - start, 2), "unrealised": unreal,
                     "total": round(eq - start + unreal, 2),
                     "trades": len(b.get("trades") or []), "open": len(b.get("positions") or []),
+                    **_sides(b.get("positions") or [], b.get("trades") or []),
                     "risk_mult": c.get("risk_mult"), "slots": c.get("slots"),
                     "note": c.get("note"),
                 })
@@ -6033,6 +6063,7 @@ class H(BaseHTTPRequestHandler):
                     run += (t.get("net_pct") or 0)
                     curve.append(round(run, 4))
                 unreal, marked, unmarked = _mark(b.get("positions") or [], _prices_now())
+                sides = _sides(b.get("positions") or [], trades)
                 out.append({
                     "engine": b.get("engine"),
                     "equity": round(eq, 2), "start": round(start, 2),
@@ -6042,6 +6073,8 @@ class H(BaseHTTPRequestHandler):
                     "marked": marked, "unmarked": unmarked,
                     "return_pct": round(100 * (eq / start - 1), 3) if start else 0,
                     "total_pct": round(100 * (eq - start + unreal) / start, 3) if start else 0,
+                    "open_long": sides["open_long"], "open_short": sides["open_short"],
+                    "closed_long": sides["closed_long"], "closed_short": sides["closed_short"],
                     "trades": len(trades), "win_pct": round(100 * wins / len(trades), 1) if trades else 0,
                     "avg_net": round(sum((t.get("net_pct") or 0) for t in trades) / len(trades), 4) if trades else 0,
                     "open": len(b.get("positions") or []),
@@ -6056,6 +6089,10 @@ class H(BaseHTTPRequestHandler):
                     "ts": b.get("ts")})
             total = sum(r["equity"] for r in out)
             start_total = sum(r["start"] for r in out) or 1
+            long_open = sum(r["open_long"] for r in out)
+            short_open = sum(r["open_short"] for r in out)
+            long_closed = sum(r["closed_long"] for r in out)
+            short_closed = sum(r["closed_short"] for r in out)
             real_t = sum(r["realised"] for r in out)
             unreal_t = sum(r["unrealised"] for r in out)
             return self._send(200, json.dumps({
@@ -6064,6 +6101,8 @@ class H(BaseHTTPRequestHandler):
                 "total": round(real_t + unreal_t, 2),
                 "return_pct": round(100 * (total / start_total - 1), 3),
                 "open": sum(r["open"] for r in out),
+                "open_long": long_open, "open_short": short_open,
+                "closed_long": long_closed, "closed_short": short_closed,
                 "closed": sum(r["trades"] for r in out),
                 "up": sum(1 for r in out if r["return_pct"] > 0),
                 "down": sum(1 for r in out if r["return_pct"] < 0),
