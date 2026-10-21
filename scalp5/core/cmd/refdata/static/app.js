@@ -12,6 +12,91 @@ const PRED_COLOR = {
   issued_by: "#43c6d8", tracks: "#43c6d8", derived_from: "#43c6d8",
 };
 
+/* ---------- resizable / collapsible split panels ----------
+   Wide screens: two-column grid with a draggable divider; width and
+   collapse state persist in localStorage. Narrow screens (CSS switches to
+   drawer mode): the panel slides in from the right over a backdrop. */
+const panels = {}; // key -> {aside, split, apply}
+
+function wireSplit(key, splitSel, vsplitSel, asideSel) {
+  const split = $(splitSel), vs = $(vsplitSel), aside = $(asideSel);
+  const btn = aside.querySelector(".dcollapse");
+  const state = { aside, split, apply };
+  panels[key] = state;
+
+  function apply() {
+    const collapsed = aside.classList.contains("collapsed");
+    split.classList.toggle("nodetail", collapsed);
+    btn.textContent = collapsed ? "◂" : "▾";
+    btn.title = collapsed ? "expand panel" : "collapse panel (persisted)";
+    if (document.body.classList.contains("narrow")) updateBackdrop();
+  }
+  btn.addEventListener("click", () => {
+    aside.classList.toggle("collapsed");
+    localStorage.setItem(`refdata:${key}:collapsed`, aside.classList.contains("collapsed") ? "1" : "0");
+    apply();
+  });
+  if (localStorage.getItem(`refdata:${key}:collapsed`) === "1") aside.classList.add("collapsed");
+  const savedW = parseInt(localStorage.getItem(`refdata:${key}:w`) || "0", 10);
+  if (savedW >= 280 && savedW <= 900) split.style.setProperty("--detail-w", savedW + "px");
+
+  vs.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    vs.setPointerCapture(e.pointerId);
+    document.body.classList.add("resizing");
+    const move = (ev) => {
+      const w = split.getBoundingClientRect().right - ev.clientX;
+      if (w >= 280 && w <= 900) split.style.setProperty("--detail-w", w + "px");
+    };
+    const up = (ev) => {
+      vs.removeEventListener("pointermove", move);
+      vs.removeEventListener("pointerup", up);
+      document.body.classList.remove("resizing");
+      const w = Math.round(split.getBoundingClientRect().right - ev.clientX);
+      if (w >= 280 && w <= 900) localStorage.setItem(`refdata:${key}:w`, String(w));
+    };
+    vs.addEventListener("pointermove", move);
+    vs.addEventListener("pointerup", up);
+  });
+  apply();
+  return state;
+}
+
+function openDetail(key) {
+  const p = panels[key];
+  if (!p) return;
+  p.aside.classList.remove("collapsed");
+  localStorage.setItem(`refdata:${key}:collapsed`, "0");
+  p.apply();
+}
+
+let backdrop = null;
+function updateBackdrop() {
+  const anyOpen = Object.values(panels).some((p) =>
+    p.aside.closest(".tab").classList.contains("on") && !p.aside.classList.contains("collapsed"));
+  if (anyOpen && document.body.classList.contains("narrow")) {
+    if (!backdrop) {
+      backdrop = document.createElement("div");
+      backdrop.className = "backdrop";
+      backdrop.addEventListener("click", () =>
+        Object.values(panels).forEach((p) => {
+          if (!p.aside.classList.contains("collapsed")) p.aside.querySelector(".dcollapse").click();
+        }));
+      document.body.appendChild(backdrop);
+    }
+  } else if (backdrop) {
+    backdrop.remove();
+    backdrop = null;
+  }
+}
+const narrowMQ = window.matchMedia("(max-width:1080px)");
+function onNarrow() {
+  document.body.classList.toggle("narrow", narrowMQ.matches);
+  Object.values(panels).forEach((p) => p.apply());
+  updateBackdrop();
+}
+narrowMQ.addEventListener("change", onNarrow);
+
 async function api(path) {
   const r = await fetch(path, { headers: { Accept: "application/json" } });
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
@@ -25,6 +110,7 @@ $$("#tabs button").forEach((b) =>
   b.addEventListener("click", () => {
     $$("#tabs button").forEach((x) => x.classList.toggle("on", x === b));
     $$(".tab").forEach((t) => t.classList.toggle("on", t.id === `tab-${b.dataset.tab}`));
+    updateBackdrop();
   }));
 const showTab = (name) => $(`#tabs button[data-tab="${name}"]`).click();
 
@@ -123,7 +209,8 @@ $("#inst-table tbody").addEventListener("click", (e) => {
 async function selectInstrument(id) {
   inst.sel = id;
   renderInstruments();
-  const box = $("#inst-detail");
+  openDetail("inst");
+  const box = $("#inst-detail-body");
   box.innerHTML = `<p class="placeholder">loading…</p>`;
   const [r, docs, edges] = await Promise.all([
     api(`/v1/instruments/${encodeURIComponent(id)}`),
@@ -238,8 +325,9 @@ $("#doc-table tbody").addEventListener("click", (e) => {
 });
 
 async function openDocument(id) {
+  openDetail("doc");
   const d = await api(`/v1/documents/${encodeURIComponent(id)}`);
-  $("#doc-detail").innerHTML = `
+  $("#doc-detail-body").innerHTML = `
     <h2>${esc(d.title)}</h2>
     <div><span class="pill ${esc(d.kind)}">${esc(d.kind)}</span>
       ${d.class ? `<span class="pill ${esc(d.class)}">${esc(d.class)}</span>` : ""}
@@ -348,6 +436,9 @@ async function runSearch() {
 }
 
 /* ---------- boot ---------- */
+wireSplit("inst", "#inst-split", "#inst-vsplit", "#inst-detail");
+wireSplit("doc", "#doc-split", "#doc-vsplit", "#doc-detail");
+onNarrow();
 loadInstruments().catch((e) => ($("#inst-count").textContent = e.message));
 loadDocuments().catch(() => {});
 loadEdges().catch(() => {});

@@ -12,8 +12,10 @@
 
 Format rules, matching the Design and Architecture Reference:
 
-- box text is measured against the box: width *and* height, so a label is set as
-  large as it fits and never crosses its border
+- every text layer is measured and fitted: box titles, box rows, the tag column,
+  diamond labels, arrow labels, notes and the figure header. Each is set as large as
+  its space allows (up to 25 px for the header, 16 px for a row) and never larger,
+  with a 6% safety margin so a line never touches the border it is measured against
 - figures run at full content width (10.2 in), which prints a 16 px label at about
   7 pt instead of 5 pt
 

@@ -6,34 +6,34 @@
 <marker id="a-risk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6b6b"/></marker>
 <marker id="a-evidence" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#a879ff"/></marker>
 <marker id="a-control" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#7f8ea3"/></marker>
-<text x="40" y="46" fill="#e6eef8" font-size="20" font-weight="700">Control — what may change behaviour</text>
-<text x="40" y="68" fill="#8ea0b6" font-size="12">supervise, stop, and nothing else</text>
-<text x="1620" y="46" fill="#5a6b80" font-size="10.5" text-anchor="end">no data path may stop the platform</text>
+<text x="40" y="50" fill="#e6eef8" font-size="25" font-weight="700">Control — what may change behaviour</text>
+<text x="40" y="74" fill="#8ea0b6" font-size="15">supervise, stop, and nothing else</text>
+<text x="1620" y="46" fill="#5a6b80" font-size="13" text-anchor="end">no data path may stop the platform</text>
 <rect x="60" y="120" width="420" height="220" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
 <text x="70" y="142" fill="#7f8ea3" font-size="15.0" font-weight="700" letter-spacing="0.06em">SUPERVISOR</text>
 <text x="70" y="160" fill="#e6eef8" font-size="16.0" font-weight="600">engine registry</text>
-<text x="470" y="160" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="470" y="160" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
 <text x="70" y="184.0" fill="#8ea0b6" font-size="16.0" font-weight="400">restart on exit</text>
-<text x="470" y="184.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="470" y="184.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
 <text x="70" y="208.0" fill="#8ea0b6" font-size="16.0" font-weight="400">equity and open counts</text>
-<text x="470" y="208.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="470" y="208.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <rect x="540" y="120" width="460" height="220" rx="9" fill="#251315" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.2"/>
 <text x="550" y="142" fill="#ef6b6b" font-size="15.0" font-weight="700" letter-spacing="0.06em">TRADING STATE</text>
 <text x="988" y="140" fill="#5a6b80" font-size="8.5" text-anchor="end">aggregate</text>
 <text x="550" y="160" fill="#e6eef8" font-size="16.0" font-weight="600">on / off</text>
-<text x="990" y="160" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">STATE</text>
+<text x="990" y="160" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">STATE</text>
 <text x="550" y="184.0" fill="#e6eef8" font-size="16.0" font-weight="600">stop flag on disk</text>
-<text x="990" y="184.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
+<text x="990" y="184.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">ENTITY</text>
 <text x="550" y="208.0" fill="#8ea0b6" font-size="16.0" font-weight="400">reset books and stats</text>
-<text x="990" y="208.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
+<text x="990" y="208.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">SERVICE</text>
 <rect x="1060" y="120" width="460" height="220" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2"/>
 <text x="1070" y="142" fill="#7f8ea3" font-size="15.0" font-weight="700" letter-spacing="0.06em">HEARTBEAT</text>
 <text x="1070" y="160" fill="#8ea0b6" font-size="16.0" font-weight="400">what is alive now</text>
-<text x="1510" y="160" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1510" y="160" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <text x="1070" y="184.0" fill="#8ea0b6" font-size="16.0" font-weight="400">equity from the books</text>
-<text x="1510" y="184.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1510" y="184.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <text x="1070" y="208.0" fill="#8ea0b6" font-size="16.0" font-weight="400">wins / losses</text>
-<text x="1510" y="208.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1510" y="208.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <path d="M 480,230 L 540,230" fill="none" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-control)"/>
 <path d="M 1000,230 L 1060,230" fill="none" stroke="#ef6b6b" stroke-opacity="0.8" stroke-width="1.4" marker-end="url(#a-risk)"/>
 <text x="60" y="400" fill="#e6eef8" font-size="10.5" text-anchor="start" font-weight="600">STOP means stop:</text>
@@ -48,11 +48,11 @@
 <rect x="860" y="380" width="660" height="240" rx="9" fill="#151b24" stroke="#7f8ea3" stroke-opacity="0.8" stroke-width="1.2" stroke-dasharray="6 5"/>
 <text x="870" y="402" fill="#7f8ea3" font-size="15.0" font-weight="700" letter-spacing="0.06em">THE INVARIANT</text>
 <text x="870" y="420" fill="#8ea0b6" font-size="16.0" font-weight="400">no data path can stop the platform</text>
-<text x="1510" y="420" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1510" y="420" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <text x="870" y="444.0" fill="#8ea0b6" font-size="16.0" font-weight="400">no control path can invent data</text>
-<text x="1510" y="444.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1510" y="444.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <text x="870" y="468.0" fill="#8ea0b6" font-size="16.0" font-weight="400">a stopped book is visibly stopped</text>
-<text x="1510" y="468.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1510" y="468.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 <text x="870" y="492.0" fill="#8ea0b6" font-size="16.0" font-weight="400">a refused trade is visibly refused</text>
-<text x="1510" y="492.0" fill="#5a6b80" font-size="9" text-anchor="end" letter-spacing="0.04em">VALUE</text>
+<text x="1510" y="492.0" fill="#5a6b80" font-size="11" text-anchor="end" letter-spacing="0.04em">VALUE</text>
 </svg>

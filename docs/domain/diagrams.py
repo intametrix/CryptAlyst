@@ -40,14 +40,16 @@ def text_w(text, size):
     differ by nearly a factor of two, and guessing one width for all of them is how
     labels end up over the border.
     """
-    wide = sum(1 for c in text if c in "MWmw@")
+    wide = sum(1 for c in text if c in "MWmw@" or c.isupper())
     narrow = sum(1 for c in text if c in "iljt.,;:'!| ")
-    other = len(text) - wide - narrow
-    return size * (0.86 * wide + 0.34 * narrow + 0.56 * other)
+    digits = sum(1 for c in text if c.isdigit())
+    other = len(text) - wide - narrow - digits
+    return size * (0.80 * wide + 0.34 * narrow + 0.58 * digits + 0.52 * other)
 
 
 def fit(text, size, avail, floor):
     """Largest size at or below `size` that fits `avail`, never below `floor`."""
+    avail *= 0.94
     while size > floor and text_w(text, size) > avail:
         size -= 0.5
     return size
@@ -63,13 +65,16 @@ class Fig:
                 f'<marker id="a-{k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" '
                 f'markerHeight="7" orient="auto-start-reverse">'
                 f'<path d="M 0 0 L 10 5 L 0 10 z" fill="{c}"/></marker>')
-        self.parts.append(f'<text x="40" y="46" fill="{INK}" font-size="20" font-weight="700">'
+        t_size = fit(title, 25, w - 260, 15)
+        self.parts.append(f'<text x="40" y="50" fill="{INK}" font-size="{t_size}" font-weight="700">'
                           f'{html.escape(title)}</text>')
         if subtitle:
-            self.parts.append(f'<text x="40" y="68" fill="{DIM}" font-size="12">'
+            s_size = fit(subtitle, 15, w - 120, 10)
+            self.parts.append(f'<text x="40" y="74" fill="{DIM}" font-size="{s_size}">'
                               f'{html.escape(subtitle)}</text>')
         if corner:
-            self.parts.append(f'<text x="{w-40}" y="46" fill="{FAINT}" font-size="10.5" '
+            c_size = fit(corner, 13, 300, 8.5)
+            self.parts.append(f'<text x="{w-40}" y="46" fill="{FAINT}" font-size="{c_size}" '
                               f'text-anchor="end">{html.escape(corner)}</text>')
 
     def box(self, x, y, w, h, title, rows, colour, dashed=False, tag=None):
@@ -91,13 +96,13 @@ class Fig:
         for row in rows:
             name, kind = row if isinstance(row, tuple) else (row, "")
             bold = kind in ("aggregate", "entity", "state")
-            tag_w = text_w(kind.upper(), 10) + 14 if kind else 0
+            tag_w = text_w(kind.upper(), 11) + 12 if kind else 0
             size = fit(name, min(16.0, by_height), w - 24 - tag_w, 9.5)
             self.parts.append(
                 f'<text x="{x+10}" y="{yy}" fill="{INK if bold else DIM}" font-size="{size}" '
                 f'font-weight="{600 if bold else 400}">{html.escape(name)}</text>')
             if kind:
-                ts = fit(kind.upper(), 9, tag_w - 8, 7.0)
+                ts = fit(kind.upper(), 11, tag_w - 6, 7.5)
                 self.parts.append(f'<text x="{x+w-10}" y="{yy}" fill="{FAINT}" font-size="{ts}" '
                                   f'text-anchor="end" letter-spacing="0.04em">'
                                   f'{html.escape(kind.upper())}</text>')
@@ -110,7 +115,7 @@ class Fig:
         self.parts.append(f'<polygon points="{pts}" fill="{FILL[colour]}" stroke="{c}" '
                           f'stroke-opacity="0.85" stroke-width="1.2"/>')
         words = text.split("\n")
-        size = min(fit(wd, 14, w * 0.62, 9.5) for wd in words) if words else 12
+        size = min(fit(wd, 15.5, w * 0.60, 9.5) for wd in words) if words else 12
         for i, word in enumerate(words):
             dy = (i - (len(words) - 1) / 2) * (size + 4) + size * 0.36
             self.parts.append(f'<text x="{cx}" y="{cy+dy}" fill="{INK}" font-size="{size}" '
@@ -124,11 +129,15 @@ class Fig:
                           f'stroke-opacity="0.8" stroke-width="{width}"{dash} '
                           f'marker-end="url(#a-{colour})"/>')
         if label:
-            self.parts.append(f'<text x="{lx}" y="{ly}" fill="{DIM}" font-size="9.5" '
+            run = max(abs(pts[-1][0] - pts[0][0]), abs(pts[-1][1] - pts[0][1]), 40)
+            size = fit(label, 13, max(run * 0.85, 60), 8.5)
+            self.parts.append(f'<text x="{lx}" y="{ly}" fill="{DIM}" font-size="{size}" '
                               f'text-anchor="{anchor}">{html.escape(label)}</text>')
         return self
 
     def note(self, x, y, text, size=13, colour=DIM, anchor="start", weight="400"):
+        room = (self.w - x - 30) if anchor == "start" else (x - 30)
+        size = fit(text, size, room, 8.5)
         self.parts.append(f'<text x="{x}" y="{y}" fill="{colour}" font-size="{size}" '
                           f'text-anchor="{anchor}" font-weight="{weight}">'
                           f'{html.escape(text)}</text>')
@@ -154,7 +163,7 @@ def context_map():
     f = Fig(1660, 760, "Domain model, level 1 — the contexts",
             "what the platform is about, and which way knowledge flows",
             "one envelope contract · one bus · one record")
-    f.box(40, 110, 300, 190, "Market data", [
+    f.box(40, 118, 300, 190, "Market data", [
         ("Symbol universe", "value"), ("Kline series", "entity"),
         ("Depth book", "entity"), ("Feed shard", "service")], "market", tag="ingest")
     f.box(40, 470, 300, 170, "Intelligence", [
@@ -179,23 +188,22 @@ def context_map():
         ("Trading state", "aggregate"), ("Supervisor", "service"),
         ("Heartbeat", "service"), ("Stop flag", "entity"),
         ("Topic registry", "aggregate"), ("Interceptor chain", "service"),
-        ("Operator registry", "service")], "control", dashed=True, tag="may stop")
+        ("Operator registry", "service"), ("publishes system.control", "value"),
+        ("STOP resets books and stats", "value")], "control", dashed=True, tag="may stop")
 
     f.arrow([(340, 200), (420, 200)], "market", label="market.*", lx=346, ly=190)
     f.arrow([(340, 545), (385, 545), (385, 330), (420, 330)], "intel", width=1.2,
             label="intel.*", lx=346, ly=562)
-    f.arrow([(580, 350), (580, 450)], "model", label="proposed order", lx=590, ly=404)
-    f.arrow([(470, 450), (470, 350)], "risk", dashed=True, width=1.2,
-            label="allowed / refused", lx=468, ly=404, anchor="end")
+    f.arrow([(580, 350), (580, 450)], "model")
+    f.note(592, 424, "proposed order", size=12)
+    f.arrow([(470, 450), (470, 350)], "risk", dashed=True, width=1.2)
+    f.note(458, 424, "allowed / refused", size=12, anchor="end")
     f.arrow([(740, 230), (786, 230), (786, 190), (820, 190)], "model",
             label="decision · fill", lx=748, ly=252)
     f.arrow([(340, 92), (820, 92)], "market", dashed=True, width=1.0)
     f.note(352, 84, "every topic is recorded, not only trades", size=9)
     f.arrow([(1140, 310), (1140, 430)], "evidence", label="read-only replay", lx=1150, ly=376)
-    f.arrow([(1220, 330), (1140, 330)], "control", dashed=True, width=1.0)
-    f.note(1210, 350, "supervises, publishes system.control", size=9, anchor="end")
-    f.note(1210, 600, "STOP resets books and stats", size=9, anchor="end")
-    f.note(1210, 616, "and leaves market data running.", size=9, anchor="end")
+    f.arrow([(1330, 360), (1140, 360)], "control", dashed=True, width=1.0)
     return f.save(os.path.join(os.path.dirname(__file__), "fig", "01-contexts.svg"))
 
 

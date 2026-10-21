@@ -34,7 +34,7 @@
       <select id="f-venue"><option value="">venue: all</option></select>
       <span class="count" id="inst-count"></span>
     </div>
-    <div class="split">
+    <div class="split" id="inst-split">
       <div class="tablewrap">
         <table id="inst-table">
           <thead><tr>
@@ -49,7 +49,12 @@
           <tbody></tbody>
         </table>
       </div>
-      <aside id="inst-detail" class="detail"><p class="placeholder">select an instrument</p></aside>
+      <div class="vsplit" id="inst-vsplit" title="drag to resize"></div>
+      <aside id="inst-detail" class="detail">
+        <div class="dhead"><span class="dtitle">instrument</span>
+          <button class="dcollapse" title="collapse panel (persisted)">▾</button></div>
+        <div class="dbody" id="inst-detail-body"><p class="placeholder">select an instrument</p></div>
+      </aside>
     </div>
   </section>
 
@@ -63,7 +68,7 @@
       </select>
       <span class="count" id="doc-count"></span>
     </div>
-    <div class="split">
+    <div class="split" id="doc-split">
       <div class="tablewrap">
         <table id="doc-table">
           <thead><tr>
@@ -73,7 +78,12 @@
           <tbody></tbody>
         </table>
       </div>
-      <aside id="doc-detail" class="detail"><p class="placeholder">select a document</p></aside>
+      <div class="vsplit" id="doc-vsplit" title="drag to resize"></div>
+      <aside id="doc-detail" class="detail">
+        <div class="dhead"><span class="dtitle">document</span>
+          <button class="dcollapse" title="collapse panel (persisted)">▾</button></div>
+        <div class="dbody" id="doc-detail-body"><p class="placeholder">select a document</p></div>
+      </aside>
     </div>
   </section>
 

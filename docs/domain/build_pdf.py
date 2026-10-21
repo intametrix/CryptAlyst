@@ -99,7 +99,7 @@ def bullets(items, size=9.6):
         p.add_run(it).font.size = Pt(size)
 
 
-def table(head, rows, size=8.8):
+def table(head, rows, size=8.2):
     t = doc.add_table(rows=1, cols=len(head))
     t.style = "Table Grid"
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -114,7 +114,10 @@ def table(head, rows, size=8.8):
         cells = t.add_row().cells
         for i, val in enumerate(row):
             cells[i].text = ""
-            run = cells[i].paragraphs[0].add_run(val)
+            p = cells[i].paragraphs[0]
+            p.paragraph_format.space_after = Pt(0)
+            p.paragraph_format.space_before = Pt(0)
+            run = p.add_run(val)
             run.font.size = Pt(size)
     # rows never split across pages, and the header repeats if the table does
     for i, row in enumerate(t.rows):
@@ -252,6 +255,11 @@ for n, s in enumerate(sections, 1):
             bullets(s["bullets"])
     if s.get("table"):
         head, rows = s["table"]
+        if len(rows) >= 7:
+            # a long table gets its own page rather than a single orphaned row
+            brk = doc.add_paragraph()
+            brk.paragraph_format.page_break_before = True
+            brk.paragraph_format.space_after = Pt(0)
         table(head, rows)
     for text in s.get("body2", []):
         para(text)
