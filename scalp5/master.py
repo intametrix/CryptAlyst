@@ -2248,6 +2248,76 @@ function showTab(which){
 
 
 
+
+/* ---- drill-down from the realised and unrealised tiles ----------------------- */
+window.DRILL = window.DRILL || null;
+
+function drillClose(){
+  var m=document.getElementById("drillmodal");
+  if(m) m.classList.remove("open");
+  window.DRILL=null;
+}
+
+async function drillOpen(kind){
+  window.DRILL = kind;
+  var m=document.getElementById("drillmodal");
+  if(!m){
+    m=document.createElement("div");
+    m.id="drillmodal";
+    m.className="sheet";
+    m.style.cssText="position:fixed;inset:0;background:#050a10ee;z-index:60;display:none;"+
+      "overflow:auto;padding:22px";
+    m.innerHTML='<div style="max-width:1200px;margin:0 auto">'+
+      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px">'+
+      '<b id="drilltitle" style="font-size:16px">—</b><span class="spacer" style="flex:1"></span>'+
+      '<button class="tbtn" onclick="drillClose()">close</button></div>'+
+      '<div id="drillbody" class="panel" style="padding:10px">loading…</div></div>';
+    document.body.appendChild(m);
+  }
+  m.classList.add("open");
+  m.style.display="block";
+  var t=document.getElementById("drilltitle");
+  if(t) t.textContent = (kind==="realised" ? "Realised — every book, banked only"
+        : kind==="unrealised" ? "Unrealised — every book, marked at the last price"
+        : "Total — realised plus unrealised");
+  await drillRender();
+}
+
+async function drillRender(){
+  var box=document.getElementById("drillbody"); if(!box) return;
+  var kind=window.DRILL||"realised";
+  var d={};
+  try{ d=await (await fetch("/api/engines",{cache:"no-store"})).json(); }
+  catch(e){ box.innerHTML='<div class="empty">engines unavailable</div>'; return; }
+  var key = kind==="unrealised" ? "unrealised" : kind==="total" ? "total" : "realised";
+  var es=(d.engines||[]).slice().sort(function(a,b){ return (b[key]||0)-(a[key]||0); });
+  var sum=es.reduce(function(a,e){ return a+(e[key]||0); },0);
+  var rows=es.map(function(e){
+    return '<tr><td>'+esc(e.name)+'</td>'+
+      '<td>'+((e.disabled)?"disabled":(e.alive?"running":"stopped"))+'</td>'+
+      '<td class="num '+((e.realised||0)>=0?"up":"down")+'">'+sgn(e.realised||0)+'</td>'+
+      '<td class="num '+((e.unrealised||0)>=0?"up":"down")+'">'+sgn(e.unrealised||0)+'</td>'+
+      '<td class="num '+((e.total||0)>=0?"up":"down")+'"><b>'+sgn(e.total||0)+'</b></td>'+
+      '<td class="num">'+(e.open||0)+'</td>'+
+      '<td style="white-space:nowrap">'+
+        '<button class="tbtn" onclick="setCashIn(\''+e.name+'\')">cash in</button> '+
+        '<button class="tbtn" onclick="reloadEngine(\''+e.name+'\')">reload</button> '+
+        '<button class="tbtn" style="border-color:#f85149;color:#ffb3ad" '+
+          'onclick="closeBook(\''+e.name+'\').then?closeBook(\''+e.name+'\'):0">close</button>'+
+      '</td></tr>';
+  }).join("");
+  box.innerHTML='<div style="margin-bottom:8px;color:#9fb0c4;font-family:var(--mono);font-size:11px">'+
+      es.length+' books · '+key+' total '+sgn(sum)+'</div>'+
+    '<table class="wide"><thead><tr><th>book</th><th>state</th>'+
+    '<th class="num">realised</th><th class="num">unrealised</th><th class="num">total</th>'+
+    '<th class="num">open</th><th>actions</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+async function reloadEngine(name){
+  try{ await fetch("/api/engine?name="+encodeURIComponent(name)+"&action=reload",{cache:"no-store"}); }catch(e){}
+  if(window.DRILL) drillRender();
+}
+
 /* ---- Engines: what each book is doing, and the two buttons that matter -------- */
 async function engineAction(name, act){
   var r = await fetch("/api/engine?name="+encodeURIComponent(name)+"&action="+encodeURIComponent(act),
@@ -2831,6 +2901,11 @@ async function optApply(m){
 
 
 window.BOOKFILTER = window.BOOKFILTER || null;
+function _drillTile(label, value, colour){
+  return '<span onclick="drillOpen(\''+label+'\')" title="click to see every book behind this" '+
+    'style="cursor:pointer;display:inline-block;border-radius:8px;padding:1px 4px">'+
+    UI.stat(label, value, colour)+'</span>';
+}
 function _sideTile(label, value, colour, kind){
   var on = (window.BOOKFILTER === kind);
   return '<span onclick="bookFilter(\''+kind+'\')" title="click to '+(on?"clear":"filter to")+' '+
@@ -2875,9 +2950,9 @@ async function renderBooks(){
     _sideTile("closed long", d.closed_long||0, "#3fb950", "closed_long")+
     _sideTile("closed short", d.closed_short||0, "#f85149", "closed_short")+
     UI.stat("closed trades", d.closed||0)+
-    UI.stat("realised", ((d.realised||0)>=0?"+":"")+money(d.realised||0), ((d.realised||0)>=0?"#3fb950":"#f85149"))+
-    UI.stat("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"))+
-    UI.stat("total", ((d.total||0)>=0?"+":"")+money(d.total||0), ((d.total||0)>=0?"#3fb950":"#f85149"))+
+    _drillTile("realised", ((d.realised||0)>=0?"+":"")+money(d.realised||0), ((d.realised||0)>=0?"#3fb950":"#f85149"))+
+    _drillTile("unrealised", ((d.unrealised||0)>=0?"+":"")+money(d.unrealised||0), ((d.unrealised||0)>=0?"#3fb950":"#f85149"))+
+    _drillTile("total", ((d.total||0)>=0?"+":"")+money(d.total||0), ((d.total||0)>=0?"#3fb950":"#f85149"))+
     '</div>'+
     '<div class="mk" style="margin-top:6px">'+books.length+' books each start at $'+
       Number(books[0].start||5000).toLocaleString()+' · '+(d.open||0)+
@@ -6287,7 +6362,7 @@ class H(BaseHTTPRequestHandler):
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             name = (q.get("name", [""])[0] or "").strip()
             act = (q.get("action", [""])[0] or "").strip()
-            if not name or act not in ("start", "stop"):
+            if not name or act not in ("start", "stop", "reload"):
                 return self._send(400, _json.dumps({"error": "name and action=start|stop"}),
                                   "application/json")
             path = os.path.join(HERE, "state", "disabled.json")
@@ -6296,6 +6371,22 @@ class H(BaseHTTPRequestHandler):
             except Exception:
                 cur = {"books": []}
             books = [b for b in (cur.get("books") or []) if b]
+            if act == "reload":
+                try:
+                    import supervisor as _sup
+                    script = os.path.basename(_sup.ENGINES.get(name, [None, None, name + ".py"])[2])
+                except Exception:
+                    script = name + ".py"
+                _sp.run(["pkill", "-f", script], capture_output=True)
+                time.sleep(0.5)
+                try:
+                    import supervisor as _sup2
+                    _sup2.start(name)
+                except Exception:
+                    pass
+                return self._send(200, _json.dumps({"ok": True, "name": name,
+                                                    "action": "reload"}),
+                                  "application/json")
             if act == "stop":
                 if name not in books:
                     books.append(name)
