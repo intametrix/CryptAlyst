@@ -32,11 +32,11 @@ type Backend interface {
 
 // Memory keeps the most recent N records per topic. The hot path.
 type Memory struct {
-	mu     sync.RWMutex
-	limit  int
+	mu      sync.RWMutex
+	limit   int
 	byTopic map[string][]Record
-	writes int64
-	drops  int64
+	writes  int64
+	drops   int64
 }
 
 func NewMemory(limitPerTopic int) *Memory {
@@ -79,10 +79,10 @@ func (m *Memory) Stats() (writes, drops int64) {
 
 // Journal appends every record to disk and replays it on open. The durable path.
 type Journal struct {
-	mu   sync.Mutex
-	f    *os.File
-	w    *bufio.Writer
-	path string
+	mu     sync.Mutex
+	f      *os.File
+	w      *bufio.Writer
+	path   string
 	writes int64
 }
 

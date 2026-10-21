@@ -24,13 +24,13 @@ type Book struct {
 }
 
 type Kline struct {
-	T int64   `json:"t"`
-	O float64 `json:"o"`
-	H float64 `json:"h"`
-	L float64 `json:"l"`
-	C float64 `json:"c"`
-	V float64 `json:"v"`
-	Q float64 `json:"q"`
+	T  int64   `json:"t"`
+	O  float64 `json:"o"`
+	H  float64 `json:"h"`
+	L  float64 `json:"l"`
+	C  float64 `json:"c"`
+	V  float64 `json:"v"`
+	Q  float64 `json:"q"`
 	Qb float64 `json:"Q"`
 }
 
@@ -42,17 +42,17 @@ type Mini struct {
 }
 
 type State struct {
-	mu     sync.RWMutex
-	Prices map[string]float64
-	Books  map[string]*Book
-	Depth  map[string][]Level
-	DepthS map[string][]Level
-	K1     map[string][]Kline
-	K15    map[string][]Kline
-	Mini   map[string]Mini
-	Msgs   int64
-	LastMS int64
-	Series int
+	mu          sync.RWMutex
+	Prices      map[string]float64
+	Books       map[string]*Book
+	Depth       map[string][]Level
+	DepthS      map[string][]Level
+	K1          map[string][]Kline
+	K15         map[string][]Kline
+	Mini        map[string]Mini
+	Msgs        int64
+	LastMS      int64
+	Series      int
 	KlineEvents int64
 }
 

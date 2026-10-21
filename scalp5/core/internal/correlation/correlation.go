@@ -15,10 +15,10 @@ import (
 
 // Step is one append on a document's ledger.
 type Step struct {
-	Kind    string    `json:"kind"`   // mint | ref | decision | fill | read | note
-	Actor   string    `json:"actor"`
-	Detail  string    `json:"detail,omitempty"`
-	TS      time.Time `json:"ts"`
+	Kind   string    `json:"kind"` // mint | ref | decision | fill | read | note
+	Actor  string    `json:"actor"`
+	Detail string    `json:"detail,omitempty"`
+	TS     time.Time `json:"ts"`
 }
 
 // Doc is the correlation map's row for one chain of work.
@@ -37,11 +37,11 @@ type Doc struct {
 // Service owns the map. It is a projection of durable records, never the source
 // of truth: everything here can be rebuilt by replaying the journal.
 type Service struct {
-	mu     sync.RWMutex
-	docs   map[string]*Doc
-	byCID  map[string]string
-	steps  int64
-	reads  int64
+	mu    sync.RWMutex
+	docs  map[string]*Doc
+	byCID map[string]string
+	steps int64
+	reads int64
 }
 
 func New() *Service {

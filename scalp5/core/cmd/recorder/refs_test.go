@@ -50,5 +50,3 @@ func TestDerivedRefsIgnoreStaleInputs(t *testing.T) {
 		t.Fatalf("stale reference survived: %+v", refs)
 	}
 }
-
-

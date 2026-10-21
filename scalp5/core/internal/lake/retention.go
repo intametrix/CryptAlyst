@@ -25,17 +25,17 @@ type RetentionConfig struct {
 
 // Segmented is a rotating journal with compression and expiry.
 type Segmented struct {
-	cfg     RetentionConfig
-	mu      sync.Mutex
-	file    *os.File
-	size    int64
-	segments []string
-	writes  int64
-	rotations int64
+	cfg        RetentionConfig
+	mu         sync.Mutex
+	file       *os.File
+	size       int64
+	segments   []string
+	writes     int64
+	rotations  int64
 	compressed int64
-	deleted int64
-	stop    chan struct{}
-	once    sync.Once
+	deleted    int64
+	stop       chan struct{}
+	once       sync.Once
 }
 
 func OpenSegmented(cfg RetentionConfig) (*Segmented, error) {

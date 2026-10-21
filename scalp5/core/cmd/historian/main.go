@@ -267,7 +267,7 @@ func main() {
 		"bar_seconds": *widthSec, "symbols": len(symbols), "per_symbol": symbols,
 		"from_ms": first, "to_ms": last,
 		"columns": header, "source_lines": lines,
-		"built_at": time.Now().UTC().Format(time.RFC3339),
+		"built_at":   time.Now().UTC().Format(time.RFC3339),
 		"label_hint": "forward return over the next N bars, computed by the trainer",
 	}
 	mb, _ := json.MarshalIndent(manifest, "", "  ")

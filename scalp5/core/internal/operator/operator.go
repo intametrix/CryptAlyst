@@ -29,8 +29,8 @@ type Operator struct {
 
 // Registry holds the advertised capabilities.
 type Registry struct {
-	mu   sync.RWMutex
-	ops  map[string]*Operator
+	mu     sync.RWMutex
+	ops    map[string]*Operator
 	byNeed map[string][]string
 }
 
