@@ -48,7 +48,8 @@ def fill(engine, trade):
            "rank_score": trade.get("rank_score"), "why": trade.get("why"),
            "slippage_bps": trade.get("slippage_bps"),
            "fill_id": trade.get("fill_id") or new_id("f"),
-           "decision_id": trade.get("decision_id")}
+           "decision_id": trade.get("decision_id"),
+           "signal_price": trade.get("signal_price")}
     try:
         os.makedirs(STATE, exist_ok=True)
         with open(FILLS, "a") as fh:
