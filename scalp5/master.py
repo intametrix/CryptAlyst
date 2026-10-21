@@ -2632,7 +2632,17 @@ function sgn(v){ v=Number(v||0); return (v>=0?'+':'')+money(v); }
 async function renderEngines(){
   var el = document.getElementById("engbody"); if(!el) return;
   var d;
-  try{ d = await (await fetch("/api/engines",{cache:"no-store"})).json(); }
+  try{
+    var _m = await (await fetch("/api/models",{cache:"no-store"})).json();
+    d = {engines: (_m.models||[]).map(function(m){
+      return {name:m.key, script:m.key+".py", alive:!!m.alive, disabled:!!m.disabled,
+              equity:m.equity, start:m.start, realised:m.realised, unrealised:m.unrealised,
+              total:Math.round(((m.realised||0)+(m.unrealised||0))*100)/100,
+              trades:m.trades, open:m.open, open_long:m.long, open_short:m.short,
+              closed_long:m.closed_long, closed_short:m.closed_short,
+              risk_mult:null, slots:null};
+    })};
+  }
   catch(e){ el.innerHTML='<div class="empty">engines unavailable: '+esc(e.message||e)+'</div>'; return; }
   if(d.error){ el.innerHTML='<div class="empty">'+esc(d.error)+'</div>'; return; }
   var es = d.engines||[];
@@ -6640,6 +6650,8 @@ class H(BaseHTTPRequestHandler):
                     "closed_short": sum(1 for t in tr if str(t.get("side") or "").lower() in ("sell", "short")),
                     "wins": sum(1 for t in tr if (t.get("net_pct") or 0) > 0),
                     "disabled": eng.replace("_", "").lower() in dis,
+                    "alive": any(eng.replace("_", "") in ln.replace("_", "")
+                                 for ln in _proc_snapshot()),
                 })
             return self._send(200, _json.dumps({"models": rows}), "application/json")
         if p == "/api/engines":
