@@ -28,6 +28,8 @@ import threading
 import time
 import urllib.request
 
+import ratelimit
+
 try:
     import tactics as _tactics
     _tactics.require_enabled('multimodels', 'multi_models.py')   # A6: a disabled book does not run
@@ -92,9 +94,7 @@ def log(m):
 
 
 def jget(url, timeout=8.0):
-    req = urllib.request.Request(url, headers={"User-Agent": "multi/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8"))
+    return ratelimit.jget(url, timeout, {"User-Agent": "multi/1.0"})
 
 
 def all_prices():

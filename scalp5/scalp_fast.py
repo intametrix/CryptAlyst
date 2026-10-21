@@ -25,6 +25,7 @@ import os
 import statistics as stats
 import time
 import urllib.request
+import ratelimit
 
 try:
     import tactics as _tactics
@@ -92,9 +93,7 @@ def atr_wilder(highs, lows, closes, period=14):
 # market data
 # --------------------------------------------------------------------------
 def http_json(url, timeout=5.0):
-    req = urllib.request.Request(url, headers={"User-Agent": "scalp-fast/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    return ratelimit.jget(url, timeout, {"User-Agent": "scalp-fast/1.0"})
 
 
 def top_symbols(n):

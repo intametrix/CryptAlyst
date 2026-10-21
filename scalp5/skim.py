@@ -22,6 +22,7 @@ import time
 
 import tactics
 import urllib.request
+import ratelimit
 
 try:
     import tactics as _tactics
@@ -43,9 +44,7 @@ def log(m):
 
 
 def jget(url, timeout=5.0):
-    req = urllib.request.Request(url, headers={"User-Agent": "skim/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8"))
+    return ratelimit.jget(url, timeout, {"User-Agent": "skim/1.0"})
 
 
 def ema_last(vals, period):

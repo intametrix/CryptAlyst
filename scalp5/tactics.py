@@ -1,6 +1,8 @@
 """tactics - the shared playbook: confirm with TA, size by conviction, lock fast."""
 import json, os, time, urllib.request
 
+import ratelimit
+
 FEE = 0.0002        # maker: 0.02% per side, 0.04% round trip (taker is 0.001)
 TAKER_FEE = 0.001
 MARKET_DATA = "http://127.0.0.1:8796"
@@ -11,8 +13,7 @@ _TTL = 12.0
 
 
 def jget(u, t=6.0):
-    with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "tactics/1"}), timeout=t) as r:
-        return json.loads(r.read().decode())
+    return ratelimit.jget(u, t, {"User-Agent": "tactics/1"})
 
 
 def bars(sym, interval="1m", limit=60):

@@ -8,6 +8,7 @@ seconds, closes, and waits before the next attempt.
     python3 curve_rider.py --hold 4 --wait 20 --risk 0.5
 """
 import argparse, json, os, time, urllib.request
+import ratelimit
 
 try:
     import tactics as _tactics
@@ -26,8 +27,7 @@ FEE = 0.2
 
 
 def jget(u, t=6.0):
-    with urllib.request.urlopen(urllib.request.Request(u, headers={"User-Agent": "rider/1"}), timeout=t) as r:
-        return json.loads(r.read().decode())
+    return ratelimit.jget(u, t, {"User-Agent": "rider/1"})
 
 
 def klines(sym, interval="1m", limit=60):

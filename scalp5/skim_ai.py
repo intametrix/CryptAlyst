@@ -32,6 +32,7 @@ import json
 import os
 import time
 import urllib.request
+import ratelimit
 
 try:
     import tactics as _tactics
@@ -56,9 +57,7 @@ def log(m):
 
 
 def jget(url, timeout=8.0):
-    req = urllib.request.Request(url, headers={"User-Agent": "skim-ai/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8"))
+    return ratelimit.jget(url, timeout, {"User-Agent": "skim-ai/1.0"})
 
 
 def all_prices():
