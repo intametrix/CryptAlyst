@@ -511,8 +511,12 @@ function draw(){
       s+='<path d="M'+x(i).toFixed(1)+','+(py+(up?rad+3:-(rad+3))).toFixed(1)+
          ' l'+rad+','+(up?-rad*1.6:rad*1.6)+' l'+(-rad*2)+',0 z" fill="'+col+
          '" opacity="'+(a.severity==="CRITICAL"?0.95:0.55)+'"/>';
-      s+='<text x="'+x(i).toFixed(1)+'" y="'+(py+(up?rad+15:-(rad+10))).toFixed(1)+'" fill="'+col+
-         '" font-size="8.5" text-anchor="middle" font-family="monospace">'+esc(a.kind)+' '+Math.round(a.score||0)+'</text>';
+      var label=esc(a.kind)+' '+Math.round(a.score||0);
+      var bw=label.length*7.4+14, by=(py+(up?rad+10:-(rad+10)))-13;
+      s+='<rect x="'+(x(i)-bw/2).toFixed(1)+'" y="'+by.toFixed(1)+'" width="'+bw.toFixed(1)+
+         '" height="16" rx="8" fill="'+col+'" opacity="0.92" stroke="#0b1119" stroke-width="1"/>';
+      s+='<text x="'+x(i).toFixed(1)+'" y="'+(by+12).toFixed(1)+'" fill="#0b1119" font-size="11" font-weight="700" '+
+         'text-anchor="middle" font-family="monospace">'+label+'</text>';
     });
   }
 
