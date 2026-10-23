@@ -221,6 +221,12 @@ function loadSignals(cb){
 }
 var ENGDATA=[];
 var LIVE=true, LIVE_MS=1000, LAST_TS=0, TICKS=0, LIVE_TIMER=null, TICK_TIMER=null, TICK_N=0;
+function busy(){
+  if(PROPS_OPEN) return true;
+  var a=document.activeElement;
+  if(a && (a.tagName==="SELECT" || a.tagName==="INPUT" || a.tagName==="TEXTAREA")) return true;
+  return false;
+}
 function pollLive(){
   if(!LIVE) return;
   fetch("/api/klines?symbol="+encodeURIComponent(SYM)+"&interval="+S.tf+"&limit=300",{cache:"no-store"})
@@ -241,7 +247,7 @@ function pollLive(){
       } else {
         S.s=Math.max(0,Math.min(BARS.length-(S.c||BARS.length),S.s||0));
       }
-      draw();
+      if(!busy()) draw();
     })
     .catch(function(){});
 }
