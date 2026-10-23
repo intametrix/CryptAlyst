@@ -754,3 +754,167 @@ and a trading system you can trust.
 storage model, the spark spread. It gives you the **trust, the traceability and the substrate**
 that let that edge be traded, explained, audited and governed. For a commodity as regulated,
 event-driven and data-rich as UK gas, that is the foundation — not an add-on.
+
+---
+
+# 34. Why a long-term curve trader would love this — and why it outclasses a terminal
+
+**What this is.** A long-term gas curve trader holds positions across months and seasons —
+calendar spreads, butterflies, the shape of the curve — for days and weeks. Their edge is
+*slow and fundamental*, not tick-by-tick. This section argues that ATLAS + the envelope is
+the platform that edge has always needed.
+
+**Why it matters.** The incumbent tool (a data terminal) gives you the *price*; ATLAS gives
+you the price *and the reason and the record*. That difference is everything for a portfolio
+manager who must explain, replay and audit their book.
+
+![Figure 34.1 — terminal vs platform](e1-terminal-vs-platform.png)
+
+*Figure 34.1 — a terminal is read-only; a platform records, versions and replays.*
+
+| | A terminal | ATLAS + the envelope |
+|---|---|---|
+| data | yes, read-only | yes, plus *your* sources |
+| analytics | theirs, black-box | yours, versioned, replayable |
+| lineage | none | full refs, per signal |
+| audit | none | append-only lake |
+| execution | no | yes, on the same bus |
+| IP | rented | owned |
+
+A terminal tells you *what the price is*. ATLAS tells you *why your model said what it said,
+what it read, and what you did about it* — and proves all three.
+
+---
+
+# 35. Yes — it is the envelope
+
+The magic is not the database or the UI. It is the **envelope**: the tiny, stamped packet that
+carries its own provenance, lineage, correlation and pipeline. Everything else in this
+document — the fusion, the audit, the replay, the surveillance — is a consequence of the
+envelope being the *unit of record*.
+
+![Figure 35.1 — the envelope's features](e2-envelope-features.png)
+
+*Figure 35.1 — meta, refs, cid, hops: provenance, lineage, chain, gates.*
+
+| Feature | What it answers |
+|---|---|
+| `meta` (producer, ts, generation, TTL) | who, when, in what order, how fresh |
+| `refs` (inputs + ages) | what this decision read, and how old |
+| `cid` (correlation id) | the whole chain: tick → decision → fill → pnl |
+| `hops` (pipeline) | which gates ran, and what they refused |
+
+The rest of this section is **case studies** — each one is a feature of the envelope, shown as
+a concrete example a curve trader or PM would actually hit.
+
+---
+
+# 36. Case studies — the envelope in action
+
+## 36.1 Lineage — "why did the model go long Q1?"
+
+A PM asks why the model went long Q1 on 3 February. The forecast's **refs** answer it:
+
+![Figure 36.1 — the lineage case](e3-case-lineage.png)
+
+*Figure 36.1 — the forecast carries its inputs and their ages.*
+
+```
+forecast M+1 bullish
+  ├─ ref: fundamental.weather  (HDD +4, 2m old)
+  ├─ ref: fundamental.storage  (fill 60%, 15m old)
+  └─ ref: market.curve         (backwardated, 0.5s old)
+```
+
+The answer is not a recollection — it is **the record**. The PM sees the exact inputs, and
+their ages, and knows the decision was well-founded (or stale). That is the difference between
+a model you trust and a model you hope is right.
+
+## 36.2 Correlation — "replay the whole trade"
+
+One correlation id follows the work from the market tick to the P&L:
+
+![Figure 36.2 — the correlation case](e4-case-correlation.png)
+
+*Figure 36.2 — one cid resolves the tick, the decision, the fill and the pnl from the lake.*
+
+```
+$ resolve cid-9f
+  market.tick     09:02:01  (the trigger)
+  model.decision  09:02:03  long M+1 · cid-9f
+  model.fill      09:02:05  net +0.4% · parent cid-9f
+  model.pnl       09:02:05  equity +£1,240 · cid-9f
+```
+
+From one id, the entire life of a trade is reassembled. For a curve trader holding for weeks,
+that means every position's *whole story* is recoverable — for the PM, the risk team, and the
+regulator.
+
+## 36.3 Generation — "the weather feed silently died"
+
+A weather feed stops publishing. Because the envelope carries a **monotonic generation** per
+topic, the gap is *detected*, not inferred:
+
+![Figure 36.3 — the generation-gap case](e5-case-gap.png)
+
+*Figure 36.3 — a gap in generation is a fact, caught instantly.*
+
+```
+fundamental.weather  generation 105
+fundamental.weather  generation 108   ← 106, 107 missing
+```
+
+A terminal would simply show a stale (or blank) weather number and you would never know. ATLAS
+*flags the gap* — the forecast that would have used a silent feed is refused as stale, and the
+feed is restored. This is the difference between "the data was wrong" and "the data went
+silent, and we caught it".
+
+## 36.4 Versioning — "why did the view change?"
+
+The forecast changed overnight. The **versioned** envelope shows exactly why:
+
+![Figure 36.4 — the versioning case](e6-case-version.png)
+
+*Figure 36.4 — two versions differ by one input, and the difference is reproducible.*
+
+```
+forecast v1 (old weather):  M+1 bearish
+forecast v2 (new weather):  M+1 bullish   ← the cold revision
+```
+
+Because data and models are versioned, the change in the view is *attributable* to the change
+in the input — not to a mystery. A PM can show the trader, the risk team and the client
+exactly why the book changed.
+
+## 36.5 Freshness — "the stale storage number"
+
+The envelope's **TTL** and the freshness interceptor refuse a stale input:
+
+```
+model.decision M+1 long
+  → freshness interceptor: REFUSED
+    reason: storage ref 32h old (max 15m)
+```
+
+A terminal would let you trade on a number you *think* is live. The envelope refuses to. For a
+market where a storage print or a weather run is the whole trade, that freshness gate is the
+difference between an informed position and a stale one.
+
+---
+
+# 37. The curve trader's day, with ATLAS
+
+![Figure 37.1 — the curve trader on ATLAS](e7-curve-trader.png)
+
+*Figure 37.1 — the slow fundamental edge, on a platform that records it.*
+
+| The curve trader does | ATLAS provides |
+|---|---|
+| reads the balance, storage, weather | fused envelopes, with lineage |
+| forms a slow view (summer-winter, basis) | the intel window confirms the pattern |
+| expresses it via spreads | orders + fills on the bus |
+| holds for weeks | every mark, every P&L, recorded |
+| explains the P&L to the PM | the correlation chain + the case file |
+
+A long-term curve trader does not need a faster terminal. They need a **system that remembers
+why they are in the trade, proves it, and replays it.** That is ATLAS, and that is the envelope.
