@@ -1,0 +1,812 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: A4 landscape; margin: 11mm 14mm 14mm 14mm; }
+html, body { margin: 0; padding: 0; }
+body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.42; }
+h1 { color: #1F4E79; font-size: 16pt; break-before: page; break-after: avoid-page; page-break-before: always; page-break-after: avoid; }
+h2 { color: #1F4E79; font-size: 12pt; break-after: avoid-page; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; font-size: 8.5pt; page-break-inside: avoid; }
+th { background: #1F4E79; color: #ffffff; font-weight: bold; padding: 4px 6px; text-align: left; }
+td { border: 1px solid #d0d7e2; padding: 3px 6px; }
+img { max-width: 100%; }
+em { color: #596370; font-size: 8pt; }
+pre { background: #F1F3F6; font-family: Courier, monospace; font-size: 8pt; padding: 6px; }
+blockquote { border-left: 3px solid #1F4E79; margin-left: 0; padding-left: 12px; color: #444; }
+section.fig { break-inside: avoid; page-break-inside: avoid; margin: 10px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+section.fig img { max-width: 100%; max-height: 55vh; }
+section.fig em { margin-top: 6px; text-align: center; }
+</style></head><body><h1>Trading UK Gas — a deep dive</h1>
+<h2>NBP market mechanics, the famous trades, and the strategies that worked</h2>
+<blockquote>
+<p>A deep, factual tour of UK natural-gas trading: the NBP balance, the weather and storage
+drivers, the 2021–22 shock, the Amaranth blow-up, and the strategies that real funds have
+used — then how AI changes all of it, now and next.</p>
+</blockquote>
+<hr>
+<h1>1. The market — NBP in one breath</h1>
+<p>The <strong>NBP</strong> (National Balancing Point) is the UK's virtual gas hub: the single price at which
+UK gas trades, quoted in <strong>pence per therm</strong> (p/th). One therm ≈ 29.3 kWh. It is the physical
+and financial reference for the whole UK gas market.</p>
+<p>The NBP price is a <strong>balance</strong>: supply against weather-driven demand, buffered by storage.</p>
+<section class="fig"><img src="u1-balance.png" alt="Figure 1.1 — the NBP balance">
+<p><em>Figure 1.1 — Norway, UKCS, LNG and interconnectors supply; power, heating, industry and exports demand.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Fact</th>
+<th>Number</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UK gas demand</td>
+<td>~70–80 bcm/year</td>
+</tr>
+<tr>
+<td>price unit</td>
+<td>pence per therm (p/th)</td>
+</tr>
+<tr>
+<td>hub</td>
+<td>NBP (virtual)</td>
+</tr>
+<tr>
+<td>traded</td>
+<td>day-ahead, M+1, season, winter, forwards</td>
+</tr>
+</tbody>
+</table>
+<p>The market clears every gas day, and the price is set by the <em>marginal</em> unit of supply or
+demand — exactly like the power merit order, but for molecules.</p>
+<hr>
+<h1>2. Supply — where the gas comes from</h1>
+<p>UK gas supply has four legs, and they matter because they are the <em>shocks</em>:</p>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Share (approx.)</th>
+<th>What shocks it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Norway pipeline</strong></td>
+<td>~45%</td>
+<td>outages, maintenance (Kollsnes, Troll)</td>
+</tr>
+<tr>
+<td><strong>UKCS (North Sea)</strong></td>
+<td>~25%, declining</td>
+<td>field decline, unplanned outages</td>
+</tr>
+<tr>
+<td><strong>LNG</strong> (Milford Haven, Isle of Grain)</td>
+<td>~20%, swing</td>
+<td>Asian premium, cargo diversion</td>
+</tr>
+<tr>
+<td><strong>interconnectors</strong> (IUK to Belgium, BBL to NL)</td>
+<td>net exporter/importer</td>
+<td>European demand, price spreads</td>
+</tr>
+</tbody>
+</table>
+<p>Norway is the single largest source — a Norwegian outage is the classic bullish event. LNG is
+the <em>swing</em>: when Asia pays up, cargoes divert and the UK tightens. The interconnectors link
+NBP to TTF (Dutch) and make the UK part of one European gas system.</p>
+<hr>
+<h1>3. Demand — where the gas goes</h1>
+<table>
+<thead>
+<tr>
+<th>Use</th>
+<th>Driver</th>
+<th>Volatility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>power generation</strong></td>
+<td>gas-fired power, wind/solar output</td>
+<td>high, weather</td>
+</tr>
+<tr>
+<td><strong>residential + commercial heating</strong></td>
+<td>HDD (temperature)</td>
+<td>high, winter</td>
+</tr>
+<tr>
+<td><strong>industrial</strong></td>
+<td>economic activity</td>
+<td>low</td>
+</tr>
+<tr>
+<td><strong>exports</strong> (IUK/BBL)</td>
+<td>European prices</td>
+<td>high, event</td>
+</tr>
+</tbody>
+</table>
+<p>Heating and power burn are the weather-driven core. A cold winter day can nearly double
+demand from a mild one. That is why UK gas is a <strong>weather market</strong> first and foremost.</p>
+<hr>
+<h1>4. Storage — the UK's structural weakness</h1>
+<p>The UK has <strong>very little gas storage</strong> — roughly <strong>9 days</strong> of demand, versus ~80 days for
+Germany. This is the single most important structural fact about NBP:</p>
+<section class="fig"><img src="u2-storage.png" alt="Figure 4.1 — the storage cycle">
+<p><em>Figure 4.1 — inject in summer, withdraw in winter; the UK is structurally short storage.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Fact</th>
+<th>Number</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UK storage</td>
+<td>~9 days of demand</td>
+</tr>
+<tr>
+<td>Germany</td>
+<td>~80 days</td>
+</tr>
+<tr>
+<td>Rough (largest, closed 2017, partly reopened)</td>
+<td>~3.3 bcm</td>
+</tr>
+<tr>
+<td>consequence</td>
+<td>NBP is <strong>more volatile</strong> + weather-sensitive than TTF</td>
+</tr>
+</tbody>
+</table>
+<p>Because the UK cannot store its way through a cold winter, <strong>the market is the storage</strong> —
+prices must move sharply to ration demand and attract LNG. That is the structural source of
+the UK's winter price spikes.</p>
+<hr>
+<h1>5. The seasonal structure — summer vs winter</h1>
+<p>Gas has a <em>built-in</em> seasonal rhythm: inject in summer (cheap), withdraw in winter (dear).
+The <strong>summer-winter spread</strong> is the price of storage plus a risk premium.</p>
+<section class="fig"><img src="u3-seasonal.png" alt="Figure 5.1 — the summer-winter spread">
+<p><em>Figure 5.1 — the winter premium is the cost of carry plus the risk of a cold, tight winter.</em></p></section>
+<p>The spread is the most-traded structure in gas. It <em>should</em> be bounded by storage economics
+(inject now, withdraw later, earn the spread) — but it blew out dramatically in 2021–22 when
+storage was low and the risk premium exploded.</p>
+<hr>
+<h1>6. Weather — the driver</h1>
+<p>Weather is the single biggest short-term driver. The measure is <strong>HDD</strong> (heating degree days):
+each degree below a baseline (15.5°C) is one unit of heating demand.</p>
+<section class="fig"><img src="u4-weather.png" alt="Figure 6.1 — weather to demand">
+<p><em>Figure 6.1 — cold raises demand and price; mild does the reverse.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>cold snap (&quot;Beast from the East&quot; 2018)</td>
+<td>demand spike, price spike</td>
+</tr>
+<tr>
+<td>mild winter</td>
+<td>demand soft, price soft</td>
+</tr>
+<tr>
+<td>forecast revision (colder)</td>
+<td>price jumps on the revision</td>
+</tr>
+</tbody>
+</table>
+<p>The edge in UK gas is often the <strong>weather forecast revision</strong>, not the weather itself — the
+trader who sizes the <em>change in the forecast</em> faster wins.</p>
+<hr>
+<h1>7. Geopolitics — the 2021–22 shock</h1>
+<p>The defining gas event of the era:</p>
+<section class="fig"><img src="u5-crisis.png" alt="Figure 7.1 — the 2021–22 crisis">
+<p><em>Figure 7.1 — Russia's invasion cut pipeline gas, Europe scrambled for LNG, prices exploded.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th>Event</th>
+<th>NBP/TTF</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>early 2021</td>
+<td>tight storage, cold winter</td>
+<td>~40–50 p/th</td>
+</tr>
+<tr>
+<td>late 2021</td>
+<td>Russia curtails flows</td>
+<td>~200+ p/th</td>
+</tr>
+<tr>
+<td>Feb 2022</td>
+<td>invasion of Ukraine</td>
+<td>spike</td>
+</tr>
+<tr>
+<td>Aug 2022</td>
+<td>peak panic, LNG diversion</td>
+<td><strong>~500–600+ p/th</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The lesson: <strong>gas is a geopolitical commodity.</strong> A supply shock to a low-storage system with
+little spare capacity is not a 20% move — it is a 10× move. The funds that were <em>long the
+winter / long storage</em> ahead of 2021–22 made the trade of the decade.</p>
+<hr>
+<h1>8. The famous trades — what worked and what blew up</h1>
+<h2>8.1 Amaranth (2006) — the calendar-spread blow-up</h2>
+<p>Amaranth's Brian Hunter bet huge on <strong>natural-gas calendar spreads</strong> (long winter / short
+summer, and the March-April and Nov-Jan spreads). In September 2006 the spreads moved against
+the position and Amaranth lost <strong>~$6 billion in a week</strong> — the largest hedge-fund collapse to
+that date. The CFTC later charged Hunter with attempted manipulation of gas futures.</p>
+<section class="fig"><img src="u6-amaranth.png" alt="Figure 8.1 — the Amaranth blow-up">
+<p><em>Figure 8.1 — one over-sized spread position, one adverse move, $6bn gone.</em></p></section>
+<p><strong>The lesson is not &quot;don't trade spreads&quot; — it is &quot;size the spread, know its liquidity, and
+never let one position be the fund.&quot;</strong> The calendar spread is a <em>good trade</em>; the Amaranth
+mistake was the <em>size</em> and the <em>concentration</em>.</p>
+<h2>8.2 The 2021–22 winners</h2>
+<p>The funds that won the crisis were <strong>long winter gas, long the storage premium, and long the
+tail</strong> — via the curve and options. They read the fundamentals (low storage + tight LNG +
+Russia risk) and positioned <em>before</em> the spike. That is fundamental, option-shaped trading:
+<strong>buy the tail, not the point.</strong></p>
+<hr>
+<h1>9. The strategies that have worked</h1>
+<h2>9.1 Weather-driven (the Centaurus / John Arnold play)</h2>
+<section class="fig"><img src="u7-strategy-weather.png" alt="Figure 9.1 — the weather strategy">
+<p><em>Figure 9.1 — buy the cold forecast, sell into the cold.</em></p></section>
+<p>The classic: on a colder forecast revision, <strong>long M+1 / winter</strong>; when the cold arrives and
+the price spikes, <strong>sell into it</strong>. John Arnold at Centaurus built his fortune on weather-driven
+gas trading — reading the forecast faster and better than the market.</p>
+<h2>9.2 Storage-based (the fundamental long)</h2>
+<section class="fig"><img src="u8-strategy-storage.png" alt="Figure 9.2 — the storage strategy">
+<p><em>Figure 9.2 — low storage + tight LNG = bullish into winter.</em></p></section>
+<p>When storage is below the 5-year average going into winter, the winter premium is underpriced.
+<strong>Long winter / Q1</strong>, and revalue as storage refills or weather turns mild.</p>
+<h2>9.3 The calendar spread (sized right)</h2>
+<section class="fig"><img src="u9-strategy-spread.png" alt="Figure 9.3 — the spread trade">
+<p><em>Figure 9.3 — trade the spread against its storage-cost anchor.</em></p></section>
+<p>The spread is the same instrument Amaranth used — but the discipline is the <em>anchor</em>: the
+spread should not exceed the cost of storage plus a <em>reasonable</em> risk premium. When it does,
+it is rich; sell it. When it is below, buy it.</p>
+<h2>9.4 The basis — NBP vs TTF</h2>
+<section class="fig"><img src="u10-strategy-basis.png" alt="Figure 9.4 — the basis trade">
+<p><em>Figure 9.4 — the NBP-TTF spread is bounded by interconnector capacity.</em></p></section>
+<p>NBP and TTF are linked by the IUK and BBL interconnectors. When the spread exceeds transport
+cost, the flow arbitrages it away. Trade the <em>convergence</em>.</p>
+<h2>9.5 The spark spread — gas vs power</h2>
+<section class="fig"><img src="u11-strategy-spark.png" alt="Figure 9.5 — the spark spread">
+<p><em>Figure 9.5 — power minus gas and carbon; trade the plant margin.</em></p></section>
+<p>The spark spread ties gas to power. When a gas plant is profitable (spread rich), power is
+bid up relative to gas; when it is losing (spread negative), gas is bid up relative to power.
+Trade the mean reversion.</p>
+<hr>
+<h1>10. The risk lessons</h1>
+<section class="fig"><img src="u12-risk.png" alt="Figure 10.1 — the risk controls">
+<p><em>Figure 10.1 — concentration, margin, liquidity, limits and the tail, all before the governor.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Lesson</th>
+<th>Source</th>
+<th>Control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>concentration kills</td>
+<td>Amaranth</td>
+<td>one spread ≠ one fund; limits</td>
+</tr>
+<tr>
+<td>spreads are illiquid</td>
+<td>Amaranth</td>
+<td>size to the book, not the view</td>
+</tr>
+<tr>
+<td>the tail is the risk</td>
+<td>2021–22</td>
+<td>options + stress, buy the tail</td>
+</tr>
+<tr>
+<td>margin calls are real</td>
+<td>2021–22</td>
+<td>free-margin gate before every order</td>
+</tr>
+<tr>
+<td>weather is optionality</td>
+<td>2018</td>
+<td>trade the forecast, hedge the miss</td>
+</tr>
+</tbody>
+</table>
+<p>The envelope's governor is built exactly for this: <strong>refuse with a rule and a number</strong>, before
+the trade, while it can still be refused.</p>
+<hr>
+<h1>11. How AI shapes gas trading — now and next</h1>
+<p><strong>What it does.</strong> AI turns the same data a trader reads — price, weather, storage, flows,
+news — into <em>forecasts</em> and <em>signals</em> that are faster, more systematic and more probabilistic
+than a human alone.</p>
+<p><strong>Why it matters.</strong> Gas is a data-rich, weather-driven, event-driven market. The edge is in
+<em>fusing</em> many weak signals (a cold forecast, a low storage number, a pipeline outage headline)
+into one strong, probability-weighted view — which is exactly what machine learning is good at.</p>
+<section class="fig"><img src="a1-stack.png" alt="Figure 11.1 — the AI stack">
+<p><em>Figure 11.1 — data → features → ML models → signals → advisor / auto / human.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>What AI does</th>
+<th>Human's role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>data</td>
+<td>ingest + clean</td>
+<td>verify sources</td>
+</tr>
+<tr>
+<td>models</td>
+<td>forecast, classify, rank</td>
+<td>choose features, judge sanity</td>
+</tr>
+<tr>
+<td>signals</td>
+<td>produce a probability</td>
+<td>override, size, approve</td>
+</tr>
+<tr>
+<td>decision</td>
+<td>recommend</td>
+<td>own the risk</td>
+</tr>
+</tbody>
+</table>
+<p>The human does not disappear — the human moves <em>up</em> the stack, from computing to supervising.</p>
+<hr>
+<h1>12. Modelling — machine-learning price forecasts</h1>
+<p><strong>What it does.</strong> Predicts the price (or the direction) of a contract — M+1, the winter, the
+summer-winter spread — from a feature vector.</p>
+<p><strong>Why it matters.</strong> The gas price is a function of <em>many</em> interacting inputs (HDD, storage,
+LNG, curve shape). ML finds the mapping where a hand-written formula would miss it.</p>
+<section class="fig"><img src="a2-ml-forecast.png" alt="Figure 12.1 — the ML forecast pipeline">
+<p><em>Figure 12.1 — features in, a price forecast out, with uncertainty.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Strength</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>gradient boosting (XGBoost/LightGBM)</td>
+<td>tabular, interpretable</td>
+<td>the workhorse — daily balance</td>
+</tr>
+<tr>
+<td>LSTM / temporal</td>
+<td>sequences, memory</td>
+<td>demand over hours</td>
+</tr>
+<tr>
+<td>transformer</td>
+<td>long-range, attention</td>
+<td>news + price, multi-horizon</td>
+</tr>
+</tbody>
+</table>
+<p>The honest forecast is not a point — it is a <strong>distribution</strong>. A forecast of &quot;M+1 at 120 p/th
+± 15&quot; is tradeable; a forecast of &quot;120&quot; is a guess.</p>
+<hr>
+<h1>13. Probabilistic forecasting — trade the distribution</h1>
+<p><strong>What it does.</strong> Forecasts quantiles (q05, q50, q95), not a single number.</p>
+<p><strong>Why it matters.</strong> The <em>asymmetry</em> is the trade. If the q95 is +40% but the q05 is −5%, the
+risk-reward is asymmetric and you size differently than a symmetric point forecast would say.</p>
+<section class="fig"><img src="a3-probabilistic.png" alt="Figure 13.1 — the probabilistic signal">
+<p><em>Figure 13.1 — quantiles give the upside/downside asymmetry, and you trade the tail.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Forecast</th>
+<th>What it tells you</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>q50 (median)</td>
+<td>the central view</td>
+<td>the base position</td>
+</tr>
+<tr>
+<td>q05</td>
+<td>the downside</td>
+<td>the stop / the hedge</td>
+</tr>
+<tr>
+<td>q95</td>
+<td>the upside</td>
+<td>the tail to buy</td>
+</tr>
+</tbody>
+</table>
+<p>This is where ML beats a rule: a rule says &quot;cold → bullish&quot;; a probabilistic model says
+&quot;cold → bullish with 70% confidence and a fat right tail&quot;.</p>
+<hr>
+<h1>14. Weather-to-demand modelling</h1>
+<p><strong>What it does.</strong> Maps a weather forecast (temperature, wind) to gas and power demand.</p>
+<p><strong>Why it matters.</strong> Weather is the single biggest short-term driver of gas demand — heating in
+winter, power burn. The model that maps degrees to therms is the foundation of every forecast.</p>
+<section class="fig"><img src="a4-weather-ml.png" alt="Figure 14.1 — weather to demand">
+<p><em>Figure 14.1 — ECMWF/GFS temperature → HDD → demand → price impact.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Feature</th>
+<th>Model</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>temperature</td>
+<td>HDD (heating degree days)</td>
+<td>demand regression / ML</td>
+</tr>
+<tr>
+<td>wind</td>
+<td>wind power output</td>
+<td>power burn → gas demand</td>
+</tr>
+<tr>
+<td>solar</td>
+<td>solar output</td>
+<td>same</td>
+</tr>
+</tbody>
+</table>
+<p>Heating degree days are the workhorse: one degree below a baseline is one unit of heating
+demand, aggregated over population and buildings. The ML version learns the <em>non-linearity</em>
+(extreme cold is worse than linear).</p>
+<hr>
+<h1>15. News and NLP — the event edge</h1>
+<p><strong>What it does.</strong> Reads the wires and social in real time and turns them into <em>events</em> — a
+pipeline outage, an LNG cargo diversion, a sanction, a strike.</p>
+<p><strong>Why it matters.</strong> The biggest gas moves are event-driven (a pipeline cut, an invasion). The
+trader who learns of the event seconds faster — and sizes it correctly — has the edge.</p>
+<section class="fig"><img src="a5-news-nlp.png" alt="Figure 15.1 — news to signal">
+<p><em>Figure 15.1 — NLP detects the event, the event becomes a signal with an expiry.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Typical market impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>pipeline outage</td>
+<td>bullish (supply cut)</td>
+</tr>
+<tr>
+<td>LNG cargo cancelled</td>
+<td>bullish (supply short)</td>
+</tr>
+<tr>
+<td>mild weather revision</td>
+<td>bearish (demand soft)</td>
+</tr>
+<tr>
+<td>storage beat</td>
+<td>bearish (looser)</td>
+</tr>
+</tbody>
+</table>
+<p>NLP turns unstructured text into a <em>typed event with an expiry</em> — the signal is &quot;bearish
+M+1, 2-day horizon&quot;, not just &quot;negative news&quot;.</p>
+<hr>
+<h1>16. Sentiment — the positioning edge</h1>
+<p><strong>What it does.</strong> Scores the tone of news and the positioning of the market (CFTC-style
+commitments, option skew, flows).</p>
+<p><strong>Why it matters.</strong> When everyone is already long, the marginal buyer is gone — sentiment is
+the contrarian and the momentum signal at once.</p>
+<section class="fig"><img src="a6-sentiment.png" alt="Figure 16.1 — sentiment fusion">
+<p><em>Figure 16.1 — news tone + positioning fuse into a sentiment-adjusted signal.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Sentiment</th>
+<th>Reading</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>crowded long</td>
+<td>exhaustion risk</td>
+<td>fade the longs</td>
+</tr>
+<tr>
+<td>crowded short</td>
+<td>squeeze risk</td>
+<td>fade the shorts</td>
+</tr>
+<tr>
+<td>neutral + fundamentals</td>
+<td>clean signal</td>
+<td>follow the fundamentals</td>
+</tr>
+</tbody>
+</table>
+<p>Sentiment is a <em>weight</em>, not a direction — it tells you how much to trust the fundamental
+signal, and when a move is over-extended.</p>
+<hr>
+<h1>17. The LLM research agent</h1>
+<p><strong>What it does.</strong> A large-language-model agent that reads the lake, the news and the models,
+and <em>answers questions with evidence</em>.</p>
+<p><strong>Why it matters.</strong> The platform already records everything as envelopes. An LLM agent can
+read that record and explain a move — and, crucially, <em>cite the envelopes</em> as evidence.</p>
+<section class="fig"><img src="a7-llm-agent.png" alt="Figure 17.1 — the LLM agent">
+<p><em>Figure 17.1 — a question in, a cited answer out.</em></p></section>
+<blockquote>
+<p>&quot;Why is NBP up today?&quot; → &quot;Cold revision (+4 HDD) and a Norwegian outage (Kollsnes, −30 mcm/d),
+against storage at 60% (below 5yr avg). See envelopes #…, #…, #….&quot;</p>
+</blockquote>
+<p>The LLM does not replace the models — it <em>narrates</em> them, and it makes the advisory
+self-explanatory for compliance and for the human.</p>
+<hr>
+<h1>18. Reinforcement learning — execution and market-making</h1>
+<p><strong>What it does.</strong> Learns <em>how to act</em> (order size, timing, venue) to maximise a reward
+(slippage, fill, PnL).</p>
+<p><strong>Why it matters.</strong> Forecasting is &quot;what&quot;; execution is &quot;how&quot;. A good forecast ruined by bad
+execution is a loss. RL optimises the <em>how</em>.</p>
+<section class="fig"><img src="a8-rl-exec.png" alt="Figure 18.1 — the RL execution loop">
+<p><em>Figure 18.1 — state → action → reward, learned end to end.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Use</th>
+<th>State</th>
+<th>Action</th>
+<th>Reward</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>execution</td>
+<td>book, curve, vol</td>
+<td>order size + timing</td>
+<td>−slippage, fill</td>
+</tr>
+<tr>
+<td>market-making</td>
+<td>inventory, spread</td>
+<td>quote</td>
+<td>spread PnL − inventory risk</td>
+</tr>
+</tbody>
+</table>
+<p>RL is the future of the <em>tactics</em>, while the <em>strategy</em> (what to be long or short) remains
+the fundamental and ML models.</p>
+<hr>
+<h1>19. Generative models — scenarios and the tail</h1>
+<p><strong>What it does.</strong> Generates <em>synthetic</em> scenarios — cold snaps, pipeline cuts, LNG booms —
+for stress and training.</p>
+<p><strong>Why it matters.</strong> The tail is where the money and the risk are. A generative model can
+<em>sample</em> the tails that history has not yet shown, so you train and stress for the 1-in-50
+winter, not just the 1-in-5.</p>
+<section class="fig"><img src="a9-generative.png" alt="Figure 19.1 — generative scenarios">
+<p><em>Figure 19.1 — scenarios feed stress tests and tail-aware training.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Use</th>
+<th>What it gives</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>stress / VaR</td>
+<td>the tail losses</td>
+</tr>
+<tr>
+<td>training</td>
+<td>models that have seen the extreme</td>
+</tr>
+</tbody>
+</table>
+<p>This is the answer to &quot;what happens if we get another 2022&quot;: you generate it, and you size
+for it.</p>
+<hr>
+<h1>20. Multi-agent systems on the envelope</h1>
+<p><strong>What it does.</strong> Runs many specialised agents — weather, fundamental, news, sentiment — each
+publishing on the bus, and a meta-agent that fuses them into a tier.</p>
+<p><strong>Why it matters.</strong> This is the AI version of the architecture we already built: each agent
+is a calculation agent, the bus is the nervous system, the meta-agent is the book's intel
+window. AI slots <em>into</em> the envelope, it does not replace it.</p>
+<section class="fig"><img src="a10-multi-agent.png" alt="Figure 20.1 — the multi-agent system">
+<p><em>Figure 20.1 — weather, fundamental, news, sentiment agents → bus → meta-agent → trade.</em></p></section>
+<p>The envelope architecture was built for this: <strong>models publish numbers, the book accumulates
+them and confirms a pattern.</strong> AI models are just more, and better, numbers.</p>
+<hr>
+<h1>21. Human-in-the-loop</h1>
+<p><strong>What it does.</strong> Keeps a human in the decision — the AI proposes, the human sizes, approves,
+vetoes — and records who did what.</p>
+<p><strong>Why it matters.</strong> Regulation (MiFID II, suitability) and risk demand accountability. The AI
+can be wrong in ways a human catches (a headline the model mis-read, a tail it has not seen).
+The human is the <em>guardian</em>, and the envelope records the override.</p>
+<section class="fig"><img src="a11-human-loop.png" alt="Figure 21.1 — the human-in-the-loop">
+<p><em>Figure 21.1 — AI signal → human override or auto → audit of who + why.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Human's role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>advisory</td>
+<td>human reads the AI view</td>
+</tr>
+<tr>
+<td>systematic</td>
+<td>human approves the rules</td>
+</tr>
+<tr>
+<td>auto</td>
+<td>human sets the bounds, AI executes within them</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h1>22. The data stack for AI</h1>
+<p><strong>What it does.</strong> The pipeline from raw data to a deployed agent.</p>
+<p><strong>Why it matters.</strong> AI is only as good as the data. The stack — clean, align, feature, train,
+validate, deploy — is where most AI projects fail, and where the envelope helps: every stage
+is a stamped, versioned artefact.</p>
+<section class="fig"><img src="a13-data-stack.png" alt="Figure 22.1 — the data stack">
+<p><em>Figure 22.1 — raw → clean → features → train → deploy, looping.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Envelope role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>raw</td>
+<td>recorded as market/fundamental envelopes</td>
+</tr>
+<tr>
+<td>features</td>
+<td>a derived dataset, versioned</td>
+</tr>
+<tr>
+<td>train</td>
+<td>a model artefact, versioned</td>
+</tr>
+<tr>
+<td>deploy</td>
+<td>an agent that publishes signals</td>
+</tr>
+</tbody>
+</table>
+<p>Versioned data + versioned models = a forecast you can reproduce, which is the same
+traceability the trading platform already guarantees.</p>
+<hr>
+<h1>23. Ensembles and signal fusion</h1>
+<p><strong>What it does.</strong> Combines the fundamental, ML, weather and sentiment models into one signal
+with a confidence.</p>
+<p><strong>Why it matters.</strong> No single model is right all the time. The ensemble is more robust than
+the best single model — it is the <em>pattern</em> of agreement that matters, exactly like the
+book's intel window.</p>
+<section class="fig"><img src="a14-ensemble.png" alt="Figure 23.1 — the ensemble">
+<p><em>Figure 23.1 — four models fuse into one tier signal with confidence.</em></p></section>
+<section class="fig"><img src="a15-signal-fusion.png" alt="Figure 23.2 — the weighted fusion">
+<p><em>Figure 23.2 — fundamental + ML + sentiment → probability → decision.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Fusion</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>voting</td>
+<td>count agreeing models</td>
+</tr>
+<tr>
+<td>weighted</td>
+<td>weight by track record</td>
+</tr>
+<tr>
+<td>stacked</td>
+<td>a meta-model learns the weights</td>
+</tr>
+</tbody>
+</table>
+<p>The tier signal is the <em>confidence</em> — and confidence is what separates a trade from a gamble.</p>
+<hr>
+<h1>24. Now → next → future</h1>
+<section class="fig"><img src="a12-now-future.png" alt="Figure 24.1 — the AI timeline">
+<p><em>Figure 24.1 — ML forecasts today, LLM agents + RL next, autonomous desks later.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Horizon</th>
+<th>Capability</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>now</td>
+<td>ML price/demand forecasts, NLP news, sentiment</td>
+</tr>
+<tr>
+<td>next</td>
+<td>LLM research agents, RL execution, generative scenarios</td>
+</tr>
+<tr>
+<td>future</td>
+<td>autonomous multi-agent desks, human as supervisor</td>
+</tr>
+</tbody>
+</table>
+<p>The direction is clear: the human moves from <em>computing</em> to <em>supervising</em>, and the platform —
+with its envelope, its bus, its audit trail — is already built to host that future.</p>
+<hr>
+<h1>25. Governance — the risks of AI trading</h1>
+<p><strong>What it does.</strong> Governs the AI like it governs any model: versioned, validated, bounded,
+and accountable.</p>
+<p><strong>Why it matters.</strong> An AI that trades gas can fail silently (a drift in the weather model) or
+loudly (a mis-read headline). The same controls that apply to any model apply to AI — plus
+new ones.</p>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>model drift</td>
+<td>monitor forecast error, retrain on schedule</td>
+</tr>
+<tr>
+<td>hallucination (LLM)</td>
+<td>cite envelopes, never invent a fact</td>
+</tr>
+<tr>
+<td>overfitting</td>
+<td>validate out-of-sample, walk-forward</td>
+</tr>
+<tr>
+<td>tail blindness</td>
+<td>generative stress, size for the tail</td>
+</tr>
+<tr>
+<td>opacity</td>
+<td>a reason for every signal, a human override</td>
+</tr>
+</tbody>
+</table>
+<p>The envelope is the answer to all of them: <strong>every signal carries a reason, a timestamp and a
+provenance, and every decision is auditable.</strong> AI does not change that — it makes it more
+necessary.</p>
+</body></html>
