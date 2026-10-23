@@ -1,0 +1,493 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: A4 landscape; margin: 11mm 14mm 14mm 14mm; }
+html, body { margin: 0; padding: 0; }
+body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.42; }
+h1 { color: #1F4E79; font-size: 16pt; break-before: page; break-after: avoid-page; page-break-before: always; page-break-after: avoid; }
+h2 { color: #1F4E79; font-size: 12pt; break-after: avoid-page; page-break-after: avoid; }
+h3 { color: #596370; font-size: 10.5pt; break-after: avoid-page; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; font-size: 8.5pt; page-break-inside: avoid; }
+th { background: #1F4E79; color: #ffffff; font-weight: bold; padding: 4px 6px; text-align: left; }
+td { border: 1px solid #d0d7e2; padding: 3px 6px; }
+img { max-width: 100%; }
+em { color: #596370; font-size: 8pt; }
+pre { background: #F1F3F6; font-family: Courier, monospace; font-size: 8pt; padding: 6px; }
+blockquote { border-left: 3px solid #1F4E79; margin-left: 0; padding-left: 12px; color: #444; }
+section.fig { break-inside: avoid; page-break-inside: avoid; margin: 10px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+section.fig img { max-width: 100%; max-height: 55vh; }
+section.fig em { margin-top: 6px; text-align: center; }
+</style></head><body><h1>CryptAlyst Futures — a dedicated platform</h1>
+<h2>Reusing ATLAS + the envelope; rebuilding everything above the bus</h2>
+<blockquote>
+<p>Architectural plan for a <strong>futures and commodities</strong> trading platform — energy,
+metals, agriculture, rates — built on the same operating system as the crypto
+platform (the envelope, the bus, the decoupled model→signal→book→strategy), but
+with a new futures domain on top: instruments, forward curves, margin, FIX,
+compliance, and fundamental modelling.</p>
+</blockquote>
+<hr>
+<h1>1. The advice, stated plainly</h1>
+<p><strong>Do not extend the crypto platform. Build a new platform that reuses its core.</strong></p>
+<p>The envelope and ATLAS are <em>market-agnostic</em>. A packet is a packet — the bus does not
+know or care whether it carries a BTCUSDT depth tick or a Henry Hub natural-gas forward
+curve. That is precisely why the core carries over unchanged.</p>
+<p>What must be new is <strong>everything above the bus</strong>: the instruments, the data, the models,
+the execution, the risk and the compliance. Futures are not crypto, and the differences
+are structural:</p>
+<table>
+<thead>
+<tr>
+<th>Crypto (spot)</th>
+<th>Futures</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>single asset, no expiry</td>
+<td>an <strong>underlying</strong> + an <strong>expiry</strong> + a <strong>roll</strong></td>
+</tr>
+<tr>
+<td>one spot price</td>
+<td>a <strong>forward curve</strong> and <strong>basis</strong></td>
+</tr>
+<tr>
+<td>perpetual funding</td>
+<td><strong>margin</strong> (initial/variation) and <strong>margin calls</strong></td>
+</tr>
+<tr>
+<td>unregulated, un-cleared</td>
+<td><strong>cleared</strong>, <strong>FIX</strong>, <strong>MiFID II / EMIR</strong></td>
+</tr>
+</tbody>
+</table>
+<section class="fig"><img src="f1-platform.png" alt="Figure 1.1 — the futures platform on the envelope core">
+<p><em>Figure 1.1 — the envelope/bus/model/book/lake core is reused; the futures domain is built new.</em></p></section>
+<hr>
+<h1>2. The planes — the futures domain</h1>
+<p>The crypto platform has five planes. The futures platform adds or reshapes them:</p>
+<section class="fig"><img src="f2-planes.png" alt="Figure 2.1 — the futures planes">
+<p><em>Figure 2.1 — market, instrument, fundamental, margin, exec, compliance, risk.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Plane</th>
+<th>What it carries</th>
+<th>New or adapted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>market</code></td>
+<td>curve, settlement, depth, spread</td>
+<td>adapted (curve, not spot)</td>
+</tr>
+<tr>
+<td><code>instrument</code></td>
+<td>contract spec, calendar, roll</td>
+<td><strong>new</strong></td>
+</tr>
+<tr>
+<td><code>fundamental</code></td>
+<td>supply/demand, weather, politics, grid</td>
+<td><strong>new</strong></td>
+</tr>
+<tr>
+<td><code>margin</code></td>
+<td>IM, VM, calls, limits</td>
+<td><strong>new</strong></td>
+</tr>
+<tr>
+<td><code>exec</code></td>
+<td>FIX order, fill, allocation</td>
+<td><strong>new</strong></td>
+</tr>
+<tr>
+<td><code>compliance</code></td>
+<td>MiFID II, EMIR, reports</td>
+<td><strong>new</strong></td>
+</tr>
+<tr>
+<td><code>risk</code></td>
+<td>exposure, stress, gap</td>
+<td>adapted</td>
+</tr>
+</tbody>
+</table>
+<p>Every one of these is a <em>producer of envelopes</em> on the same bus. The model, book and
+strategy layers subscribe exactly as they do today — they just consume futures data.</p>
+<hr>
+<h1>3. Instrument reference data</h1>
+<p>Futures cannot be traded without knowing <em>what a contract is</em>. The instrument domain is
+the single source of truth for every contract:</p>
+<section class="fig"><img src="f3-instrument.png" alt="Figure 3.1 — the contract spec">
+<p><em>Figure 3.1 — symbol, underlying, multiplier, tick, expiry, calendar, limits.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Example</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>symbol / exchange</td>
+<td>CL (CME), TTF (ICE), F (EEX)</td>
+<td>the address of the contract</td>
+</tr>
+<tr>
+<td>underlying</td>
+<td>WTI crude, Dutch gas, copper</td>
+<td>what you are actually exposed to</td>
+</tr>
+<tr>
+<td>multiplier / tick</td>
+<td>1,000 bbl × $0.01</td>
+<td>the P&amp;L per tick</td>
+</tr>
+<tr>
+<td>expiry / delivery</td>
+<td>M1 … M12, last trade date</td>
+<td>when the contract rolls</td>
+</tr>
+<tr>
+<td>calendar / roll</td>
+<td>roll dates, holidays</td>
+<td>how the curve is built and rolled</td>
+</tr>
+<tr>
+<td>limits</td>
+<td>position, reportable</td>
+<td>regulatory + exchange caps</td>
+</tr>
+</tbody>
+</table>
+<p>The instrument domain is the <em>reference data problem</em> in miniature — and in a futures
+platform it is the foundation every other component keys off.</p>
+<hr>
+<h1>4. Market data — the forward curve</h1>
+<p>Futures price is not a single number. It is a <strong>curve</strong>: one price per delivery month.
+And the shape of that curve is itself the signal.</p>
+<section class="fig"><img src="f4-curve.png" alt="Figure 4.1 — the forward curve and basis">
+<p><em>Figure 4.1 — contango and backwardation are the market's opinion of carry and scarcity.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>contango</td>
+<td>futures above spot — cost of carry (storage, interest)</td>
+</tr>
+<tr>
+<td>backwardation</td>
+<td>futures below spot — scarcity or convenience yield</td>
+</tr>
+<tr>
+<td>basis</td>
+<td>future − spot</td>
+</tr>
+<tr>
+<td>calendar spread</td>
+<td>the price of one month vs the next (M1−M2)</td>
+</tr>
+<tr>
+<td>crack / spark</td>
+<td>refining / power-generation margins</td>
+</tr>
+</tbody>
+</table>
+<p>To <em>work out the price — flat or forward</em> — you must understand carry, storage, seasonality
+and the shape of the curve. That is the difference from crypto, and it is the whole game.</p>
+<hr>
+<h1>5. Margin — the risk you cannot ignore</h1>
+<p>Trading futures <strong>bears risk</strong>: you post initial margin, you are marked to market daily
+(variation margin), and when the account falls below maintenance you get a <strong>margin call</strong> —
+top up or be liquidated.</p>
+<section class="fig"><img src="f5-margin.png" alt="Figure 5.1 — the margin engine">
+<p><em>Figure 5.1 — initial margin, variation margin, and the margin call path.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Margin</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>initial margin</td>
+<td>posted to open a position</td>
+</tr>
+<tr>
+<td>variation margin</td>
+<td>the daily mark-to-market cash flow</td>
+</tr>
+<tr>
+<td>maintenance</td>
+<td>the floor before a call</td>
+</tr>
+<tr>
+<td>margin call</td>
+<td>the demand to top up or be closed</td>
+</tr>
+</tbody>
+</table>
+<p>The margin engine is a <strong>first-class producer on the bus</strong>: it publishes <code>margin.state</code> and
+<code>margin.call</code> envelopes, and the risk governor refuses any order that would breach free
+margin. In futures, the margin check happens <em>before</em> the order — not after.</p>
+<hr>
+<h1>6. Execution — FIX</h1>
+<p>Futures orders go to regulated venues (CME, ICE, EEX, LME) through brokers — and that is
+<strong>FIX</strong>. The exec plane speaks FIX 4.4:</p>
+<section class="fig"><img src="f6-fix.png" alt="Figure 6.1 — the FIX execution path">
+<p><em>Figure 6.1 — NewOrderSingle → venue → ExecutionReport → allocation → lake.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>FIX message</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NewOrderSingle</code> (D)</td>
+<td>send an order</td>
+</tr>
+<tr>
+<td><code>ExecutionReport</code> (8)</td>
+<td>acknowledge, partial, fill</td>
+</tr>
+<tr>
+<td><code>OrderCancelRequest</code> (F)</td>
+<td>cancel</td>
+</tr>
+<tr>
+<td>allocation</td>
+<td>assign a fill to accounts (give-up)</td>
+</tr>
+</tbody>
+</table>
+<p>The FIX session is <em>another envelope producer/consumer</em>: every order, fill and allocation
+is a stamped packet on the bus, correlated to the strategy that generated it — so the audit
+trail from signal to fill is complete, exactly as in crypto.</p>
+<hr>
+<h1>7. Compliance — MiFID II and EMIR</h1>
+<p>Regulation is <strong>not optional</strong>. The futures platform must satisfy, at minimum:</p>
+<section class="fig"><img src="f7-compliance.png" alt="Figure 7.1 — the compliance obligations">
+<p><em>Figure 7.1 — transaction reporting, position reporting, best execution, suitability.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Obligation</th>
+<th>Regime</th>
+<th>What it requires</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>transaction reporting</td>
+<td>MiFID II / EMIR</td>
+<td>report every trade, on time</td>
+</tr>
+<tr>
+<td>position reporting</td>
+<td>MiFID II / EMIR</td>
+<td>report holdings past limits</td>
+</tr>
+<tr>
+<td>best execution</td>
+<td>MiFID II</td>
+<td>prove you got the best price</td>
+</tr>
+<tr>
+<td>suitability</td>
+<td>MiFID II</td>
+<td>know your client and their risk</td>
+</tr>
+</tbody>
+</table>
+<p>Because the envelope carries a correlation id and the lake is append-only, the compliance
+report is <strong>generated from the same evidence</strong> as the trading record — a report is a view
+over the lake, not a separately-maintained log. That is the envelope &quot;having you covered&quot;.</p>
+<hr>
+<h1>8. Fundamentals — weather, politics, the grid</h1>
+<p>The crypto models read order flow. The futures models must also read the <em>world</em>: supply and
+demand, weather, politics, and — for energy — the grid itself.</p>
+<section class="fig"><img src="f8-fundamentals.png" alt="Figure 8.1 — the fundamental models">
+<p><em>Figure 8.1 — supply/demand, weather, politics and grid feed the fundamental forecast.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Fundamental</th>
+<th>Drives</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>supply / demand</td>
+<td>inventory, production, consumption</td>
+<td>EIA crude stocks, USDA WASDE</td>
+</tr>
+<tr>
+<td>weather</td>
+<td>heating/cooling demand, wind, hydro</td>
+<td>HDD/CDD, wind forecast</td>
+</tr>
+<tr>
+<td>politics</td>
+<td>sanctions, OPEC, export bans</td>
+<td>a pipeline sanction, an export tax</td>
+</tr>
+<tr>
+<td>grid</td>
+<td>dispatch, congestion, storage</td>
+<td>gas storage %, power plant availability</td>
+</tr>
+</tbody>
+</table>
+<p>Energy, especially, is a <strong>systems problem</strong>: gas and electricity prices are set at the
+margin by the most expensive plant, on the most congested node, at the most extreme weather.
+Modelling that — down to the grid level — is a first-class model domain, publishing its
+forecast as an envelope the strategies consume.</p>
+<hr>
+<h1>9. Risk — the governor, futures-grade</h1>
+<section class="fig"><img src="f9-risk.png" alt="Figure 9.1 — the futures risk governor">
+<p><em>Figure 9.1 — margin, exposure, VaR/stress/gap and limits, all before an order.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Futures-specific</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>margin</td>
+<td>free margin ≥ IM for the order</td>
+</tr>
+<tr>
+<td>exposure</td>
+<td>net and gross, per underlying and per curve bucket</td>
+</tr>
+<tr>
+<td>stress / gap</td>
+<td>what happens at expiry, or on a limit move</td>
+</tr>
+<tr>
+<td>limits</td>
+<td>exchange position limits, reportable thresholds</td>
+</tr>
+</tbody>
+</table>
+<p>The governor is the same idea as crypto — refuse with a rule and a number — but the rules
+are futures-grade: margin, concentration, and gap risk on delivery.</p>
+<hr>
+<h1>10. The models</h1>
+<section class="fig"><img src="f10-models.png" alt="Figure 10.1 — the model types">
+<p><em>Figure 10.1 — price action, supply/demand, weather, politics, grid — each a pure signal producer.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Question</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>price action</td>
+<td>is the curve trending, is the spread moving?</td>
+</tr>
+<tr>
+<td>supply/demand</td>
+<td>is the balance tightening or loosening?</td>
+</tr>
+<tr>
+<td>weather</td>
+<td>is demand or renewable supply shifting?</td>
+</tr>
+<tr>
+<td>politics</td>
+<td>is a supply shock forming?</td>
+</tr>
+<tr>
+<td>grid</td>
+<td>is the system at a stress point?</td>
+</tr>
+</tbody>
+</table>
+<p>Each is a <strong>calculation agent</strong> — a pure function of its inputs, publishing a signal with an
+epoch timestamp. The book accumulates them in its intel window and confirms a pattern before
+a strategy trades. Advisory, systematic and auto are just three <em>strategies</em> over the same
+signals.</p>
+<hr>
+<h1>11. Crypto vs futures, side by side</h1>
+<section class="fig"><img src="f11-difference.png" alt="Figure 11.1 — the structural difference">
+<p><em>Figure 11.1 — spot vs forward: expiry, curve, margin, clearing.</em></p></section>
+<p>The one line that matters: <strong>crypto trades an asset; futures trade a curve of commitments</strong> —
+and everything new in this platform (instrument, margin, FIX, compliance, fundamentals)
+exists because of that difference.</p>
+<hr>
+<h1>12. Build plan — phases</h1>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>What</th>
+<th>Depends on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 · Core reuse</td>
+<td>fork the envelope/bus/model/book/lake core</td>
+<td>—</td>
+</tr>
+<tr>
+<td>2 · Instrument + curve</td>
+<td>reference data, forward curve, basis</td>
+<td>1</td>
+</tr>
+<tr>
+<td>3 · Market data</td>
+<td>venue feeds (CME, ICE, EEX, LME)</td>
+<td>1, 2</td>
+</tr>
+<tr>
+<td>4 · Margin + risk</td>
+<td>margin engine, governor</td>
+<td>2, 3</td>
+</tr>
+<tr>
+<td>5 · Execution</td>
+<td>FIX 4.4 session, order/fill/allocation</td>
+<td>3, 4</td>
+</tr>
+<tr>
+<td>6 · Compliance</td>
+<td>MiFID II / EMIR reporting</td>
+<td>5</td>
+</tr>
+<tr>
+<td>7 · Fundamentals</td>
+<td>supply/demand, weather, politics, grid</td>
+<td>2</td>
+</tr>
+<tr>
+<td>8 · Strategies</td>
+<td>advisory → systematic → auto</td>
+<td>4, 7</td>
+</tr>
+</tbody>
+</table>
+<p>Each phase ships envelopes on the same bus, so the platform is <em>observable and auditable at
+every step</em> — which is the entire point of ATLAS and the envelope.</p>
+<hr>
+<h1>13. Summary</h1>
+<p>The futures platform is <strong>the same operating system, a different market</strong>. Reuse the
+envelope, the bus, the decoupled model→signal→book→strategy, the intel window and the lake.
+Build new: instruments, forward curves, margin, FIX, compliance and fundamental modelling.
+The envelope covers the <em>how</em>; the futures domain is the <em>what</em>.</p>
+</body></html>

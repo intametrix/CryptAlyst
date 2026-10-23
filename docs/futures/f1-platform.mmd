@@ -1,0 +1,39 @@
+flowchart LR
+    subgraph CORE["ATLAS + ENVELOPE (reused)"]
+        BUS["BUS · envelopes · TTL"]
+        MOD["models → signals"]
+        BK["books · intel · strategies"]
+        LAKE["recorder · lake"]
+    end
+    subgraph FUT["FUTURES DOMAIN (new)"]
+        INST["instrument reference<br/>contract · expiry · tick · multiplier"]
+        MD["futures market data<br/>curve · basis · spread"]
+        FUND["fundamentals<br/>supply/demand · weather · politics · grid"]
+        MGN["margin engine<br/>initial/variation · calls"]
+        EXEC["FIX execution<br/>orders · fills · allocations"]
+        CMP["compliance<br/>MiFID II · EMIR · reporting"]
+    end
+    INST & MD & FUND & MGN & EXEC & CMP --> BUS
+    BUS --> MOD
+    MOD --> BUS
+    BUS --> BK
+    BK --> BUS
+    BUS --> LAKE
+    class BUS c_neutral
+    class MOD c_intel
+    class BK c_model
+    class LAKE c_store
+    class INST c_store
+    class MD c_market
+    class FUND c_intel
+    class MGN c_risk
+    class EXEC c_control
+    class CMP c_risk
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
