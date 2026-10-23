@@ -527,9 +527,11 @@ function draw(){
       for(var q=0;q<BARS.length;q++){ var dd=Math.abs(BARS[q].t-v.at_ms); if(dd<bd){bd=dd;i=q;} }
       if(i==null||i<vs-1||i>vs+vc) return;
       var up=(v.direction||"").toUpperCase().indexOf("BUY")>=0||(v.direction||"").toUpperCase().indexOf("PUMP")>=0;
-      var yb=H-14-(up?3:9);
-      s+='<rect x="'+(x(i)-1.5).toFixed(1)+'" y="'+yb.toFixed(1)+'" width="3" height="7" fill="'+
-         (VC[v.model]||"#8494a8")+'" opacity=".85"/>';
+      var yb=H-14-(up?5:11);
+      var mc=VC[v.model]||"#8494a8";
+      s+='<rect x="'+(x(i)-2).toFixed(1)+'" y="'+yb.toFixed(1)+'" width="5" height="11" fill="'+mc+'" opacity=".9"/>';
+      s+='<text x="'+x(i).toFixed(1)+'" y="'+(yb-3).toFixed(1)+'" fill="'+mc+'" font-size="7.5" text-anchor="middle" font-family="monospace">'+
+         (v.model||"").slice(0,9)+'</text>';
     });
   }
 
@@ -1323,7 +1325,11 @@ function symKey(ev){
 function setSym(v){
   if(!v) return;
   SYM=v; $("symlabel").textContent=v; FILLS=[];
-  loadBars(S.tf, function(){ loadFills(function(){ draw(); }); });
+  loadBars(S.tf, function(){
+    loadSignals(function(){
+      loadFills(function(){ draw(); });
+    });
+  });
 }
 function setChart(c){ S.chart=c; persist(); chips(); draw(); }
 function setTool(t){ S.tool=t; chips(); }
