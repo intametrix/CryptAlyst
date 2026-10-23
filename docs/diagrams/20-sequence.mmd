@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant MD as marketdata
+    participant BUS as BUS
+    participant MOD as model
+    participant BK as book
+    participant S as strategy
+    participant R as recorder
+
+    MD->>BUS: market.depth / market.candle (TTL: drop)
+    BUS->>MOD: latest state
+    MOD->>MOD: compute number
+    MOD->>BUS: model.decision (epoch ts, TTL 5m)
+    BUS->>BK: decision
+    BK->>BK: record in intel window
+    BK->>BK: pattern? >= N agreeing
+    BK->>S: tier signal
+    S->>BK: open / close
+    BK->>BUS: model.fill / model.pnl
+    BUS->>R: record envelope
+    R->>R: write lake once

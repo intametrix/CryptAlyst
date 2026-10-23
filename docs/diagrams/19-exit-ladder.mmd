@@ -1,0 +1,23 @@
+flowchart LR
+    POS["open position"] --> L1{"+0.35% ?"}
+    L1 -- yes --> LOCK["lock (bank profit)"]
+    L1 -- no --> L2{"peak≥1% & retraced 0.5% ?"}
+    L2 -- yes --> TRAIL["trail (ride winner)"]
+    L2 -- no --> L3{"≤ −0.5% ?"}
+    L3 -- yes --> STOP["stop (cap loss)"]
+    L3 -- no --> L4{"held ≥180s ?"}
+    L4 -- yes --> CLOCK["clock (turnover)"]
+    L4 -- no --> POS
+    class POS c_model
+    class L1,L2,L3,L4 c_neutral
+    class LOCK,TRAIL c_intel
+    class STOP c_risk
+    class CLOCK c_control
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

@@ -1,0 +1,9 @@
+{
+  "dest": "ARCHITECTURE.pdf",
+  "pdf_options": {
+    "format": "A4",
+    "margin": { "top": "18mm", "bottom": "18mm", "left": "18mm", "right": "18mm" },
+    "printBackground": true
+  },
+  "stylesheet": "style.css"
+}

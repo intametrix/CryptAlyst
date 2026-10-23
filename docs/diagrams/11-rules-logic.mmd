@@ -1,0 +1,23 @@
+flowchart TD
+    subgraph RSI["rsi2"]
+        R1["2-bar RSI < 10"] --> RB["buy"]
+        R2["2-bar RSI > 90"] --> RS["sell"]
+    end
+    subgraph DON["donchian55"]
+        D1["close >= 55-bar high"] --> DB["buy"]
+        D2["close <= 55-bar low"] --> DS["sell"]
+    end
+    subgraph MAC["macd_trend"]
+        M1["hist crosses above 0"] --> MB["buy"]
+        M2["hist crosses below 0"] --> MS["sell"]
+    end
+    class R1,R2,D1,D2,M1,M2 c_intel
+    class RB,RS,DB,DS,MB,MS c_model
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

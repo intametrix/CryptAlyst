@@ -1,0 +1,10 @@
+body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.4; }
+h1 { color: #1F4E79; font-size: 15.5pt; }
+h2 { color: #1F4E79; font-size: 12pt; }
+h3 { color: #596370; font-size: 10.5pt; }
+table { border-collapse: collapse; width: 100%; font-size: 8.3pt; }
+th { background: #1F4E79; color: #ffffff; font-weight: bold; padding: 4px 6px; text-align: left; }
+td { border: 1px solid #d0d7e2; padding: 3px 6px; }
+img { max-width: 100%; }
+em { color: #596370; font-size: 8pt; }
+pre { background: #F1F3F6; font-family: Courier, monospace; font-size: 8pt; padding: 6px; }
