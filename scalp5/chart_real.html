@@ -79,6 +79,11 @@
   <button id="btn" onclick="toggle()">⚙ control</button>
 </header>
 
+<button id="proparrow" onclick="showProps()" title="show properties"
+        style="display:none;position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:60;
+               background:#101923;border:1px solid #24313e;border-right:0;border-radius:9px 0 0 9px;
+               color:#e6edf6;padding:14px 7px;cursor:pointer;font-size:15px">▶</button>
+
 <div class="layout">
   <div>
     <div id="panel">
@@ -271,6 +276,10 @@ function setLive(on){
 }
 var PROPS_OPEN=true;
 var PROPS_HIDDEN=false;
+function syncPropsArrow(){
+  var a=$("proparrow");
+  if(a) a.style.display = PROPS_HIDDEN ? "block" : "none";
+}
 function hideProps(){
   var lay=document.querySelector(".layout");
   var b=$("hidebtn");
@@ -278,12 +287,22 @@ function hideProps(){
   PROPS_HIDDEN = !!(lay && lay.classList.contains("collapsed"));
   persist();
   if(b) b.textContent = PROPS_HIDDEN ? "▶ show" : "◀ hide";
+  syncPropsArrow();
+}
+function showProps(){
+  var lay=document.querySelector(".layout");
+  if(lay) lay.classList.remove("collapsed");
+  PROPS_HIDDEN=false;
+  persist();
+  var b=$("hidebtn"); if(b) b.textContent="◀ hide";
+  syncPropsArrow();
 }
 function applyPropsHidden(){
   var lay=document.querySelector(".layout");
   var b=$("hidebtn");
   if(lay){ if(PROPS_HIDDEN) lay.classList.add("collapsed"); else lay.classList.remove("collapsed"); }
   if(b) b.textContent = PROPS_HIDDEN ? "▶ show" : "◀ hide";
+  syncPropsArrow();
 }
 function toggleProps(){
   PROPS_OPEN=!PROPS_OPEN;
