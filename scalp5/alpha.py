@@ -34,14 +34,14 @@ BACKEND = "http://127.0.0.1:8787"; SPOT = "https://api.binance.com"
 FAPI = "https://fapi.binance.com"; FEE = 0.001
 
 CONFIRM_SECS = 0.0     # HFT: enter immediately (no confirmation)
-TP_PCT = 20.0           # a trade up 20% -> close it out
+TP_PCT = 2.0            # a trade up 2% -> close it out (net +1.8%)
 LOCK_USD = 800.0        # book unrealised >= this -> bank the winners
 LOCK_PCT = 0.3          # bank only winners that clear the fee
-STOP_SECS = 5.0         # HFT: a bad position still bad after 5s -> close it
-STOP_PCT = 0.2          # HFT: cut tiny losses fast
-SKIM_PCT = 0.25         # HFT: bank the fastest fee-clearing profit (net +0.05%)
-TRAIL_ARM_PCT = 0.3     # HFT: arm the trail fast
-TRAIL_PCT = 0.15        # HFT: trail tight below the peak
+STOP_SECS = 30.0        # a bad position still bad after 30s -> close it
+STOP_PCT = 0.5          # stop-loss: cut at -0.5% (net -0.7%)
+SKIM_PCT = 2.0          # (unused: the +2% TP is the profit exit)
+TRAIL_ARM_PCT = 1.0     # arm the trailing stop once a winner clears +1%
+TRAIL_PCT = 0.5         # trail this far below the peak
 WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOXLUSDT", "XAUUSDT", "SNDKUSDT"]  # always trade the fastest tickers
 
 def advisor_picks(n=5):
@@ -109,11 +109,6 @@ class Book:
             p = self.pos[s]
             if p["peak"] >= TRAIL_ARM_PCT and p["mark"] <= p["peak"] - TRAIL_PCT:
                 self._close(s, p, "trail")
-        # skim: bank a quick small profit
-        for s in list(self.pos):
-            p = self.pos[s]
-            if p["mark"] >= SKIM_PCT:
-                self._close(s, p, "skim")
         # +20% take-profit (far target, rarely reached once skimming)
         for s in list(self.pos):
             p = self.pos[s]
