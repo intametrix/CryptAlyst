@@ -2,12 +2,16 @@
   "dest": "content.pdf",
   "pdf_options": {
     "format": "A4",
-    "landscape": true,
-    "margin": { "top": "16mm", "bottom": "16mm", "left": "14mm", "right": "14mm" },
+    "margin": {
+      "top": "18mm",
+      "bottom": "18mm",
+      "left": "18mm",
+      "right": "18mm"
+    },
     "printBackground": true,
     "displayHeaderFooter": true,
     "headerTemplate": "<div></div>",
-    "footerTemplate": "<div style=\"width:100%;font-size:8px;color:#596370;padding:0 14mm;display:flex;justify-content:space-between;font-family:Helvetica,Arial,sans-serif;\"><span>Designed by Andrew John Preston · TekVolt Systems</span><span>Page <span class=\"pageNumber\"></span> of <span class=\"totalPages\"></span></span></div>"
+    "footerTemplate": "<div style=\"width:100%;font-size:8px;color:#596370;padding:0 14mm;display:flex;justify-content:space-between;font-family:Helvetica,Arial,sans-serif;\"><span>Designed by Andrew John Preston \u00b7 TekVolt Systems</span><span>Page <span class=\"pageNumber\"></span> of <span class=\"totalPages\"></span></span></div>"
   },
   "stylesheet": "style.css"
 }

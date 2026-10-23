@@ -25,12 +25,13 @@ import (
 )
 
 const (
-	lockPct  = 0.35
-	trailArm = 1.0
-	trail    = 0.5
-	stopPct  = 0.5
-	clockS   = 180.0
-	fee      = 0.2
+	lockPct   = 2.0 // a trade up 2% (net +1.8%) — a win is ~2.6x a loss
+	trailArm  = 1.0
+	trail     = 0.5
+	stopPct   = 0.5
+	clockS    = 3600.0 // 1h hold for winners: give them time to reach the +2% target
+	fee       = 0.2
+	minEquity = 4900.0 // a book below this is unlikely to generate PnL -> close it
 )
 
 var taNames = []string{"donchian55", "orb", "boll_squeeze", "rsi2", "vwap_revert",
@@ -424,12 +425,13 @@ type Position struct {
 }
 
 type Book struct {
-	Name   string
-	Start  float64
-	Equity float64
-	mu     sync.Mutex
-	Pos    map[string]*Position
-	Trades []map[string]any
+	Name    string
+	Start   float64
+	Equity  float64
+	Stopped bool
+	mu      sync.Mutex
+	Pos     map[string]*Position
+	Trades  []map[string]any
 }
 
 func newBook(name string) *Book {
@@ -517,6 +519,15 @@ func (b *Book) manage(m *Market) []Fill {
 	return fills
 }
 
+// stopBook flattens every position and marks the book closed: it is unlikely to
+// generate PnL, so it is taken out of the market rather than allowed to bleed.
+func (b *Book) stopBook() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.Stopped = true
+	b.Pos = map[string]*Position{}
+}
+
 func (b *Book) snapshot() map[string]any {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -526,7 +537,7 @@ func (b *Book) snapshot() map[string]any {
 			"notional": p.Notional, "held_s": time.Since(p.T).Seconds()})
 	}
 	return map[string]any{"engine": b.Name, "equity": math.Round(b.Equity*100) / 100,
-		"start_equity": b.Start, "trade_count": len(b.Trades), "positions": pos, "trades": b.Trades}
+		"start_equity": b.Start, "trade_count": len(b.Trades), "positions": pos, "trades": b.Trades, "stopped": b.Stopped}
 }
 
 func backfill(m *Market) {
@@ -668,10 +679,10 @@ func main() {
 			Symbol    string  `json:"symbol"`
 			Imbalance float64 `json:"imbalance"`
 			Bids      []struct {
-				Price float64 `json:"price"`
+				Price float64 `json:"p"`
 			} `json:"bids"`
 			Asks []struct {
-				Price float64 `json:"price"`
+				Price float64 `json:"p"`
 			} `json:"asks"`
 		}
 		if json.Unmarshal(msg.Body, &d) == nil && d.Symbol != "" {
@@ -765,7 +776,7 @@ func main() {
 			return
 		}
 		b, ok := books[d.Model]
-		if !ok {
+		if !ok || b.Stopped {
 			return
 		}
 		// the model must see a pattern (3 agreeing signals in the window) before
@@ -801,6 +812,14 @@ func main() {
 	// manage loop: close positions on the exit ladder + publish fills + dump state
 	for {
 		for _, b := range books {
+			if b.Stopped {
+				continue
+			}
+			if b.Equity < minEquity {
+				b.stopBook()
+				log.Printf("%-14s CLOSED BOOK (equity %.0f < %.0f — unlikely to generate PnL)", b.Name, b.Equity, minEquity)
+				continue
+			}
 			for _, f := range b.manage(m) {
 				if body, err := json.Marshal(f); err == nil {
 					_ = cl.Publish(fillSpec.Exchange, fillSpec.Name, body)

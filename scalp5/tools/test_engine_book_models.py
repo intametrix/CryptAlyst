@@ -177,9 +177,9 @@ def main():
     alpha._tactics.size_mult = lambda: 1.0
     ab = alpha.Book("funding_carry")          # risk 2.5, sl 1.0
     ab.open("BTCUSDT", "buy", 100.0, "test")
-    ok("alpha book: notional = risk/sl capped at 3x",
-       ab.pos["BTCUSDT"]["notional"], 5000.0 * 2.5 / 100.0 / 0.01)
-    ab.manage({"BTCUSDT": 101.2})             # +1.2% >= tp 1.2
+    ok("alpha book: notional capped at 0.5x equity",
+       ab.pos["BTCUSDT"]["notional"], 5000.0 * 0.5)
+    ab.manage({"BTCUSDT": 102.5})             # +2.5% >= TP_PCT 2.0
     ok("alpha book: take-profit closes", "BTCUSDT" in ab.pos, False)
     ok("alpha book: exit reason is target", ab.trades[-1]["reason"], "target")
     ab2 = alpha.Book("funding_carry")
