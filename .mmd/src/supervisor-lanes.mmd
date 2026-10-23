@@ -1,0 +1,22 @@
+flowchart TB
+    SUP["SUPERVISOR (supervisor.py)<br/>launches each lane · applies the disable list · restarts the dead"] --> L1["LANE 1 = engine market_data (Go)"]
+    SUP --> L2["LANE 2 = engine alpha.py (Python)"]
+    SUP --> L3["LANE 3 = engine tad (Go)"]
+    L1 -->|"1 &harr; 1"| E1["one process<br/>one book-set"]
+    L2 -->|"1 &harr; 1"| E2["one process"]
+    E2 -->|"1 &rarr; many"| M1["model funding_carry = book"]
+    E2 -->|"1 &rarr; many"| M2["model xsec_momentum = book"]
+    E2 -->|"1 &rarr; many"| M3["model cascade_rebound = book"]
+    L3 -->|"1 &harr; 1"| E3["one process"]
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class SUP c_control;
+class L1,L2,L3 c_neutral;
+class E1,E2,E3 c_neutral;
+class M1,M2,M3 c_model;

@@ -10,54 +10,73 @@ import os
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.units import cm
+from reportlab.lib.units import cm, inch
 from reportlab.platypus import (
-    BaseDocTemplate, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 from reportlab.platypus.tableofcontents import TableOfContents
+from reportlab.graphics.shapes import Drawing, Circle, Line, String, Group, Wedge, PolyLine
+from reportlab.lib.colors import white as _white
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "topics-pubsub.pdf")
 
-INK = HexColor("#1a2733")
-ACCENT = HexColor("#274866")
-RULE = HexColor("#8a97a5")
-BODY = HexColor("#2b2b2b")
-GRAY = HexColor("#5c6b7a")
-ZEBRA = HexColor("#f2f5f8")
-BLACK = HexColor("#000000")
-YELLOW = HexColor("#ffd400")
+# --- document style: matches the Design & Architecture Reference ---
+ACCENT = HexColor("#1f4e79")   # accent blue (headings, table headers)
+MUTED = HexColor("#596370")    # muted grey (captions, footers, H3)
+BODY = HexColor("#1a1a1a")     # near-black body text
+INK = ACCENT                   # headings/title use the accent
+RULE = HexColor("#b0b6bf")     # light grid border
+GRAY = MUTED
+ZEBRA = HexColor("#f1f3f6")    # zebra rows + mono background
+BLACK = ACCENT                 # table header background = accent blue
+YELLOW = HexColor("#ffffff")   # table header text = white
 
 S = {
-    "title": ParagraphStyle("title", fontName="Times-Bold", fontSize=20,
-                            leading=24, textColor=INK, spaceAfter=2),
-    "subtitle": ParagraphStyle("subtitle", fontName="Times-Italic", fontSize=10.5,
+    "title": ParagraphStyle("title", fontName="Helvetica-Bold", fontSize=24,
+                            leading=29, textColor=INK, spaceAfter=2),
+    "subtitle": ParagraphStyle("subtitle", fontName="Helvetica-Oblique", fontSize=10.5,
                                leading=13, textColor=GRAY, spaceAfter=10),
-    "h2": ParagraphStyle("h2", fontName="Times-Bold", fontSize=13,
-                         leading=16, textColor=ACCENT, spaceBefore=12, spaceAfter=4),
-    "body": ParagraphStyle("body", fontName="Times-Roman", fontSize=10,
-                           leading=13, textColor=BODY, spaceAfter=4),
-    "small": ParagraphStyle("small", fontName="Times-Roman", fontSize=8.5,
+    "h2": ParagraphStyle("h2", fontName="Helvetica-Bold", fontSize=12,
+                         leading=15, textColor=ACCENT, spaceBefore=8, spaceAfter=8,
+                         keepWithNext=1),
+    "body": ParagraphStyle("body", fontName="Helvetica", fontSize=10,
+                           leading=13, textColor=BODY, spaceAfter=5),
+    "small": ParagraphStyle("small", fontName="Helvetica", fontSize=8.5,
                             leading=11, textColor=GRAY),
-    "cell": ParagraphStyle("cell", fontName="Times-Roman", fontSize=9,
-                           leading=11, textColor=BODY),
-    "cellb": ParagraphStyle("cellb", fontName="Times-Bold", fontSize=9,
-                            leading=11, textColor=INK),
-    "head": ParagraphStyle("head", fontName="Times-Bold", fontSize=10,
-                           leading=12, textColor=YELLOW),
-    "mono": ParagraphStyle("mono", fontName="Courier", fontSize=8.5,
+    "cell": ParagraphStyle("cell", fontName="Helvetica", fontSize=8.3,
                            leading=10.5, textColor=BODY),
+    "cellb": ParagraphStyle("cellb", fontName="Helvetica-Bold", fontSize=8.3,
+                            leading=10.5, textColor=INK),
+    "head": ParagraphStyle("head", fontName="Helvetica-Bold", fontSize=8.6,
+                           leading=11, textColor=YELLOW),
+    "mono": ParagraphStyle("mono", fontName="Courier", fontSize=8,
+                           leading=10, textColor=BODY),
+    "chapter": ParagraphStyle("chapter", fontName="Helvetica-Bold", fontSize=15.5,
+                              leading=19, textColor=ACCENT, spaceBefore=10, spaceAfter=8),
+    "h3": ParagraphStyle("h3", fontName="Helvetica-Bold", fontSize=10.5,
+                         leading=13, textColor=MUTED, spaceBefore=8, spaceAfter=3),
+    "caption": ParagraphStyle("caption", fontName="Helvetica-Oblique", fontSize=9.5,
+                              leading=12, textColor=MUTED, spaceAfter=10, alignment=1),
 }
 
-# cover / intro / TOC styles
-COVER_TITLE = ParagraphStyle("covertitle", fontName="Times-Bold", fontSize=30,
-                             leading=36, textColor=INK, spaceAfter=10)
-COVER_SUB = ParagraphStyle("coversub", fontName="Times-Italic", fontSize=12,
-                           leading=16, textColor=GRAY, spaceAfter=16)
-COVER_BODY = ParagraphStyle("coverbody", fontName="Times-Roman", fontSize=11,
+# cover / intro / TOC styles (cover matches the Design & Architecture Reference)
+COVER_TITLE = ParagraphStyle("covertitle", fontName="Helvetica-Bold", fontSize=36,
+                             leading=42, textColor=ACCENT, spaceAfter=10, alignment=1)
+COVER_SUB = ParagraphStyle("coversub", fontName="Helvetica", fontSize=18,
+                           leading=24, textColor=MUTED, spaceAfter=4, alignment=1,
+                           wordSpace=3)
+COVER_EDITION = ParagraphStyle("coveredition", fontName="Helvetica-Oblique", fontSize=10,
+                               leading=13, textColor=MUTED, spaceAfter=12, alignment=1)
+COVER_BODY = ParagraphStyle("coverbody", fontName="Helvetica", fontSize=11,
                             leading=16, textColor=BODY, spaceAfter=8)
-TOC_STYLE = ParagraphStyle("toc", fontName="Times-Roman", fontSize=10.5,
+TOC_STYLE = ParagraphStyle("toc", fontName="Helvetica", fontSize=10.5,
                            leading=17, textColor=BODY)
+
+# shared code-block style (design-ref mono: Courier 8pt on #f1f3f6)
+CODE_STYLE = ParagraphStyle("codestyle", fontName="Courier", fontSize=8, leading=10,
+                            textColor=BODY, backColor=ZEBRA, borderPadding=5,
+                            borderColor=RULE, borderWidth=0.4)
 
 
 class TopicsDoc(SimpleDocTemplate):
@@ -65,7 +84,10 @@ class TopicsDoc(SimpleDocTemplate):
     draws page numbers on every page except the cover (page 1)."""
 
     def afterFlowable(self, flowable):
-        if isinstance(flowable, Paragraph) and flowable.style.name == "h2":
+        # Only chapters appear in the Contents (the numbered subsections are
+        # already visible in the body). Tracking h2 too made the TOC overflow
+        # onto a second, mostly-empty page.
+        if isinstance(flowable, Paragraph) and flowable.style.name == "chapter":
             self.notify("TOCEntry", (0, flowable.getPlainText(), self.page))
 
 
@@ -74,10 +96,172 @@ def _page_footer(canvas, doc):
     if page <= 1:
         return  # no page number on the cover
     canvas.saveState()
-    canvas.setFont("Times-Roman", 9)
+    canvas.setFont("Helvetica", 8.5)
     canvas.setFillColor(GRAY)
     canvas.drawCentredString(A4[0] / 2.0, 1.0 * cm, str(page - 1))
     canvas.restoreState()
+
+
+def diagram(name, max_w=16.5 * cm, max_h=20 * cm):
+    """Embed a rendered Mermaid PNG, scaled to fit the page."""
+    path = os.path.join(HERE, "diagrams", name + ".png")
+    if not os.path.exists(path):
+        return Paragraph("<i>[diagram %s missing]</i>" % name, S["caption"])
+    try:
+        from PIL import Image as PILImage
+        im = PILImage.open(path)
+        w, h = im.size
+    except Exception:
+        return Paragraph("<i>[diagram %s unreadable]</i>" % name, S["caption"])
+    scale = min(max_w / w, max_h / h)
+    return Image(path, width=w * scale, height=h * scale)
+
+
+def fig(name, caption, max_w=16.5 * cm, max_h=20 * cm):
+    """A diagram + its caption. No leading spacer, so a preceding heading's
+    keepWithNext binds to the image and they stay together on the same page."""
+    return [diagram(name, max_w, max_h), Paragraph(caption, S["caption"])]
+
+
+def sec_fig(title, name, caption, max_h=20 * cm):
+    """A numbered subsection heading kept together with its diagram + caption
+    (KeepTogether, so a heading is never orphaned at the bottom of a page)."""
+    return [KeepTogether([sec(title), diagram(name, 16.5 * cm, max_h),
+                          Paragraph(caption, S["caption"])])]
+
+
+_CH = [0]   # current chapter number
+_SEC = [0]  # current subsection number within the chapter
+
+
+def chapter(title, num=None):
+    """Start a new chapter (page break + chapter heading). Resets the subsection counter."""
+    if num is not None:
+        _CH[0] = num
+    _SEC[0] = 0
+    return [PageBreak(), Paragraph(title, S["chapter"])]
+
+
+def sec(title):
+    """A numbered subsection heading: 'N.M — Title'."""
+    _SEC[0] += 1
+    return Paragraph("%d.%d &middot; %s" % (_CH[0], _SEC[0], title), S["h2"])
+
+
+def title_box(word, fill, stroke, text_color):
+    """A single word in its own coloured box, for the cover title stack."""
+    p = Paragraph(word, ParagraphStyle("titlebox", fontName="Helvetica-Bold",
+                 fontSize=16, leading=20, textColor=text_color, alignment=1))
+    t = Table([[p]], colWidths=[11 * cm], hAlign="CENTER")
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), fill),
+        ("BOX", (0, 0), (-1, -1), 1.2, stroke),
+        ("LEFTPADDING", (0, 0), (-1, -1), 14), ("RIGHTPADDING", (0, 0), (-1, -1), 14),
+        ("TOPPADDING", (0, 0), (-1, -1), 9), ("BOTTOMPADDING", (0, 0), (-1, -1), 9),
+    ]))
+    return t
+
+
+# cover title stack: (word, fill, stroke, text) — one colour per term
+TITLE_BOXES = [
+    ("Supervisor", HexColor("#d8eef2"), HexColor("#0f6b7a"), HexColor("#08343c")),
+    ("Lanes", HexColor("#eef1f5"), HexColor("#4b5b6e"), HexColor("#1f2b38")),
+    ("Engines", HexColor("#dbe9fb"), HexColor("#1d4e89"), HexColor("#0b2545")),
+    ("Models", HexColor("#ffe9c7"), HexColor("#b7791f"), HexColor("#4a2f00")),
+    ("Messaging", HexColor("#d9f2e3"), HexColor("#1d7a4d"), HexColor("#0d3b26")),
+    ("Data Event Types", HexColor("#e9e3f7"), HexColor("#5b3fa8"), HexColor("#2a1a55")),
+]
+
+
+import math as _math
+
+
+def _radial_drawing():
+    """A cartoon hand-drawn mindmap: CRYPTALYST centre, six pastel
+    role-coloured nodes, joined by gently bowed hand-drawn branches.
+    Colours honour style-guide.md (the classDef role palette)."""
+    W, H = 16.8 * cm, 12 * cm
+    cx, cy = W / 2.0, H / 2.0
+    d = Drawing(W, H)
+    # style-guide role palette (c_control, c_neutral, c_market, c_model, c_intel, c_store)
+    nodes = [
+        ("Supervisor", "#d8eef2", "#0f6b7a", "#08343c"),
+        ("Lanes", "#eef1f5", "#4b5b6e", "#1f2b38"),
+        ("Engines", "#dbe9fb", "#1d4e89", "#0b2545"),
+        ("Models", "#ffe9c7", "#b7791f", "#4a2f00"),
+        ("Messaging", "#d9f2e3", "#1d7a4d", "#0d3b26"),
+        ("Data Event Types", "#e9e3f7", "#5b3fa8", "#2a1a55"),
+    ]
+    R, Rs, Rc = 4.25 * cm, 1.7 * cm, 1.85 * cm
+    # hand-drawn branches: gently bowed polylines, each in its node's stroke colour
+    for i, (label, fill, stroke, textc) in enumerate(nodes):
+        ang = _math.radians(90 - i * 60)
+        sx = cx + Rc * _math.cos(ang); sy = cy + Rc * _math.sin(ang)
+        ex = cx + (R - Rs) * _math.cos(ang); ey = cy + (R - Rs) * _math.sin(ang)
+        mx = (sx + ex) / 2.0 - 0.20 * cm * _math.sin(ang)
+        my = (sy + ey) / 2.0 + 0.20 * cm * _math.cos(ang)
+        d.add(PolyLine([sx, sy, mx, my, ex, ey],
+                       strokeColor=HexColor(stroke), strokeWidth=2.4,
+                       strokeLineJoin=1, strokeLineCap=1))
+    # pastel sticker nodes with drop shadows
+    for i, (label, fill, stroke, textc) in enumerate(nodes):
+        ang = _math.radians(90 - i * 60)
+        x = cx + R * _math.cos(ang)
+        y = cy + R * _math.sin(ang)
+        d.add(Circle(x + 0.09 * cm, y - 0.09 * cm, Rs,
+                     fillColor=HexColor("#d8dce2"), strokeColor=None))
+        d.add(Circle(x, y, Rs, fillColor=HexColor(fill),
+                     strokeColor=HexColor(stroke), strokeWidth=2.5))
+        d.add(String(x, y - 0.12 * cm, label, fontName="Helvetica-Bold", fontSize=10,
+                     fillColor=HexColor(textc), textAnchor="middle"))
+    # centre node in the accent navy (style-guide primary)
+    d.add(Circle(cx + 0.09 * cm, cy - 0.09 * cm, Rc,
+                 fillColor=HexColor("#d8dce2"), strokeColor=None))
+    d.add(Circle(cx, cy, Rc, fillColor=HexColor("#1f4e79"),
+                 strokeColor=HexColor("#16395a"), strokeWidth=2.5))
+    d.add(Circle(cx, cy, Rc - 0.14 * cm, strokeColor=HexColor("#3a6ea5"),
+                 strokeWidth=1.0, fillColor=None))
+    d.add(String(cx, cy - 0.21 * cm, "CRYPTALYST", fontName="Helvetica-Bold", fontSize=16,
+                 fillColor=_white, textAnchor="middle"))
+    return d
+
+
+def callout(text):
+    """A single-cell shaded box (design-ref 'Light List Accent 1' callout)."""
+    t = Table([[Paragraph(text, ParagraphStyle("callout", fontName="Helvetica", fontSize=9,
+                 leading=12, textColor=BODY))]], colWidths=[17.3 * cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), HexColor("#dbe9fb")),
+        ("BOX", (0, 0), (-1, -1), 0.5, ACCENT),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    return t
+
+
+def _cover_meta_table():
+    rows = [
+        ("Document", "CryptAlyst — Supervisor, Lanes, Engines, Models, Messaging, Data Event Types"),
+        ("Platform Version", "2.0"),
+        ("Document Revision", "2"),
+        ("Status", "living reference; the 22-topic registry is normative"),
+        ("Audience", "engineers, quants, risk, and anyone asked to change the platform"),
+        ("Scope", "the running paper-trading platform: bus, engines, models, books"),
+        ("Designed by", "Andrew Preston"),
+        ("Copyright", "© TekVolt Systems 2026"),
+    ]
+    head = [Paragraph("Field", S["head"]), Paragraph("Value", S["head"])]
+    data = [head] + [[Paragraph(r[0], S["cellb"]), Paragraph(r[1], S["cell"])] for r in rows]
+    t = Table(data, colWidths=[3.2 * cm, 14.1 * cm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BLACK), ("TEXTCOLOR", (0, 0), (-1, 0), YELLOW),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [ZEBRA, HexColor("#ffffff")]),
+        ("GRID", (0, 0), (-1, -1), 0.4, RULE), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, 0), 5), ("BOTTOMPADDING", (0, 0), (-1, 0), 5),
+        ("TOPPADDING", (0, 1), (-1, -1), 4), ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+    ]))
+    return t
 
 
 # (topic, exchange, retention, publishers, subscriber note)
@@ -548,15 +732,43 @@ MODELS_DETAIL = [
 ]
 
 
+# who consumes each model's output (parallel to MODELS_DETAIL)
+USED_BY = [
+    "every engine &mdash; the single raw feed no one else is allowed to touch",
+    "the books (TA confirmation) &mdash; and the model.evaluate pacer pulse",
+    "the gate chain &mdash; the primary weight (forecast_min) for every entry",
+    "the books &mdash; flow confidence feeds the conviction sizing",
+    "the OI gate &mdash; the quadrant multiplier on each decision",
+    "the owner's board review &mdash; alpha reads its flagged names",
+    "the owner-selected winners &mdash; the leaderboard and the solver measure them",
+    "the kept funding book",
+    "the kept consensus book",
+    "the pipeline canary (honestly not an edge)",
+    "fast_ignition + crypto_strategies &mdash; the alert feed",
+    "every research artefact &mdash; F4 replay, solver, fit_weights",
+    "the book lifecycle &mdash; stops the underperformers",
+]
+
+
 def _model_paragraphs():
     out = []
-    for name, how, used in MODELS_DETAIL:
+    for (name, how, used), by in zip(MODELS_DETAIL, USED_BY):
         out.append(Paragraph("<b>%s</b>" % name, ParagraphStyle(
-            "mname", fontName="Times-Bold", fontSize=11, leading=13.5, textColor=ACCENT,
+            "mname", fontName="Helvetica-Bold", fontSize=10.5, leading=13, textColor=ACCENT,
             spaceBefore=6, spaceAfter=2)))
         out.append(Paragraph("How it works — %s" % how, S["body"]))
         out.append(Paragraph("<b>Best used for</b> — %s" % used, S["body"]))
-        out.append(Spacer(1, 2))
+        box = Table([[Paragraph("<b>Used by</b> &mdash; %s" % by, ParagraphStyle(
+            "usedby", fontName="Helvetica", fontSize=8.5, leading=11, textColor=BODY))]],
+            colWidths=[17.3 * cm])
+        box.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), HexColor("#ffe9c7")),
+            ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#b7791f")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ("TOPPADDING", (0, 0), (-1, -1), 3), ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        out.append(box)
+        out.append(Spacer(1, 4))
     return out
 
 
@@ -644,7 +856,7 @@ def on_model_decision(env):
 
 def _flow_section():
     out = []
-    out.append(Paragraph("Message flow — how a model's output travels", S["h2"]))
+    out.append(sec("Message flow — how a model's output travels"))
     out.append(Paragraph(
         "A model (book) computes a result and publishes it to <b>one topic</b>. The bus wraps "
         "it in an <b>envelope</b> and routes it by exchange + routing key. Every consumer "
@@ -652,17 +864,14 @@ def _flow_section():
         "instrument — routing is by key, never by broadcast.", S["body"]))
     out.append(_envelope_table())
     out.append(Spacer(1, 4))
-    out.append(Paragraph("Pseudo-code", S["h2"]))
-    code = Paragraph(CODE.replace("\n", "<br/>"), ParagraphStyle(
-        "code", fontName="Courier", fontSize=7.5, leading=9.5, textColor=BODY,
-        backColor=HexColor("#f7f9fb"), borderPadding=5, borderColor=RULE, borderWidth=0.4))
+    out.append(Paragraph("Pseudo-code", S["h3"]))
+    code = Paragraph(CODE.replace("\n", "<br/>"), CODE_STYLE)
     out.append(code)
     return out
 
 
 def _decision_section():
     out = []
-    out.append(Paragraph("Engines, models and books — and how a number becomes a decision", S["h2"]))
     out.append(Paragraph(
         "<b>Engine</b> = a running process (the supervisor launches one "
         "<font face='Courier'>python3 -u &lt;file&gt;.py</font>). <b>Model</b> = a strategy/rule "
@@ -695,45 +904,420 @@ def _decision_section():
     return out
 
 
+ENGINE_ROSTER = [
+    ("market_data (Go)", "the only Binance feed", "market.price / candle / depth / mini24h / ticks"),
+    ("tad (Go)", "technical-analysis daemon", "intel.ta, model.evaluate"),
+    ("forecast (Go)", "7-agent forecaster", "intel.forecast"),
+    ("signals (Python)", "taker ratio + flow confidence", "intel.signal / intel.flow / intel.movers"),
+    ("feeds (Python)", "open-interest + book imbalance", "features.json (a file, not a topic)"),
+    ("market_agent (Python)", "the opportunity board", "intel.board + opportunities.json"),
+    ("alpha (Python)", "funding_carry, xsec_momentum, cascade_rebound", "model.decision / fill / pnl"),
+    ("models10 (Python)", "funding_fade (via --only)", "model.decision / fill"),
+    ("crypto_strategies (Python)", "model_stack (via --only)", "model.decision / fill"),
+    ("churn (Python)", "throughput demo", "model.decision / fill"),
+    ("backend (Go)", "pump/dump + breakout detectors", "alert.pumpdump + screen/survey"),
+    ("recorder (Go)", "the single lake writer", "state/lake3 (not a topic)"),
+    ("portfolio_review (Python)", "grades books + stops losers", "review.verdict + disabled.json"),
+]
+
+
+def _engine_roster_table():
+    head = [Paragraph("Engine", S["head"]), Paragraph("Role", S["head"]),
+            Paragraph("Publishes", S["head"])]
+    rows = [head]
+    for name, role, pub in ENGINE_ROSTER:
+        rows.append([Paragraph("<font face='Courier'>%s</font>" % name, S["cell"]),
+                     Paragraph(role, S["cell"]), Paragraph(pub, S["cell"])])
+    t = Table(rows, colWidths=[5.4 * cm, 6.0 * cm, 6.8 * cm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BLACK), ("TEXTCOLOR", (0, 0), (-1, 0), YELLOW),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [ZEBRA, HexColor("#ffffff")]),
+        ("GRID", (0, 0), (-1, -1), 0.4, RULE), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, 0), 6), ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
+        ("TOPPADDING", (0, 1), (-1, -1), 4), ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+    ]))
+    return t
+
+
+def _engines_chapter():
+    out = chapter("Chapter 3 &middot; Engines &mdash; the running processes", 3)
+    out.append(Paragraph(
+        "An <b>engine</b> is one running process &mdash; a Go binary or a "
+        "<font face='Courier'>python3 -u file.py</font>. It owns a lane: the supervisor launches it, "
+        "it subscribes to the topics it needs, and it loops. One engine can host several models; "
+        "<font face='Courier'>--only</font> narrows it to one. <font face='Courier'>alpha.py</font> runs "
+        "three models (funding_carry, xsec_momentum, cascade_rebound), "
+        "<font face='Courier'>models10.py</font> runs funding_fade, and "
+        "<font face='Courier'>crypto_strategies.py</font> runs model_stack. Some engines are Go "
+        "(market_data, tad, forecast, backend, recorder), some are Python (the books, signals, feeds) &mdash; "
+        "they interoperate only through the bus and the envelope.", S["body"]))
+    out += fig("engine-lifecycle",
+               "Figure 3.1 &mdash; an engine's life: launch, subscribe, loop, and the supervisor's "
+               "watchdog restart when it dies.")
+    out.append(Paragraph(
+        "The lifecycle matters because it is <b>stateless across restarts</b>: an engine's book state is "
+        "rebuilt from disk, not carried in memory. The supervisor keeps the fleet alive, but it never "
+        "decides <i>what</i> trades &mdash; it only decides <i>which engines are allowed to run</i> "
+        "(the disable list) and restarts the ones that crash.", S["body"]))
+
+    out += sec_fig("How an engine discovers its topics", "discovery",
+               "Figure 3.2 &mdash; topic discovery: the registry is the single source of truth; an engine "
+               "declares its needs in code, and the bus refuses anything unregistered or unauthorised.")
+    out.append(Paragraph(
+        "There is no magic. The <b>topic registry</b> "
+        "(<font face='Courier'>core/internal/topics/topics.go</font> in Go, "
+        "<font face='Courier'>lib/bus.py</font> in Python) is the one list of every topic, its exchange, "
+        "and its allowed producers. An engine 'knows' its topics because they are <b>declared in its code</b>: "
+        "it either subscribes to a queue for the topic, or reads the latest via an HTTP proxy "
+        "(forecast :8790, tad :8792, signal_bus :8793, master :8799). On publish, the bus re-checks the "
+        "registry &mdash; an unregistered topic or an unauthorised producer is refused before it reaches "
+        "the wire. That is the discovery process: <i>declare, then validate against the registry.</i>", S["body"]))
+
+    out.append(sec("Python and Go in one fleet"))
+    out.append(Paragraph(
+        "A book is Python; the market-data feed and the forecasters are Go. They are not 'all in one "
+        "engine' &mdash; they are separate processes that meet at the <b>envelope</b>, a language-agnostic "
+        "JSON shape "
+        "<font face='Courier'>{topic, key, producer, data, version, seq, ts}</font>. A Go producer "
+        "(market_data, tad, forecast) marshals its struct to that JSON and publishes it; a Python consumer "
+        "receives the body and, if it has no <font face='Courier'>topic</font> field, wraps it into the "
+        "same envelope shape (<font face='Courier'>bus.py:_decoding</font>). The language is invisible at "
+        "the boundary: <font face='Courier'>models10.py</font> calls the Go forecast over HTTP and reads a "
+        "Go-written envelope without ever importing Go. The only contract is the JSON shape and the topic "
+        "name &mdash; which is why the two registries must stay in sync.", S["body"]))
+
+    out += sec_fig("What an engine reads &mdash; inputs and their shapes", "engine-inputs",
+               "Figure 3.3 &mdash; every input an engine can read, and the one thing it writes: a "
+               "decision on the book.")
+    out.append(Paragraph(
+        "No engine talks to Binance directly except <b>market_data</b>. Everything else reads the bus "
+        "topics or the REST/file proxies. The inputs, with their exact shapes, are:", S["body"]))
+    out.append(_input_shapes_table())
+    out.append(Paragraph(
+        "An engine reads only the inputs its models need &mdash; a funding book ignores the OI quadrant, "
+        "a momentum book ignores funding. Each input is fetched fresh every cycle, and its age is carried "
+        "through the gates so a stale value becomes a refusal, never a silent trade.", S["body"]))
+
+    out.append(sec("K-lines"))
+    out.append(Paragraph(
+        "A <b>K-line</b> (candlestick) is one bar of OHLCV: <b>o</b>pen, <b>h</b>igh, <b>l</b>ow, "
+        "<b>c</b>lose, <b>v</b>olume, stamped with a timestamp. market_data serves them per symbol and "
+        "interval &mdash; "
+        "<font face='Courier'>/klines?symbol=BTCUSDT&amp;interval=1m&amp;limit=120</font> returns 120 "
+        "one-minute candles. Everything derived &mdash; EMA, RSI, ATR, Donchian, the forecast, the "
+        "momentum rank &mdash; is computed from these bars. The intervals matter: 1m for fast TA and "
+        "liquidation proxies, 15m for the funding_fade rule and the forecast blend, 4h for the BTC regime "
+        "drift every alt inherits. On a fresh boot market_data backfills 200 &times; 1m and 200 &times; "
+        "15m bars per symbol, so the platform is never history-starved.", S["body"]))
+
+    out += sec_fig("The Engine Scan Loop", "engine-loop",
+               "Figure 3.4 &mdash; the engine's loop: read, score, gate, trade, publish, repeat.")
+    out.append(Paragraph(
+        "The loop is the same shape in every engine: pull fresh inputs, ask each model's rule for a "
+        "signal, run the gate chain, and &mdash; only if every gate passes &mdash; open a position and "
+        "publish the decision. The gate chain is shared (risk.py, tactics.py), so no engine can invent "
+        "its own risk policy.", S["body"]))
+
+    out += sec_fig("The OI quadrant", "oi-quadrant",
+               "Figure 3.5 &mdash; the price &times; open-interest quadrant: where price and OI move "
+               "together, or diverge, and the climax that demotes both directions.")
+    out.append(Paragraph(
+        "Open interest is the number of open contracts; it tracks whether money is entering or leaving. "
+        "Crossing it with price gives four regimes. <b>Confirmation</b> (OI and price move together) is a "
+        "genuine trend &mdash; new money pushing. <b>Divergence</b> (they move apart) is a weak move &mdash; "
+        "distribution or short covering. The <b>climax</b> case (an extreme OI move) is exhaustion and "
+        "demotes <b>both</b> directions. The engine carries this quadrant on each decision "
+        "(<font face='Courier'>oi_quadrant</font>), and the OI gate turns it into a strategy-aware score "
+        "multiplier &mdash; momentum prefers confirmation, reversion prefers divergence.", S["body"]))
+
+    out.append(sec("The engine roster"))
+    out.append(_engine_roster_table())
+    return out
+
+
+def _input_shapes_table():
+    rows = [
+        ("market.candle", "klines", "array of {t, o, h, l, c, v} — one bar per row"),
+        ("intel.forecast", "REST :8790", "{views:[{agent, side, prob, move_pct}], prob, move_pct, horizon, bar_age_s}"),
+        ("intel.ta", "REST :8792 / ta_live.json", "{symbol, signals:[{kind, side}], count}"),
+        ("intel.signal", "REST :8793", "{symbol, score, side, flow_conf}"),
+        ("intel.flow", "REST :8793", "{symbol, flow_conf} — conviction for sizing"),
+        ("features.json (OI)", "file", "{symbol, oi_chg_5m, oi_chg_15m, oi_chg_1h, px_chg_15m, oi_quadrant}"),
+        ("alert.pumpdump", "REST :8787", "{symbol, kind(PUMP/DUMP), severity, score, metrics:{burst_z,...}}"),
+    ]
+    head = [Paragraph("Input", S["head"]), Paragraph("Via", S["head"]),
+            Paragraph("Shape", S["head"])]
+    data = [head] + [[Paragraph("<font face='Courier'>%s</font>" % r[0], S["cell"]),
+                      Paragraph(r[1], S["cell"]), Paragraph("<font face='Courier'>%s</font>" % r[2], S["cell"])]
+                     for r in rows]
+    t = Table(data, colWidths=[3.2 * cm, 2.6 * cm, 11.5 * cm], repeatRows=1)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), BLACK), ("TEXTCOLOR", (0, 0), (-1, 0), YELLOW),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [ZEBRA, HexColor("#ffffff")]),
+        ("GRID", (0, 0), (-1, -1), 0.4, RULE), ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("TOPPADDING", (0, 0), (-1, 0), 5), ("BOTTOMPADDING", (0, 0), (-1, 0), 5),
+        ("TOPPADDING", (0, 1), (-1, -1), 4), ("BOTTOMPADDING", (0, 1), (-1, -1), 4),
+    ]))
+    return t
+
+
+def _models_chapter():
+    out = chapter("Chapter 5 &middot; Models &mdash; the rules that score", 5)
+    out.append(Paragraph(
+        "A <b>model</b> is a pure rule: it takes inputs and returns a <b>side</b> (buy / sell / none) "
+        "plus a <b>score</b> (its conviction). It has no memory of its own &mdash; its memory is the "
+        "book it writes to. A model never trades directly; it only produces a signal that the gate chain "
+        "(Chapter 4) then accepts or rejects.", S["body"]))
+    out += fig("model-rule",
+               "Figure 5.1 &mdash; a model is a function: inputs in, a scored signal out. Below the "
+               "threshold it stays silent.")
+    out.append(Paragraph(
+        "Every model follows this shape, but the <i>rule inside the box</i> is different for each one. "
+        "funding_fade looks at the funding rate, xsec_momentum looks at 24h returns, model_stack looks at "
+        "the model votes. What is identical is the output: a scored signal that enters the same gate "
+        "chain.", S["body"]))
+    out += sec_fig("The models, side by side", "model-inputs",
+               "Figure 5.2 &mdash; four models, four different inputs, the same output shape: a scored "
+               "signal.")
+    out.append(Paragraph(
+        "This is the key to understanding the platform: <b>the model is the smallest replaceable part</b>. "
+        "Swapping a rule changes only what happens inside one box &mdash; the inputs, the gates, the "
+        "sizing and the book are all shared. The owner's best-5 selection chose specific models to keep; "
+        "the rest are disabled (A6) and influence nothing. Each description below ends with a "
+        "<b>Used by</b> box naming its consumer.", S["body"]))
+    out.append(sec("Each model in detail"))
+    out.extend(_model_paragraphs())
+    return out
+
+
+def _books_chapter():
+    out = chapter("Chapter 6 &middot; Books &mdash; the paper accounts", 6)
+    out.append(Paragraph(
+        "A <b>book</b> is one model's paper account: its <b>equity</b>, its <b>open positions</b>, and "
+        "its <b>closed trades</b>. One book per model. The book is the only thing that remembers &mdash; "
+        "the model re-scores every cycle, but the book accumulates the realised PnL that the leaderboard "
+        "and the solver measure.", S["body"]))
+    out += fig("book-anatomy",
+               "Figure 6.1 &mdash; a book's anatomy: equity, positions, trades, and the capital "
+               "allocation that decides how much it may size.")
+    out.append(Paragraph(
+        "Equity moves two ways: an open position is <b>marked to market</b> each cycle (equity drifts "
+        "with the unrealised PnL), and a closed position realises PnL into equity permanently. "
+        "<font face='Courier'>return_pct = equity / start_equity &minus; 1</font> is the number the "
+        "leaderboard shows, and <font face='Courier'>capital.json</font> stores each book's "
+        "<font face='Courier'>risk_mult</font> &mdash; a promoted book may size up, a demoted one may "
+        "only size down, and a disabled one gets zero allocation (A6).", S["body"]))
+    out += sec_fig("From signal to an open position", "signal-to-trade",
+               "Figure 6.2 &mdash; the sequence: risk, then a maker quote, then the book opens, and the "
+               "decision/fill are published with linked ids.")
+    out.append(Paragraph(
+        "Notice the ordering: <b>risk before size, quote before open</b>. risk.allow refuses an oversized "
+        "or stale entry; maker.quote returns a limit price that joins the book instead of crossing it; "
+        "then the book opens and publishes model.decision + model.fill with linked decision_id / "
+        "fill_id so the lake can thread the whole life of the position.", S["body"]))
+    out += sec_fig("The life of one position", "position-lifecycle",
+               "Figure 6.3 &mdash; a position is opened once, marked every cycle, and closed by one of "
+               "four triggers; the realised PnL lands in equity and the trades list.")
+    out.append(sec("How size is decided"))
+    out.append(Paragraph(
+        "Three multipliers stack, in order. First the model's <b>risk budget</b>: "
+        "<font face='Courier'>risk_pct</font> of equity, capped at 8% (models10) or 3&times; (alpha), "
+        "turned into a notional by the stop distance. Then <b>conviction sizing</b>: "
+        "<font face='Courier'>risk_for(base, conf) = base &times; (0.6 + 0.2 &times; min(conf, 4))</font> "
+        "&mdash; more confirmations, more capital. Then the global <b>size_mult</b> (now 3.0) scales the "
+        "final notional. Shorts on models10 carry half the size (the unbounded-tail rule).", S["body"]))
+    return out
+
+
+def _signal_chapter():
+    out = chapter("Chapter 7 &middot; A signal becomes a trade, end to end", 7)
+    out.append(Paragraph(
+        "Everything in one sequence. Read top to bottom: market_data feeds the whole platform; tad, "
+        "forecast and feeds each derive one input; the model scores; risk admits; the book opens; and "
+        "the decision + fill are published back onto the bus for the lake and the dashboard.", S["body"]))
+    out += fig("full-flow", "Figure 7.1 &mdash; the full signal-to-trade flow, one symbol.")
+    out.append(sec("A worked example, in pseudo-code"))
+    code = Paragraph(
+        "# 1. inputs arrive on the bus (BTCUSDT)<br/>"
+        "klines  = market_data.klines(\"BTCUSDT\", \"1m\")        # 120 bars<br/>"
+        "ta      = tad.signals(\"BTCUSDT\")                      # EMA/RSI/Donchian votes<br/>"
+        "fc      = forecast.blend(\"BTCUSDT\", \"buy\")           # prob 0.61, move 0.4%<br/>"
+        "oi      = feeds.quadrant(\"BTCUSDT\")                   # \"confirmation\"<br/>"
+        "<br/>"
+        "# 2. the model scores<br/>"
+        "side, score = funding_fade(\"BTCUSDT\")                 # fr=+0.10%  -> (\"sell\", 0.8)<br/>"
+        "<br/>"
+        "# 3. the gates run<br/>"
+        "if fc.prob &lt; 0.45: skip                              # 0.61 passes<br/>"
+        "score *= oi_gate.adjust(score, oi, side)               # confirmation boosts the move<br/>"
+        "ok, why = risk.allow(\"BTCUSDT\", side, notional, equity, fc.move_pct)<br/>"
+        "if not ok: skip                                        # exposure/staleness gate<br/>"
+        "<br/>"
+        "# 4. the trade opens<br/>"
+        "px, prob = maker.quote(\"BTCUSDT\", side, notional)      # join the bid<br/>"
+        "book.open(\"BTCUSDT\", side, px, notional)              # position live<br/>"
+        "emit.decision + emit.fill                              # linked ids -> lake", CODE_STYLE)
+    out.append(code)
+    return out
+
+
+def _supervisors_chapter():
+    out = chapter("Chapter 2 &middot; Supervisors &amp; lanes", 2)
+    out.append(Paragraph(
+        "The <b>supervisor</b> (<font face='Courier'>supervisor.py</font>) is the platform's shepherd, "
+        "not its trader. It never decides <i>what</i> to trade &mdash; it decides <i>which engines are "
+        "allowed to run</i> and keeps them alive. A <b>lane</b> is one engine's slot in the fleet: the "
+        "process it runs in, the code it owns, and the inputs it is allowed to read. The relationships "
+        "are fixed and simple: <b>an engine is 1-to-1 with a lane</b>, and <b>an engine is 1-to-many "
+        "with models</b> (each model is one book).", S["body"]))
+    out += fig("supervisor-lanes",
+               "Figure 2.1 &mdash; the supervisor allocates lanes; each lane is one engine (1:1); each "
+               "engine hosts many models (1:many), one book per model.")
+    out.append(Paragraph(
+        "What the supervisor actually does, in order: it reads the <b>disable list</b> "
+        "(<font face='Courier'>state/disabled.json</font>) and refuses to launch any disabled engine "
+        "(A6 &mdash; a re-enable is a human act); it launches each enabled engine as its own process; "
+        "it <b>watches</b> them (a crash or a hang is restarted by the watchdog); and it grades each "
+        "book (trades, return, streak) for the leaderboard. Because the disable check happens again "
+        "inside <font face='Courier'>start()</font>, a relaunch cannot silently revive a disabled "
+        "book &mdash; that hole was closed after the best-5 enforcement.", S["body"]))
+    out.append(Paragraph(
+        "The 1:1 / 1:many split is the whole point of the layering. A lane is the unit of <b>lifecycle</b> "
+        "(launch, disable, restart); a model is the unit of <b>logic</b> (one rule); a book is the unit of "
+        "<b>state</b> (equity, positions, trades). Changing a model's rule never touches the lane; killing "
+        "a lane never touches another engine's models.", S["body"]))
+    return out
+
+
+def _gates_chapter():
+    out = chapter("Chapter 4 &middot; Gates &mdash; from rule to allowed trade", 4)
+    out.append(Paragraph(
+        "A signal is not a trade. Between the rule's output and an open position sits the <b>gate "
+        "chain</b> &mdash; a fixed sequence of checks that every signal must survive, in order. A "
+        "<b>no</b> at any gate drops the signal for that cycle; nothing is retried in a loop. This is "
+        "the one place the platform refuses risk, and it is shared by every book (risk.py, tactics.py), "
+        "so no model can invent its own risk policy.", S["body"]))
+    out += fig("gates",
+               "Figure 4.1 &mdash; the gate chain. Each gate is a veto; a no sends the model back to the "
+               "next scan cycle.")
+    out.append(sec("The rule"))
+    out.append(Paragraph(
+        "The <b>rule</b> is the pure function at the head of the chain: it reads the inputs and returns "
+        "a <b>side</b> (<font face='Courier'>buy</font> / <font face='Courier'>sell</font> / "
+        "<font face='Courier'>none</font>) plus a <b>score</b> (its conviction). It has no memory and no "
+        "opinion about risk &mdash; risk is the gates' job. The rule only answers one question: "
+        "<i>given these inputs, which way, and how strongly?</i>", S["body"]))
+    out.append(sec("How a BUY or SELL is decided, with worked examples"))
+    out.append(Paragraph(
+        "The decision is the rule's answer surviving the gates. Three worked examples:", S["body"]))
+    out.append(Paragraph(
+        "<b>Example 1 &mdash; funding_fade decides SELL.</b> The rule reads "
+        "<font face='Courier'>lastFundingRate</font>. The crowd is paying heavily to stay long, so the "
+        "reversion is short. fr = +0.10% &rarr; above +0.08% &rarr; rule returns "
+        "<font face='Courier'>(\"sell\", 0.8)</font>. Then the gates: the forecast must not say "
+        "strongly buy (prob &ge; 0.45 in the sell direction), the move must clear the fee, the OI "
+        "quadrant must not be a fresh long-accumulation, and risk.allow must admit the size. If all pass, "
+        "the book opens a short.", S["body"]))
+    out.append(Paragraph(
+        "<b>Example 2 &mdash; xsec_momentum decides BUY.</b> The rule ranks symbols by 24h return and "
+        "longs the strongest, shorts the weakest (market-neutral). For a name in the strongest bucket it "
+        "returns <font face='Courier'>(\"buy\", rank_score)</font>. The forecast must agree (prob &ge; "
+        "0.45 for buy), and because it is a momentum long, the OI gate <i>boosts</i> a confirmation "
+        "quadrant (OI up + price up) and <i>demotes</i> a divergence. If the gates pass, the book buys.", S["body"]))
+    out.append(Paragraph(
+        "<b>Example 3 &mdash; a signal the gates REJECT.</b> funding_fade returns "
+        "<font face='Courier'>(\"sell\", 0.9)</font>, but the forecast returns prob 0.55 <i>for buy</i> "
+        "&mdash; the forecast gate vetoes the short (the blend disagrees). No trade. The model re-scores "
+        "next cycle. This is the whole point: a strong rule answer is overruled by a disagreeing "
+        "forecast, because the forecast is the primary weight.", S["body"]))
+    out.append(sec("The forecast, in detail"))
+    out.append(Paragraph(
+        "The forecast is the primary gate. Seven agents each look at the same 1m/15m candle series from "
+        "a different angle &mdash; <b>momentum</b> (EMA slope + recent return), <b>volume</b>, "
+        "<b>volatility</b>, <b>reversion</b>, <b>moving-average</b>, <b>breakout</b>, and "
+        "<b>pressure</b> &mdash; and each returns a probability (a sigmoid of its raw score) plus an "
+        "expected move. A supervisor blends them, weighting each agent by its historical hit rate "
+        "(<font face='Courier'>w = 0.5 + accuracy</font>, so 0.5&ndash;1.5), into one "
+        "<font face='Courier'>prob</font> and one <font face='Courier'>move_pct</font>.", S["body"]))
+    out.append(Paragraph(
+        "<b>Worked blend.</b> Seven agents return probabilities 0.62, 0.58, 0.50, 0.66, 0.55, 0.60, "
+        "0.49. With equal weights the blend is &asymp; 0.57 &mdash; above 0.45, so the forecast admits. "
+        "But if momentum and breakout (the two with the best hit rate) are the 0.62 and 0.66, their "
+        "higher weights pull the blend toward 0.60, strengthening the admission. The action is labelled "
+        "from the blend: <font face='Courier'>enter</font> when prob &ge; 0.58 and move &ge; 0.25%, "
+        "<font face='Courier'>liquidate</font> when prob &le; 0.42, otherwise <font face='Courier'>"
+        "hold</font>. Below MIN_BARS=50 bars the forecaster refuses to answer at all.", S["body"]))
+    return out
+
+
 def doc():
     story = []
 
-    # ---- cover page (no page number) ----
-    story.append(Spacer(1, 4 * cm))
-    story.append(Paragraph("CryptAlyst", COVER_TITLE))
-    story.append(Paragraph("Message-Bus Topics — Publisher &amp; Subscriber Reference", COVER_SUB))
-    story.append(Spacer(1, 1 * cm))
+    # ---- cover page (artistic: brand + hand-drawn radial centrepiece) ----
+    story.append(Spacer(1, 0.6 * cm))
+    story.append(Paragraph("CRYPTALYST", COVER_TITLE))
+    story.append(Spacer(1, 0.3 * cm))
+    story.append(_radial_drawing())
+    story.append(Spacer(1, 0.4 * cm))
+    story.append(Paragraph("Supervisor &middot; Lanes &middot; Engines &middot; Models &middot; "
+                           "Messaging &middot; Data Event Types", COVER_EDITION))
+    # push the credits to the bottom of the cover, in bold and larger
+    story.append(Spacer(1, 1.4 * cm))
     story.append(Paragraph(
-        "CryptAlyst is a paper-trading crypto platform: a Go market-data feed, a RabbitMQ "
-        "message bus, and a fleet of Python engines that compute signals, weigh them, and trade "
-        "paper books. This document is the reference for the bus — the one broker, its eight "
-        "exchanges and twenty-two topics, who publishes and who subscribes, how a model's "
-        "numbers become a weighted decision, and the places where the wiring is still wrong.", COVER_BODY))
-    story.append(Paragraph(
-        "How to read it: the first section defines the engine/model/book layers and the decision "
-        "weighting; then the architecture counts; then the registry; then each model; then the "
-        "message flow and the per-subscriber breakdown; finally the known gaps.", COVER_BODY))
+        "Platform Version 2.0 &nbsp;&middot;&nbsp; Document Revision 2<br/>"
+        "Designed by Andrew Preston &nbsp;&middot;&nbsp; &copy; TekVolt Systems 2026",
+        ParagraphStyle("credits", fontName="Helvetica-Bold", fontSize=12,
+                       leading=17, textColor=INK, alignment=1)))
     story.append(PageBreak())
 
-    # ---- table of contents ----
+    # ---- front matter: about + contents ----
+    story.append(_cover_meta_table())
+    story.append(Spacer(1, 0.5 * cm))
+    story.append(callout(
+        "<b>Reading order.</b> Chapter 1 defines the engine/model/book layers and the decision "
+        "weighting; Chapter 2 the supervisors and lanes; Chapter 3 the engines; Chapter 4 the gate "
+        "chain and how a BUY or SELL is decided; Chapter 5 the models; Chapter 6 the books; Chapter 7 "
+        "a worked example of a signal becoming a trade &mdash; each with Mermaid flow diagrams. "
+        "Chapter 8 is the bus reference (architecture, registry, producers, subscribers); "
+        "Chapter 9 lists the known gaps."))
+    story.append(Spacer(1, 0.6 * cm))
     story.append(Paragraph("Contents", S["h2"]))
     story.append(TableOfContents())
-    story.append(PageBreak())
 
     # ---- body ----
+    # Chapter 1 — Overview
+    story.extend(chapter("Chapter 1 &middot; Overview &mdash; engines, models and books", 1))
     story.extend(_decision_section())
-    story.append(Paragraph("Bus architecture — how many of each", S["h2"]))
+
+    # Chapter 2 — Supervisors & lanes
+    story.extend(_supervisors_chapter())
+
+    # Chapter 3 — Engines
+    story.extend(_engines_chapter())
+
+    # Chapter 4 — Gates
+    story.extend(_gates_chapter())
+
+    # Chapter 5 — Models
+    story.extend(_models_chapter())
+
+    # Chapter 6 — Books
+    story.extend(_books_chapter())
+
+    # Chapter 7 — Signal becomes a trade
+    story.extend(_signal_chapter())
+
+    # Chapter 8 — Message bus
+    story.extend(chapter("Chapter 8 &middot; The message bus", 8))
+    story.append(sec("Bus architecture &mdash; how many of each"))
     story.append(_arch_table())
     story.append(Spacer(1, 6))
-    story.append(Paragraph("Registry", S["h2"]))
+    story.append(sec("Registry &mdash; the 22 topics"))
     story.append(_reg_table())
     story.append(Spacer(1, 6))
-
-    story.append(Paragraph("Per-model descriptions — what each one does", S["h2"]))
-    story.extend(_model_paragraphs())
-    story.append(Spacer(1, 6))
-
-    story.append(Paragraph("Producer contract — what each model sends and where it is inserted", S["h2"]))
+    story.append(sec("Producer contract &mdash; what each model sends and where it is inserted"))
     story.append(Paragraph(
         "Wire format: Python producers pass the registry gate (topic registered AND producer in its "
         "allow-list), then wrap the payload in an envelope "
@@ -746,11 +1330,9 @@ def doc():
         "durable mirror, bus_consumer's projection, and each live subscriber's private queue.", S["body"]))
     story.append(_contract_table())
     story.append(Spacer(1, 6))
-
     story.extend(_flow_section())
     story.append(Spacer(1, 6))
-
-    story.append(Paragraph("Subscriber breakdown", S["h2"]))
+    story.append(sec("Subscriber breakdown &mdash; every topic, every subscriber"))
     story.append(Paragraph(
         "<b>recorder (:8801)</b> and <b>bus_consumer (:8798)</b> subscribe to every topic; "
         "the breakdown lists them per topic plus each topic-specific consumer with its usage "
@@ -758,7 +1340,8 @@ def doc():
     story.append(_breakdown_table())
     story.append(Spacer(1, 6))
 
-    story.append(Paragraph("Models not receiving the topics they should listen for", S["h2"]))
+    # Chapter 7 — Known gaps
+    story.extend(chapter("Chapter 9 &middot; Known gaps &mdash; models not listening", 9))
     story.append(Paragraph(
         "These models read a <b>HTTP/file proxy</b> instead of the bus topic, or the topic "
         "has <b>no consumer</b>. The bus carries the topic; the model never subscribes to it.", S["body"]))
@@ -769,9 +1352,9 @@ def doc():
 
 def build():
     dd = TopicsDoc(OUT, pagesize=A4,
-                   leftMargin=1.4 * cm, rightMargin=1.4 * cm,
-                   topMargin=1.4 * cm, bottomMargin=1.6 * cm,
-                   title="CryptAlyst Message-Bus Topics",
+                   leftMargin=0.8 * inch, rightMargin=0.8 * inch,
+                   topMargin=0.75 * inch, bottomMargin=0.75 * inch,
+                   title="CryptAlyst — Supervisor, Lanes, Engines, Models, Messaging, Data Event Types",
                    author="CryptAlyst")
     dd.multiBuild(doc(), onFirstPage=_page_footer, onLaterPages=_page_footer)
     print("wrote", OUT, os.path.getsize(OUT), "bytes")

@@ -1,0 +1,18 @@
+sequenceDiagram
+    autonumber
+    participant M as Model (rule)
+    participant R as Risk gate
+    participant Q as Maker
+    participant B as Book
+    participant L as Ledger / Bus
+    M->>R: risk.allow(symbol, side, notional, equity, forecast...)
+    R-->>M: (allowed, reason)
+    alt allowed
+        M->>Q: quote(symbol, side, notional)
+        Q-->>M: (limit_price, fill_probability)
+        M->>B: open(symbol, side, price, notional)
+        B->>L: model.decision + model.fill
+        L-->>B: fill_id + decision_id
+    else rejected
+        R-->>M: reason (stale / oversized / no capital)
+    end

@@ -1,0 +1,23 @@
+flowchart TD
+    subgraph A["funding_fade (models10)"]
+        A1["premiumIndex funding rate"] --> A2["fr &gt; +0.08% &rarr; short<br/>fr &lt; -0.08% &rarr; buy"]
+    end
+    subgraph B["xsec_momentum (alpha)"]
+        B1["24h returns per symbol"] --> B2["long strongest N<br/>short weakest N"]
+    end
+    subgraph C["model_stack (crypto_strategies)"]
+        C1["model votes"] --> C2["net &ge; 2 &rarr; trade consensus"]
+    end
+    subgraph D["cascade_rebound (alpha)"]
+        D1["1m drop &ge; 3&sigma; on 5&times; volume"] --> D2["buy the snap-back"]
+    end
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class A1,B1,C1,D1 c_intel;
+class A2,B2,C2,D2 c_model;

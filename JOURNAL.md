@@ -568,3 +568,45 @@ of every GPU fast path.
 **Diagnosis:** `start(name)` in supervisor.py had NO disabled check of its own — the restart loop (supervisor.py:232-242) checked `disabled_set()` before `start()`, but any call path that reached `start()` directly (or a stale first-cycle read of a partially-updated disabled.json) could launch a disabled book. This is a defense-in-depth gap, not a logic failure in the loop.
 **Fix:** `start(name)` now re-checks `_norm(name)`/`_norm(stem)` against `disabled_set()` and returns without launching if disabled — the block is now enforced at the launch site itself, so no call path can start a disabled book.
 **Status:** enforcement verified post-fix — the only registry engines not in disabled.json are the 5 kept books (models10, marketagent, alpha, cryptostrat, churn).
+
+---
+
+## Entry 15 — portfolio_review clobbered disabled.json + dead publish (A6)
+
+**Found by KIMI (16:59 review):** wiring portfolio_review into the supervisor exposed two bugs. (1) `publish_verdict()` was defined but never called — the main loop ended with a literal `if not a.dry: pass`, so review.verdict never reached the bus. (2) The disabled.json write OVERWROTE the whole list with its own stop list, wiping the 63-book best-5 disable list twice (60→4 books; the supervisor relaunched ~30 disabled engines before the capital gate caught up). KIMI killed it, removed its supervisor ENGINES entry, and restored the 63-book list.
+**Fix:** (1) `publish_verdict` is now called with a proper verdict list (engine/action/why/return_pct), gated on `--dry`. (2) the disabled.json write is now a READ-MODIFY-UNION — it reads the existing list and unions its own stop set, never clobbers the owner config.
+**A6 lesson:** this is exactly the class A6 exists for — a disabled-book write path that bypasses the owner config. The disable list is owner territory; a reviewer may only ADD to it, never replace it.
+**Status:** fixes landed + compile clean; portfolio_review NOT re-added to the supervisor (KIMI re-adds after re-verifying).
+
+---
+
+## Entry 16 — full-system bug audit (iterations 1–3)
+
+Owner asked for an iterative whole-system bug/error sweep + safe refactors. Baselines green (Go core/tad/backend, Python test tools, gofmt/vet/py_compile). Findings + fixes:
+
+1. **risk.py — gross-exposure denominator bug.** `allow()` added `notional/book_equity` to the FLEET `gross_multiple` (total notional/total equity). Mixed denominators over-rejected large sizes (fighting "trade large sizes"). Extracted `exposure_ok()` + `test_risk.py`.
+2. **models10.py — short-size divergence.** Entry loop halved short notional (`*0.5`) for risk.allow+quote, but `Book.open()` recomputed full size → shorts opened 2x the risk-checked size. `Book.open` now reuses the passed notional.
+3. **oi_gate.py — climax cap inverted for shorts.** `2.0-0.70=1.30` boosted a short at extreme-OI exhaustion. Climax now skips the short inversion (symmetric demote). test_oi_gate +2 checks.
+4. **tad/scheduler — lost-wakeup race.** Submit between run()'s final dirty check and worker's delete(processing/busy) orphaned a dirty flag. run() now clears both in the same lock. `go test -race` green.
+5. **lib/solver — dead `round_trip_bps` param** removed (net already fee-inclusive).
+6. **crypto_strategies — model_stack threshold/docstring mismatch** → `MODEL_STACK_NEED=2`.
+7. **seal.go — comment mismatch** (`Ts < from`, not `<=`).
+
+Verified-correct (not bugs): alpha sd/volmed guards, risk slippage bps conversion, executor RSI l==0 guard, capital start==0 guard, forecast agentMA/atr warm-up, maker no-book guard. No re-enables, no deletions (A1/A6).
+
+---
+
+## Entry 17 — model robustness: stress-tested + hardened (owner: "push strange data")
+
+Owner drove a test-first hardening pass: fabricate realistic + pathological market data, run the models, fix every crash/nonsense signal. Result: models never crash and never fire on flat/empty/zero/NaN/inf/malformed input.
+
+**Fixes (my lane):**
+- models10.py: added `_clean(bs)` sanitizer (drops non-dict / missing-key / None / string / NaN / inf bars) applied to donchian55/boll_squeeze/rsi2/vwap_revert/vol_break; donchian55 `hi==lo` flat guard (was firing "buy" on a flat market); `rsi` 0÷0 now returns 50 (was 100 → spurious "sell"); boll_squeeze `m==0` guard; vol_break empty guard.
+- alpha.py: extracted xsec_picks / cascade_signal / funding_side (behaviour-preserving) + cascade_signal rejects malformed/non-finite bars before division/stats.
+- crypto_strategies.py: 2-line `isinstance(a/votes, dict)` guard on all 5 alert strategies (were crashing AttributeError on non-dict input).
+- scripts/start.sh: kill list now includes alpha.py + crypto_strategies.py (stale kept-books survived restarts); dashboard wait 30s→90s.
+
+**Tests (6 new, all green):**
+- test_engine_book_models.py (56) · test_signal_scenarios.py (16) · test_realistic_scenarios.py (15) · test_crazy_market.py (32×6=192) · table_results.py (22) · fuzz_models.py (10k malformed inputs, 0 crashes).
+
+Deployed: books restarted 05:45, trading (alpha 6 open), recorder 0 errors.

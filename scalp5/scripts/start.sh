@@ -74,11 +74,12 @@ if [ "$KILL" = "1" ]; then
   say "0 · clearing the previous run"
   KILLED=0
   for pat in \
-    supervisor.py models10.py crypto_pack.py executor.py hybrids.py alpha_rank.py \
-    alpha_signals.py skim_pump.py curve_rider.py churn.py multi_models.py stats_models.py \
-    sympathy_lag.py slow_edges.py crypto_edges.py turtle_multi.py swing_v2.py swing_turtle.py \
-    scalp_fast.py skim.py skim_ai.py grid.py hft.py movers.py flash.py fast_ignition.py \
-    market_agent.py signals.py feeds.py heartbeat.py optimiser_svc.py master.py \
+    supervisor.py models10.py crypto_pack.py crypto_strategies.py executor.py hybrids.py \
+    alpha.py alpha_rank.py alpha_signals.py skim_pump.py curve_rider.py churn.py \
+    multi_models.py stats_models.py sympathy_lag.py slow_edges.py crypto_edges.py \
+    turtle_multi.py swing_v2.py swing_turtle.py scalp_fast.py skim.py skim_ai.py grid.py \
+    hft.py movers.py flash.py fast_ignition.py market_agent.py signals.py feeds.py \
+    heartbeat.py optimiser_svc.py master.py \
     bin/marketdata bin/recorder bin/busconsumer bin/healthpub bin/signalbus bin/envelopeapi
   do
     if pgrep -f "$pat" >/dev/null 2>&1; then
@@ -256,7 +257,9 @@ pgrep -f "feeds.py --every" >/dev/null && ok "feeds publishing" || warn "feeds.p
 say "9 · dashboard"
 nohup python3 -u master.py --host 0.0.0.0 --port 8799 >"$LOGS/master.log" 2>&1 &
 nohup python3 -u heartbeat.py >"$LOGS/heartbeat.log" 2>&1 &
-wait_http "http://127.0.0.1:8799/api/health" 30 "dashboard on :8799" || die "dashboard did not answer"
+# master.py probes the whole fleet on first /api/health (fan-out + retry), which
+# is slow on a cold start — give it 90s, not 30, before declaring the stage dead.
+wait_http "http://127.0.0.1:8799/api/health" 90 "dashboard on :8799" || die "dashboard did not answer"
 
 say "10 · the Envelope Explorer"
 (cd "$CORE" && nohup ./bin/envelopeapi --port 8802 --dir ../state/lake3 >"$LOGS/envelopeapi.log" 2>&1 &)

@@ -1,0 +1,20 @@
+sequenceDiagram
+    autonumber
+    participant MD as market_data
+    participant TA as tad
+    participant FC as forecast
+    participant FD as feeds (OI)
+    participant M as Model
+    participant RK as Risk
+    participant BK as Book
+    MD->>TA: klines (1m)
+    MD->>FC: klines (15m)
+    MD->>FD: OI / depth / taker
+    TA->>M: intel.ta (signal votes)
+    FC->>M: intel.forecast (prob + move)
+    FD->>M: features.json (OI quadrant)
+    M->>M: rule scores the symbol
+    M->>RK: risk.allow(...)
+    RK-->>M: allowed
+    M->>BK: open position
+    BK->>MD: model.decision / model.fill

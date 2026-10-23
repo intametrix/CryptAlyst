@@ -63,6 +63,8 @@ def prices():
 # strategies: (alert, votes, held_symbols) -> ("buy"|"sell"|None, why)
 # --------------------------------------------------------------------------
 def flow_follow(a, votes, held):
+    if not isinstance(a, dict) or not isinstance(votes, dict):
+        return None, ""
     m = a.get("metrics") or {}
     tbr = m.get("taker_buy_ratio")
     burst = m.get("burst_multiple") or 0
@@ -76,6 +78,8 @@ def flow_follow(a, votes, held):
 
 
 def range_fade(a, votes, held):
+    if not isinstance(a, dict) or not isinstance(votes, dict):
+        return None, ""
     m = a.get("metrics") or {}
     rp = m.get("range_position")
     burst = m.get("burst_multiple") or 0
@@ -89,6 +93,8 @@ def range_fade(a, votes, held):
 
 
 def model_stack(a, votes, held):
+    if not isinstance(a, dict) or not isinstance(votes, dict):
+        return None, ""
     # consensus threshold: the NET vote (buys minus sells) must reach NEED.
     # Today only two detectors emit votes, so |net|>=2 means "2 of 2 agree".
     net = sum(votes.values())
@@ -98,6 +104,8 @@ def model_stack(a, votes, held):
 
 
 def sweep_reversal(a, votes, held):
+    if not isinstance(a, dict) or not isinstance(votes, dict):
+        return None, ""
     m = a.get("metrics") or {}
     z = m.get("burst_z") or 0
     if a.get("severity") != "CRITICAL" or z < 8:
@@ -109,6 +117,8 @@ def sweep_reversal(a, votes, held):
 
 
 def momentum_stack(a, votes, held):
+    if not isinstance(a, dict) or not isinstance(votes, dict):
+        return None, ""
     m = a.get("metrics") or {}
     rp, tbr = m.get("range_position"), m.get("taker_buy_ratio")
     net = sum(votes.values())

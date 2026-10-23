@@ -92,6 +92,8 @@ def rsi(cl, n=14):
             g += ch
         else:
             l -= ch
+    if g == 0 and l == 0:
+        return 50.0        # no movement -> neutral, not overbought
     if l == 0:
         return 100.0
     return 100 - 100 / (1 + (g / n) / (l / n))
@@ -109,9 +111,34 @@ def atr(bs, n=14):
 
 # ---- the ten rule sets: each returns "buy", "sell" or None ------------------
 
+def _clean(bs):
+    """Drop bars that are missing a numeric field or carry a non-finite value,
+    so a malformed source (missing key / None / string / NaN / inf) cannot crash
+    a model. Well-formed bars pass through unchanged."""
+    out = []
+    for b in bs:
+        if not isinstance(b, dict):
+            continue
+        try:
+            o = float(b.get("o", b.get("c", 0.0)))
+            h = float(b["h"]); l = float(b["l"]); c = float(b["c"])
+            v = float(b.get("v", 0.0))
+        except (TypeError, ValueError, KeyError):
+            continue
+        if any(x != x or abs(x) == float("inf") for x in (o, h, l, c, v)):
+            continue
+        out.append({"t": b.get("t", 0), "o": o, "h": h, "l": l, "c": c, "v": v})
+    return out
+
+
 def r_donchian55(bs):
+    bs = _clean(bs)
+    if not bs:
+        return None
     hi = max(b["h"] for b in bs[-55:])
     lo = min(b["l"] for b in bs[-55:])
+    if hi == lo:
+        return None          # flat — no range, so no breakout possible
     c = bs[-1]["c"]
     if c >= hi:
         return "buy"
@@ -138,8 +165,13 @@ def r_orb(bs):
 
 
 def r_boll_squeeze(bs):
+    bs = _clean(bs)
+    if not bs:
+        return None
     cl = [b["c"] for b in bs[-20:]]
     m = sum(cl) / len(cl)
+    if m == 0:
+        return None          # zero price -> no meaningful band
     sd = (sum((x - m) ** 2 for x in cl) / len(cl)) ** 0.5
     width = 2 * sd / m
     if sd == 0:
@@ -152,6 +184,7 @@ def r_boll_squeeze(bs):
 
 
 def r_rsi2(bs):
+    bs = _clean(bs)
     cl = [b["c"] for b in bs]
     r = rsi(cl[-20:], 2) if len(cl) >= 3 else 50
     if r < 10:
@@ -162,6 +195,7 @@ def r_rsi2(bs):
 
 
 def r_vwap_revert(bs):
+    bs = _clean(bs)
     pv = sum(b["c"] * b["v"] for b in bs[-30:])
     vv = sum(b["v"] for b in bs[-30:])
     if vv <= 0:
@@ -189,6 +223,9 @@ def r_macd(bs):
 
 
 def r_vol_break(bs):
+    bs = _clean(bs)
+    if not bs or len(bs) < 20:
+        return None
     avg = sum(b["v"] for b in bs[-20:-1]) / 19
     b = bs[-1]
     if avg <= 0 or b["v"] < 3 * avg:

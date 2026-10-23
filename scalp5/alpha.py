@@ -137,6 +137,43 @@ def clear_pending(book, sym):
             PENDING.pop(k, None)
 
 
+# --- the three model rules, extracted so "our thinking" is testable ---------
+def xsec_picks(ranked):
+    """Cross-sectional momentum: long the strongest 3, short the weakest 3
+    (only when the weak end is actually negative — no shorting a rising name)."""
+    longs = ranked[:3]
+    shorts = [u for u in ranked[-3:] if (u.get("c") or 0) < 0]
+    return longs, shorts
+
+
+def cascade_signal(b1):
+    """True when the last 1m bar is a >1.5-sigma drop on >2.5x median volume —
+    forced selling, so buy the snap-back. len < 30 is a no-signal (warm-up)."""
+    if len(b1) < 30:
+        return False
+    # reject malformed / non-finite bars before dividing or taking stats
+    for b in b1:
+        if not isinstance(b, dict):
+            return False
+        c, v = b.get("c"), b.get("v")
+        if not isinstance(c, (int, float)) or not isinstance(v, (int, float)):
+            return False
+        if c != c or c == 0 or abs(c) == float("inf"):
+            return False
+    rets = [(b1[i]["c"] / b1[i - 1]["c"] - 1) * 100 for i in range(1, len(b1))]
+    sd = statistics.pstdev(rets[:-1]) or 1e-9
+    last_ret = rets[-1]
+    volmed = statistics.median([x["v"] for x in b1[-21:-1]]) or 1e-9
+    return last_ret < -1.5 * sd and b1[-1]["v"] > 2.5 * volmed
+
+
+def funding_side(rate):
+    """Side for a funding extreme; None below the 2bps threshold."""
+    if abs(rate) < 0.0002:
+        return None
+    return "sell" if rate > 0 else "buy"
+
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--seconds", type=int, default=86400)
     ap.add_argument("--loop", type=float, default=5.0); ap.add_argument("--universe", type=int, default=60)
@@ -183,7 +220,7 @@ def main():
         if b: b.manage(px)
         ranked = sorted([u for u in uni if u.get("c") is not None], key=lambda u: -(u["c"] or 0))
         if len(ranked) >= 20:
-            longs = ranked[:3]; shorts = ranked[-3:]
+            longs, shorts = xsec_picks(ranked)
             for u in longs:
                 if u["s"] in b.pos or len(b.pos) >= 16:
                     continue
@@ -194,7 +231,7 @@ def main():
                 b.open(u["s"], "buy", u["price"], "top-3 24h: %+.1f%% (10s confirmed)" % u["c"])
                 log("%-16s BUY  %-11s %+.1f%% confirmed 10s" % ("xsec_momentum", u["s"], u["c"]))
             for u in shorts:
-                if u["s"] in b.pos or len(b.pos) >= 16 or (u["c"] or 0) >= 0:
+                if u["s"] in b.pos or len(b.pos) >= 16:
                     continue
                 if opp_rank and opp_rank.get(u["s"], 0) < OPP_MIN:
                     continue
@@ -212,12 +249,11 @@ def main():
               if s in cb.pos or len(cb.pos) >= 6: continue
               try: b1 = klines(s, "1m", 40)
               except Exception: continue
-              if len(b1) < 30: continue
-              rets = [(b1[i]["c"] / b1[i-1]["c"] - 1) * 100 for i in range(1, len(b1))]
-              sd = statistics.pstdev(rets[:-1]) or 1e-9
-              last_ret = rets[-1]
-              volmed = statistics.median([x["v"] for x in b1[-21:-1]]) or 1e-9
-              if last_ret < -1.5 * sd and b1[-1]["v"] > 2.5 * volmed:
+              if cascade_signal(b1):
+                  rets = [(b1[i]["c"] / b1[i-1]["c"] - 1) * 100 for i in range(1, len(b1))]
+                  sd = statistics.pstdev(rets[:-1]) or 1e-9
+                  last_ret = rets[-1]
+                  volmed = statistics.median([x["v"] for x in b1[-21:-1]]) or 1e-9
                   cb.open(s, "buy", b1[-1]["c"], "1m %.2f%% (%.1f sigma) on %.1fx volume" %
                           (last_ret, last_ret / sd, b1[-1]["v"] / volmed))
                   log("%-16s BUY  %-11s cascade %.1f sigma %.1fx vol" %
@@ -233,8 +269,8 @@ def main():
         ext = sorted(fr.items(), key=lambda kv: -abs(kv[1]))[:6]
         for s, rate in ext:
             if s not in px or s in fc.pos or len(fc.pos) >= 6: continue
-            if abs(rate) < 0.0002: continue
-            side = "sell" if rate > 0 else "buy"
+            side = funding_side(rate)
+            if side is None: continue
             if not confirmed("funding", s, side):
                 continue
             fc.open(s, side, px[s], "funding %+.4f%%/8h (10s confirmed)" % (100 * rate))

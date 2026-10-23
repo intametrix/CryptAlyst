@@ -1,0 +1,27 @@
+flowchart LR
+    MD["market_data<br/>(Go)"]
+    FC["forecast<br/>(Go)"]
+    TA["tad<br/>(Go)"]
+    SG["signals"]
+    FD["feeds"]
+    BA["backend detectors"]
+    E["ENGINE<br/>(a running process)"]
+    BK["BOOK<br/>(one model's account)"]
+    MD -->|"market.candle / price"| E
+    FC -->|"intel.forecast (prob + move)"| E
+    TA -->|"intel.ta (signal votes)"| E
+    SG -->|"intel.signal / intel.flow"| E
+    FD -->|"features.json (OI quadrant)"| E
+    BA -->|"alert.pumpdump"| E
+    E -->|"model.decision / model.fill"| BK
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class MD c_market;
+class FC,TA,SG,FD,BA c_intel;
+class E,BK c_model;

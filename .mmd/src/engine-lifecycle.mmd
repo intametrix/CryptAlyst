@@ -1,0 +1,14 @@
+sequenceDiagram
+    autonumber
+    participant S as Supervisor
+    participant E as Engine process
+    participant B as Message Bus
+    S->>E: launch python3 -u models10.py --only funding_fade
+    E->>B: subscribe to its topics
+    loop every scan cycle
+        E->>B: read inputs (forecast, TA, signals)
+        E->>E: compute signal + score
+        E->>B: publish model.decision / model.fill
+    end
+    Note over S,E: if the process dies or hangs
+    S->>E: restart (watchdog)
