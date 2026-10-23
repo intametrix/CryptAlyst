@@ -1864,6 +1864,7 @@ header{margin-left:186px}
  header,.wrap{margin-left:56px !important}}
 </style>
 <script>__UI_LIB__</script>
+<script src="/lwc.js"></script>
 <script>
 /* EARLY TAB FALLBACK — runs before the main script so a later failure can never
    make the sidebar unclickable. The full showTab replaces this on load. */
@@ -2216,8 +2217,7 @@ header{margin-left:186px}
       <button class="tbtn" onclick="resetY()" title="reset price axis (y)">reset price</button>
       <span class="mk" style="margin-left:6px">drag to pan · shift+drag to select a range · wheel zooms · double-click resets</span>
     </div>
-    <svg id="chartsvg" viewBox="0 0 1000 360" preserveAspectRatio="none"
-         style="width:100%;height:360px;display:block;touch-action:none;cursor:crosshair"></svg>
+    <div id="chartdiv" style="width:100%;height:420px"></div>
     <div class="label" id="chartfoot" style="margin-top:8px">—</div>
   </div>
 </div>
@@ -2741,62 +2741,57 @@ function chartGestures(){ return "drag to pan · shift+drag to select a range ·
 if (typeof VIEW === "undefined") { window.VIEW = {s:0, c:120, y:null}; }
 function chartRows(){ return (typeof LASTROWS!=="undefined" && LASTROWS) ? LASTROWS : []; }
 
-function resetView(){
-  var rows=chartRows();
-  VIEW.s = Math.max(0, rows.length-120);
-  VIEW.c = Math.min(120, rows.length||120);
-  VIEW.y = null;
-  drawMarket();
+function resetView(){ if(LWC) LWC.timeScale().fitContent(); }
+function resetY(){ if(LWC_candles) LWC_candles.priceScale().applyOptions({autoScale:true}); }
+function zoomStep(f){
+  if(!LWC) return;
+  var ts=LWC.timeScale(), r=ts.getVisibleLogicalRange();
+  if(!r) return;
+  var mid=(r.from+r.to)/2, len=(r.to-r.from)*f/2;
+  ts.setVisibleLogicalRange({from:mid-len, to:mid+len});
 }
-function resetY(){ VIEW.y=null; drawMarket(); }
-function zoomStep(factor){ zoomAt(600, (VIEW.c||120)*factor); }
 
-function drawMarket(){
-  var svg=$("chartsvg"); if(!svg) return;
-  var rows=chartRows();
-  if(!rows.length){ svg.innerHTML='<text x="20" y="40" fill="#59677a">no candles yet</text>'; return; }
-  var W=1000,H=360,PL=8,PR=64,PT=10,PB=30;
-  var n=rows.length, c=Math.max(10, Math.min(VIEW.c||120, n));
-  var s=Math.max(0, Math.min(n-c, VIEW.s||0));
-  var view=rows.slice(s, s+c);
-  var lo=Infinity, hi=-Infinity, vmax=0;
-  view.forEach(function(r){ lo=Math.min(lo,r.l); hi=Math.max(hi,r.h); vmax=Math.max(vmax,r.v||0); });
-  if(VIEW.y){ lo=VIEW.y.lo; hi=VIEW.y.hi; }
-  var pad=(hi-lo)*0.06 || 0.001; lo-=pad; hi+=pad;
-  var plotW=W-PL-PR, plotH=H-PT-PB-56, volH=48;
-  var bw=plotW/c;
-  var y=function(p){ return PT + (hi-p)/(hi-lo)*plotH; };
-  var volBase=PT+plotH+volH;
-  var g='';
-  // grid
-  for(var i=0;i<=4;i++){
-    var py=PT+plotH*i/4, price=hi-(hi-lo)*i/4;
-    g+='<line x1="'+PL+'" y1="'+py+'" x2="'+(PL+plotW)+'" y2="'+py+'" stroke="#16202b"/>';
-    g+='<text x="'+(PL+plotW+6)+'" y="'+(py+3)+'" fill="#59677a" font-size="10">'+price.toPrecision(6)+'</text>';
-  }
-  // candles + volume
-  view.forEach(function(r,i){
-    var x=PL+i*bw+bw*0.5, up=r.c>=r.o;
-    var col=up?"#3fb950":"#f85149";
-    g+='<line x1="'+x.toFixed(1)+'" y1="'+y(r.h).toFixed(1)+'" x2="'+x.toFixed(1)+'" y2="'+y(r.l).toFixed(1)+'" stroke="'+col+'" stroke-width="1"/>';
-    var top=y(Math.max(r.o,r.c)), bot=y(Math.min(r.o,r.c));
-    g+='<rect x="'+(x-bw*0.32).toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+Math.max(1,bw*0.64).toFixed(1)+
-       '" height="'+Math.max(1,bot-top).toFixed(1)+'" fill="'+col+'"/>';
-    var vh=vmax? (r.v/vmax)*volH : 0;
-    g+='<rect x="'+(x-bw*0.32).toFixed(1)+'" y="'+(volBase-vh).toFixed(1)+'" width="'+Math.max(1,bw*0.64).toFixed(1)+
-       '" height="'+vh.toFixed(1)+'" fill="'+(up?"#1d3b2a":"#3b1d1d")+'"/>';
+let LWC=null, LWC_candles=null, LWC_vol=null, LWC_legend=null;
+function lwcInit(){
+  if(!window.LightweightCharts) return;
+  var el=$("chartdiv"); if(!el) return;
+  if(LWC){ LWC.applyOptions({width:el.clientWidth}); return; }
+  LWC=LightweightCharts.createChart(el, {
+    layout:{background:{type:"solid",color:"#0b1119"}, textColor:"#8494a8", fontSize:11},
+    grid:{vertLines:{color:"#16202b"}, horzLines:{color:"#16202b"}},
+    rightPriceScale:{borderColor:"#1e2733"},
+    timeScale:{borderColor:"#1e2733", timeVisible:true, secondsVisible:false},
+    crosshair:{mode:0},
+    width:el.clientWidth, height:420
   });
-  // time axis
-  var ticks=Math.min(6, view.length);
-  for(var t=0;t<ticks;t++){
-    var idx=Math.floor(t*(view.length-1)/Math.max(1,ticks-1));
-    var d=new Date(view[idx].t);
-    var tx=PL+ (idx*bw) + bw*0.5;
-    g+='<text x="'+tx.toFixed(0)+'" y="'+(H-10)+'" fill="#59677a" font-size="9" text-anchor="middle">'+
-       d.toTimeString().slice(0,5)+'</text>';
-  }
-  svg.innerHTML=g;
-  GEO={vs:s, vc:c, PL:PL, PR:PR, PT:PT, PB:PB, W:W, H:H, LO:lo, HI:hi, plotW:plotW, plotH:plotH};
+  LWC_candles=LWC.addCandlestickSeries({upColor:"#3fb950",downColor:"#f85149",borderVisible:false,
+    wickUpColor:"#3fb950",wickDownColor:"#f85149", priceLineVisible:false});
+  LWC_vol=LWC.addHistogramSeries({priceFormat:{type:"volume"}, priceScaleId:"vol"});
+  LWC.chart.priceScale("vol").applyOptions({scaleMargins:{top:0.82,bottom:0}});
+  LWC.subscribeCrosshairMove(function(p){
+    var out=$("chartfoot");
+    if(!out) return;
+    if(!p || !p.time || !p.seriesData || !p.seriesData.get(LWC_candles)){
+      out.textContent="—"; return;
+    }
+    var c=p.seriesData.get(LWC_candles);
+    var chg=(c.open? ((c.close-c.open)/c.open*100):0).toFixed(2)+"%";
+    out.textContent="O "+c.open.toFixed(6)+"  H "+c.high.toFixed(6)+"  L "+c.low.toFixed(6)+
+      "  C "+c.close.toFixed(6)+"  "+chg;
+  });
+  window.addEventListener("resize", function(){ if(LWC) LWC.applyOptions({width:el.clientWidth}); });
+}
+function drawMarket(){
+  lwcInit();
+  var rows=chartRows();
+  if(!LWC) return;
+  if(!rows.length){ return; }
+  var candles=rows.map(function(r){ return {time:Math.floor(r.t/1000), open:r.o, high:r.h, low:r.l, close:r.c}; });
+  var vols=rows.map(function(r){ return {time:Math.floor(r.t/1000), value:r.v||0,
+    color:(r.c>=r.o)?"rgba(63,185,80,0.45)":"rgba(248,81,73,0.45)"}; });
+  LWC_candles.setData(candles);
+  LWC_vol.setData(vols);
+  LWC.timeScale().fitContent();
 }
 function allLayers(){} function setLayerScope(){}
 
@@ -6223,6 +6218,13 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, PAGE.replace("__UI_LIB__", ui_lib()), "text/html")
         if p in ("/", "/index.html"):
             return self._send(200, PAGE, "text/html")
+        if p == "/lwc.js":
+            try:
+                with open(os.path.join(HERE, "..", "web", "node_modules", "lightweight-charts",
+                                       "dist", "lightweight-charts.standalone.production.js"), "rb") as fh:
+                    return self._send(200, fh.read(), "application/javascript")
+            except Exception:
+                return self._send(500, b"/* lightweight-charts not found */", "application/javascript")
         if p == "/api/klines":
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
