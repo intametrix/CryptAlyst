@@ -34,6 +34,11 @@ BACKEND = "http://127.0.0.1:8787"; SPOT = "https://api.binance.com"
 FAPI = "https://fapi.binance.com"; FEE = 0.001
 
 CONFIRM_SECS = 3.0     # a signal must persist this long before we act
+TP_PCT = 20.0           # a trade up 20% -> close it out
+LOCK_USD = 800.0        # book unrealised >= this -> bank the winners
+LOCK_PCT = 0.3          # bank only winners that clear the fee
+STOP_SECS = 30.0        # a bad position still bad after 30s -> close it
+STOP_PCT = 0.5          # ...only if it is meaningfully bad (past the fee)
 PENDING = {}            # (book, symbol, side) -> first time the signal was seen
 
 CFG = {
@@ -60,25 +65,54 @@ class Book:
         ch = (px / p["entry"] - 1) * 100
         return ch if p["side"] == "buy" else -ch
 
+    def _equity_mtm(self):
+        return self.equity + sum(p["notional"] * p.get("mark", 0.0) / 100 for p in self.pos.values())
+
+    def _close(self, s, p, reason):
+        net = p["mark"] - 200 * FEE
+        self.equity += p["notional"] * net / 100
+        self.trades.append({"symbol": s, "side": p["side"], "entry": p["entry"],
+            "gross_pct": round(p["mark"], 3), "net_pct": round(net, 3),
+            "peak_pct": round(p["peak"], 3), "reason": reason,
+            "held_s": round(time.time() - p["t"], 1), "notional": round(p["notional"], 2),
+            "entry_ms": int(p["t"] * 1000), "exit_ms": int(time.time() * 1000),
+            "why": p["why"]})
+        self.pos.pop(s, None)
+
     def manage(self, px):
+        # mark every position first
         for s in list(self.pos):
             p = self.pos[s]; m = px.get(s)
             if not m: continue
-            ch = self.mark(s, m); p["mark"] = ch; p["peak"] = max(p.get("peak", 0), ch)
-            r = None
-            if ch >= self.cfg["tp"]: r = "target"
-            elif False: r = "stop"   # profit-only
-            elif time.time() - p["t"] >= self.cfg["hold"]: r = "clock"
-            if r:
-                net = ch - 200 * FEE
-                self.equity += p["notional"] * net / 100
-                self.trades.append({"symbol": s, "side": p["side"], "entry": p["entry"],
-                    "gross_pct": round(ch, 3), "net_pct": round(net, 3),
-                    "peak_pct": round(p["peak"], 3), "reason": r,
-                    "held_s": round(time.time() - p["t"], 1), "notional": round(p["notional"], 2),
-                    "entry_ms": int(p["t"] * 1000), "exit_ms": int(time.time() * 1000),
-                    "why": p["why"]})
-                self.pos.pop(s, None)
+            p["mark"] = self.mark(s, m); p["peak"] = max(p.get("peak", 0), p["mark"])
+        # equity floor
+        if self._equity_mtm() <= 0:
+            for s in list(self.pos):
+                self._close(s, self.pos[s], "floor")
+            return
+        # +20% take-profit
+        for s in list(self.pos):
+            p = self.pos[s]
+            if p["mark"] >= TP_PCT:
+                self._close(s, p, "target")
+        # $800 book lock
+        unreal = sum(p["notional"] * p["mark"] / 100 for p in self.pos.values())
+        if unreal >= LOCK_USD:
+            for s in list(self.pos):
+                p = self.pos[s]
+                if p["mark"] > LOCK_PCT:
+                    self._close(s, p, "lock")
+            return
+        # 30s time-stop
+        for s in list(self.pos):
+            p = self.pos[s]
+            if p["mark"] < -STOP_PCT and time.time() - p["t"] >= STOP_SECS:
+                self._close(s, p, "stop")
+        # clock: winners only
+        for s in list(self.pos):
+            p = self.pos[s]
+            if p["mark"] > 0 and time.time() - p["t"] >= self.cfg["hold"]:
+                self._close(s, p, "clock")
 
     last_open = 0.0
 
