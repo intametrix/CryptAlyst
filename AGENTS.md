@@ -98,3 +98,29 @@ machine-enforced, not process-hoped.
 Until the enforcement lands in code, this rule binds the agents directly:
 no agent re-enables a model, and every disable an agent performs is followed
 by a written post-mortem on the channel and in `JOURNAL.md`.
+
+## Rule A7 — NO UNREQUESTED CHANGES; ASK BEFORE EXPANDING SCOPE
+
+Set by the human after the trading-platform incident (reverted to 1f12a4c).
+An agent changes ONLY what the human explicitly asked to change — nothing
+more, nothing "implied", nothing "as an improvement on the side".
+
+- A broad or ambiguous instruction is NOT a licence to expand scope. Ask one
+  specific question, or make the smallest change that satisfies the literal
+  request, then stop and confirm before going further.
+- No renames (books, files, UI labels), no threshold/number changes, no new
+  exits or features, no UI changes, and no removal of something the human
+  asked for — unless the human asked for that exact thing by name.
+- Before any change that alters trading behaviour, the visible UI, or the set
+  of books/models, state the exact change and get explicit approval on the
+  channel first. "Improve it", "optimise it", "make it faster" are NOT
+  approval for a specific change.
+- When switching the runtime of a working system (e.g. Python -> Go), keep the
+  old system running and prove the new one trades equivalently before cutting
+  over; never swap a live system for an unverified one.
+- Any change made without approval is reverted on request without argument,
+  and the overstep is disclosed in JOURNAL.md.
+
+This rule binds both agents and wins over any "feel free to improve" style
+instruction: "feel free to improve" still requires naming the concrete change
+and getting a yes before applying it.
