@@ -83,7 +83,7 @@ def main():
                 if not sym:
                     time.sleep(1); continue
                 side = "buy" if snap["imb"] >= 0 else "sell"
-                notional = min(bk.equity * a.risk / 100 * 20, bk.equity * 0.08)
+                notional = min(bk.equity * a.risk / 100 * 20, bk.equity * 0.25)
                 bk.pos = {"symbol": sym, "side": side, "entry": snap["mid"], "t": time.time(),
                           "notional": notional, "peak": 0.0,
                           "why": "imb %+.2f 24h %+.1f%%" % (snap["imb"], meta.get(sym, 0))}
