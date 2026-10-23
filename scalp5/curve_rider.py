@@ -124,19 +124,18 @@ def main():
             px2 = px
             chg = 0.0
             net = -FEE
-            peak = 0.0
             while True:
                 time.sleep(a.hold)
+                # trade the signal until it changes (direction flips)
+                new_side, _slope = direction()
+                if new_side != side:
+                    break
                 px2 = float(jget(SPOT + "/api/v3/ticker/price?symbol=" + best, 5)["price"])
                 chg = (px2 / px - 1) * 100 if side == "buy" else (1 - px / px2) * 100
-                peak = max(peak, chg)
                 net = chg - FEE
-                # greedy: ride the curve, exit only on a retracement from the peak
-                if peak >= 0.5 and chg <= peak - 0.5:
-                    break
                 if chg <= -1.0:      # safety stop: no heavy losses
                     break
-                log("HOLD  %-10s %-4s peak %+6.3f%% net %+6.3f%%" % (best, side, peak, net))
+                log("HOLD  %-10s %-4s net %+6.3f%% signal %s" % (best, side, net, new_side))
             bk.equity += notional * net / 100
             bk.trades.append({"symbol": best, "side": side, "entry": px, "exit": px2,
                               "gross_pct": chg, "net_pct": net, "peak_pct": max(0.0, chg),
