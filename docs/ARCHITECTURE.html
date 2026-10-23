@@ -12,8 +12,8 @@ img { max-width: 100%; }
 em { color: #596370; font-size: 8pt; }
 pre { background: #F1F3F6; font-family: Courier, monospace; font-size: 8pt; padding: 6px; }
 blockquote { border-left: 3px solid #1F4E79; margin-left: 0; padding-left: 12px; color: #444; }
-section.landscape { break-before: page; page-break-before: always; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-section.landscape img { max-width: 100%; max-height: 70vh; }
+section.landscape { break-inside: avoid; page-break-inside: avoid; margin: 10px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+section.landscape img { max-width: 100%; max-height: 52vh; }
 section.landscape em { margin-top: 6px; text-align: center; }
 </style></head><body><h1>CryptAlyst — Books, Models &amp; Data</h1>
 <h2>The decoupled streaming forecast architecture</h2>
@@ -186,11 +186,6 @@ old packets simply evaporate.</p>
 <section class="landscape"><img src="diagrams/02-bus.png" alt="Figure 2.1 — producers and subscribers on the bus">
 <p><em>Figure 2.1 — calculation agents publish numbers; subscribers listen and decide.</em></p></section>
 <h2>2.1 The envelope anatomy</h2>
-<pre><code class="language-mermaid">flowchart TD
-    E[&quot;envelope&quot;] --&gt; D[&quot;data — the payload&quot;]
-    E --&gt; M[&quot;meta — version · plane · producer · epoch ts · TTL · cid&quot;]
-    E --&gt; R[&quot;refs — topic · key · generation · age_ms&quot;]
-</code></pre>
 <section class="landscape"><img src="diagrams/08-envelope-anatomy.png" alt="Figure 2.2 — the envelope: data, meta, references">
 <p><em>Figure 2.2 — an envelope carries the payload, its provenance, and the inputs it read.</em></p></section>
 <table>

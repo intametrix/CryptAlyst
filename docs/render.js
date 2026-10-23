@@ -26,8 +26,8 @@ img { max-width: 100%; }
 em { color: #596370; font-size: 8pt; }
 pre { background: #F1F3F6; font-family: Courier, monospace; font-size: 8pt; padding: 6px; }
 blockquote { border-left: 3px solid #1F4E79; margin-left: 0; padding-left: 12px; color: #444; }
-section.landscape { break-before: page; page-break-before: always; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-section.landscape img { max-width: 100%; max-height: 70vh; }
+section.landscape { break-inside: avoid; page-break-inside: avoid; margin: 10px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+section.landscape img { max-width: 100%; max-height: 52vh; }
 section.landscape em { margin-top: 6px; text-align: center; }
 `;
 
