@@ -1,23 +1,3 @@
-<div style="text-align:center; margin-top: 120px; page-break-after: always;">
-<h1 style="font-size: 26pt; color:#1F4E79;">CryptAlyst</h1>
-<h2 style="color:#596370; font-weight: normal;">Books, Models &amp; Data</h2>
-<p style="font-size: 11pt; color:#596370; font-style: italic;">The decoupled streaming forecast architecture<br/>
-— messaging, streaming, models, books, data and history —<br/>
-and how they combine to continuously forecast and fire tier signals.</p>
-<br/><br/>
-<table style="width: 70%; margin: 0 auto;">
-<tr><th>At a glance</th><th></th></tr>
-<tr><td>Architecture</td><td>async · decoupled · bus-driven</td></tr>
-<tr><td>Messaging</td><td>STOMP envelopes · epoch ts · TTL · no backlog</td></tr>
-<tr><td>Streaming</td><td>Binance WebSocket · never poll · BPF filter-at-source</td></tr>
-<tr><td>Models</td><td>10 calculation agents · pure functions</td></tr>
-<tr><td>Books</td><td>account + bounded signal intel window</td></tr>
-<tr><td>Strategy</td><td>lock · trail · stop · clock ladder</td></tr>
-<tr><td>Runtime</td><td>pure Go · goroutines</td></tr>
-<tr><td>Diagrams</td><td>35 · rendered in the CryptAlyst role palette</td></tr>
-</table>
-</div>
-
 # CryptAlyst — Books, Models & Data
 ## The decoupled streaming forecast architecture
 
@@ -152,6 +132,16 @@ signal" idea applied to market data.
 
 # 1. The core principle
 
+**What it does.** This section defines the one organising idea the whole platform hangs on:
+every part is a *producer* or a *consumer* of small, stamped packets, and nothing is coupled
+directly to anything else.
+
+**Why it matters.** Decoupling is what makes the system observable, testable and
+replaceable. A coupled system (a model that opens a position directly) is fast to write and
+impossible to reason about afterwards; a decoupled system records every hop as a packet, so
+every decision can be replayed and every part can be swapped without touching the rest.
+
+
 The platform is **asynchronous and decoupled**. Nothing calls anything else directly.
 
 - **Models are calculation agents** — they publish *numbers* (a signal, a score, a probability).
@@ -183,6 +173,16 @@ be published, listened to, and used by any other part — without any part knowi
 <div style="page-break-after: always"></div>
 
 # 2. Messaging — the bus is the nervous system
+
+**What it does.** The bus moves every packet between every component: market data in,
+model numbers out, decisions and fills and pnl around the loop. A packet is an envelope — a
+payload plus provenance (who, when, in what order, with a TTL).
+
+**Why it matters.** The bus is the single point of integration. Because everything flows
+through it as stamped envelopes, the whole system has one audit trail, one source of truth
+for "who may write what", and one place to observe. Without it, every component would need
+its own hand-rolled wiring, and the platform would be a hairball of direct calls.
+
 
 Every message on the bus is an **envelope**: a payload plus metadata — the provenance that
 makes the stream auditable and fresh. The bus is a **state channel, not a job queue**: with
@@ -269,6 +269,15 @@ retention (TTL). The planes group them:
 
 # 3. Streaming — never poll (BPF-inspired)
 
+**What it does.** Market data (depth, candles, price, volume, OI) arrives over WebSocket,
+pushed by the exchange, and is filtered at the source to only the fields each consumer needs.
+
+**Why it matters.** Polling is the enemy of a fast decision: the measurement showed one HTTP
+fetch (333 ms) is ~2000× slower than one model calculation (150 µs). Streaming removes that
+latency and the "filter at the source" idea (from the Berkeley Packet Filter) removes the
+wasted data. A decision made on a pushed, pre-filtered number is both faster and cheaper.
+
+
 The Berkeley Packet Filter filters packets **at the source** — inside the kernel — so only the
 data that matches is ever copied up. The same idea applied to market data:
 
@@ -309,6 +318,15 @@ The market data service subscribes once, and every model reads the same live sta
 <div style="page-break-after: always"></div>
 
 # 4. Models — calculation agents that publish numbers
+
+**What it does.** A model is a *pure function*: candles and the depth imbalance in, a
+"buy" / "sell" / "nothing" out. It publishes that number and holds no account state.
+
+**Why it matters.** Purity is what makes a model testable (you can feed it generated bars
+and assert the answer) and replaceable (a better rule is a drop-in). If a model also knew
+about the account, it would be impossible to test in isolation and impossible to swap
+without dragging the whole book along. One model = one question = one testable function.
+
 
 A model owns **one question**. It does not know about accounts, positions, or risk. It
 computes and publishes — which is what makes it replaceable and testable.
@@ -351,6 +369,15 @@ model knowing who listens.
 
 # 5. Books — account **and** intel
 
+**What it does.** The book is the account (equity, positions, PnL) *plus* a bounded
+rolling window of the recent signals, so a model can see a *pattern* before it is confident.
+
+**Why it matters.** A single signal is noise; a streak is a signal. The window is the memory
+that turns the former into the latter — without it the strategy would trade every blip.
+Because the window is bounded and TTL-expired, it never holds too much, yet it is long enough
+to catch a sustained move (imagine a bull run: the streak is exactly what you want to see).
+
+
 The book is two things at once:
 
 1. **The account** — equity, open positions, realised PnL. This survives and is reported.
@@ -384,6 +411,16 @@ signal.
 
 # 6. Data — the market microstructure
 
+**What it does.** The system reads the order flow — depth imbalance, open interest, price,
+volume — not just the candles. Each signal reveals a different face of what the market is
+*thinking*.
+
+**Why it matters.** Candles alone are the *past*; the order book and OI are the *present* —
+the resting orders and the new money that will move price next. Combining them with history
+turns a lagging picture into a leading forecast. The market microstructure is the edge: it
+shows intention before it becomes a completed trade.
+
+
 A forecast is only as good as the data behind it. The system reads the order flow, not just
 the candles:
 
@@ -412,6 +449,16 @@ the candles:
 
 # 7. Forecast → tier signal → trade
 
+**What it does.** The numbers from the models are combined with history and the signal
+intel into a *forecast*, which is then ranked into *tiers*, and only a confirmed tier signal
+is traded.
+
+**Why it matters.** Not every number deserves a trade. The tier ranking is what stops the
+strategy from treating a weak signal and a strong one the same — it concentrates capital on
+the confident, confirmed signals and ignores the noise. That is the difference between a
+forecast and a firehose.
+
+
 The strategy does not act on every number. It waits for a **tier signal** — a confirmed,
 strength-ranked decision.
 
@@ -437,6 +484,16 @@ Not all signals are equal. The system ranks them by strength and acts accordingl
 
 # 8. The strategy and exit ladder
 
+**What it does.** Once a tier signal is confirmed, the strategy opens a position and
+manages it on a fixed ladder: lock at +0.35%, trail off the peak, stop at −0.5%, clock at
+180s.
+
+**Why it matters.** The ladder is a *risk envelope*, not a prediction. It does not try to
+call the market; it guarantees that whatever happens, the profit is banked, the loss is
+bounded, the winner has room to run, and nothing is held forever. Fixed, simple exits are
+what make the outcome predictable — which is the whole point of a trading system.
+
+
 Once a tier signal is confirmed, the strategy opens a position and manages it on a fixed
 ladder. The ladder is the risk envelope that keeps losses bounded and lets winners run.
 
@@ -459,6 +516,16 @@ ladder. The ladder is the risk envelope that keeps losses bounded and lets winne
 
 # 9. Pure Go — concurrency
 
+**What it does.** The models and the engine run as independent Go goroutines inside one
+process, each with its own scheduler.
+
+**Why it matters.** The same independence the bus gives at the message level, goroutines
+give at the process level: a slow model can't block the others, a panic is contained, and
+each model runs continuously whether or not anyone listens. Pure Go also removes the
+interpreter as a concern — the math was never the bottleneck, but one runtime for everything
+is simpler to build, deploy and reason about.
+
+
 The models and the engine run as **Go goroutines**, each decoupled from the others:
 
 - **A slow model can't block the others** (each owns its goroutine).
@@ -472,6 +539,15 @@ The models and the engine run as **Go goroutines**, each decoupled from the othe
 <div style="page-break-after: always"></div>
 
 # 10. The full journey
+
+**What it does.** Traces one market tick from the exchange WebSocket all the way to a
+recorded fill, through the bus, the recorder, the models, the book and the lake.
+
+**Why it matters.** The journey is the proof the decoupling works end to end: data is
+recorded once and consumed many times, models publish and books decide, and every step lands
+in the same append-only lake. Understanding the journey is understanding the whole system in
+one pass.
+
 
 One market tick's journey through the platform, end to end:
 
@@ -492,6 +568,14 @@ One market tick's journey through the platform, end to end:
 <div style="page-break-after: always"></div>
 
 # 11. The envelope and pipeline
+
+**What it does.** Defines the envelope (data, meta, refs) and the pipeline every packet
+passes: four interceptors, the operator, a transformer.
+
+**Why it matters.** Provenance and checks are *on the packet*, not in a log beside it. A
+refusal is recorded as an envelope too, so "why not" is a packet you can open. That is what
+turns a message stream into evidence you can audit.
+
 
 Covered in section 2 — reproduced here with the full field dictionary and the worked
 refusal path.
@@ -521,6 +605,14 @@ model's own signal-age check — a distinction the record preserves.
 
 # 12. The topic registry
 
+**What it does.** One table lists every topic: its exchange, its allowed producers, and its
+retention (TTL).
+
+**Why it matters.** A single registry is the enforcement point for producer contracts — who
+may write what — and for the TTL that keeps the bus a state channel rather than a job queue.
+Adding a topic is one line; changing a contract is visible to everyone.
+
+
 The registry is the single source of truth for who may write what, and how long it lives.
 
 | Topic | Plane | Producers | Retention |
@@ -549,6 +641,14 @@ channel, not a job queue.
 
 # 13. The risk governor
 
+**What it does.** Sits between the tier signal and the trade, and refuses any order the
+account cannot afford: exposure, gross multiple, per-symbol concentration.
+
+**Why it matters.** The models want to trade; the account has limits. The governor is the
+machine-enforced boundary that says no, with the rule and the number recorded. Without it,
+"risk" would be a hope; with it, a refusal is a fact you can audit.
+
+
 Between the tier signal and the trade sits the risk governor. It is the machine-enforced
 boundary that refuses a trade the models want but the account cannot afford.
 
@@ -570,6 +670,15 @@ answerable.
 
 # 14. The evolution
 
+**What it does.** Recounts the path from a monolithic script to the decoupled streaming
+forecast.
+
+**Why it matters.** The evolution is the design argument in miniature: each step removed a
+coupling and added a layer of memory. Seeing the steps explains *why* the end state looks the
+way it does — and warns against sliding back into the coupled pattern that caused the
+trouble in the first place.
+
+
 Every step removed a coupling and added a layer of **memory** — which is exactly what a
 forecast needs.
 
@@ -587,6 +696,14 @@ forecast needs.
 <div style="page-break-after: always"></div>
 
 # 15. Model reference — the calculation agents in detail
+
+**What it does.** Documents each of the ten models as a pure function — its exact rule, its
+inputs, its thresholds, and what it returns.
+
+**Why it matters.** The reference is the contract between "what the model computes" and "what
+the system trades". Having each rule written down means a signal can be reproduced by hand,
+a bug can be localised to one function, and a change can be reasoned about before it is made.
+
 
 Each model is a **pure function of its inputs**: candles (and, for the curve rider, the
 depth imbalance). It returns `buy`, `sell`, or nothing. It holds no state and knows nothing
@@ -834,6 +951,15 @@ be traced from the market tick that triggered it to the fill it produced.
 
 # 17. Data signals — deep dive
 
+**What it does.** Explains the three microstructure signals in detail: depth imbalance,
+open interest change, and volume — each with its formula and its thresholds.
+
+**Why it matters.** These signals are what the market is *thinking*, as opposed to what it
+has *done* (the candles). Understanding each one — and its limits — is what lets the models
+read intention rather than lag. The depth leads price; OI shows conviction; volume shows
+participation.
+
+
 ## 17.1 Depth imbalance — what the book is thinking
 
 The order book is a live vote. Bid volume is money wanting to buy; ask volume is money
@@ -891,6 +1017,14 @@ volume is noise. The spike rule catches the difference:
 
 # 18. Correlation and lineage
 
+**What it does.** Explains how one correlation id follows a piece of work from the market
+tick through the decision, the fill and the pnl, and how references are declared or derived.
+
+**Why it matters.** Lineage is what turns a pile of packets into a *story* — and a story you
+can verify. A trade traceable to its trigger is evidence; a trade without a line of descent
+is a rumour. The correlation id is the spine of the audit.
+
+
 Every piece of work is followed by one **correlation id**. A market tick leads to a decision,
 the decision to a fill, the fill to a pnl update — all carrying the same cid, so the whole
 chain is resolvable in the lake.
@@ -917,6 +1051,15 @@ presented as declared.
 
 # 19. Book states
 
+**What it does.** Models the book as a small state machine: idle → accumulating →
+confirmed → in position → closed → idle.
+
+**Why it matters.** A state machine makes the book's behaviour finite and testable. The
+window expiring returns "accumulating" to "idle", so a pattern can never form from stale
+intel. Every transition is a defined, checkable step — which is what makes the book
+deterministic.
+
+
 The book is a small state machine. Every position moves through the same states, and the
 exit ladder is the only thing that moves it forward.
 
@@ -939,6 +1082,14 @@ never forms from stale intel.
 
 # 20. The recorder and the lake
 
+**What it does.** The recorder is the single consumer of the bus: it writes every envelope
+once into the lake (the append-only journal + an indexed store) and fans it out to readers.
+
+**Why it matters.** Single-writer, append-only is what makes the record trustworthy: nothing
+rewrites history, nothing drops a packet silently, and the explorer reads the same lake the
+recorder wrote. The lake is the memory of the whole platform.
+
+
 The bus has **one consumer**: the recorder. It writes every envelope **once** into the lake,
 then fans it out to readers (the explorer, the dashboards). This single-writer design is why
 the record is append-only and auditable.
@@ -956,6 +1107,15 @@ the record is append-only and auditable.
 <div style="page-break-after: always"></div>
 
 # 21. The supervisor and control plane
+
+**What it does.** The supervisor launches and restarts the models, watches their health,
+publishes the aggregate pnl, and accepts control commands.
+
+**Why it matters.** The supervisor is the orchestrator that never trades: it keeps the
+trading processes alive and honest without making a single decision itself. Separating
+control from trading means a control failure can't corrupt a book, and a book failure can't
+silence the control plane.
+
 
 The supervisor is the orchestrator: it launches and restarts the models, watches health, and
 publishes the aggregate pnl. It never trades — it only keeps the trading processes alive and
@@ -975,6 +1135,14 @@ honest.
 <div style="page-break-after: always"></div>
 
 # 22. Example trades — each exit, worked
+
+**What it does.** Works each exit in the ladder — stop, trail, cascade, funding — as a
+concrete trade with numbers.
+
+**Why it matters.** Each exit exists for a reason (bound the loss, ride the winner, buy the
+flush, collect the funding), and seeing the numbers makes the reason concrete. The ladder is
+a set of *guarantees*, and each worked example is one guarantee demonstrated.
+
 
 ## 22.1 The stop
 
@@ -1017,6 +1185,14 @@ perps, collects the funding, and exits on the clock or the lock.
 
 # 23. Risk accounting
 
+**What it does.** Measures the account as a whole — the gross multiple (total notional over
+equity), per-position exposure, and per-symbol concentration — and refuses past the limits.
+
+**Why it matters.** Risk is a portfolio property, not a per-trade property. Ten individually
+small positions can still be a lethal total; the gross multiple catches that. The refusal
+names the rule and the number, so the bound is auditable, not aspirational.
+
+
 The governor measures the account as a whole, not trade by trade. The binding number is the
 **gross multiple**: total notional divided by equity.
 
@@ -1041,6 +1217,14 @@ vague feeling but a recorded, auditable decision.
 
 # 24. The envelope journey, restated
 
+**What it does.** Restates the pipeline every envelope passes: interceptors → operator →
+transformer → lake, with a refusal recorded at any stage.
+
+**Why it matters.** Repetition is deliberate: the pipeline is the one thing every packet
+shares, so it bears repeating. A refusal at any interceptor is itself an envelope, so the
+record contains both the trades and the reasons for non-trades.
+
+
 ![Figure 24.1 — every envelope passes the same pipeline](diagrams/33-envelope-journey.png)
 
 *Figure 24.1 — authority, keying, correlation, freshness, then the operator, then the transformer.*
@@ -1051,6 +1235,14 @@ the trades *and* the reasons for non-trades.
 <div style="page-break-after: always"></div>
 
 # 25. Tier decisions, restated
+
+**What it does.** Restates how numbers are ranked into tiers, and how the tier decides the
+action.
+
+**Why it matters.** The tier ranking is the capital-allocation rule: strong confirmed signals
+act, weak ones are ignored. Restating it alongside the forecast closes the loop — the
+forecast produces the number, the tier decides whether it is worth trading.
+
 
 ![Figure 25.1 — numbers ranked into tiers](diagrams/34-tier-decision.png)
 
@@ -1066,6 +1258,14 @@ between a forecast and a firehose.
 <div style="page-break-after: always"></div>
 
 # 26. Design decisions — why it is built this way
+
+**What it does.** States each major design choice and its reason: the bus over direct
+calls, the intel window, the TTL, the fixed ladder, the pure models.
+
+**Why it matters.** Decisions should be written down, or they get re-litigated (and
+accidentally reversed) later. This section is the "why" appendix — the reasoning that
+survives the code.
+
 
 Every choice is a decision with a consequence. These are the reasons, stated plainly.
 
@@ -1115,6 +1315,14 @@ every rule can be verified with synthetic bars before it ever sees a live market
 
 # 27. The forecast — how the layers combine
 
+**What it does.** Defines the forecast as a function of three layers — live (the trigger),
+historical (the context), and signal intel (the confidence) — and shows a worked combination.
+
+**Why it matters.** A forecast is not one number; it is the combination of *now*, *where we
+are*, and *is this real*. Separating the layers makes the forecast explainable — you can say
+which layer drove a decision, and tune each layer independently.
+
+
 The forecast is not one number. It is a function of three layers:
 
 ```
@@ -1161,6 +1369,14 @@ conviction the strategy can act on.
 
 # 28. The Go code structure
 
+**What it does.** Maps the code to the architecture: which module holds the bus, which
+holds the models, which holds the engine, and how the goroutines split the work.
+
+**Why it matters.** The code should mirror the design, or the design is just a diagram.
+Mapping one to the other means a reader can find the model, the book, or the exit ladder in
+the source — and see that the decoupling is real, not aspirational.
+
+
 The models and the engine run as Go binaries, split by module.
 
 | Module | Path | What it holds |
@@ -1203,6 +1419,15 @@ run.
 <div style="page-break-after: always"></div>
 
 # 29. More worked examples
+
+**What it does.** Four more scenarios: a churn day (why nothing traded), a mean-reversion
+trade (two models agreeing), a generation gap (a silent producer detected), and a full
+session replay.
+
+**Why it matters.** Each example exercises a different property — the honesty of "nothing
+traded", the power of agreement, the detectability of loss, and the replayability of the
+lake. Together they show the system is not just a happy path.
+
 
 ## 29.1 A churn day — why nothing traded
 
@@ -1256,6 +1481,13 @@ from the lake — which is the point of recording once and reading many times.
 
 # 30. Operations and monitoring
 
+**What it does.** Lists what must be running, the health checks, and the restart order.
+
+**Why it matters.** A system that cannot be operated cannot be trusted. The checks (feed
+alive, recorder consuming, generation gaps) turn "is it working?" into a set of numeric
+answers, and the restart order protects the append-only lake.
+
+
 ## 30.1 What must be running
 
 | Service | Port | Purpose |
@@ -1292,6 +1524,13 @@ append-only, so a restart never rewrites history.
 
 # 31. Testing the models
 
+**What it does.** Describes the test harness and why generated data is used.
+
+**Why it matters.** A model is a pure function, so it can be tested against deterministic
+bars — no network, no clock, no state. A test that reads the live market is a bet, not a
+test. This is the discipline that makes a rule change safe to ship.
+
+
 Every model is a **pure function of its inputs**, so every model is testable against
 generated data — no network, no clock, no state. This is what the test harness relies on.
 
@@ -1318,6 +1557,13 @@ a breakout. Deterministic inputs, deterministic assertions.
 <div style="page-break-after: always"></div>
 
 # 32. Appendix — the complete topic registry
+
+**What it does.** Lists every topic with its plane, producers and retention.
+
+**Why it matters.** This is the full producer contract surface — the complete answer to "who
+may write what, and how long it lives". It is the appendix you consult when adding a topic or
+diagnosing a missing binding.
+
 
 | Topic | Plane | Producers | Retention |
 |---|---|---|---|
@@ -1354,6 +1600,12 @@ a breakout. Deterministic inputs, deterministic assertions.
 
 # 33. Glossary, expanded
 
+**What it does.** Defines every term in one place.
+
+**Why it matters.** A shared vocabulary is what lets two people read the same diagram and
+mean the same thing. The glossary is the contract for the words.
+
+
 | Term | Meaning |
 |---|---|
 | envelope | the fixed carrier: data, meta, references |
@@ -1379,6 +1631,13 @@ a breakout. Deterministic inputs, deterministic assertions.
 <div style="page-break-after: always"></div>
 
 # 34. Summary
+
+**What it does.** Condenses the whole document to one paragraph and three principles.
+
+**Why it matters.** The summary is the answer to "what is this, in one breath": a decoupled
+streaming forecast, where books hold the intel, the bus keeps it real-time, and the window
+keeps it informed.
+
 
 The system is a **decoupled streaming forecast**: market data streams in (never polled), the
 models publish numbers (never trading directly), the bus carries them as stamped envelopes
