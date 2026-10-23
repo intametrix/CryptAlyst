@@ -58,6 +58,12 @@
  .prow2 span{color:var(--faint)}
  .prow2 b{color:var(--fg);font-weight:500;text-align:right}
  .swatch{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:5px;vertical-align:middle}
+#flowresize{height:9px;cursor:ns-resize;border-top:1px solid #1b2632;background:transparent;
+  border-radius:0 0 10px 10px;transition:background .15s,border-color .15s;position:relative;margin-top:2px}
+#flowresize::after{content:"•••";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-size:9px;color:#9fb0c4;opacity:0;letter-spacing:3px;transition:opacity .15s;pointer-events:none}
+#flowbox:hover #flowresize, #flowresize:hover{background:#1d2b3a;border-top:2px solid #3d6f96}
+#flowbox:hover #flowresize::after, #flowresize:hover::after{opacity:1}
 </style></head><body>
 
 <header>
@@ -117,8 +123,7 @@
         </div>
         <div style="display:flex;gap:6px;padding:0 12px 6px;flex-wrap:wrap" id="flowwin"></div>
         <div id="flows" style="display:none;padding:0 12px 12px;max-height:240px;overflow:auto"></div>
-        <div id="flowresize" style="height:6px;cursor:ns-resize;border-top:1px solid #1b2632;background:#0a1219;border-radius:0 0 10px 10px"
-             onmousedown="startFlowResize(event)" title="drag to resize the money flow panel"></div>
+        <div id="flowresize" onmousedown="startFlowResize(event)" title="drag to resize the money flow panel"></div>
       </div>
       <div class="hint">drag = zoom box · drag price scale = zoom price · drag time scale = zoom time ·
         drag a box = zoom · shift-drag = pan · alt-drag = zoom price ·
