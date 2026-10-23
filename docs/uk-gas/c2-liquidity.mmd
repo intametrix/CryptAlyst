@@ -1,11 +1,14 @@
-flowchart TD
-    BET["Amaranth (Hunter)<br/>long winter / short summer<br/>calendar spreads"] --> MOVE["spreads moved against<br/>Sept 2006"]
-    MOVE --> LOSS["~$6bn lost in a week"]
-    LOSS --> LESSON["lesson: spreads are<br/>illiquid + position limits"]
-    class BET c_model
-    class MOVE c_risk
-    class LOSS c_risk
-    class LESSON c_control
+flowchart LR
+    CURVE["gas curve"] --> FRONT["front (M1)<br/>liquid · tight"]
+    CURVE --> BACK["back (seasons)<br/>illiquid · wide"]
+    FRONT --> SPRD["spread<br/>less liquid than outright"]
+    BACK --> SPRD
+    SPRD --> STRESS["stress<br/>bid-ask blows out<br/>(2022)"]
+    class CURVE c_market
+    class FRONT c_intel
+    class BACK c_intel
+    class SPRD c_model
+    class STRESS c_risk
 %% colour by role
 classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
 classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;

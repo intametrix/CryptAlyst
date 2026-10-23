@@ -2,7 +2,7 @@
 ## NBP market mechanics, the famous trades, and the strategies that worked
 
 > A deep, factual tour of UK natural-gas trading: the NBP balance, the weather and storage
-> drivers, the 2021–22 shock, the Amaranth blow-up, and the strategies that real funds have
+> drivers, the 2021–22 shock, the 2006 calendar-spread blow-up, and the strategies that real funds have
 > used — then how AI changes all of it, now and next.
 
 ---
@@ -142,19 +142,19 @@ winter / long storage* ahead of 2021–22 made the trade of the decade.
 
 # 8. The famous trades — what worked and what blew up
 
-## 8.1 Amaranth (2006) — the calendar-spread blow-up
+## 8.1 The 2006 calendar-spread blow-up
 
-Amaranth's Brian Hunter bet huge on **natural-gas calendar spreads** (long winter / short
+One large US hedge fund's lead energy trader bet huge on **natural-gas calendar spreads** (long winter / short
 summer, and the March-April and Nov-Jan spreads). In September 2006 the spreads moved against
-the position and Amaranth lost **~$6 billion in a week** — the largest hedge-fund collapse to
-that date. The CFTC later charged Hunter with attempted manipulation of gas futures.
+the position and the fund lost **~$6 billion in a week** — the largest hedge-fund collapse to
+that date. The CFTC later charged the trader with attempted manipulation of gas futures.
 
-![Figure 8.1 — the Amaranth blow-up](u6-amaranth.png)
+![Figure 8.1 — the 2006 calendar-spread blow-up](u6-spread.png)
 
 *Figure 8.1 — one over-sized spread position, one adverse move, $6bn gone.*
 
 **The lesson is not "don't trade spreads" — it is "size the spread, know its liquidity, and
-never let one position be the fund."** The calendar spread is a *good trade*; the Amaranth
+never let one position be the fund."** The calendar spread is a *good trade*; the
 mistake was the *size* and the *concentration*.
 
 ## 8.2 The 2021–22 winners
@@ -168,14 +168,14 @@ Russia risk) and positioned *before* the spike. That is fundamental, option-shap
 
 # 9. The strategies that have worked
 
-## 9.1 Weather-driven (the Centaurus / John Arnold play)
+## 9.1 Weather-driven (the classic play)
 
 ![Figure 9.1 — the weather strategy](u7-strategy-weather.png)
 
 *Figure 9.1 — buy the cold forecast, sell into the cold.*
 
 The classic: on a colder forecast revision, **long M+1 / winter**; when the cold arrives and
-the price spikes, **sell into it**. John Arnold at Centaurus built his fortune on weather-driven
+the price spikes, **sell into it**. A legendary gas trader built his fortune on weather-driven
 gas trading — reading the forecast faster and better than the market.
 
 ## 9.2 Storage-based (the fundamental long)
@@ -193,7 +193,7 @@ When storage is below the 5-year average going into winter, the winter premium i
 
 *Figure 9.3 — trade the spread against its storage-cost anchor.*
 
-The spread is the same instrument Amaranth used — but the discipline is the *anchor*: the
+The spread is the same instrument that fund used — but the discipline is the *anchor*: the
 spread should not exceed the cost of storage plus a *reasonable* risk premium. When it does,
 it is rich; sell it. When it is below, buy it.
 
@@ -226,8 +226,8 @@ Trade the mean reversion.
 
 | Lesson | Source | Control |
 |---|---|---|
-| concentration kills | Amaranth | one spread ≠ one fund; limits |
-| spreads are illiquid | Amaranth | size to the book, not the view |
+| concentration kills | the 2006 fund | one spread ≠ one fund; limits |
+| spreads are illiquid | the 2006 fund | size to the book, not the view |
 | the tail is the risk | 2021–22 | options + stress, buy the tail |
 | margin calls are real | 2021–22 | free-margin gate before every order |
 | weather is optionality | 2018 | trade the forecast, hedge the miss |
@@ -569,3 +569,96 @@ new ones.
 The envelope is the answer to all of them: **every signal carries a reason, a timestamp and a
 provenance, and every decision is auditable.** AI does not change that — it makes it more
 necessary.
+
+---
+
+# 26. Corruption in energy markets
+
+**What it is.** Energy markets — gas and power especially — have been repeatedly abused,
+because the underlying is physical, the benchmark is an assessment, and one big player can
+move a thin market. Understanding the abuses is part of trading it honestly.
+
+**Why it matters.** The same mechanics that make gas tradable (a physical balance, a
+price-assessment window, an illiquid curve) are the mechanics that get manipulated. A trader
+must both *avoid* the abuses and *recognise* them in the tape.
+
+![Figure 26.1 — the corruption typology](c1-corruption.png)
+
+*Figure 26.1 — benchmark fixing, spoofing, wash trades, position manipulation, withholding, insider.*
+
+| Abuse | What it is | Example pattern |
+|---|---|---|
+| benchmark fixing | trading in the assessment window to move the published price | trading at the fix to mark a book |
+| spoofing / layering | placing orders you intend to cancel to move price | a wall of bids pulled at the last moment |
+| wash trades | trading with yourself to fake volume | two accounts crossing the same ticket |
+| position manipulation | squeezing a delivery/expiry point | cornering the prompt month |
+| capacity withholding | a generator withholds to lift power price | a plant "outage" at peak |
+| insider information | trading on non-public outage/flow data | a physical trader acting before an outage is public |
+
+The UK and EU regimes — **REMIT** (energy market integrity), **MAR** (market abuse), and the
+CFTC across the Atlantic — prohibit these, with reporting, position limits and surveillance.
+
+---
+
+# 27. Liquidity — where the risk hides
+
+**What it is.** The gas curve is *not* uniformly liquid. The front month is tight; the back
+(seasons, years) is thin; and the spreads and options are thinner still. Liquidity is the
+difference between a trade you can exit and a trade that owns you.
+
+**Why it matters.** The 2006 calendar-spread collapse and the 2022 spike were both, at root,
+*liquidity events*: when a position is too big for the market, the exit *is* the move.
+
+![Figure 27.1 — the liquidity of the curve](c2-liquidity.png)
+
+*Figure 27.1 — front liquid, back illiquid; the spread is thinner than the outright.*
+
+| Instrument | Liquidity | Risk |
+|---|---|---|
+| front month (M1) | tight, deep | low |
+| seasons / years | thin, wide | high |
+| calendar spread | thinner than outright | high (the 2006 lesson) |
+| options / tail | very thin | very high, especially in stress |
+
+The rule follows: **size to the liquidity, not to the conviction.** A correct view in an
+illiquid instrument is still a loss if you cannot get out.
+
+---
+
+# 28. Governance and surveillance
+
+**What it does.** The platform's own answer to corruption and illiquidity: every order, fill
+and signal is an envelope; surveillance is a *view over the lake*, not a separate log.
+
+**Why it matters.** The same traceability that makes a trade auditable makes a *manipulation*
+auditable. A spoof is a pattern of cancelled orders in the record; a wash is two accounts
+crossing; a squeeze is a position against the limit. All are detectable from the envelopes.
+
+![Figure 28.1 — the surveillance controls](c3-governance.png)
+
+*Figure 28.1 — spoof/layering detection, position limits, benchmark oversight, reporting, whistleblowing.*
+
+| Control | What it watches |
+|---|---|
+| spoof / layering detection | order-to-trade ratios, cancel patterns |
+| position limits | exposure against the exchange + regulatory caps |
+| benchmark oversight | trading around the assessment window |
+| reporting | REMIT / MAR / EMIR / MiFID II |
+| whistleblowing | a channel for the inside report |
+
+The envelope is the honest broker: **it records everything once, in order, with a correlation
+id — so both the trade and the attempt to game it leave the same kind of trace.**
+
+---
+
+# 29. Summary — trading UK gas, honestly and well
+
+- **Know the balance** — Norway, UKCS, LNG, interconnectors; power, heat, industry, exports.
+- **Know the structure** — the UK's ~9 days of storage, the summer-winter spread.
+- **Know the drivers** — weather (HDD), storage, geopolitics.
+- **Know the trades** — weather, storage, the calendar spread (sized), the basis, the spark.
+- **Know the risks** — concentration, illiquidity, the tail, corruption.
+- **And let AI help** — forecasts, news, sentiment, agents — all on the same envelope, so
+  every signal has a reason and every trade is auditable.
+
+That is the whole game: **a physical market, an honest platform, and a disciplined edge.**
