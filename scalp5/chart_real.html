@@ -264,7 +264,7 @@ function setLive(on){
   }
   chips(); props();
 }
-var PROPS_OPEN=false;
+var PROPS_OPEN=true;
 function toggleProps(){
   PROPS_OPEN=!PROPS_OPEN;
   var p=$("props"), b=$("pbtn"), panel=$("panel");
@@ -1369,6 +1369,7 @@ function showSignal(i){
   html+='</div>';
   p.innerHTML=html;
   p.style.display="block";
+  try{ p.scrollIntoView({behavior:"smooth", block:"nearest"}); }catch(e){ p.scrollIntoView(); }
 }
 function setChart(c){ S.chart=c; persist(); chips(); draw(); props(); }
 function setTool(t){ S.tool=t; chips(); props(); }
@@ -1426,6 +1427,13 @@ wire(); chips(); fit();
 loadBars(S.tf, function(){
   loadSignals(function(){ loadFills(function(){ draw(); }); });
 });
+(function(){
+  PROPS_OPEN=true;
+  var p=$("props"), b=$("pbtn"), panel=$("panel");
+  if(panel){ panel.classList.add("open"); if(panel.style.display==="none") panel.style.display=""; }
+  if(p) p.style.display="";
+  if(b) b.classList.add("on");
+})();
 function startTick(){
   if(TICK_TIMER) clearInterval(TICK_TIMER);
   TICK_TIMER=setInterval(function(){
