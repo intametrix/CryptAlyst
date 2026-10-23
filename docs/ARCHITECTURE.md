@@ -1444,6 +1444,185 @@ is before you read its payload — market data, a model's opinion, or the govern
 Together with the topic, the plane is the address; the envelope is the letter.
 
 
+
+
+<div style="page-break-after: always"></div>
+
+# Appendix F — THE X FILES
+
+> "The truth is out there." In this system, the truth is **in the envelopes**. Every
+> decision, every trade, every refusal is a stamped packet in an append-only lake — so any
+> question an investigator can ask, the record can answer. This appendix is the field manual:
+> how to **debug a decision**, how to **optimise a model**, and how the **absolute
+> traceability** of the platform works. It is the most satisfying part of the whole design.
+
+<div style="page-break-after: always"></div>
+
+## F.1 The investigation mindset
+
+When a model traded — or did not — the first question is never "is it a bug". It is:
+
+1. **What did it read?** — the references, with their ages at execution.
+2. **What did it decide?** — the verdict, the confidence, the reason.
+3. **What stopped it?** — the refusal, with the rule and the number.
+
+The system records all three for every decision, so the investigation is a *read*, not a
+*guess*. There is no "it probably did X" — there is only the envelope that says what it did.
+
+![Figure F.1 — the debugging workflow](diagrams/x1-debug-decision.png)
+
+*Figure F.1 — every decision resolves to a verdict you can reproduce from the lake.*
+
+## F.2 Debugging a decision
+
+### F.2.1 Traded or refused?
+
+The first fork: did the decision become a trade, or a refusal? The answer decides which view
+to open.
+
+- **Refused** → the WHY view, which ranks refusals by rule and shows the exact reason.
+- **Traded** → the EXECUTION view, which shows what the model read and how old each input was.
+
+![Figure F.2 — the refusal path](diagrams/x2-why-refusal.png)
+
+*Figure F.2 — a refusal names the rule and the number, and is itself an envelope in the lake.*
+
+### F.2.2 What the model actually read
+
+The execution trace answers the narrowest, most useful question: *for this one fill, which
+raw envelopes did the model read, in what order, and how old were they when it acted?*
+
+![Figure F.3 — the execution trace](diagrams/x3-execution-trace.png)
+
+*Figure F.3 — inputs are listed with their age at execution; a stale input is a finding, not a feeling.*
+
+| Finding | Meaning |
+|---|---|
+| input 0.2s old | fresh — the decision was well-founded |
+| input 3.2s old | still fresh for most topics |
+| input 3200s old | stale — the model acted on old data |
+
+### F.2.3 A worked refusal
+
+```
+model.decision NEARUSDT  side=buy  confidence=0.62
+  verdict    REFUSED
+  reason     stale signals: 3230s old (max 90s)
+  pipeline   authority pass · keying pass · correlation pass · freshness pass
+  refs       market.candle 0.5s · market.depth 0.2s (both fresh)
+```
+
+The freshness interceptor passed — the *envelope* was fresh. The refusal came from the
+model's own signal-age check. The market data was seconds old; the *signals* were 53 minutes
+old. The investigation lands on the real fault: a signal producer was silent for that symbol,
+and the model correctly refused to act on stale information.
+
+<div style="page-break-after: always"></div>
+
+## F.3 Optimising the models
+
+Optimisation is a loop, not a one-off. The same decoupling that makes the system observable
+makes it tuneable: because every model is a pure function and every outcome is a stamped
+packet, a parameter change can be measured against the exact same inputs.
+
+![Figure F.4 — the optimisation loop](diagrams/x6-optimise-loop.png)
+
+*Figure F.4 — evaluate, tune, re-run on generated data, re-evaluate.*
+
+### F.3.1 The measure
+
+| Metric | What it tells you |
+|---|---|
+| realised PnL | the bottom line |
+| win rate | how often the model is right |
+| fee drag | how much the 0.2% fee eats the edge |
+| mean hold | whether exits fire as intended |
+| largest loss | whether the stop is actually bounding losses |
+
+### F.3.2 The probation and rotation
+
+A model earns its place by surviving probation: its first N minutes of live trading. If the
+PnL falls below the floor, it is stopped, its post-mortem is written, and another model is
+tried.
+
+![Figure F.5 — probation and rotation](diagrams/x7-rotation.png)
+
+*Figure F.5 — survive probation or be stopped; a stopped model is post-mortemed and replaced.*
+
+### F.3.3 Tuning the forecast
+
+The forecast is a function of three layers; tuning is calibrating their weights. The tier
+signal is the feedback: a weight change that raises the quality of tier-1 signals is kept,
+one that does not is reverted.
+
+![Figure F.6 — tuning the forecast layers](diagrams/x8-forecast-tune.png)
+
+*Figure F.6 — the tier signal feeds back into the layer weights.*
+
+### F.3.4 A worked tuning
+
+`rsi2` was buying at RSI < 10 and losing to fees. The investigation showed the winners were
+real but the losers were fee-sized. Tuning the threshold from <10 to <5 cut the low-quality
+entries, and the win rate rose. The change was measured against the *same* generated bars
+before and after — so the improvement is a number, not an opinion.
+
+<div style="page-break-after: always"></div>
+
+## F.4 Absolute traceability
+
+This is the fascinating part: **the platform is evidence**. Nothing is lost, nothing is
+inferred silently, and every step is linked by one correlation id.
+
+![Figure F.7 — the correlation chain](diagrams/x4-traceability.png)
+
+*Figure F.7 — one cid follows the work from market tick to fill to pnl, into an append-only lake.*
+
+### F.4.1 Why this is absolute
+
+| Property | What it means |
+|---|---|
+| append-only lake | history is never rewritten |
+| monotonic generation | a gap is detectable, never hidden |
+| correlation ids | every step links to its parent |
+| derived refs are labelled | inferred lineage is never passed off as declared |
+| refusals are recorded | "why not" is evidence, not a gap |
+| case hash | two reports are comparable by fingerprint |
+
+### F.4.2 The case file
+
+For any decision, the system can produce a **case file**: the verdict, the inputs with ages,
+the pipeline stages, and a case hash that fingerprints the scope — so two copies can be
+compared and a changed one detected.
+
+![Figure F.8 — the case file](diagrams/x5-case-file.png)
+
+*Figure F.8 — a case file is the decision, its inputs, its pipeline, and a hash.*
+
+### F.4.3 Reconstructing a trade from a correlation id
+
+```
+$ resolve cid-8c50fc9388443f4e
+
+  market.candle  SOLUSDT  09:02:01.123   (the trigger)
+  model.decision SOLUSDT  buy  cid-8c50fc9388443f4e
+  model.fill     SOLUSDT  buy  net +0.21%  parent cid-8c50fc9388443f4e
+  model.pnl      donchian55  equity 5005.25  cid-8c50fc9388443f4e
+```
+
+From one id, the entire life of a trade is reassembled — the tick that triggered it, the
+decision, the fill, and the resulting pnl. That is what "absolute traceability" means: the
+record is complete enough to replay the trade, and honest enough to show its own gaps.
+
+<div style="page-break-after: always"></div>
+
+## F.5 The X FILES, closed
+
+The truth is out there — and in this system it is *literally* out there, in the lake, as a
+chain of stamped envelopes. Debugging is reading that chain. Optimising is measuring it.
+Traceability is the fact that the chain is complete and append-only. That is the reward for
+building decoupled: **every question is answerable, and every answer is evidence.**
+
+
 <div style="page-break-after: always"></div>
 
 # 15. Field dictionary and glossary

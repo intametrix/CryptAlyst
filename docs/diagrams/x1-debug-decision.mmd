@@ -1,0 +1,21 @@
+flowchart TD
+    Q["a decision to explain"] --> A{"traded or refused?"}
+    A -- refused --> R["WHY view<br/>reason + number"]
+    A -- traded --> T["EXECUTION view<br/>what it read, with ages"]
+    T --> C["case file<br/>payload + refs + pipeline"]
+    R --> C
+    C --> V["verdict<br/>reproducible from the lake"]
+    class Q c_model
+    class A c_neutral
+    class R c_risk
+    class T c_intel
+    class C c_store
+    class V c_control
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
