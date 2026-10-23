@@ -1261,7 +1261,7 @@ function engineScope(){
 }
 function clearEngine(){
   ENGINE=null; engineScope();
-  loadFills(function(){ draw(); });
+  loadFills(function(){ draw(); props(); });
 }
 var UNIVERSE=[], UNIVERSE_AT=0, SYMIDX=-1, SYMHITS=[];
 function loadUniverse(cb){
@@ -1347,7 +1347,7 @@ function setSym(v){
   SYM=v; $("symlabel").textContent=v; FILLS=[];
   loadBars(S.tf, function(){
     loadSignals(function(){
-      loadFills(function(){ draw(); });
+      loadFills(function(){ draw(); props(); });
     });
   });
 }
@@ -1434,7 +1434,7 @@ document.addEventListener("click", function(ev){
 });
 wire(); chips(); fit();
 loadBars(S.tf, function(){
-  loadSignals(function(){ loadFills(function(){ draw(); }); });
+  loadSignals(function(){ loadFills(function(){ draw(); props(); }); });
 });
 (function(){
   PROPS_OPEN=true;
