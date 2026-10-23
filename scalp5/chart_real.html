@@ -116,7 +116,9 @@
           <span id="flowarrow" style="color:#58a6ff">▸</span>
         </div>
         <div style="display:flex;gap:6px;padding:0 12px 6px;flex-wrap:wrap" id="flowwin"></div>
-        <div id="flows" style="display:none;padding:0 12px 12px"></div>
+        <div id="flows" style="display:none;padding:0 12px 12px;max-height:240px;overflow:auto"></div>
+        <div id="flowresize" style="height:6px;cursor:ns-resize;border-top:1px solid #1b2632;background:#0a1219;border-radius:0 0 10px 10px"
+             onmousedown="startFlowResize(event)" title="drag to resize the money flow panel"></div>
       </div>
       <div class="hint">drag = zoom box · drag price scale = zoom price · drag time scale = zoom time ·
         drag a box = zoom · shift-drag = pan · alt-drag = zoom price ·
@@ -1020,6 +1022,25 @@ function toggleFlowWindow(m){
   if(i>=0){ if(FLOW_W.length>1) FLOW_W.splice(i,1); }
   else { FLOW_W.push(m); FLOW_W.sort(function(a,b){return a-b;}); }
   flowWindows(); loadFlows();
+}
+function startFlowResize(e){
+  e.preventDefault();
+  var box=$("flows"); if(!box) return;
+  var startY=e.clientY, startH=box.getBoundingClientRect().height||240;
+  function move(ev){
+    var h=startH+(ev.clientY-startY);
+    if(h<60) h=60;
+    if(h>600) h=600;
+    box.style.maxHeight=h+"px";
+  }
+  function up(){
+    document.removeEventListener("mousemove",move);
+    document.removeEventListener("mouseup",up);
+    document.body.style.cursor="";
+  }
+  document.addEventListener("mousemove",move);
+  document.addEventListener("mouseup",up);
+  document.body.style.cursor="ns-resize";
 }
 function toggleFlows(){
   FLOW_OPEN=!FLOW_OPEN;
