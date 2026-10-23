@@ -722,48 +722,10 @@ function props(){
   if(!GEO && typeof draw==="function"){ try{ draw(); }catch(e){} }
   if(!GEO) return;
   var on=LAYER_META.filter(function(m){return OV[m.id];});
-  var last=BARS[BARS.length-1];
-  function row(k,v){ return '<div class="prow2"><span>'+k+'</span><b>'+v+'</b></div>'; }
-  var html="";
-  html+='<div class="pg"><div class="pgt">instrument</div>'+
-        row("symbol",SYM)+row("timeframe",S.tf)+
-        row("last close",fmt(last.c))+
-        row("last volume",fmt(last.v,0))+
-        row("bars total",BARS.length)+'</div>';
-  html+='<div class="pg"><div class="pgt">series</div>'+
-        row("chart type",S.chart)+
-        row("bars drawn",GEO.vc)+
-        row("live",LIVE?("bars "+(LIVE_MS/1000).toFixed(2)+"s · price 0.25s · "+
-             TICK_N+" ticks"):"paused")+
-        '<div class="prow"><span>refresh</span><div class="chips">'+
-          [250,500,1000,2000,5000].map(function(ms){
-            return '<button class="'+(LIVE_MS===ms?"on":"")+'" onclick="setLiveMs('+ms+')">'+
-                   (ms<1000?ms+"ms":(ms/1000)+"s")+'</button>';
-          }).join("")+'</div></div>'+
-        row("engine scope",ENGINE||"all models")+
-        row("fills on symbol",FILLS.length)+
-        row("alerts",SIGNALS.alerts.length)+
-        row("model votes",SIGNALS.models.length)+'</div>';
-  html+='<div class="pg"><div class="pgt">viewport</div>'+
-        row("bars visible",GEO.vc)+
-        row("window start",GEO.vs)+
-        row("price low",fmt(GEO.lo))+
-        row("price high",fmt(GEO.hi))+
-        row("scale",S.scaleMode)+
-        row("price span",fmt(GEO.HI-GEO.LO,3))+
-        row("time span",GEO.vc+" bars")+
-        row("axis",P.dualAxis?"dual (price · % )":(P.priceAxisRight?"price both sides":"price left"))+
-        row("price ticks",AX.tPrice)+
-        row("time ticks",AX.tTime)+
-        row("log scale",S.log?"on":"off")+'</div>';
-  html+='<div class="pg"><div class="pgt">overlays · '+on.length+'/'+LAYER_META.length+'</div>'+
-        on.map(function(m){
-          return '<div class="prow2"><span><i class="swatch" style="background:'+m.colour+'"></i>'+m.label+'</span><b>on</b></div>';
-        }).join("")+'</div>';
   var sel=function(id,label,options,current,fn){
     return '<label class="prow2" style="align-items:center"><span>'+label+'</span>'+
       '<select onchange="'+fn+'(this.value)" style="background:#0b1119;color:#e6edf6;border:1px solid #24313e;'+
-      'border-radius:6px;padding:2px 6px;font-family:var(--mono);font-size:11px">'+
+      'border-radius:6px;padding:3px 8px;font-family:var(--mono);font-size:11px;min-width:130px">'+
       options.map(function(o){
         return '<option value="'+o[0]+'"'+(String(current)===String(o[0])?' selected':'')+'>'+o[1]+'</option>';
       }).join("")+'</select></label>';
@@ -773,12 +735,13 @@ function props(){
       '<input type="checkbox" '+(on?'checked':'')+' onchange="'+handler+'" '+
       'style="accent-color:#3fb950">'+'</label>';
   };
-  html+='<div class="pg"><div class="pgt">edit</div>'+
+  var html="";
+  html+='<div class="pg"><div class="pgt">settings</div>'+
         sel("sym","symbol",(function(){
           var list=[];
-          try{ if(typeof SYMS!=="undefined" && SYMS && SYMS.length) list=SYMS.slice(0,60); }catch(e){}
+          try{ if(typeof SYMS!=="undefined" && SYMS && SYMS.length) list=SYMS.slice(0,80); }catch(e){}
           if(!list.length && typeof TICKERS!=="undefined" && TICKERS && TICKERS.length){
-            list=TICKERS.map(function(t){return t.s||t;}).slice(0,60);
+            list=TICKERS.map(function(t){return t.s||t;}).slice(0,80);
           }
           if(!list.length) list=[SYM||"BTCUSDT"];
           if(list.indexOf(SYM)<0) list.unshift(SYM);
@@ -802,11 +765,6 @@ function props(){
         PROP_META.map(function(m){
           return chk(m.label, P[m.id], "setProp(&quot;"+m.id+"&quot;, this.checked)");
         }).join("")+'</div>';
-  html+='<div class="pg"><div class="pgt">tools</div>'+
-        row("measure",MEAS?"drawn":"off")+
-        row("drag tool",S.tool==="box"?"zoom box":"pan")+
-        row("measure mode",S.measure?"armed":"idle")+
-        row("cursor",CURSOR?fmt(CURSOR):"—")+'</div>';
   $("props").innerHTML=html;
   renderModel();
 }
