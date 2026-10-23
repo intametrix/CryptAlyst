@@ -397,12 +397,7 @@ def main():
         for i, n in enumerate(names):
             baskets[n] = syms[i * per:(i + 1) * per] or syms[:per]
 
-        px = {}
-        for sym in syms:
-            try:
-                px[sym] = float(jget(SPOT + "/api/v3/ticker/price?symbol=" + sym, 6)["price"])
-            except Exception:
-                continue
+        px = {t["s"]: float(t.get("price") or 0) for t in uni if t.get("price")}
 
         for name, bk in books.items():
             if bk.disabled:
