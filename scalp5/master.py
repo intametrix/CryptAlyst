@@ -2224,8 +2224,35 @@ header{margin-left:186px}
       <button class="tbtn" onclick="zoomStep(1.7)" title="zoom out (-)">zoom −</button>
       <button class="tbtn" onclick="resetView()" title="reset zoom (0)">reset</button>
       <button class="tbtn" onclick="resetY()" title="reset price axis (y)">reset price</button>
-      <span class="mk" style="margin-left:6px">drag to pan · shift+drag to select a range · wheel zooms · double-click resets</span>
+      <button class="tbtn" onclick="toggleProps()" title="chart properties">⚙ properties</button>
+      <span class="mk" style="margin-left:6px">drag to pan · wheel zooms · double-click resets</span>
     </div>
+    <div id="chartprops" style="display:none;background:#101923;border:1px solid #1b2836;border-radius:10px;
+         padding:12px 14px;margin:4px 0 10px">
+      <div class="label" style="margin:2px 0 6px">interval</div>
+      <div id="ivbtns" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+      <div class="label" style="margin:2px 0 6px">chart type</div>
+      <select id="ctype" onchange="setType(this.value)" style="background:#141d27;border:1px solid #26333f;
+              color:#e6edf6;border-radius:7px;padding:6px 9px;font:inherit;font-size:12px;margin-bottom:10px">
+        <option value="candles">candlesticks</option>
+        <option value="hollow">hollow candles</option>
+        <option value="line">line</option>
+        <option value="area">area</option>
+      </select>
+      <div class="label" style="margin:2px 0 6px">indicators</div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8494a8;margin-bottom:6px">
+        <input type="checkbox" id="indma20" onchange="toggleInd('ma20',this.checked)"> MA20</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8494a8;margin-bottom:6px">
+        <input type="checkbox" id="indma50" onchange="toggleInd('ma50',this.checked)"> MA50</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8494a8">
+        <input type="checkbox" id="indvol" onchange="toggleInd('volume',this.checked)"> show volume</label>
+    </div>
+    <div id="chartctl" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px">
+      <button class="tbtn" onclick="zoomStep(0.6)">zoom +</button>
+      <button class="tbtn" onclick="zoomStep(1.7)">zoom −</button>
+      <button class="tbtn" onclick="resetView()">reset</button>
+      <button class="tbtn" onclick="resetY()">reset price</button>
+
     <div id="chartdiv" style="width:100%;height:420px"></div>
     <div class="label" id="chartfoot" style="margin-top:8px">—</div>
   </div>
@@ -2760,7 +2787,7 @@ function zoomStep(f){
   ts.setVisibleLogicalRange({from:mid-len, to:mid+len});
 }
 
-let LWC=null, LWC_candles=null, LWC_vol=null, LWC_legend=null;
+let LWC=null, LWC_main=null, LWC_vol=null, LWC_ma20=null, LWC_ma50=null;
 function lwcInit(){
   if(!window.LightweightCharts) return;
   var el=$("chartdiv"); if(!el) return;
@@ -2773,59 +2800,66 @@ function lwcInit(){
     crosshair:{mode:0},
     width:el.clientWidth, height:420
   });
-  LWC_candles=LWC.addCandlestickSeries({upColor:"#3fb950",downColor:"#f85149",borderVisible:false,
-    wickUpColor:"#3fb950",wickDownColor:"#f85149", priceLineVisible:false});
   LWC_vol=LWC.addHistogramSeries({priceFormat:{type:"volume"}, priceScaleId:"vol"});
   LWC.chart.priceScale("vol").applyOptions({scaleMargins:{top:0.82,bottom:0}});
   LWC.subscribeCrosshairMove(function(p){
     var out=$("chartfoot");
     if(!out) return;
-    if(!p || !p.time || !p.seriesData || !p.seriesData.get(LWC_candles)){
-      out.textContent="—"; return;
+    var mainData = p && p.seriesData ? p.seriesData.get(LWC_main) : null;
+    if(!p || !p.time || !mainData){ out.textContent="—"; return; }
+    if(CHART_SETTINGS.type==="line" || CHART_SETTINGS.type==="area"){
+      out.textContent="C "+mainData.value.toFixed(6);
+    } else {
+      var c=mainData;
+      var chg=(c.open? ((c.close-c.open)/c.open*100):0).toFixed(2)+"%";
+      out.textContent="O "+c.open.toFixed(6)+"  H "+c.high.toFixed(6)+"  L "+c.low.toFixed(6)+
+        "  C "+c.close.toFixed(6)+"  "+chg;
     }
-    var c=p.seriesData.get(LWC_candles);
-    var chg=(c.open? ((c.close-c.open)/c.open*100):0).toFixed(2)+"%";
-    out.textContent="O "+c.open.toFixed(6)+"  H "+c.high.toFixed(6)+"  L "+c.low.toFixed(6)+
-      "  C "+c.close.toFixed(6)+"  "+chg;
   });
   window.addEventListener("resize", function(){ if(LWC) LWC.applyOptions({width:el.clientWidth}); });
 }
-let CHART_SYM="BTCUSDT";
-function chartPopulateSyms(){
-  fetch("/api/universe800",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
-    var dl=$("symopts"); if(!dl) return;
-    var opts=(d.tickers||[]).slice(0,400).map(function(t){
-      return '<option value="'+esc(t.s)+'">'+esc(t.s)+'</option>';
-    }).join("");
-    dl.innerHTML=opts;
-  }).catch(function(){});
+function buildMainSeries(){
+  if(!LWC) return;
+  if(LWC_main){ try{LWC.removeSeries(LWC_main);}catch(e){} LWC_main=null; }
+  if(LWC_ma20){ try{LWC.removeSeries(LWC_ma20);}catch(e){} LWC_ma20=null; }
+  if(LWC_ma50){ try{LWC.removeSeries(LWC_ma50);}catch(e){} LWC_ma50=null; }
+  var t=CHART_SETTINGS.type||"candles";
+  if(t==="line"){ LWC_main=LWC.addLineSeries({color:"#58a6ff", lineWidth:2, priceLineVisible:false}); }
+  else if(t==="area"){ LWC_main=LWC.addAreaSeries({lineColor:"#58a6ff", topColor:"rgba(88,166,255,0.28)",
+    bottomColor:"rgba(88,166,255,0)", priceLineVisible:false}); }
+  else { LWC_main=LWC.addCandlestickSeries({upColor:"#3fb950",downColor:"#f85149",borderVisible:false,
+    wickUpColor:"#3fb950",wickDownColor:"#f85149", priceLineVisible:false}); }
+  if(CHART_SETTINGS.ma20) LWC_ma20=LWC.addLineSeries({color:"#f0b90b", lineWidth:1, priceLineVisible:false});
+  if(CHART_SETTINGS.ma50) LWC_ma50=LWC.addLineSeries({color:"#c678dd", lineWidth:1, priceLineVisible:false});
 }
-function chartLoadSym(sym){
-  sym=(sym||"").trim().toUpperCase(); if(!sym) return;
-  CHART_SYM=sym;
-  var t=$("charttitle"); if(t) t.textContent=sym;
-  var sub=$("chartsub"); if(sub) sub.textContent="loading "+sym+"…";
-  fetch("/api/klines?symbol="+encodeURIComponent(sym)+"&interval=5m&limit=300",{cache:"no-store"})
-    .then(function(r){return r.json();}).then(function(d){
-      LASTROWS=(d.rows||[]).map(function(r){ return {t:r.t,o:r.o,h:r.h,l:r.l,c:r.c,v:r.v}; });
-      if(sub) sub.textContent="live market · "+LASTROWS.length+" candles";
-      drawMarket();
-    }).catch(function(e){
-      if(sub) sub.textContent="error loading "+sym;
-    });
+function ma(data, n){
+  var out=[];
+  for(var i=0;i<data.length;i++){
+    if(i<n-1) continue;
+    var sum=0; for(var j=i-n+1;j<=i;j++) sum+=data[j].close;
+    out.push({time:data[i].time, value:sum/n});
+  }
+  return out;
 }
-chartPopulateSyms();
-
 function drawMarket(){
   lwcInit();
+  buildMainSeries();
   var rows=chartRows();
   if(!LWC) return;
   if(!rows.length){ return; }
   var candles=rows.map(function(r){ return {time:Math.floor(r.t/1000), open:r.o, high:r.h, low:r.l, close:r.c}; });
+  var t=CHART_SETTINGS.type||"candles";
+  if(t==="line" || t==="area"){
+    LWC_main.setData(candles.map(function(c){ return {time:c.time, value:c.close}; }));
+  } else {
+    LWC_main.setData(candles);
+  }
   var vols=rows.map(function(r){ return {time:Math.floor(r.t/1000), value:r.v||0,
     color:(r.c>=r.o)?"rgba(63,185,80,0.45)":"rgba(248,81,73,0.45)"}; });
-  LWC_candles.setData(candles);
   LWC_vol.setData(vols);
+  LWC_vol.applyOptions({visible: !!CHART_SETTINGS.volume});
+  if(LWC_ma20) LWC_ma20.setData(ma(candles,20));
+  if(LWC_ma50) LWC_ma50.setData(ma(candles,50));
   LWC.timeScale().fitContent();
 }
 function allLayers(){} function setLayerScope(){}
