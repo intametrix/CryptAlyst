@@ -22,6 +22,7 @@ import tactics as T
 import risk
 import maker
 from lib import emit
+import streamfeed
 
 try:
     import tactics as _tactics
@@ -382,6 +383,7 @@ def main():
     books = {n: Book(n, a.start) for n in names}
     # each model gets a different slice of the liquid universe
     log("MODELS10 — %d strategies, probation %.0fs, risk %.2f%%" % (len(books), a.probation, RISK))
+    feed = None
     while True:
         try:
             uni = jget(MASTER + "/api/universe800", 10).get("tickers") or []
@@ -398,6 +400,8 @@ def main():
             baskets[n] = syms[i * per:(i + 1) * per] or syms[:per]
 
         px = {t["s"]: float(t.get("price") or 0) for t in uni if t.get("price")}
+        if feed is None:
+            feed = streamfeed.Feed(syms[:90])      # stream klines for the model baskets
 
         for name, bk in books.items():
             if bk.disabled:
@@ -435,7 +439,7 @@ def main():
                 if sym in bk.pos or sym not in px:
                     continue
                 try:
-                    bs = klines(sym, "1s", 200)
+                    bs = feed.klines(sym)
                 except Exception:
                     continue
                 if len(bs) < 60:
