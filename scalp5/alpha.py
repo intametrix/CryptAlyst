@@ -43,6 +43,16 @@ SKIM_PCT = 0.25         # HFT: bank the fastest fee-clearing profit (net +0.05%)
 TRAIL_ARM_PCT = 0.3     # HFT: arm the trail fast
 TRAIL_PCT = 0.15        # HFT: trail tight below the peak
 WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOXLUSDT", "XAUUSDT", "SNDKUSDT"]  # always trade the fastest tickers
+
+def advisor_picks(n=5):
+    """Top-n opportunities from the market agent's board (the advisor)."""
+    try:
+        ob = jget(MASTER + "/api/opportunities", timeout=6).get("opportunities") or []
+        ob = [r for r in ob if r.get("symbol") and r.get("price")]
+        ob.sort(key=lambda r: -(r.get("score") or 0))
+        return ob[:n]
+    except Exception:
+        return []
 PENDING = {}            # (book, symbol, side) -> first time the signal was seen
 
 CFG = {
@@ -299,6 +309,16 @@ def main():
                 side = "buy" if (u.get("c") or 0) >= 0 else "sell"
                 b.open(sym, side, u["price"], "watchlist 24h %+.1f%%" % (u.get("c") or 0))
                 log("%-16s %-4s %-11s watchlist" % ("xsec_momentum", side.upper(), sym))
+
+        # advisor selection: trade the advisor's top-scored opportunities next
+        if b:
+            for r in advisor_picks(5):
+                sym = r["symbol"]
+                if sym in b.pos or len(b.pos) >= 16:
+                    continue
+                side = "buy" if (r.get("chg") or 0) >= 0 else "sell"
+                b.open(sym, side, r["price"], "advisor score %.2f" % (r.get("score") or 0))
+                log("%-16s %-4s %-11s advisor %.2f" % ("xsec_momentum", side.upper(), sym, r.get("score") or 0))
 
         # ---- 2. cascade rebound: 1m 3-sigma drop on 5x volume
         cb = books.get("cascade_rebound")
