@@ -39,7 +39,7 @@ LOCK_USD = 800.0        # book unrealised >= this -> bank the winners
 LOCK_PCT = 0.3          # bank only winners that clear the fee
 STOP_SECS = 5.0         # HFT: a bad position still bad after 5s -> close it
 STOP_PCT = 0.2          # HFT: cut tiny losses fast
-SKIM_PCT = 0.1          # HFT: bank a tiny move
+SKIM_PCT = 0.25         # HFT: bank the fastest fee-clearing profit (net +0.05%)
 TRAIL_ARM_PCT = 0.3     # HFT: arm the trail fast
 TRAIL_PCT = 0.15        # HFT: trail tight below the peak
 WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOXLUSDT", "XAUUSDT", "SNDKUSDT"]  # always trade the fastest tickers
