@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant MD as marketdata
+    participant BUS as BUS
+    participant M as model
+    participant BK as book
+    participant R as recorder
+
+    MD->>BUS: publish market.depth (TTL drop)
+    BUS->>M: latest state (no backlog)
+    M->>M: compute number
+    M->>BUS: publish model.decision (TTL 5m)
+    BUS->>BK: decision
+    BK->>BK: record + confirm pattern
+    BK->>BUS: publish model.fill
+    BUS->>R: record everything once

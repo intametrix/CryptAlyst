@@ -1,0 +1,21 @@
+flowchart LR
+    W["wss://stream.binance.com:9443"] -->|"subscribe 90 symbols"| S["combined stream"]
+    S --> F["frame dispatch<br/>stream name → handler"]
+    F --> D["depth handler"]
+    F --> K["kline handler"]
+    D --> IMB["imbalance cache"]
+    K --> KL["candle cache"]
+    IMB & KL --> PUB["publish on bus"]
+    class W c_market
+    class S,F c_neutral
+    class D,K c_intel
+    class IMB,KL c_store
+    class PUB c_market
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
