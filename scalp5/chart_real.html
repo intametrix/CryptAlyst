@@ -165,7 +165,7 @@ var P={grid:true, priceAxis:true, priceAxisRight:false, dualAxis:false, timeAxis
        lastLine:true, crosshair:true, axisDrag:true, volumePane:true, scrollPan:false,
        tooltip:true, highlight:true};
 function persist(){
-  try{ localStorage.setItem("chartPrefs", JSON.stringify({S:S, OV:OV, P:P})); }catch(e){}
+  try{ localStorage.setItem("chartPrefs", JSON.stringify({S:S, OV:OV, P:P, minimised:MINIMISED})); }catch(e){}
 }
 function restorePrefs(){
   try{
@@ -173,6 +173,7 @@ function restorePrefs(){
     if(v.S){ Object.assign(S, v.S); }
     if(v.OV){ Object.assign(OV, v.OV); }
     if(v.P){ Object.assign(P, v.P); }
+    MINIMISED=!!v.minimised;
   }catch(e){}
 }
 restorePrefs();
@@ -272,7 +273,15 @@ function toggleMin(){
   var lay=document.querySelector(".layout");
   var b=document.querySelector("#propcol .tbtn");
   if(lay) lay.classList.toggle("min");
-  if(b) b.textContent = (lay && lay.classList.contains("min")) ? "▶" : "◀ minimise";
+  MINIMISED = !!(lay && lay.classList.contains("min"));
+  persist();
+  if(b) b.textContent = MINIMISED ? "▶" : "◀ minimise";
+}
+function applyMin(){
+  var lay=document.querySelector(".layout");
+  var b=document.querySelector("#propcol .tbtn");
+  if(lay){ if(MINIMISED) lay.classList.add("min"); else lay.classList.remove("min"); }
+  if(b) b.textContent = MINIMISED ? "▶" : "◀ minimise";
 }
 function toggleProps(){
   PROPS_OPEN=!PROPS_OPEN;
@@ -1438,6 +1447,7 @@ loadBars(S.tf, function(){
 });
 (function(){
   PROPS_OPEN=true;
+  applyMin();
   var p=$("props"), b=$("pbtn"), panel=$("panel");
   if(panel){ panel.classList.add("open"); if(panel.style.display==="none") panel.style.display=""; }
   if(p) p.style.display="";
