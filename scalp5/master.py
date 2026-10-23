@@ -2209,6 +2209,15 @@ header{margin-left:186px}
     <span class="close" onclick="closeChart()">×</span>
     <h2 id="charttitle" style="color:#58a6ff">—</h2>
     <div class="label" id="chartsub">live market</div>
+    <div style="margin:8px 0">
+      <input id="chartsym" list="symopts" placeholder="type or choose a symbol…"
+             autocomplete="off" spellcheck="false"
+             style="background:#141d27;border:1px solid #26333f;color:#e6edf6;border-radius:7px;
+                    padding:7px 11px;font:inherit;font-size:13px;font-family:var(--mono);width:240px"
+             oninput="chartLoadSym(this.value)"
+             onkeydown="if(event.key==='Enter')chartLoadSym(this.value)">
+      <datalist id="symopts"></datalist>
+    </div>
     <div class="ivs" id="ivs"></div>
     <div id="chartctl" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 8px">
       <button class="tbtn" onclick="zoomStep(0.6)" title="zoom in (+)">zoom +</button>
@@ -2781,6 +2790,32 @@ function lwcInit(){
   });
   window.addEventListener("resize", function(){ if(LWC) LWC.applyOptions({width:el.clientWidth}); });
 }
+let CHART_SYM="BTCUSDT";
+function chartPopulateSyms(){
+  fetch("/api/universe800",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    var dl=$("symopts"); if(!dl) return;
+    var opts=(d.tickers||[]).slice(0,400).map(function(t){
+      return '<option value="'+esc(t.s)+'">'+esc(t.s)+'</option>';
+    }).join("");
+    dl.innerHTML=opts;
+  }).catch(function(){});
+}
+function chartLoadSym(sym){
+  sym=(sym||"").trim().toUpperCase(); if(!sym) return;
+  CHART_SYM=sym;
+  var t=$("charttitle"); if(t) t.textContent=sym;
+  var sub=$("chartsub"); if(sub) sub.textContent="loading "+sym+"…";
+  fetch("/api/klines?symbol="+encodeURIComponent(sym)+"&interval=5m&limit=300",{cache:"no-store"})
+    .then(function(r){return r.json();}).then(function(d){
+      LASTROWS=(d.rows||[]).map(function(r){ return {t:r.t,o:r.o,h:r.h,l:r.l,c:r.c,v:r.v}; });
+      if(sub) sub.textContent="live market · "+LASTROWS.length+" candles";
+      drawMarket();
+    }).catch(function(e){
+      if(sub) sub.textContent="error loading "+sym;
+    });
+}
+chartPopulateSyms();
+
 function drawMarket(){
   lwcInit();
   var rows=chartRows();
