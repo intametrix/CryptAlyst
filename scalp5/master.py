@@ -2046,6 +2046,12 @@ header{margin-left:186px}
   <div id="marketlive">
     <div class="mhead"><span class="sym">Live market</span>
       <span class="mk">deepest books first · ticking every second</span>
+      <select id="mlengine" class="sympick" onchange="setMlEngine(this.value)" title="filter by engine/book">
+        <option value="all">all engines</option>
+      </select>
+      <input id="mlsym" class="sympick" list="mlsymlist" placeholder="type a ticker…"
+             autocomplete="off" spellcheck="false" oninput="setMlSym(this.value)" style="width:150px">
+      <datalist id="mlsymlist"></datalist>
       <span style="flex:1"></span>
       <span class="pill" id="mlage">—</span>
       <span class="mk" id="mlcount"></span></div>
@@ -2456,7 +2462,7 @@ function showTab(which){
   try{ if(which==="busview") renderBus(); }catch(e){ tabErr("busview",e); }
   try{ if(which==="thinking") renderThinking(); }catch(e){ tabErr("thinking",e); }
   try{ if(which==="moversview"){ renderMovers(); renderFlow(); } }catch(e){ tabErr("moversview",e); }
-  try{ if(which==="marketlive"){ renderMarketLive(); } mlStream(); }catch(e){ tabErr("marketlive",e); }
+  try{ if(which==="marketlive"){ renderMarketLive(); loadMlEngines(); populateMlDatalist(); } mlStream(); }catch(e){ tabErr("marketlive",e); }
   try{ if(which==="books") renderBooks(); }catch(e){ tabErr("books",e); }
   try{ if(which==="engines") renderEngines(); }catch(e){ tabErr("engines",e); }
   try{ if(which==="health") renderHealth(); }catch(e){ tabErr("health",e); }
@@ -4553,6 +4559,7 @@ function fadePrice(cell, up){
   }, 90);
 }
 var ML_PREV={}, ML_LAST={}, ML_TICKAGE=0, ML_LIVE={}, ML_ES=null, ML_HITS=0;
+var ML_ENGINE="all", ML_SYM="", ML_ENGINE_SYMS={};
 var ML_SERIES={}, ML_METRICS={}, ML_SERIES_TS=0, ML_SIG="", ML_MINI={};
 function mlStream(){
   if(ML_ES || typeof EventSource==="undefined") return;
@@ -4682,6 +4689,35 @@ async function renderMovers(){
     card("biggest gainers — 24h",d.gainers,"#3fb950","pct")+
     card("biggest losers — 24h",d.losers,"#f85149","pct");
 }
+function loadMlEngines(){
+  fetch("/api/all",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    var engs=(d.engines||[]).filter(function(e){return e.equity!=null;});
+    var sel=$("mlengine"); if(!sel) return;
+    var cur=sel.value||"all";
+    var html='<option value="all">all engines</option>';
+    engs.forEach(function(e){
+      var syms=(e.positions||[]).map(function(p){return p.symbol;}).filter(Boolean);
+      ML_ENGINE_SYMS[e.key]=syms;
+      html+='<option value="'+esc(e.key)+'"'+(cur===e.key?" selected":"")+'>'+esc(e.key)+' · '+syms.length+' symbols</option>';
+    });
+    sel.innerHTML=html;
+  }).catch(function(){});
+}
+function setMlEngine(v){ ML_ENGINE=v; ML_SIG=""; renderMarketLive(); }
+function setMlSym(v){
+  ML_SYM=(v||"").trim().toUpperCase();
+  ML_SIG="";
+  clearTimeout(window.__mlsymT);
+  window.__mlsymT=setTimeout(function(){ renderMarketLive(); },200);
+}
+function populateMlDatalist(){
+  fetch("/api/universe800",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    var dl=$("mlsymlist"); if(!dl) return;
+    dl.innerHTML=(d.tickers||[]).slice(0,300).map(function(t){
+      return '<option value="'+esc(t.s)+'">';
+    }).join("");
+  }).catch(function(){});
+}
 async function renderMarketLive(){
   var body=$("mlbody"); if(!body) return;
   var t0=Date.now();
@@ -4700,10 +4736,19 @@ async function renderMarketLive(){
     var tk=await (await fetch("/api/tick?syms="+syms,{cache:"no-store"})).json();
     live=tk.p||{}; ML_TICKAGE=tk.age_ms||0;
   }catch(e){}
-  var px=(d.tickers||[]).slice(0,40).map(function(x){
+  var px=(d.tickers||[]).slice(0,200).map(function(x){
     if(live[x.s]!=null) return Object.assign({},x,{price:live[x.s]});
     return x;
   });
+  if(ML_ENGINE!=="all"){
+    var es=ML_ENGINE_SYMS[ML_ENGINE]||[];
+    px=px.filter(function(t){ return es.indexOf(t.s)>=0; });
+  }
+  if(ML_SYM){
+    var q=ML_SYM.toUpperCase();
+    px=px.filter(function(t){ return t.s.indexOf(q)>=0; });
+  }
+  px=px.slice(0,80);
   var sp=f.series||{}, mt=m.series||{}, X={};
   try{
     var xd=await (await fetch("/api/signals_ext",{cache:"no-store"})).json();
