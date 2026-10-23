@@ -33,12 +33,15 @@ MASTER = "http://127.0.0.1:8799"
 BACKEND = "http://127.0.0.1:8787"; SPOT = "https://api.binance.com"
 FAPI = "https://fapi.binance.com"; FEE = 0.001
 
-CONFIRM_SECS = 3.0     # a signal must persist this long before we act
+CONFIRM_SECS = 1.0     # a signal must persist this long before we act
 TP_PCT = 20.0           # a trade up 20% -> close it out
 LOCK_USD = 800.0        # book unrealised >= this -> bank the winners
 LOCK_PCT = 0.3          # bank only winners that clear the fee
 STOP_SECS = 30.0        # a bad position still bad after 30s -> close it
 STOP_PCT = 0.5          # ...only if it is meaningfully bad (past the fee)
+SKIM_PCT = 0.5          # quick small profit (scalp)
+TRAIL_ARM_PCT = 1.0     # arm the trailing stop once a winner clears this
+TRAIL_PCT = 0.5         # trail this far below the peak
 PENDING = {}            # (book, symbol, side) -> first time the signal was seen
 
 CFG = {
@@ -90,7 +93,17 @@ class Book:
             for s in list(self.pos):
                 self._close(s, self.pos[s], "floor")
             return
-        # +20% take-profit
+        # ride the curve: once a winner clears the arm, exit on a retracement
+        for s in list(self.pos):
+            p = self.pos[s]
+            if p["peak"] >= TRAIL_ARM_PCT and p["mark"] <= p["peak"] - TRAIL_PCT:
+                self._close(s, p, "trail")
+        # skim: bank a quick small profit
+        for s in list(self.pos):
+            p = self.pos[s]
+            if p["mark"] >= SKIM_PCT:
+                self._close(s, p, "skim")
+        # +20% take-profit (far target, rarely reached once skimming)
         for s in list(self.pos):
             p = self.pos[s]
             if p["mark"] >= TP_PCT:
