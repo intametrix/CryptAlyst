@@ -7107,7 +7107,7 @@ class H(BaseHTTPRequestHandler):
             out = []
             try:
                 files = [f for f in os.listdir(os.path.join(HERE, "state"))
-                         if (f.startswith("pack_") or f.startswith("strategy_"))
+                         if (f.startswith("pack_") or f.startswith("strategy_") or f.startswith("alpha_"))
                          and f.endswith(".json")]
             except Exception:
                 files = []
