@@ -1362,4 +1362,168 @@ The lake is therefore <em>self-documenting</em>.</p>
 <p>That is why the envelope is the whole trick: <strong>you don't maintain documentation — the packets
 are the documentation.</strong> The system is its own audit trail, its own research log, and its own
 time machine.</p>
+<hr>
+<h1>39. ATLAS slots into any system — the universal adapter</h1>
+<p><strong>What it is.</strong> The envelope is a <strong>universal adapter</strong>: any data source — a CSV export, a REST
+API, a WebSocket, a FIX feed, a weather API, a news wire — can be wrapped into one shape and
+flow through the same bus into the same lake.</p>
+<p><strong>Why it matters.</strong> Integration is usually the most expensive, most fragile part of any
+trading system: every new source needs its own connector, its own schema, its own storage.
+The envelope removes that — <strong>one shape to rule them all</strong>, and every source is just a thin
+adapter that maps its native format into an envelope.</p>
+<section class="fig"><img src="g1-universal-adapter.png" alt="Figure 39.1 — the envelope as universal adapter">
+<p><em>Figure 39.1 — CSV, REST, WebSocket, FIX, weather, news — all become envelopes on one bus.</em></p></section>
+<p>The value is the <em>normalisation</em>: once a thing is an envelope, it is versioned, keyed,
+timestamped, correlated and auditable — <strong>regardless of where it came from</strong>. The lake does not
+care if a packet is a Bloomberg export or a satellite reading; it treats them the same.</p>
+<hr>
+<h1>40. The pipeline — operators, interceptors, transformers</h1>
+<p>The plug-in point is a three-stage pipeline. This is the mechanism that makes ATLAS universal:</p>
+<section class="fig"><img src="g2-pipeline.png" alt="Figure 40.1 — the pipeline">
+<p><em>Figure 40.1 — operator (connect) → interceptors (gate) → transformer (shape) → lake.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>What it does</th>
+<th>The &quot;plug&quot;</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>operator</strong></td>
+<td>fetches from the source and maps to an envelope</td>
+<td>the connector — write one per source</td>
+</tr>
+<tr>
+<td><strong>interceptors</strong></td>
+<td>authority, keying, correlation, freshness</td>
+<td>the <em>trust</em> gates — who may write, is it fresh</td>
+</tr>
+<tr>
+<td><strong>transformer</strong></td>
+<td>record, redact, enrich, derive</td>
+<td>the <em>adaptation</em> — reshape, hide, enrich</td>
+</tr>
+</tbody>
+</table>
+<p>To slot in a new system, you write an <strong>operator</strong> (the adapter), register its <strong>topic</strong>, and
+attach the <strong>interceptors</strong> and <strong>transformers</strong> that apply. Everything downstream — models,
+books, the explorer — consumes it <em>unchanged</em>, because it is already an envelope.</p>
+<hr>
+<h1>41. Connecting to pretty much any third-party API</h1>
+<p><strong>What it does.</strong> A connector is a <em>thin</em> operator: fetch from a third-party API (poll or
+stream), map the response into an envelope, publish. That is the whole integration.</p>
+<section class="fig"><img src="g3-connectors.png" alt="Figure 41.1 — connectors to third parties">
+<p><em>Figure 41.1 — weather, storage, flows, price, news, CRM — each a thin connector on the bus.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>API</th>
+<th>What it contributes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ECMWF / GFS</td>
+<td>weather</td>
+<td>HDD, wind, solar forecast</td>
+</tr>
+<tr>
+<td>GIE AGSI</td>
+<td>storage</td>
+<td>gas fill levels</td>
+</tr>
+<tr>
+<td>ENTSO-E</td>
+<td>flows / generation</td>
+<td>cross-border, generation mix</td>
+</tr>
+<tr>
+<td>ICE / EEX</td>
+<td>market data</td>
+<td>price, curve, settlement</td>
+</tr>
+<tr>
+<td>news wire</td>
+<td>news / NLP</td>
+<td>events, sentiment</td>
+</tr>
+<tr>
+<td>CRM / KYC</td>
+<td>internal</td>
+<td>client, compliance</td>
+</tr>
+</tbody>
+</table>
+<p>Because the envelope is shape-agnostic, the connector is ~50 lines: <em>authenticate, fetch, map
+to envelope, publish.</em> No new database, no new schema, no new UI — the models and the explorer
+pick it up automatically.</p>
+<p><strong>Why it is so slick:</strong> the hard parts — storage, versioning, lineage, audit, fan-out — are
+<em>already done</em> by the bus and the lake. The only new work is the fetch and the map.</p>
+<hr>
+<h1>42. The wealth of data</h1>
+<p><strong>What it is.</strong> Because everything plugs in, ATLAS accumulates a <em>wealth</em> of data — not just
+price, but weather, storage, flows, news, sentiment, fundamentals, shipping, satellite, power,
+carbon, FX — all in one lake, all cross-correlatable.</p>
+<p><strong>Why it matters.</strong> The edge in gas is rarely in one source. It is in the <em>intersection</em>: a cold
+forecast <strong>plus</strong> a low storage print <strong>plus</strong> a pipeline outage <strong>plus</strong> a news headline.
+ATLAS is the only architecture that fuses all of them <em>with lineage</em>, so the fusion is trusted.</p>
+<section class="fig"><img src="g4-wealth.png" alt="Figure 42.1 — the wealth of data">
+<p><em>Figure 42.1 — everything into one lake, fused into the edge no single source gives.</em></p></section>
+<p>The &quot;wealth&quot; is not volume for its own sake — it is <strong>combinatorial value</strong>: N sources that can
+be cross-correlated produce far more signal than N sources in isolation. And because every
+source is a versioned envelope, the correlations are <em>reproducible</em>, not anecdotal.</p>
+<hr>
+<h1>43. Slick — yet dangerously powerful</h1>
+<p><strong>The slick part.</strong> One shape, one bus, one pipeline: any source plugs in with a thin adapter,
+and everything downstream (models, books, the explorer, compliance) consumes it automatically.</p>
+<p><strong>The dangerous part.</strong> When everything is in one lake and one bus, the system can <em>act</em> on all
+of it — automatically, at scale, in milliseconds. That power is dangerous three ways:</p>
+<section class="fig"><img src="g5-slick-powerful.png" alt="Figure 43.1 — slick, powerful, dangerous, guarded">
+<p><em>Figure 43.1 — the power is real; the guardrails make it safe.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Danger</th>
+<th>What it means</th>
+<th>The guardrail</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>bad data at scale</td>
+<td>a wrong feed auto-traded everywhere</td>
+<td>interceptors (freshness, authority) refuse it</td>
+</tr>
+<tr>
+<td>leakage</td>
+<td>one consumer sees data it shouldn't</td>
+<td>transformers (redaction) + authority</td>
+</tr>
+<tr>
+<td>autonomy</td>
+<td>the machine acts without a human</td>
+<td>human-in-the-loop + the governor</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why it is <em>dangerously</em> powerful:</strong> the same universality that makes it slick also makes it a
+<em>force multiplier</em> — for good data and for bad. A silent feed, a mis-configured connector, or an
+over-permissioned consumer would be amplified by the very power that makes the system great.
+That is exactly why the interceptors, transformers and the human-in-the-loop are not
+afterthoughts — they are the <strong>guardrails that make the power safe to wield</strong>.</p>
+<hr>
+<h1>44. The recipe — adding a new source</h1>
+<section class="fig"><img src="g6-plug-in.png" alt="Figure 44.1 — the four-step recipe">
+<p><em>Figure 44.1 — operator, topic, interceptors, transform — done.</em></p></section>
+<pre><code>1. write an operator     (fetch the API, map to an envelope)
+2. register the topic    (who may write, retention)
+3. add the interceptors  (authority, keying, correlation, freshness)
+4. transform + store     (record, redact, enrich)
+   → done — everything downstream consumes it automatically
+</code></pre>
+<p>That is the whole answer to &quot;how does ATLAS slot into any system&quot;: <strong>four steps, one shape, and
+the rest of the platform already knows what to do with it.</strong></p>
 </body></html>

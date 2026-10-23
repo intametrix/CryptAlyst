@@ -1027,3 +1027,136 @@ The lake is therefore *self-documenting*.
 That is why the envelope is the whole trick: **you don't maintain documentation — the packets
 are the documentation.** The system is its own audit trail, its own research log, and its own
 time machine.
+
+---
+
+# 39. ATLAS slots into any system — the universal adapter
+
+**What it is.** The envelope is a **universal adapter**: any data source — a CSV export, a REST
+API, a WebSocket, a FIX feed, a weather API, a news wire — can be wrapped into one shape and
+flow through the same bus into the same lake.
+
+**Why it matters.** Integration is usually the most expensive, most fragile part of any
+trading system: every new source needs its own connector, its own schema, its own storage.
+The envelope removes that — **one shape to rule them all**, and every source is just a thin
+adapter that maps its native format into an envelope.
+
+![Figure 39.1 — the envelope as universal adapter](g1-universal-adapter.png)
+
+*Figure 39.1 — CSV, REST, WebSocket, FIX, weather, news — all become envelopes on one bus.*
+
+The value is the *normalisation*: once a thing is an envelope, it is versioned, keyed,
+timestamped, correlated and auditable — **regardless of where it came from**. The lake does not
+care if a packet is a Bloomberg export or a satellite reading; it treats them the same.
+
+---
+
+# 40. The pipeline — operators, interceptors, transformers
+
+The plug-in point is a three-stage pipeline. This is the mechanism that makes ATLAS universal:
+
+![Figure 40.1 — the pipeline](g2-pipeline.png)
+
+*Figure 40.1 — operator (connect) → interceptors (gate) → transformer (shape) → lake.*
+
+| Stage | What it does | The "plug" |
+|---|---|---|
+| **operator** | fetches from the source and maps to an envelope | the connector — write one per source |
+| **interceptors** | authority, keying, correlation, freshness | the *trust* gates — who may write, is it fresh |
+| **transformer** | record, redact, enrich, derive | the *adaptation* — reshape, hide, enrich |
+
+To slot in a new system, you write an **operator** (the adapter), register its **topic**, and
+attach the **interceptors** and **transformers** that apply. Everything downstream — models,
+books, the explorer — consumes it *unchanged*, because it is already an envelope.
+
+---
+
+# 41. Connecting to pretty much any third-party API
+
+**What it does.** A connector is a *thin* operator: fetch from a third-party API (poll or
+stream), map the response into an envelope, publish. That is the whole integration.
+
+![Figure 41.1 — connectors to third parties](g3-connectors.png)
+
+*Figure 41.1 — weather, storage, flows, price, news, CRM — each a thin connector on the bus.*
+
+| Source | API | What it contributes |
+|---|---|---|
+| ECMWF / GFS | weather | HDD, wind, solar forecast |
+| GIE AGSI | storage | gas fill levels |
+| ENTSO-E | flows / generation | cross-border, generation mix |
+| ICE / EEX | market data | price, curve, settlement |
+| news wire | news / NLP | events, sentiment |
+| CRM / KYC | internal | client, compliance |
+
+Because the envelope is shape-agnostic, the connector is ~50 lines: *authenticate, fetch, map
+to envelope, publish.* No new database, no new schema, no new UI — the models and the explorer
+pick it up automatically.
+
+**Why it is so slick:** the hard parts — storage, versioning, lineage, audit, fan-out — are
+*already done* by the bus and the lake. The only new work is the fetch and the map.
+
+---
+
+# 42. The wealth of data
+
+**What it is.** Because everything plugs in, ATLAS accumulates a *wealth* of data — not just
+price, but weather, storage, flows, news, sentiment, fundamentals, shipping, satellite, power,
+carbon, FX — all in one lake, all cross-correlatable.
+
+**Why it matters.** The edge in gas is rarely in one source. It is in the *intersection*: a cold
+forecast **plus** a low storage print **plus** a pipeline outage **plus** a news headline.
+ATLAS is the only architecture that fuses all of them *with lineage*, so the fusion is trusted.
+
+![Figure 42.1 — the wealth of data](g4-wealth.png)
+
+*Figure 42.1 — everything into one lake, fused into the edge no single source gives.*
+
+The "wealth" is not volume for its own sake — it is **combinatorial value**: N sources that can
+be cross-correlated produce far more signal than N sources in isolation. And because every
+source is a versioned envelope, the correlations are *reproducible*, not anecdotal.
+
+---
+
+# 43. Slick — yet dangerously powerful
+
+**The slick part.** One shape, one bus, one pipeline: any source plugs in with a thin adapter,
+and everything downstream (models, books, the explorer, compliance) consumes it automatically.
+
+**The dangerous part.** When everything is in one lake and one bus, the system can *act* on all
+of it — automatically, at scale, in milliseconds. That power is dangerous three ways:
+
+![Figure 43.1 — slick, powerful, dangerous, guarded](g5-slick-powerful.png)
+
+*Figure 43.1 — the power is real; the guardrails make it safe.*
+
+| Danger | What it means | The guardrail |
+|---|---|---|
+| bad data at scale | a wrong feed auto-traded everywhere | interceptors (freshness, authority) refuse it |
+| leakage | one consumer sees data it shouldn't | transformers (redaction) + authority |
+| autonomy | the machine acts without a human | human-in-the-loop + the governor |
+
+**Why it is *dangerously* powerful:** the same universality that makes it slick also makes it a
+*force multiplier* — for good data and for bad. A silent feed, a mis-configured connector, or an
+over-permissioned consumer would be amplified by the very power that makes the system great.
+That is exactly why the interceptors, transformers and the human-in-the-loop are not
+afterthoughts — they are the **guardrails that make the power safe to wield**.
+
+---
+
+# 44. The recipe — adding a new source
+
+![Figure 44.1 — the four-step recipe](g6-plug-in.png)
+
+*Figure 44.1 — operator, topic, interceptors, transform — done.*
+
+```
+1. write an operator     (fetch the API, map to an envelope)
+2. register the topic    (who may write, retention)
+3. add the interceptors  (authority, keying, correlation, freshness)
+4. transform + store     (record, redact, enrich)
+   → done — everything downstream consumes it automatically
+```
+
+That is the whole answer to "how does ATLAS slot into any system": **four steps, one shape, and
+the rest of the platform already knows what to do with it.**
