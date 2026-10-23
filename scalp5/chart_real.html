@@ -619,7 +619,6 @@ function draw(){
   $("chg").textContent=(chg>=0?"+":"")+chg.toFixed(2)+"%";
   $("chg").className="chg "+(chg>=0?"up":"down");
   $("rng").textContent=S.tf+" · "+vc+"/"+n+" bars";
-  props();
 }
 
 function heikin(src){
@@ -870,7 +869,6 @@ function cross(ev){
     tip+='</g>';
     g.innerHTML+=tip;
   }
-  if($("props")) props();
 }
 
 function restoreBand(){
@@ -1335,22 +1333,22 @@ function setSym(v){
     });
   });
 }
-function setChart(c){ S.chart=c; persist(); chips(); draw(); }
-function setTool(t){ S.tool=t; chips(); }
-function toggleProp(k){ P[k]=!P[k]; chips(); draw(); }
-function setProp(k,v){ P[k]=!!v; persist(); chips(); draw(); }
-function setLayer(id,v){ OV[id]=!!v; persist(); chips(); draw(); }
-function setScaleMode(m){ S.scaleMode=m; if(m==="log"){ S.log=true; } else { S.log=false; } persist(); chips(); draw(); }
+function setChart(c){ S.chart=c; persist(); chips(); draw(); props(); }
+function setTool(t){ S.tool=t; chips(); props(); }
+function toggleProp(k){ P[k]=!P[k]; chips(); draw(); props(); }
+function setProp(k,v){ P[k]=!!v; persist(); chips(); draw(); props(); }
+function setLayer(id,v){ OV[id]=!!v; persist(); chips(); draw(); props(); }
+function setScaleMode(m){ S.scaleMode=m; if(m==="log"){ S.log=true; } else { S.log=false; } persist(); chips(); draw(); props(); }
 function setAxisMode(m){
-  if(m==="dual"){ P.dualAxis=true; P.priceAxisRight=true; persist();}
+  if(m==="dual"){ P.dualAxis=true; P.priceAxisRight=true; persist();props();}
   else if(m==="right"){ P.dualAxis=false; P.priceAxisRight=true; }
   else { P.dualAxis=false; P.priceAxisRight=false; }
   chips(); draw();
 }
-function setTf(tf){ S.tf=tf; persist(); chips(); loadBars(tf,function(){ draw(); }); }
-function toggleLayer(id){ OV[id]=!OV[id]; chips(); draw(); }
-function toggleMeasure(){ S.measure=!S.measure; MEAS=null; persist(); chips(); draw(); }
-function setLog(on){ S.log=on; persist(); chips(); draw(); }
+function setTf(tf){ S.tf=tf; persist(); chips(); props(); loadBars(tf,function(){ draw(); }); }
+function toggleLayer(id){ OV[id]=!OV[id]; chips(); draw(); props(); }
+function toggleMeasure(){ S.measure=!S.measure; MEAS=null; persist(); chips(); draw(); props(); }
+function setLog(on){ S.log=on; persist(); chips(); draw(); props(); }
 function lockPrice(){ if(GEO) S.y={lo:GEO.LO,hi:GEO.HI}; chips(); draw(); }
 function toggle(){
   var p=$("panel");
