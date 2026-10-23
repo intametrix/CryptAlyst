@@ -43,7 +43,7 @@ ENGINES = {
                     "--clock", "600", "--gap", "2", "--max-open", "6",
                     "--short-weight", "1.5"],
     # every model in the tree, each on its own $5,000 book
-    "alpha":       [PY_, "-u", "alpha.py", "--top", "300", "--only", "funding_carry,xsec_momentum"],
+    "alpha":       [PY_, "-u", "alpha.py", "--top", "300", "--only", "funding_carry,xsec_momentum,cascade_rebound"],
     "multimodels": [PY_, "-u", "multi_models.py", "--equity", "5000"],
     "statsmodels": [PY_, "-u", "stats_models.py", "--equity", "5000"],
     "swingv2":     [PY_, "-u", "swing_v2.py", "--equity", "5000"],

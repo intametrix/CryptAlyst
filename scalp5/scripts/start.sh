@@ -49,7 +49,7 @@ port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 wait_http() { # wait_http <url> <seconds> <name>
   local url=$1 secs=$2 name=$3 i=0
   while [ $i -lt "$secs" ]; do
-    if curl -sS --max-time 2 "$url" >/dev/null 2>&1; then ok "$name"; return 0; fi
+    if curl -sS --max-time 10 "$url" >/dev/null 2>&1; then ok "$name"; return 0; fi
     sleep 1; i=$((i+1))
   done
   return 1
