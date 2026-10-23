@@ -1,17 +1,19 @@
 const fs = require('fs');
+const path = require('path');
 const MarkdownIt = require('markdown-it');
 const puppeteer = require('puppeteer-core');
 
 const md = new MarkdownIt({ html: true, linkify: true });
 let html = md.render(fs.readFileSync('ARCHITECTURE.md', 'utf8'));
 
-// wrap each figure (img + optional caption) in a landscape page section
+// wrap each figure (img + optional caption) in its own page section
 html = html.replace(/<p><img([^>]*)><\/p>(\s*<p><em>Figure[^<]*<\/em><\/p>)?/g, (m, img, cap) => {
   return `<section class="landscape"><img${img}>${cap || ''}</section>`;
 });
 
 const css = `
 @page { size: A4 landscape; margin: 11mm 14mm 14mm 14mm; }
+html, body { margin: 0; padding: 0; }
 body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.42; }
 h1 { color: #1F4E79; font-size: 16pt; }
 h2 { color: #1F4E79; font-size: 12pt; }
@@ -29,18 +31,20 @@ section.landscape em { margin-top: 6px; text-align: center; }
 `;
 
 const full = `<!doctype html><html><head><meta charset="utf-8"><style>${css}</style></head><body>${html}</body></html>`;
+const htmlPath = path.resolve('ARCHITECTURE.html');
+fs.writeFileSync(htmlPath, full);
 
 (async () => {
   const browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', args: ['--no-sandbox'] });
   const page = await browser.newPage();
-  await page.setContent(full, { waitUntil: 'networkidle0' });
+  await page.goto('file://' + htmlPath, { waitUntil: 'networkidle0' });
   await page.pdf({
     path: 'content.pdf',
     preferCSSPageSize: true,
     printBackground: true,
     displayHeaderFooter: true,
     headerTemplate: '<div></div>',
-    footerTemplate: '<div style="width:100%;font-size:7.5px;color:#596370;padding:0 12px;display:flex;justify-content:space-between;font-family:Helvetica,Arial,sans-serif;"><span>Designed by Andrew John Preston · TekVolt Systems</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>',
+    footerTemplate: '<div style="width:100%;text-align:center;font-size:11px;color:#596370;font-family:Helvetica,Arial,sans-serif;">Designed by Andrew John Preston · TekVolt Systems &nbsp;·&nbsp; Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>',
     margin: { top: '12mm', bottom: '12mm', left: '0', right: '0' }
   });
   await browser.close();

@@ -80,56 +80,6 @@ time.
 
 <div style="page-break-after: always"></div>
 
-# Appendix A — the exit ladder in code
-
-The ladder is four checks, in order, on every mark:
-
-```
-switch {
-case chg >= +0.35:
-    reason = "lock"                          // bank a fee-clearing profit
-case peak >= +1.0 && chg <= peak-0.5:
-    reason = "trail"                         // ride the winner, exit on a pullback
-case chg <= -0.5:
-    reason = "stop"                          // cap every loss
-case held >= 180 && chg > 0:
-    reason = "clock"                         // force turnover on winners
-}
-```
-
-## Appendix B — a model rule in code
-
-`rsi2` is the whole model: a pure function of candles, nothing else.
-
-```
-func rsi2(bs []Candle) string {
-    cl := closes(bs)
-    if len(cl) < 3 { return "" }
-    r := rsi(cl, 2)
-    if r < 10  { return "buy"  }
-    if r > 90  { return "sell" }
-    return ""
-}
-```
-
-It holds no state, reads no account, and knows nothing about who consumes its output. That
-purity is what makes it testable — and what makes it a *calculation agent* rather than a
-trading loop.
-
-## Appendix C — the imbalance in code
-
-```
-imb = (bid_volume - ask_volume) / (bid_volume + ask_volume)
-if |imb| > 0.3:
-    side = buy if imb > 0 else sell
-```
-
-One number, from the order book, is the whole curve-rider signal — the BPF "keep only the
-signal" idea applied to market data.
-
-
-<div style="page-break-after: always"></div>
-
 # 1. The core principle
 
 **What it does.** This section defines the one organising idea the whole platform hangs on:
@@ -1655,6 +1605,266 @@ tier signal worth trading.**
 
 
 
+# 35. The journey of market data
+
+**What it does.** Traces market data from the exchange WebSocket all the way to a recorded
+envelope and a model's decision. It is the *artery* of the system: everything downstream
+consumes this one stream.
+
+**Why it matters.** If you understand this one journey you understand the platform's shape:
+one source of market data, one bus, one recorder, many consumers. Everything else is a
+consumer of this same stream.
+
+![Figure 35.1 — the full journey](diagrams/m1-market-data-journey.png)
+
+*Figure 35.1 — Binance → marketdata → bus → recorder → lake, and bus → models → book → fills.*
+
+## 35.1 The marketdata pipeline
+
+![Figure 35.2 — marketdata filters and publishes](diagrams/m6-marketdata-pipeline.png)
+
+*Figure 35.2 — WebSocket frames are filtered at the source into three signals, then published.*
+
+The marketdata service does three things to every frame, in order: it **filters** (keeps
+only the fields each consumer needs — the BPF idea), it **collapses** (the depth becomes one
+imbalance number, the candles a bounded cache), and it **publishes** (an envelope per signal
+onto the bus). Nothing is stored in the service itself — it is a pure pump.
+
+## 35.2 The depth journey
+
+![Figure 35.3 — the depth signal's path](diagrams/m7-depth-journey.png)
+
+*Figure 35.3 — the order book becomes one imbalance number, published and consumed.*
+
+## 35.3 The candle journey
+
+![Figure 35.4 — the candle path](diagrams/m8-candle-journey.png)
+
+*Figure 35.4 — candles are seeded once (history), then streamed, and the TA models read the cache.*
+
+The candle history is **backfilled once** — 200 bars per symbol — because the bus carries only
+newly-closed candles (TTL, no backlog). The models read the seeded cache plus the live
+updates, so a model always has the *context* (history) and the *now* (the latest bar).
+
+## 35.4 The marketdata subscription
+
+![Figure 35.5 — the combined stream subscription](diagrams/m20-marketdata-subscription.png)
+
+*Figure 35.5 — 90 symbols over one combined stream, dispatched by stream name.*
+
+## 35.5 Ticks to signal
+
+![Figure 35.6 — ticks become intelligence](diagrams/m17-ticks-to-signal.png)
+
+*Figure 35.6 — raw ticks are enriched into intel.signal, which the models consume as context.*
+
+<div style="page-break-after: always"></div>
+
+# 36. The bus in detail
+
+**What it does.** Moves every packet between every component, with an exchange per plane and
+a queue per topic, and fans one publisher out to many subscribers.
+
+**Why it matters.** The bus is the *single integration point*. Understanding its shape —
+exchanges, queues, bindings, fan-out — is understanding how any component talks to any
+other without a single direct call.
+
+![Figure 36.1 — the topic tree](diagrams/m2-bus-topics.png)
+
+*Figure 36.1 — exchanges group the planes; queues deliver to consumers.*
+
+## 36.1 Fan-out: one publisher, many subscribers
+
+![Figure 36.2 — fan-out](diagrams/m3-fanout.png)
+
+*Figure 36.2 — one marketdata publish reaches the recorder, the models and the book at once.*
+
+This is the decoupling made concrete: the publisher does not know the recorder, the models
+or the book exist. It publishes once; the broker fans the packet out to every subscriber.
+Adding a new consumer is subscribing, not wiring.
+
+## 36.2 A binding
+
+![Figure 36.3 — topic → exchange → queue → consumer](diagrams/m10-binding.png)
+
+*Figure 36.3 — the topic binds to an exchange, which feeds a queue, which delivers to a consumer.*
+
+## 36.3 The envelope lifecycle
+
+![Figure 36.4 — the envelope's pipeline](diagrams/m9-envelope-lifecycle.png)
+
+*Figure 36.4 — producer → interceptors → operator → transformer → lake, with refusals recorded.*
+
+## 36.4 The recorder fan-out
+
+![Figure 36.5 — the recorder writes once, readers read](diagrams/m11-recorder-fanout.png)
+
+*Figure 36.5 — the recorder writes the journal and the index, and fans out to the explorer and dashboards.*
+
+## 36.5 The bus, as a sequence
+
+![Figure 36.6 — the async message sequence](diagrams/m19-bus-sequence.png)
+
+*Figure 36.6 — one tick's message sequence, end to end, with no component blocking another.*
+
+<div style="page-break-after: always"></div>
+
+# 37. Models subscribe, asynchronously
+
+**What it does.** A model is a subscriber: it receives the latest market state, computes a
+number, and publishes a decision — all without blocking, and all without knowing who listens.
+
+**Why it matters.** Asynchrony is the runtime twin of decoupling. A model that blocks would
+slow the pipeline; a model that panics would kill it. Because each model subscribes, computes
+and publishes independently, neither can happen.
+
+![Figure 37.1 — the model's subscribe loop](diagrams/m4-model-subscribe.png)
+
+*Figure 37.1 — subscribe, receive the latest state, compute, publish, repeat.*
+
+## 37.1 The subscription lifecycle
+
+![Figure 37.2 — a subscriber's states](diagrams/m18-subscribe-lifecycle.png)
+
+*Figure 37.2 — disconnected → connecting → subscribed → receiving, with reconnect on error.*
+
+## 37.2 The async flow across goroutines
+
+![Figure 37.3 — goroutines publish and consume over the bus](diagrams/m5-async-flow.png)
+
+*Figure 37.3 — each goroutine is a producer, a consumer, or both; none blocks the others.*
+
+## 37.3 A decision, asynchronously
+
+![Figure 37.4 — a decision travels async](diagrams/m13-decision-async.png)
+
+*Figure 37.4 — tick → model → decision → book → strategy → fill, each hop asynchronous.*
+
+## 37.4 The book subscribes and confirms
+
+![Figure 37.5 — the book's consume-and-confirm loop](diagrams/m14-book-subscribe.png)
+
+*Figure 37.5 — the book records the decision in its window and trades only on a confirmed pattern.*
+
+## 37.5 The supervisor, async
+
+![Figure 37.6 — the supervisor orchestrates without trading](diagrams/m16-supervisor-async.png)
+
+*Figure 37.6 — the supervisor launches and watches, but never makes a trading decision.*
+
+<div style="page-break-after: always"></div>
+
+# 38. Correlation and the explorer
+
+**What it does.** One correlation id follows every piece of work; the explorer reads the lake
+and renders the whole journey — the flow, the trace, the why.
+
+**Why it matters.** This is where the architecture pays off for a human: the explorer turns
+the append-only lake into a view of *what happened and why*, resolved by correlation id.
+
+![Figure 38.1 — the correlation chain](diagrams/m15-correlation-chain.png)
+
+*Figure 38.1 — one cid links the trigger, the decision, the fill and the pnl.*
+
+![Figure 38.2 — the explorer reads the lake](diagrams/m12-explorer-read.png)
+
+*Figure 38.2 — the explorer is a read-only viewer: ENVELOPES, JOURNEY, EXECUTION, WHY, GANTT, BOOKS, HEALTH.*
+
+
+<div style="page-break-after: always"></div>
+
+# Field dictionary and glossary
+
+## 15.1 Envelope metadata
+
+| Field | Type | Meaning |
+|---|---|---|
+| `version` | int | envelope contract revision |
+| `plane` | string | market, intel, model, risk, control, system |
+| `topic` | string | the bus topic |
+| `key` | string | the symbol, when it concerns one |
+| `producer` | string | the component that computed it |
+| `generation` | uint | the producer's counter; gaps mean loss |
+| `cid` | string | correlation id |
+| `computed_at` | timestamp | when produced — staleness gates use this |
+| `received_at` | timestamp | when the recorder accepted it |
+| `refs` | array | inputs with topic, key, generation, age_ms |
+| `hops` | array | pipeline stages with outcome |
+
+## 15.2 Payload fields by topic
+
+| Topic | Fields |
+|---|---|
+| `model.decision` | engine, symbol, side, allowed, reason, confidence |
+| `model.fill` | engine, symbol, side, entry, exit, gross_pct, net_pct, peak_pct, reason, held_s, notional, pnl_usd |
+| `market.depth` | symbol, bids[], asks[], bid_qty, ask_qty, imbalance |
+| `market.candle` | symbol, interval, t, o, h, l, c, v, q, Q |
+| `risk.state` | snapshot{equity, gross_multiple, longs, shorts, per_symbol} |
+
+## 15.3 Glossary
+
+| Term | Meaning |
+|---|---|
+| envelope | the fixed carrier: data, meta, references |
+| interceptor | a rule that runs before work, and can refuse |
+| operator | the capability that produces a payload |
+| transformer | a stage that changes an envelope's shape |
+| correlation id | the identity that follows one piece of work |
+| tier signal | a strength-ranked, pattern-confirmed decision |
+| intel window | the book's bounded rolling signal history |
+| lake | the recorded store of envelopes |
+| imbalance | bid volume minus ask volume, normalised |
+
+# Appendix A — the exit ladder in code
+
+The ladder is four checks, in order, on every mark:
+
+```
+switch {
+case chg >= +0.35:
+    reason = "lock"                          // bank a fee-clearing profit
+case peak >= +1.0 && chg <= peak-0.5:
+    reason = "trail"                         // ride the winner, exit on a pullback
+case chg <= -0.5:
+    reason = "stop"                          // cap every loss
+case held >= 180 && chg > 0:
+    reason = "clock"                         // force turnover on winners
+}
+```
+
+## Appendix B — a model rule in code
+
+`rsi2` is the whole model: a pure function of candles, nothing else.
+
+```
+func rsi2(bs []Candle) string {
+    cl := closes(bs)
+    if len(cl) < 3 { return "" }
+    r := rsi(cl, 2)
+    if r < 10  { return "buy"  }
+    if r > 90  { return "sell" }
+    return ""
+}
+```
+
+It holds no state, reads no account, and knows nothing about who consumes its output. That
+purity is what makes it testable — and what makes it a *calculation agent* rather than a
+trading loop.
+
+## Appendix C — the imbalance in code
+
+```
+imb = (bid_volume - ask_volume) / (bid_volume + ask_volume)
+if |imb| > 0.3:
+    side = buy if imb > 0 else sell
+```
+
+One number, from the order book, is the whole curve-rider signal — the BPF "keep only the
+signal" idea applied to market data.
+
+
+<div style="page-break-after: always"></div>
+
 ## Appendix D — the payloads, verbatim
 
 A `market.depth` packet:
@@ -1885,213 +2095,3 @@ building decoupled: **every question is answerable, and every answer is evidence
 
 
 <div style="page-break-after: always"></div>
-
-# 35. The journey of market data
-
-**What it does.** Traces market data from the exchange WebSocket all the way to a recorded
-envelope and a model's decision. It is the *artery* of the system: everything downstream
-consumes this one stream.
-
-**Why it matters.** If you understand this one journey you understand the platform's shape:
-one source of market data, one bus, one recorder, many consumers. Everything else is a
-consumer of this same stream.
-
-![Figure 35.1 — the full journey](diagrams/m1-market-data-journey.png)
-
-*Figure 35.1 — Binance → marketdata → bus → recorder → lake, and bus → models → book → fills.*
-
-## 35.1 The marketdata pipeline
-
-![Figure 35.2 — marketdata filters and publishes](diagrams/m6-marketdata-pipeline.png)
-
-*Figure 35.2 — WebSocket frames are filtered at the source into three signals, then published.*
-
-The marketdata service does three things to every frame, in order: it **filters** (keeps
-only the fields each consumer needs — the BPF idea), it **collapses** (the depth becomes one
-imbalance number, the candles a bounded cache), and it **publishes** (an envelope per signal
-onto the bus). Nothing is stored in the service itself — it is a pure pump.
-
-## 35.2 The depth journey
-
-![Figure 35.3 — the depth signal's path](diagrams/m7-depth-journey.png)
-
-*Figure 35.3 — the order book becomes one imbalance number, published and consumed.*
-
-## 35.3 The candle journey
-
-![Figure 35.4 — the candle path](diagrams/m8-candle-journey.png)
-
-*Figure 35.4 — candles are seeded once (history), then streamed, and the TA models read the cache.*
-
-The candle history is **backfilled once** — 200 bars per symbol — because the bus carries only
-newly-closed candles (TTL, no backlog). The models read the seeded cache plus the live
-updates, so a model always has the *context* (history) and the *now* (the latest bar).
-
-## 35.4 The marketdata subscription
-
-![Figure 35.5 — the combined stream subscription](diagrams/m20-marketdata-subscription.png)
-
-*Figure 35.5 — 90 symbols over one combined stream, dispatched by stream name.*
-
-## 35.5 Ticks to signal
-
-![Figure 35.6 — ticks become intelligence](diagrams/m17-ticks-to-signal.png)
-
-*Figure 35.6 — raw ticks are enriched into intel.signal, which the models consume as context.*
-
-<div style="page-break-after: always"></div>
-
-# 36. The bus in detail
-
-**What it does.** Moves every packet between every component, with an exchange per plane and
-a queue per topic, and fans one publisher out to many subscribers.
-
-**Why it matters.** The bus is the *single integration point*. Understanding its shape —
-exchanges, queues, bindings, fan-out — is understanding how any component talks to any
-other without a single direct call.
-
-![Figure 36.1 — the topic tree](diagrams/m2-bus-topics.png)
-
-*Figure 36.1 — exchanges group the planes; queues deliver to consumers.*
-
-## 36.1 Fan-out: one publisher, many subscribers
-
-![Figure 36.2 — fan-out](diagrams/m3-fanout.png)
-
-*Figure 36.2 — one marketdata publish reaches the recorder, the models and the book at once.*
-
-This is the decoupling made concrete: the publisher does not know the recorder, the models
-or the book exist. It publishes once; the broker fans the packet out to every subscriber.
-Adding a new consumer is subscribing, not wiring.
-
-## 36.2 A binding
-
-![Figure 36.3 — topic → exchange → queue → consumer](diagrams/m10-binding.png)
-
-*Figure 36.3 — the topic binds to an exchange, which feeds a queue, which delivers to a consumer.*
-
-## 36.3 The envelope lifecycle
-
-![Figure 36.4 — the envelope's pipeline](diagrams/m9-envelope-lifecycle.png)
-
-*Figure 36.4 — producer → interceptors → operator → transformer → lake, with refusals recorded.*
-
-## 36.4 The recorder fan-out
-
-![Figure 36.5 — the recorder writes once, readers read](diagrams/m11-recorder-fanout.png)
-
-*Figure 36.5 — the recorder writes the journal and the index, and fans out to the explorer and dashboards.*
-
-## 36.5 The bus, as a sequence
-
-![Figure 36.6 — the async message sequence](diagrams/m19-bus-sequence.png)
-
-*Figure 36.6 — one tick's message sequence, end to end, with no component blocking another.*
-
-<div style="page-break-after: always"></div>
-
-# 37. Models subscribe, asynchronously
-
-**What it does.** A model is a subscriber: it receives the latest market state, computes a
-number, and publishes a decision — all without blocking, and all without knowing who listens.
-
-**Why it matters.** Asynchrony is the runtime twin of decoupling. A model that blocks would
-slow the pipeline; a model that panics would kill it. Because each model subscribes, computes
-and publishes independently, neither can happen.
-
-![Figure 37.1 — the model's subscribe loop](diagrams/m4-model-subscribe.png)
-
-*Figure 37.1 — subscribe, receive the latest state, compute, publish, repeat.*
-
-## 37.1 The subscription lifecycle
-
-![Figure 37.2 — a subscriber's states](diagrams/m18-subscribe-lifecycle.png)
-
-*Figure 37.2 — disconnected → connecting → subscribed → receiving, with reconnect on error.*
-
-## 37.2 The async flow across goroutines
-
-![Figure 37.3 — goroutines publish and consume over the bus](diagrams/m5-async-flow.png)
-
-*Figure 37.3 — each goroutine is a producer, a consumer, or both; none blocks the others.*
-
-## 37.3 A decision, asynchronously
-
-![Figure 37.4 — a decision travels async](diagrams/m13-decision-async.png)
-
-*Figure 37.4 — tick → model → decision → book → strategy → fill, each hop asynchronous.*
-
-## 37.4 The book subscribes and confirms
-
-![Figure 37.5 — the book's consume-and-confirm loop](diagrams/m14-book-subscribe.png)
-
-*Figure 37.5 — the book records the decision in its window and trades only on a confirmed pattern.*
-
-## 37.5 The supervisor, async
-
-![Figure 37.6 — the supervisor orchestrates without trading](diagrams/m16-supervisor-async.png)
-
-*Figure 37.6 — the supervisor launches and watches, but never makes a trading decision.*
-
-<div style="page-break-after: always"></div>
-
-# 38. Correlation and the explorer
-
-**What it does.** One correlation id follows every piece of work; the explorer reads the lake
-and renders the whole journey — the flow, the trace, the why.
-
-**Why it matters.** This is where the architecture pays off for a human: the explorer turns
-the append-only lake into a view of *what happened and why*, resolved by correlation id.
-
-![Figure 38.1 — the correlation chain](diagrams/m15-correlation-chain.png)
-
-*Figure 38.1 — one cid links the trigger, the decision, the fill and the pnl.*
-
-![Figure 38.2 — the explorer reads the lake](diagrams/m12-explorer-read.png)
-
-*Figure 38.2 — the explorer is a read-only viewer: ENVELOPES, JOURNEY, EXECUTION, WHY, GANTT, BOOKS, HEALTH.*
-
-
-<div style="page-break-after: always"></div>
-
-# 15. Field dictionary and glossary
-
-## 15.1 Envelope metadata
-
-| Field | Type | Meaning |
-|---|---|---|
-| `version` | int | envelope contract revision |
-| `plane` | string | market, intel, model, risk, control, system |
-| `topic` | string | the bus topic |
-| `key` | string | the symbol, when it concerns one |
-| `producer` | string | the component that computed it |
-| `generation` | uint | the producer's counter; gaps mean loss |
-| `cid` | string | correlation id |
-| `computed_at` | timestamp | when produced — staleness gates use this |
-| `received_at` | timestamp | when the recorder accepted it |
-| `refs` | array | inputs with topic, key, generation, age_ms |
-| `hops` | array | pipeline stages with outcome |
-
-## 15.2 Payload fields by topic
-
-| Topic | Fields |
-|---|---|
-| `model.decision` | engine, symbol, side, allowed, reason, confidence |
-| `model.fill` | engine, symbol, side, entry, exit, gross_pct, net_pct, peak_pct, reason, held_s, notional, pnl_usd |
-| `market.depth` | symbol, bids[], asks[], bid_qty, ask_qty, imbalance |
-| `market.candle` | symbol, interval, t, o, h, l, c, v, q, Q |
-| `risk.state` | snapshot{equity, gross_multiple, longs, shorts, per_symbol} |
-
-## 15.3 Glossary
-
-| Term | Meaning |
-|---|---|
-| envelope | the fixed carrier: data, meta, references |
-| interceptor | a rule that runs before work, and can refuse |
-| operator | the capability that produces a payload |
-| transformer | a stage that changes an envelope's shape |
-| correlation id | the identity that follows one piece of work |
-| tier signal | a strength-ranked, pattern-confirmed decision |
-| intel window | the book's bounded rolling signal history |
-| lake | the recorded store of envelopes |
-| imbalance | bid volume minus ask volume, normalised |
