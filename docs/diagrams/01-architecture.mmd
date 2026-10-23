@@ -1,0 +1,42 @@
+flowchart LR
+    subgraph D["1 · DATA (streamed)"]
+        MD["market data<br/>depth · candle · price · volume · OI"]
+        HIST["historical bars"]
+    end
+    subgraph M["2 · MODELS"]
+        M1["TA rules"]
+        M2["depth imbalance"]
+        M3["pattern confirmation"]
+    end
+    subgraph B["3 · BUS"]
+        BUS["envelope packets<br/>epoch ts · TTL · no backlog"]
+    end
+    subgraph K["4 · BOOKS"]
+        ACC["account<br/>equity · positions · PnL"]
+        INT["signal intel<br/>rolling window"]
+    end
+    subgraph S["5 · STRATEGIES"]
+        ST["open / close"]
+    end
+    MD --> BUS
+    HIST --> M
+    BUS --> M1 & M2
+    M1 & M2 -->|"model.decision"| BUS
+    BUS --> INT
+    INT --> M3
+    M3 -->|"tier signal"| BUS
+    BUS --> ST
+    ST -->|"model.fill"| ACC
+    ACC -->|"model.pnl"| BUS
+    class MD,HIST c_market
+    class M1,M2,M3 c_intel
+    class ACC,INT,ST c_model
+    class BUS c_neutral
+%% colour by role
+classDef c_market  fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel   fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model   fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk    fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store   fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
