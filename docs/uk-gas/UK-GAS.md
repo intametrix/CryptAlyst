@@ -918,3 +918,112 @@ difference between an informed position and a stale one.
 
 A long-term curve trader does not need a faster terminal. They need a **system that remembers
 why they are in the trade, proves it, and replays it.** That is ATLAS, and that is the envelope.
+
+---
+
+# 38. More envelope features — the fascinating part
+
+The envelope does more than record. It *remembers*, *replays* and *proves*. These are the
+features that make a trader or PM stop and say "oh — that's why it's different."
+
+## 38.1 The intel window — conviction over days, not ticks
+
+A curve trader's edge is slow. The book's **intel window** is the memory that matches it: it
+accumulates signals over days and only acts when a *pattern* forms.
+
+![Figure 38.1 — the intel window builds conviction](e8-intel-window.png)
+
+*Figure 38.1 — three days of agreeing signals become one confirmed tier signal.*
+
+```
+day 1: storage bearish   →  recorded (1/3)
+day 2: weather bullish   →  recorded (2/3)
+day 3: LNG tight         →  recorded (3/3)  →  pattern confirmed
+```
+
+A tick-based system would have traded each day's noise. ATLAS waits for the *streak* — which is
+exactly the discipline of a long-term curve trader, now machine-enforced.
+
+## 38.2 The transform chain — every step is a packet
+
+From raw temperature to the final fill, **every step is an envelope**, so the whole chain is
+versioned and replayable.
+
+![Figure 38.2 — raw → HDD → balance → decision → fill](e9-transform-chain.png)
+
+*Figure 38.2 — the full chain, each step a versioned envelope in the lake.*
+
+```
+raw temperature  →  HDD  →  balance forecast  →  decision  →  fill
+   (envelope)      (envelope)    (envelope)        (envelope)   (envelope)
+```
+
+The trader can point at *any* link and ask "what did this read, and was it right?" — and the
+answer is in the lake, not in someone's memory.
+
+## 38.3 The refusal record — "why didn't we trade?"
+
+Most systems record only the trades. ATLAS records the **non-trades** too — every refusal is
+an envelope naming the rule and the number.
+
+![Figure 38.3 — the refusal is recorded](e10-refusal.png)
+
+*Figure 38.3 — a refused signal is itself an envelope, so "why not" is answerable.*
+
+```
+signal: long M+1
+  → governor: REFUSED  (gross 12.4× > limit 8×)
+```
+
+For a PM reviewing the book, this is gold: the *absence* of a trade is explained, not a mystery.
+The discipline is visible — and the discipline is the edge.
+
+## 38.4 Replay — the time machine
+
+The lake is append-only, so any day can be **replayed with the exact same data, in the exact
+same order**.
+
+![Figure 38.4 — replay any day](e11-replay.png)
+
+*Figure 38.4 — replay the day, re-run the models, verify what happened.*
+
+A trader can ask "what did my model actually see at 09:02 on 3 February?" — and *see it*.
+And "what would it have done with the corrected weather?" — and *re-run it*. That is a
+capability no terminal has: a **time machine** for your own decisions.
+
+## 38.5 Model comparison — fair, on the same data
+
+Two models can be run on the **same versioned inputs** and compared fairly — same data, same
+clock, different models.
+
+![Figure 38.5 — fair model comparison](e12-model-compare.png)
+
+*Figure 38.5 — same inputs, two models, one fair P&L comparison.*
+
+Without the envelope, comparing models is confounded — they saw different data at different
+times. With it, the comparison is clean, and the better model wins on merit.
+
+## 38.6 Compliance as a view — proof, not a promise
+
+A regulatory report is **a query over the lake**, not a separately-maintained spreadsheet.
+
+![Figure 38.6 — the report is a view](e13-audit.png)
+
+*Figure 38.6 — REMIT, MiFID, EMIR reports are generated from the same evidence.*
+
+The regulator's question ("show me every order, its reasoning and its fill") is answered by a
+view, with correlation ids and ages. The report is **proof**, because it is generated from the
+append-only record — not reconstructed after the fact.
+
+## 38.7 The self-describing packet
+
+The deepest fact: an envelope **knows its own provenance, its own lineage and its own chain**.
+The lake is therefore *self-documenting*.
+
+![Figure 38.7 — the self-describing packet](e14-self-describing.png)
+
+*Figure 38.7 — a packet knows who made it, what it read, and what followed it.*
+
+That is why the envelope is the whole trick: **you don't maintain documentation — the packets
+are the documentation.** The system is its own audit trail, its own research log, and its own
+time machine.

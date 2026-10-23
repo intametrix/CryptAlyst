@@ -1297,4 +1297,69 @@ difference between an informed position and a stale one.</p>
 </table>
 <p>A long-term curve trader does not need a faster terminal. They need a <strong>system that remembers
 why they are in the trade, proves it, and replays it.</strong> That is ATLAS, and that is the envelope.</p>
+<hr>
+<h1>38. More envelope features — the fascinating part</h1>
+<p>The envelope does more than record. It <em>remembers</em>, <em>replays</em> and <em>proves</em>. These are the
+features that make a trader or PM stop and say &quot;oh — that's why it's different.&quot;</p>
+<h2>38.1 The intel window — conviction over days, not ticks</h2>
+<p>A curve trader's edge is slow. The book's <strong>intel window</strong> is the memory that matches it: it
+accumulates signals over days and only acts when a <em>pattern</em> forms.</p>
+<section class="fig"><img src="e8-intel-window.png" alt="Figure 38.1 — the intel window builds conviction">
+<p><em>Figure 38.1 — three days of agreeing signals become one confirmed tier signal.</em></p></section>
+<pre><code>day 1: storage bearish   →  recorded (1/3)
+day 2: weather bullish   →  recorded (2/3)
+day 3: LNG tight         →  recorded (3/3)  →  pattern confirmed
+</code></pre>
+<p>A tick-based system would have traded each day's noise. ATLAS waits for the <em>streak</em> — which is
+exactly the discipline of a long-term curve trader, now machine-enforced.</p>
+<h2>38.2 The transform chain — every step is a packet</h2>
+<p>From raw temperature to the final fill, <strong>every step is an envelope</strong>, so the whole chain is
+versioned and replayable.</p>
+<section class="fig"><img src="e9-transform-chain.png" alt="Figure 38.2 — raw → HDD → balance → decision → fill">
+<p><em>Figure 38.2 — the full chain, each step a versioned envelope in the lake.</em></p></section>
+<pre><code>raw temperature  →  HDD  →  balance forecast  →  decision  →  fill
+   (envelope)      (envelope)    (envelope)        (envelope)   (envelope)
+</code></pre>
+<p>The trader can point at <em>any</em> link and ask &quot;what did this read, and was it right?&quot; — and the
+answer is in the lake, not in someone's memory.</p>
+<h2>38.3 The refusal record — &quot;why didn't we trade?&quot;</h2>
+<p>Most systems record only the trades. ATLAS records the <strong>non-trades</strong> too — every refusal is
+an envelope naming the rule and the number.</p>
+<section class="fig"><img src="e10-refusal.png" alt="Figure 38.3 — the refusal is recorded">
+<p><em>Figure 38.3 — a refused signal is itself an envelope, so &quot;why not&quot; is answerable.</em></p></section>
+<pre><code>signal: long M+1
+  → governor: REFUSED  (gross 12.4× &gt; limit 8×)
+</code></pre>
+<p>For a PM reviewing the book, this is gold: the <em>absence</em> of a trade is explained, not a mystery.
+The discipline is visible — and the discipline is the edge.</p>
+<h2>38.4 Replay — the time machine</h2>
+<p>The lake is append-only, so any day can be <strong>replayed with the exact same data, in the exact
+same order</strong>.</p>
+<section class="fig"><img src="e11-replay.png" alt="Figure 38.4 — replay any day">
+<p><em>Figure 38.4 — replay the day, re-run the models, verify what happened.</em></p></section>
+<p>A trader can ask &quot;what did my model actually see at 09:02 on 3 February?&quot; — and <em>see it</em>.
+And &quot;what would it have done with the corrected weather?&quot; — and <em>re-run it</em>. That is a
+capability no terminal has: a <strong>time machine</strong> for your own decisions.</p>
+<h2>38.5 Model comparison — fair, on the same data</h2>
+<p>Two models can be run on the <strong>same versioned inputs</strong> and compared fairly — same data, same
+clock, different models.</p>
+<section class="fig"><img src="e12-model-compare.png" alt="Figure 38.5 — fair model comparison">
+<p><em>Figure 38.5 — same inputs, two models, one fair P&amp;L comparison.</em></p></section>
+<p>Without the envelope, comparing models is confounded — they saw different data at different
+times. With it, the comparison is clean, and the better model wins on merit.</p>
+<h2>38.6 Compliance as a view — proof, not a promise</h2>
+<p>A regulatory report is <strong>a query over the lake</strong>, not a separately-maintained spreadsheet.</p>
+<section class="fig"><img src="e13-audit.png" alt="Figure 38.6 — the report is a view">
+<p><em>Figure 38.6 — REMIT, MiFID, EMIR reports are generated from the same evidence.</em></p></section>
+<p>The regulator's question (&quot;show me every order, its reasoning and its fill&quot;) is answered by a
+view, with correlation ids and ages. The report is <strong>proof</strong>, because it is generated from the
+append-only record — not reconstructed after the fact.</p>
+<h2>38.7 The self-describing packet</h2>
+<p>The deepest fact: an envelope <strong>knows its own provenance, its own lineage and its own chain</strong>.
+The lake is therefore <em>self-documenting</em>.</p>
+<section class="fig"><img src="e14-self-describing.png" alt="Figure 38.7 — the self-describing packet">
+<p><em>Figure 38.7 — a packet knows who made it, what it read, and what followed it.</em></p></section>
+<p>That is why the envelope is the whole trick: <strong>you don't maintain documentation — the packets
+are the documentation.</strong> The system is its own audit trail, its own research log, and its own
+time machine.</p>
 </body></html>
