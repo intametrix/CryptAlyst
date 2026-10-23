@@ -662,3 +662,95 @@ id — so both the trade and the attempt to game it leave the same kind of trace
   every signal has a reason and every trade is auditable.
 
 That is the whole game: **a physical market, an honest platform, and a disciplined edge.**
+
+---
+
+# 30. Why ATLAS is the foundation for gas trading
+
+**What it does.** ATLAS is the *data god*: it **collects**, **stores** and **transforms** every
+piece of market data, and turns it into the envelopes that everything else consumes.
+
+**Why it matters.** Gas is a data-fusion problem — weather, storage, flows, news, sentiment,
+price — and a compliance problem. ATLAS is the layer that does both: it *collects* the raw
+data, *stores* it append-only, and *transforms* it into derived signals, with every step
+versioned and auditable.
+
+![Figure 30.1 — ATLAS: collect, store, transform, serve](d1-data-backbone.png)
+
+*Figure 30.1 — ATLAS is the backbone: data in, stored once, transformed, served to all.*
+
+| Stage | What ATLAS does |
+|---|---|
+| collect | every source publishes an envelope on the bus |
+| store | the recorder writes it once into the append-only lake |
+| transform | enrich, derive, feature-engineer into derived datasets |
+| serve | models, the explorer, the dashboards read the same lake |
+
+This is the answer to "would ATLAS be beneficial?" — **yes**, because the hard problems in gas
+are *collection, storage and transformation*, and ATLAS is already the best answer to all three.
+
+---
+
+# 31. The transformation pipeline
+
+Raw data is not a signal. The transformation pipeline turns raw envelopes into derived
+features, and it is where most of the value is added.
+
+![Figure 31.1 — raw → normalise → enrich → derive → store](d2-transform-pipeline.png)
+
+*Figure 31.1 — every raw envelope is normalised, enriched and derived, versioned at each step.*
+
+| Step | Example |
+|---|---|
+| normalise | raw temperature → a `fundamental.weather` envelope with a key + timestamp |
+| enrich | temperature → **HDD** (heating degree days) |
+| derive | HDD + storage → a **balance forecast**; gas + carbon → a **spark spread** |
+| store | the derived dataset is versioned, so a forecast is reproducible |
+
+Because every transformation is itself an envelope, the *lineage* is preserved: a forecast
+carries the references to the raw inputs it used, with their ages. That is the ATLAS
+guarantee — and it is exactly what a gas forecast needs to be auditable.
+
+---
+
+# 32. The gas-specific transformations
+
+The gas domain is where ATLAS's "transform" shines, because each raw input becomes a
+*derived* signal:
+
+![Figure 32.1 — raw inputs to gas signals](d3-gas-transforms.png)
+
+*Figure 32.1 — temperature→HDD, flows→balance, storage→fill, price→basis, news→events.*
+
+| Raw | Transformation | Derived signal |
+|---|---|---|
+| temperature | heating degree days | demand pressure |
+| pipeline/LNG flows | net balance | supply tightness |
+| storage | fill % vs 5yr | winter risk premium |
+| price curve | basis, spread | carry / scarcity |
+| news | NLP events + sentiment | shock direction |
+
+Each derived signal is a *pure transformation* published as an envelope — which means it can
+be reproduced, versioned and audited. That is the difference between a spreadsheet of numbers
+and a trading system you can trust.
+
+---
+
+# 33. The ATLAS benefits, mapped to gas
+
+![Figure 33.1 — ATLAS → gas trading](d4-benefits.png)
+
+*Figure 33.1 — audit, fusion, traceability, quality gates and surveillance, all feeding gas trading.*
+
+| ATLAS capability | What it gives gas |
+|---|---|
+| correlation id + append-only lake | an audit trail from market tick to fill |
+| the bus + decoupled models | fusion of weather, storage, news and sentiment |
+| generation, refs, hops | full lineage — what a forecast read, and how old |
+| interceptors + TTL | data-quality gates — freshness, authority, keying |
+| record everything | surveillance — spoofing and wash trades are visible |
+
+**The verdict, restated:** ATLAS does not give you the *gas edge* — the weather model, the
+storage model, the spark spread. It gives you the **trust, the traceability and the substrate**
+that let that edge be traded, explained, audited and governed. For a commodity as regulated,
+event-driven and data-rich as UK gas, that is the foundation — not an add-on.
