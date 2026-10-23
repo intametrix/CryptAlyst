@@ -145,13 +145,6 @@ old packets simply evaporate.
 
 ## 2.1 The envelope anatomy
 
-```mermaid
-flowchart TD
-    E["envelope"] --> D["data — the payload"]
-    E --> M["meta — version · plane · producer · epoch ts · TTL · cid"]
-    E --> R["refs — topic · key · generation · age_ms"]
-```
-
 ![Figure 2.2 — the envelope: data, meta, references](diagrams/08-envelope-anatomy.png)
 
 *Figure 2.2 — an envelope carries the payload, its provenance, and the inputs it read.*
