@@ -160,6 +160,18 @@ var S={tf:"5m",s:0,c:null,y:null,measure:false,log:false,scaleMode:"auto",tool:"
 var P={grid:true, priceAxis:true, priceAxisRight:false, dualAxis:false, timeAxis:true,
        lastLine:true, crosshair:true, axisDrag:true, volumePane:true, scrollPan:false,
        tooltip:true, highlight:true};
+function persist(){
+  try{ localStorage.setItem("chartPrefs", JSON.stringify({S:S, OV:OV, P:P})); }catch(e){}
+}
+function restorePrefs(){
+  try{
+    var v=JSON.parse(localStorage.getItem("chartPrefs")||"{}");
+    if(v.S){ Object.assign(S, v.S); }
+    if(v.OV){ Object.assign(OV, v.OV); }
+    if(v.P){ Object.assign(P, v.P); }
+  }catch(e){}
+}
+restorePrefs();
 var PROP_META=[
   {id:"grid",label:"grid"},
   {id:"priceAxis",label:"price labels"},
@@ -1355,22 +1367,22 @@ function setSym(v){
   SYM=v; $("symlabel").textContent=v; FILLS=[];
   loadBars(S.tf, function(){ loadFills(function(){ draw(); }); });
 }
-function setChart(c){ S.chart=c; chips(); draw(); }
+function setChart(c){ S.chart=c; persist(); chips(); draw(); }
 function setTool(t){ S.tool=t; chips(); }
 function toggleProp(k){ P[k]=!P[k]; chips(); draw(); }
-function setProp(k,v){ P[k]=!!v; chips(); draw(); }
-function setLayer(id,v){ OV[id]=!!v; chips(); draw(); }
-function setScaleMode(m){ S.scaleMode=m; if(m==="log"){ S.log=true; } else { S.log=false; } chips(); draw(); }
+function setProp(k,v){ P[k]=!!v; persist(); chips(); draw(); }
+function setLayer(id,v){ OV[id]=!!v; persist(); chips(); draw(); }
+function setScaleMode(m){ S.scaleMode=m; if(m==="log"){ S.log=true; } else { S.log=false; } persist(); chips(); draw(); }
 function setAxisMode(m){
-  if(m==="dual"){ P.dualAxis=true; P.priceAxisRight=true; }
+  if(m==="dual"){ P.dualAxis=true; P.priceAxisRight=true; persist();}
   else if(m==="right"){ P.dualAxis=false; P.priceAxisRight=true; }
   else { P.dualAxis=false; P.priceAxisRight=false; }
   chips(); draw();
 }
-function setTf(tf){ S.tf=tf; chips(); loadBars(tf,function(){ draw(); }); }
+function setTf(tf){ S.tf=tf; persist(); chips(); loadBars(tf,function(){ draw(); }); }
 function toggleLayer(id){ OV[id]=!OV[id]; chips(); draw(); }
-function toggleMeasure(){ S.measure=!S.measure; MEAS=null; chips(); draw(); }
-function setLog(on){ S.log=on; chips(); draw(); }
+function toggleMeasure(){ S.measure=!S.measure; MEAS=null; persist(); chips(); draw(); }
+function setLog(on){ S.log=on; persist(); chips(); draw(); }
 function lockPrice(){ if(GEO) S.y={lo:GEO.LO,hi:GEO.HI}; chips(); draw(); }
 function toggle(){
   var p=$("panel");
