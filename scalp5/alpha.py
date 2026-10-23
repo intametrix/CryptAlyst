@@ -42,6 +42,7 @@ STOP_PCT = 0.5          # ...only if it is meaningfully bad (past the fee)
 SKIM_PCT = 0.5          # quick small profit (scalp)
 TRAIL_ARM_PCT = 1.0     # arm the trailing stop once a winner clears this
 TRAIL_PCT = 0.5         # trail this far below the peak
+WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOXLUSDT", "XAUUSDT", "SNDKUSDT"]  # always trade the fastest tickers
 PENDING = {}            # (book, symbol, side) -> first time the signal was seen
 
 CFG = {
@@ -286,6 +287,18 @@ def main():
                     continue
                 b.open(u["s"], "sell", u["price"], "bottom-3 24h: %+.1f%% (10s confirmed)" % u["c"])
                 log("%-16s SELL %-11s %+.1f%% confirmed 10s" % ("xsec_momentum", u["s"], u["c"]))
+
+        # watchlist: always trade the 5 fastest-trading tickers, direction by 24h sign
+        if b:
+            for sym in WATCHLIST:
+                if sym in b.pos or len(b.pos) >= 16:
+                    continue
+                u = next((x for x in uni if x["s"] == sym), None)
+                if not u or not u.get("price"):
+                    continue
+                side = "buy" if (u.get("c") or 0) >= 0 else "sell"
+                b.open(sym, side, u["price"], "watchlist 24h %+.1f%%" % (u.get("c") or 0))
+                log("%-16s %-4s %-11s watchlist" % ("xsec_momentum", side.upper(), sym))
 
         # ---- 2. cascade rebound: 1m 3-sigma drop on 5x volume
         cb = books.get("cascade_rebound")
