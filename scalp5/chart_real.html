@@ -34,7 +34,9 @@
  button:hover{color:var(--fg);border-color:#3a4f66}
  button.on{color:#dcecff;border-color:#3d6f96;background:#182a3b;box-shadow:0 0 0 1px #58a6ff22}
  button.armed{background:#e0a72a;border-color:#e0a72a;color:#111;font-weight:600}
- .layout{display:grid;grid-template-columns:minmax(0,1fr) 272px;gap:12px;padding:12px 16px;
+ .layout{display:grid;grid-template-columns:minmax(0,1fr) 272px;gap:12px;padding:12px 16px;}
+ .layout.min{grid-template-columns:minmax(0,1fr)}
+ .layout.min #propcol{display:none}
          max-width:1800px;margin:0 auto;align-items:start}
  @media(max-width:1100px){.layout{grid-template-columns:1fr}}
  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -119,9 +121,10 @@
     </div>
   </div>
 
-  <div style="display:flex;flex-direction:column;gap:12px;min-height:0">
+  <div id="propcol" style="display:flex;flex-direction:column;gap:12px;min-height:0">
     <div class="card props">
-      <h2>properties</h2>
+      <h2 style="display:flex;justify-content:space-between;align-items:center">properties
+        <button class="tbtn" onclick="toggleMin()" title="minimise the control panel">◀ minimise</button></h2>
       <div id="props"></div>
     </div>
     <div class="card props" id="modelcard" style="display:none">
@@ -265,6 +268,12 @@ function setLive(on){
   chips(); props();
 }
 var PROPS_OPEN=true;
+function toggleMin(){
+  var lay=document.querySelector(".layout");
+  var b=document.querySelector("#propcol .tbtn");
+  if(lay) lay.classList.toggle("min");
+  if(b) b.textContent = (lay && lay.classList.contains("min")) ? "▶" : "◀ minimise";
+}
 function toggleProps(){
   PROPS_OPEN=!PROPS_OPEN;
   var p=$("props"), b=$("pbtn"), panel=$("panel");
