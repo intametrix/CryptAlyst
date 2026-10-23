@@ -7,6 +7,7 @@ const md = new MarkdownIt({ html: true, linkify: true });
 let html = md.render(fs.readFileSync('ARCHITECTURE.md', 'utf8'));
 
 // wrap each figure (img + optional caption) in its own page section
+html = html.replace(/<div style="page-break-after: always"><\/div>/g, '');
 html = html.replace(/<p><img([^>]*)><\/p>(\s*<p><em>Figure[^<]*<\/em><\/p>)?/g, (m, img, cap) => {
   return `<section class="landscape"><img${img}>${cap || ''}</section>`;
 });
@@ -15,9 +16,9 @@ const css = `
 @page { size: A4 landscape; margin: 11mm 14mm 14mm 14mm; }
 html, body { margin: 0; padding: 0; }
 body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.42; }
-h1 { color: #1F4E79; font-size: 16pt; }
-h2 { color: #1F4E79; font-size: 12pt; }
-h3 { color: #596370; font-size: 10.5pt; }
+h1 { color: #1F4E79; font-size: 16pt; break-before: page; break-after: avoid-page; page-break-before: always; page-break-after: avoid; }
+h2 { color: #1F4E79; font-size: 12pt; break-after: avoid-page; page-break-after: avoid; }
+h3 { color: #596370; font-size: 10.5pt; break-after: avoid-page; page-break-after: avoid; }
 table { border-collapse: collapse; width: 100%; font-size: 8.5pt; page-break-inside: avoid; }
 th { background: #1F4E79; color: #ffffff; font-weight: bold; padding: 4px 6px; text-align: left; }
 td { border: 1px solid #d0d7e2; padding: 3px 6px; }
@@ -25,7 +26,7 @@ img { max-width: 100%; }
 em { color: #596370; font-size: 8pt; }
 pre { background: #F1F3F6; font-family: Courier, monospace; font-size: 8pt; padding: 6px; }
 blockquote { border-left: 3px solid #1F4E79; margin-left: 0; padding-left: 12px; color: #444; }
-section.landscape { break-before: page; break-after: page; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+section.landscape { break-before: page; page-break-before: always; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 section.landscape img { max-width: 100%; max-height: 70vh; }
 section.landscape em { margin-top: 6px; text-align: center; }
 `;

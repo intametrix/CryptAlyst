@@ -1,0 +1,2840 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: A4 landscape; margin: 11mm 14mm 14mm 14mm; }
+html, body { margin: 0; padding: 0; }
+body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.42; }
+h1 { color: #1F4E79; font-size: 16pt; break-before: page; break-after: avoid-page; page-break-before: always; page-break-after: avoid; }
+h2 { color: #1F4E79; font-size: 12pt; break-after: avoid-page; page-break-after: avoid; }
+h3 { color: #596370; font-size: 10.5pt; break-after: avoid-page; page-break-after: avoid; }
+table { border-collapse: collapse; width: 100%; font-size: 8.5pt; page-break-inside: avoid; }
+th { background: #1F4E79; color: #ffffff; font-weight: bold; padding: 4px 6px; text-align: left; }
+td { border: 1px solid #d0d7e2; padding: 3px 6px; }
+img { max-width: 100%; }
+em { color: #596370; font-size: 8pt; }
+pre { background: #F1F3F6; font-family: Courier, monospace; font-size: 8pt; padding: 6px; }
+blockquote { border-left: 3px solid #1F4E79; margin-left: 0; padding-left: 12px; color: #444; }
+section.landscape { break-before: page; page-break-before: always; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+section.landscape img { max-width: 100%; max-height: 70vh; }
+section.landscape em { margin-top: 6px; text-align: center; }
+</style></head><body><h1>CryptAlyst — Books, Models &amp; Data</h1>
+<h2>The decoupled streaming forecast architecture</h2>
+<blockquote>
+<p>A complete engineering review of the platform: how <strong>messaging, streaming, models,
+books, data and history</strong> combine to <em>continuously forecast</em> and fire <strong>tier signals</strong>
+that strategies trade. Every diagram is rendered in the CryptAlyst role palette.</p>
+</blockquote>
+
+<h2>Contents</h2>
+<ol>
+<li>The core principle</li>
+<li>Messaging — the bus</li>
+<li>Streaming — never poll</li>
+<li>Models — calculation agents</li>
+<li>Books — account and intel</li>
+<li>Data — the market microstructure</li>
+<li>Forecast → tier signal → trade</li>
+<li>The strategy and exit ladder</li>
+<li>Pure Go — concurrency</li>
+<li>The full journey</li>
+<li>The envelope and pipeline</li>
+<li>The topic registry</li>
+<li>The risk governor</li>
+<li>The evolution</li>
+<li>Model reference — the ten agents in detail</li>
+<li>Worked examples — bull run, refusal, a full trade</li>
+<li>Data signals — depth, OI, volume</li>
+<li>Correlation and lineage</li>
+<li>Book states</li>
+<li>The recorder and the lake</li>
+<li>The supervisor and control plane</li>
+<li>Example trades — stop, trail, cascade, funding</li>
+<li>Risk accounting</li>
+<li>The envelope journey</li>
+<li>Tier decisions</li>
+<li>Design decisions — why it is built this way</li>
+<li>The forecast — how the layers combine</li>
+<li>The Go code structure</li>
+<li>More worked examples</li>
+<li>Operations and monitoring</li>
+<li>Testing the models</li>
+<li>The complete topic registry</li>
+<li>Glossary</li>
+<li>Summary</li>
+</ol>
+
+<h1>How to read this document</h1>
+<p>Each section builds on the previous one, but every section also stands alone.</p>
+<ul>
+<li><strong>Sections 1–6</strong> establish the pieces: the principle, the bus, the streaming, the models,
+the books, the data.</li>
+<li><strong>Sections 7–13</strong> show the flow: forecast → tier signal → trade, the exit ladder, the Go
+concurrency, the journey, the envelope, the topic registry, the risk governor.</li>
+<li><strong>Sections 14–25</strong> are the reference: the evolution, each model in detail, worked examples,
+the data signals, the lineage, the states, the recorder, the supervisor, the risk.</li>
+<li><strong>Sections 26–34</strong> are the reasoning and the operations: why it is built this way, the
+forecast math, the code structure, more examples, monitoring, testing, the full registry,
+and the glossary.</li>
+</ul>
+<p><strong>How to read a diagram.</strong> Every diagram uses the CryptAlyst role palette:</p>
+<table>
+<thead>
+<tr>
+<th>Colour</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>blue</td>
+<td>market data (raw feed)</td>
+</tr>
+<tr>
+<td>green</td>
+<td>intelligence (TA, forecast, signals)</td>
+</tr>
+<tr>
+<td>amber</td>
+<td>models, books, strategies</td>
+</tr>
+<tr>
+<td>red</td>
+<td>risk, refusals</td>
+</tr>
+<tr>
+<td>teal</td>
+<td>control, orchestration</td>
+</tr>
+<tr>
+<td>purple</td>
+<td>stores, the lake</td>
+</tr>
+<tr>
+<td>grey</td>
+<td>the bus, envelopes, neutral</td>
+</tr>
+</tbody>
+</table>
+<p>The colour tells you <em>what kind of thing</em> a node is at a glance, before you read a single
+label. Flow runs left-to-right or top-to-bottom; sequence diagrams run top-to-bottom over
+time.</p>
+
+<h1>1. The core principle</h1>
+<p><strong>What it does.</strong> This section defines the one organising idea the whole platform hangs on:
+every part is a <em>producer</em> or a <em>consumer</em> of small, stamped packets, and nothing is coupled
+directly to anything else.</p>
+<p><strong>Why it matters.</strong> Decoupling is what makes the system observable, testable and
+replaceable. A coupled system (a model that opens a position directly) is fast to write and
+impossible to reason about afterwards; a decoupled system records every hop as a packet, so
+every decision can be replayed and every part can be swapped without touching the rest.</p>
+<p>The platform is <strong>asynchronous and decoupled</strong>. Nothing calls anything else directly.</p>
+<ul>
+<li><strong>Models are calculation agents</strong> — they publish <em>numbers</em> (a signal, a score, a probability).</li>
+<li><strong>The bus carries packets</strong> — every message is an envelope with an <strong>epoch timestamp and a TTL</strong>, and it is <strong>never backlogged</strong>: subscribers read the latest state, nothing queues.</li>
+<li><strong>Books hold the intel</strong> — a book accumulates the recent signal stream in a <strong>bounded rolling window</strong>, so a model can see a <em>pattern</em> before it is confident.</li>
+<li><strong>Strategies trade</strong> — a strategy lives inside the book and opens/closes only when the model has confirmed a pattern.</li>
+</ul>
+<p>A single signal is not enough. A model reports a signal, is <em>not sure</em> whether it is a good
+idea, and waits until it sees a <strong>pattern</strong>. <strong>That intel is what the book carries and the
+model uses.</strong></p>
+<section class="landscape"><img src="diagrams/01-architecture.png" alt="Figure 1.1 — the decoupled architecture">
+<p><em>Figure 1.1 — data → models → bus → books → strategy → trade, decoupled at every hop.</em></p></section>
+<h2>1.1 Why decouple</h2>
+<table>
+<thead>
+<tr>
+<th>Coupled (what we moved away from)</th>
+<th>Decoupled (the design)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a model opens a position directly</td>
+<td>a model only publishes a number</td>
+</tr>
+<tr>
+<td>one slow model slows everything</td>
+<td>each model owns its own goroutine</td>
+</tr>
+<tr>
+<td>a panic in one model kills the pipeline</td>
+<td>a panic is contained and reported</td>
+</tr>
+<tr>
+<td>models only run when the loop runs</td>
+<td>models run continuously, whether or not anyone listens</td>
+</tr>
+<tr>
+<td>consumers read whatever arrives</td>
+<td>consumers read the latest state (TTL, no backlog)</td>
+</tr>
+</tbody>
+</table>
+<p>The decoupling is what makes the system <em>agile</em>: a packet of model output or market data can
+be published, listened to, and used by any other part — without any part knowing who listens.</p>
+
+<h1>2. Messaging — the bus is the nervous system</h1>
+<p><strong>What it does.</strong> The bus moves every packet between every component: market data in,
+model numbers out, decisions and fills and pnl around the loop. A packet is an envelope — a
+payload plus provenance (who, when, in what order, with a TTL).</p>
+<p><strong>Why it matters.</strong> The bus is the single point of integration. Because everything flows
+through it as stamped envelopes, the whole system has one audit trail, one source of truth
+for &quot;who may write what&quot;, and one place to observe. Without it, every component would need
+its own hand-rolled wiring, and the platform would be a hairball of direct calls.</p>
+<p>Every message on the bus is an <strong>envelope</strong>: a payload plus metadata — the provenance that
+makes the stream auditable and fresh. The bus is a <strong>state channel, not a job queue</strong>: with
+a TTL on every packet and no backlog, a subscriber always reads the <em>current</em> picture, and
+old packets simply evaporate.</p>
+<section class="landscape"><img src="diagrams/02-bus.png" alt="Figure 2.1 — producers and subscribers on the bus">
+<p><em>Figure 2.1 — calculation agents publish numbers; subscribers listen and decide.</em></p></section>
+<h2>2.1 The envelope anatomy</h2>
+<pre><code class="language-mermaid">flowchart TD
+    E[&quot;envelope&quot;] --&gt; D[&quot;data — the payload&quot;]
+    E --&gt; M[&quot;meta — version · plane · producer · epoch ts · TTL · cid&quot;]
+    E --&gt; R[&quot;refs — topic · key · generation · age_ms&quot;]
+</code></pre>
+<section class="landscape"><img src="diagrams/08-envelope-anatomy.png" alt="Figure 2.2 — the envelope: data, meta, references">
+<p><em>Figure 2.2 — an envelope carries the payload, its provenance, and the inputs it read.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Member</th>
+<th>What it carries</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>data</code></td>
+<td>the payload for the topic</td>
+<td>the number the model computed</td>
+</tr>
+<tr>
+<td><code>meta</code></td>
+<td>version, plane, producer, generation, cid, timestamps</td>
+<td>provenance — who, when, in what order</td>
+</tr>
+<tr>
+<td><code>refs</code></td>
+<td>the inputs it read (topic, key, generation, age)</td>
+<td>lineage — what a decision was based on</td>
+</tr>
+</tbody>
+</table>
+<h2>2.2 The metadata fields</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>version</code></td>
+<td>the envelope contract revision</td>
+</tr>
+<tr>
+<td><code>plane</code></td>
+<td>market, intel, model, risk, control, system</td>
+</tr>
+<tr>
+<td><code>topic</code></td>
+<td>the channel (e.g. <code>model.decision</code>)</td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td>the symbol, when the message concerns one</td>
+</tr>
+<tr>
+<td><code>producer</code></td>
+<td>the component that computed the payload</td>
+</tr>
+<tr>
+<td><code>generation</code> / <code>seq</code></td>
+<td>monotonic ordering per topic</td>
+</tr>
+<tr>
+<td><code>cid</code> / <code>parent_cid</code></td>
+<td>correlation id — links a decision to its fills</td>
+</tr>
+<tr>
+<td><code>computed_at</code></td>
+<td>when the payload was produced (staleness gates use this)</td>
+</tr>
+<tr>
+<td><code>received_at</code></td>
+<td>when the recorder accepted it</td>
+</tr>
+<tr>
+<td><code>hops</code> / <code>refs</code></td>
+<td>the pipeline stages and the inputs read</td>
+</tr>
+</tbody>
+</table>
+<h2>2.3 The pipeline — interceptors, operator, transformer</h2>
+<section class="landscape"><img src="diagrams/09-decision-pipeline.png" alt="Figure 2.3 — the pipeline every envelope passes">
+<p><em>Figure 2.3 — authority, keying, correlation and freshness run before the operator produces a payload.</em></p></section>
+<p>Every envelope passes four interceptors before the operator runs, and a transformer after:</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>What it checks</th>
+<th>Refusal records</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>authority</code></td>
+<td>the producer may write this topic</td>
+<td>the rule name</td>
+</tr>
+<tr>
+<td><code>keying</code></td>
+<td>the message is keyed by symbol</td>
+<td>the rule name</td>
+</tr>
+<tr>
+<td><code>correlation</code></td>
+<td>a cid is minted and chained</td>
+<td>the rule name</td>
+</tr>
+<tr>
+<td><code>freshness</code></td>
+<td><code>computed_at</code> is within the topic's limit</td>
+<td>the rule and the number</td>
+</tr>
+</tbody>
+</table>
+<p>A refusal is recorded as an envelope too — so &quot;why not&quot; is a packet you can open, not a line
+in a log.</p>
+<h2>2.4 Topics — a single registry with producer contracts</h2>
+<p><code>topics.go</code> is the <strong>one table</strong>. Each topic declares its exchange, its producers and its
+retention (TTL). The planes group them:</p>
+<section class="landscape"><img src="diagrams/18-topic-planes.png" alt="Figure 2.4 — the planes and their topics">
+<p><em>Figure 2.4 — five planes: market, intel, model, risk, control.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Exchange</th>
+<th>Producers</th>
+<th>Retention</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>market.price</code> / <code>market.depth</code> / <code>market.candle</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop (live only)</td>
+</tr>
+<tr>
+<td><code>intel.signal</code> / <code>intel.flow</code> / <code>intel.movers</code></td>
+<td>intel</td>
+<td>signals</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.ta</code></td>
+<td>intel</td>
+<td>tad</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.forecast</code></td>
+<td>intel</td>
+<td>forecast</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>model.decision</code></td>
+<td>model</td>
+<td>models10, curve_rider, …</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>model.fill</code></td>
+<td>model</td>
+<td>same</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>model.pnl</code></td>
+<td>model</td>
+<td>same + supervisor</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>risk.state</code></td>
+<td>risk</td>
+<td>risk</td>
+<td>5m</td>
+</tr>
+</tbody>
+</table>
+
+<h1>3. Streaming — never poll (BPF-inspired)</h1>
+<p><strong>What it does.</strong> Market data (depth, candles, price, volume, OI) arrives over WebSocket,
+pushed by the exchange, and is filtered at the source to only the fields each consumer needs.</p>
+<p><strong>Why it matters.</strong> Polling is the enemy of a fast decision: the measurement showed one HTTP
+fetch (333 ms) is ~2000× slower than one model calculation (150 µs). Streaming removes that
+latency and the &quot;filter at the source&quot; idea (from the Berkeley Packet Filter) removes the
+wasted data. A decision made on a pushed, pre-filtered number is both faster and cheaper.</p>
+<p>The Berkeley Packet Filter filters packets <strong>at the source</strong> — inside the kernel — so only the
+data that matches is ever copied up. The same idea applied to market data:</p>
+<ol>
+<li><strong>Filter at the source</strong> — subscribe to only what we need (<code>depth5</code>, not the full book).</li>
+<li><strong>Keep only the signal</strong> — collapse the order book to one <code>imbalance</code> number.</li>
+<li><strong>Never poll</strong> — data pushes to us over WebSocket; decisions happen on arrival.</li>
+</ol>
+<section class="landscape"><img src="diagrams/03-stream.png" alt="Figure 3.1 — filter at the source, keep only the signal">
+<p><em>Figure 3.1 — WebSocket → filter → one number, the BPF pattern.</em></p></section>
+<h2>3.1 Why streaming beat polling</h2>
+<p>Measured during the build: <strong>one model calculation takes ~150 µs</strong>, while <strong>one HTTP fetch
+takes ~333 ms</strong> — the network was ~2000× slower than the math. Polling 24 endpoints
+sequentially cost ~8 seconds per decision; the WebSocket stream delivers the same data in
+real time.</p>
+<table>
+<thead>
+<tr>
+<th>Before (poll)</th>
+<th>After (stream)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>24 sequential HTTP fetches ≈ 8s per decision</td>
+<td>push, ~0 latency</td>
+</tr>
+<tr>
+<td>full depth (20 levels)</td>
+<td>depth5 (5 levels) + one imbalance number</td>
+</tr>
+<tr>
+<td>stale data on a timer</td>
+<td>data on arrival</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The bottleneck was never the language — it was I/O and polling.</strong></p>
+<h2>3.2 What is streamed</h2>
+<table>
+<thead>
+<tr>
+<th>Stream</th>
+<th>Frequency</th>
+<th>What it feeds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>depth5@100ms</code></td>
+<td>100 ms</td>
+<td>the imbalance (book pressure)</td>
+</tr>
+<tr>
+<td><code>kline_1m</code> / <code>kline_15m</code></td>
+<td>on close</td>
+<td>the TA models</td>
+</tr>
+<tr>
+<td><code>bookTicker</code></td>
+<td>real time</td>
+<td>the best bid/ask</td>
+</tr>
+<tr>
+<td><code>trade</code> / <code>aggTrade</code></td>
+<td>real time</td>
+<td>volume and taker flow</td>
+</tr>
+</tbody>
+</table>
+<p>The market data service subscribes once, and every model reads the same live state.</p>
+
+<h1>4. Models — calculation agents that publish numbers</h1>
+<p><strong>What it does.</strong> A model is a <em>pure function</em>: candles and the depth imbalance in, a
+&quot;buy&quot; / &quot;sell&quot; / &quot;nothing&quot; out. It publishes that number and holds no account state.</p>
+<p><strong>Why it matters.</strong> Purity is what makes a model testable (you can feed it generated bars
+and assert the answer) and replaceable (a better rule is a drop-in). If a model also knew
+about the account, it would be impossible to test in isolation and impossible to swap
+without dragging the whole book along. One model = one question = one testable function.</p>
+<p>A model owns <strong>one question</strong>. It does not know about accounts, positions, or risk. It
+computes and publishes — which is what makes it replaceable and testable.</p>
+<section class="landscape"><img src="diagrams/10-model-logic.png" alt="Figure 4.1 — a model: candles + depth in, a decision out">
+<p><em>Figure 4.1 — the model consumes the cached market state, runs its rule, and publishes a decision.</em></p></section>
+<h2>4.1 The models</h2>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Question</th>
+<th>Rule</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>donchian55</code></td>
+<td>breaking a 55-bar range?</td>
+<td>close ≥ 55-bar high → buy; ≤ low → sell</td>
+</tr>
+<tr>
+<td><code>orb</code></td>
+<td>breaking the opening range?</td>
+<td>close &gt; session high → buy; &lt; low → sell</td>
+</tr>
+<tr>
+<td><code>boll_squeeze</code></td>
+<td>tight Bollinger expanding?</td>
+<td>close &gt; +2σ with width &lt; 1% → buy</td>
+</tr>
+<tr>
+<td><code>rsi2</code></td>
+<td>2-bar RSI stretched?</td>
+<td>RSI &lt; 10 → buy; &gt; 90 → sell</td>
+</tr>
+<tr>
+<td><code>vwap_revert</code></td>
+<td>stretched from VWAP?</td>
+<td>below 0.994×VWAP → buy; above 1.006× → sell</td>
+</tr>
+<tr>
+<td><code>macd_trend</code></td>
+<td>MACD crossed zero?</td>
+<td>hist crosses up → buy; down → sell</td>
+</tr>
+<tr>
+<td><code>vol_break</code></td>
+<td>volume spike + directional close?</td>
+<td>vol &gt; 3×avg + close in top/bottom 30% → trade</td>
+</tr>
+<tr>
+<td><code>ema_pullback</code></td>
+<td>pullback to the EMA trend?</td>
+<td>price at EMA20 with EMA20&gt;EMA50 → buy</td>
+</tr>
+<tr>
+<td><code>atr_channel</code></td>
+<td>outside an ATR channel?</td>
+<td>close &gt; EMA20+1.5×ATR → buy</td>
+</tr>
+<tr>
+<td><code>curve_rider</code></td>
+<td>strongest book imbalance?</td>
+<td>buy/sell the biggest bid/ask imbalance</td>
+</tr>
+</tbody>
+</table>
+<section class="landscape"><img src="diagrams/11-rules-logic.png" alt="Figure 4.2 — three representative rule logics">
+<p><em>Figure 4.2 — RSI2, Donchian and MACD: each is a tiny deterministic function of candles.</em></p></section>
+<h2>4.2 Models feed other models</h2>
+<p>A model's output is input to another. A <strong>positioning</strong> model publishes where the book is
+exposed; a <strong>risk</strong> model consumes it and publishes risk; both feed the decision. <strong>Models
+provide valuable data for other models</strong> — and the bus is how that data moves without any
+model knowing who listens.</p>
+<section class="landscape"><img src="diagrams/07-models-feed.png" alt="Figure 4.3 — models feed models">
+<p><em>Figure 4.3 — positioning → risk → decision, each a published number.</em></p></section>
+
+<h1>5. Books — account <strong>and</strong> intel</h1>
+<p><strong>What it does.</strong> The book is the account (equity, positions, PnL) <em>plus</em> a bounded
+rolling window of the recent signals, so a model can see a <em>pattern</em> before it is confident.</p>
+<p><strong>Why it matters.</strong> A single signal is noise; a streak is a signal. The window is the memory
+that turns the former into the latter — without it the strategy would trade every blip.
+Because the window is bounded and TTL-expired, it never holds too much, yet it is long enough
+to catch a sustained move (imagine a bull run: the streak is exactly what you want to see).</p>
+<p>The book is two things at once:</p>
+<ol>
+<li><strong>The account</strong> — equity, open positions, realised PnL. This survives and is reported.</li>
+<li><strong>The intel</strong> — a bounded rolling window of recent signals, so the model can see a
+<em>pattern</em> rather than a lone blip.</li>
+</ol>
+<section class="landscape"><img src="diagrams/04-book-intel.png" alt="Figure 5.1 — the book accumulates signals and confirms a pattern">
+<p><em>Figure 5.1 — a lone signal is noise; the streak in the window is the signal.</em></p></section>
+<h2>5.1 The pattern confirmation</h2>
+<p>Models need <strong>previous signals, or many</strong>, to make an informed decision. The book holds
+those for a <strong>time window the model defines</strong>:</p>
+<ul>
+<li>a signal arrives — the model is <em>not sure</em> yet;</li>
+<li>the book records it in the rolling window;</li>
+<li>only when <strong>N agreeing signals</strong> accumulate inside the window does the model confirm;</li>
+<li>the confirmation becomes a <strong>tier signal</strong> the strategy may act on.</li>
+</ul>
+<section class="landscape"><img src="diagrams/13-pattern-confirm.png" alt="Figure 5.2 — three agreeing signals confirm a pattern">
+<p><em>Figure 5.2 — a signal is reported; the model waits for a pattern before it is sure.</em></p></section>
+<p><strong>&quot;Never hold too much data, but imagine a bull run.&quot;</strong> The window is bounded — old entries
+expire — yet it is long enough that during a sustained move the model sees the <em>streak</em> of
+agreeing signals that confirms the trend. A single signal is noise; the <strong>streak</strong> is the
+signal.</p>
+
+<h1>6. Data — the market microstructure</h1>
+<p><strong>What it does.</strong> The system reads the order flow — depth imbalance, open interest, price,
+volume — not just the candles. Each signal reveals a different face of what the market is
+<em>thinking</em>.</p>
+<p><strong>Why it matters.</strong> Candles alone are the <em>past</em>; the order book and OI are the <em>present</em> —
+the resting orders and the new money that will move price next. Combining them with history
+turns a lagging picture into a leading forecast. The market microstructure is the edge: it
+shows intention before it becomes a completed trade.</p>
+<p>A forecast is only as good as the data behind it. The system reads the order flow, not just
+the candles:</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Reads</th>
+<th>What it reveals</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>depth imbalance</strong></td>
+<td>bid vs ask volume</td>
+<td>real buy/sell pressure now</td>
+</tr>
+<tr>
+<td><strong>OI change</strong></td>
+<td>open interest over an interval</td>
+<td>new money entering</td>
+</tr>
+<tr>
+<td><strong>price</strong></td>
+<td>last / 24h move</td>
+<td>direction + momentum</td>
+</tr>
+<tr>
+<td><strong>volume</strong></td>
+<td>quote volume / spike</td>
+<td>participation and conviction</td>
+</tr>
+</tbody>
+</table>
+<section class="landscape"><img src="diagrams/05-forecast.png" alt="Figure 6.1 — history + live + intel become a forecast">
+<p><em>Figure 6.1 — three layers combined turn a number into a forecast.</em></p></section>
+<h2>6.1 The three layers of data</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>What it provides</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Live stream</strong></td>
+<td>the <em>now</em> — imbalance, last price, last volume</td>
+<td>direction of pressure</td>
+</tr>
+<tr>
+<td><strong>Historical bars</strong></td>
+<td>the <em>context</em> — 200 bars of OHLCV</td>
+<td>where price is in its range</td>
+</tr>
+<tr>
+<td><strong>Signal intel</strong></td>
+<td>the <em>memory</em> — recent model outputs</td>
+<td>whether a pattern is forming</td>
+</tr>
+</tbody>
+</table>
+<p><strong>All three combined</strong> turn a number into a <em>forecast</em>, and a forecast into a <strong>tier signal</strong>.</p>
+
+<h1>7. Forecast → tier signal → trade</h1>
+<p><strong>What it does.</strong> The numbers from the models are combined with history and the signal
+intel into a <em>forecast</em>, which is then ranked into <em>tiers</em>, and only a confirmed tier signal
+is traded.</p>
+<p><strong>Why it matters.</strong> Not every number deserves a trade. The tier ranking is what stops the
+strategy from treating a weak signal and a strong one the same — it concentrates capital on
+the confident, confirmed signals and ignores the noise. That is the difference between a
+forecast and a firehose.</p>
+<p>The strategy does not act on every number. It waits for a <strong>tier signal</strong> — a confirmed,
+strength-ranked decision.</p>
+<section class="landscape"><img src="diagrams/06-trade-loop.png" alt="Figure 7.1 — the trade loop">
+<p><em>Figure 7.1 — numbers → pattern → tier signal → open → manage → fill.</em></p></section>
+<h2>7.1 Tier ranking</h2>
+<p>Not all signals are equal. The system ranks them by strength and acts accordingly:</p>
+<section class="landscape"><img src="diagrams/14-tier-ranking.png" alt="Figure 7.2 — signals ranked into tiers">
+<p><em>Figure 7.2 — tier 1 acts immediately, tier 2 needs confirmation, tier 3 is ignored.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Tier</th>
+<th>Meaning</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Tier 1</strong></td>
+<td>strong, confirmed</td>
+<td>act immediately</td>
+</tr>
+<tr>
+<td><strong>Tier 2</strong></td>
+<td>medium</td>
+<td>needs further confirmation</td>
+</tr>
+<tr>
+<td><strong>Tier 3</strong></td>
+<td>weak</td>
+<td>ignore / log only</td>
+</tr>
+</tbody>
+</table>
+
+<h1>8. The strategy and exit ladder</h1>
+<p><strong>What it does.</strong> Once a tier signal is confirmed, the strategy opens a position and
+manages it on a fixed ladder: lock at +0.35%, trail off the peak, stop at −0.5%, clock at
+180s.</p>
+<p><strong>Why it matters.</strong> The ladder is a <em>risk envelope</em>, not a prediction. It does not try to
+call the market; it guarantees that whatever happens, the profit is banked, the loss is
+bounded, the winner has room to run, and nothing is held forever. Fixed, simple exits are
+what make the outcome predictable — which is the whole point of a trading system.</p>
+<p>Once a tier signal is confirmed, the strategy opens a position and manages it on a fixed
+ladder. The ladder is the risk envelope that keeps losses bounded and lets winners run.</p>
+<section class="landscape"><img src="diagrams/19-exit-ladder.png" alt="Figure 8.1 — the exit ladder">
+<p><em>Figure 8.1 — four exits, checked in order, on every mark.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Exit</th>
+<th>Rule</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lock</code></td>
+<td>+0.35%</td>
+<td>bank a fee-clearing profit</td>
+</tr>
+<tr>
+<td><code>trail</code></td>
+<td>peak ≥ +1%, exit −0.5% off peak</td>
+<td>ride winners</td>
+</tr>
+<tr>
+<td><code>stop</code></td>
+<td>−0.5%</td>
+<td>cap every loss (no heavy bleeds)</td>
+</tr>
+<tr>
+<td><code>clock</code></td>
+<td>180s hold, winners only</td>
+<td>force turnover</td>
+</tr>
+</tbody>
+</table>
+<section class="landscape"><img src="diagrams/12-book-lifecycle.png" alt="Figure 8.2 — the position lifecycle">
+<p><em>Figure 8.2 — open → mark → exit ladder → close → fill.</em></p></section>
+
+<h1>9. Pure Go — concurrency</h1>
+<p><strong>What it does.</strong> The models and the engine run as independent Go goroutines inside one
+process, each with its own scheduler.</p>
+<p><strong>Why it matters.</strong> The same independence the bus gives at the message level, goroutines
+give at the process level: a slow model can't block the others, a panic is contained, and
+each model runs continuously whether or not anyone listens. Pure Go also removes the
+interpreter as a concern — the math was never the bottleneck, but one runtime for everything
+is simpler to build, deploy and reason about.</p>
+<p>The models and the engine run as <strong>Go goroutines</strong>, each decoupled from the others:</p>
+<ul>
+<li><strong>A slow model can't block the others</strong> (each owns its goroutine).</li>
+<li><strong>A panicking model can't kill the pipeline</strong> (panic is contained and reported).</li>
+<li><strong>Models run continuously</strong>, publishing numbers whether or not anyone listens.</li>
+</ul>
+<section class="landscape"><img src="diagrams/16-go-concurrency.png" alt="Figure 9.1 — goroutines as the runtime mirror of the bus">
+<p><em>Figure 9.1 — the same independence the bus gives at the message level, goroutines give at the process level.</em></p></section>
+
+<h1>10. The full journey</h1>
+<p><strong>What it does.</strong> Traces one market tick from the exchange WebSocket all the way to a
+recorded fill, through the bus, the recorder, the models, the book and the lake.</p>
+<p><strong>Why it matters.</strong> The journey is the proof the decoupling works end to end: data is
+recorded once and consumed many times, models publish and books decide, and every step lands
+in the same append-only lake. Understanding the journey is understanding the whole system in
+one pass.</p>
+<p>One market tick's journey through the platform, end to end:</p>
+<section class="landscape"><img src="diagrams/17-full-journey.png" alt="Figure 10.1 — marketdata → bus → recorder → lake, and bus → models → books → fills">
+<p><em>Figure 10.1 — data is recorded once and consumed many times; models publish, books decide.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 · market data</td>
+<td>Binance WebSocket → market.price / market.depth / market.candle</td>
+</tr>
+<tr>
+<td>2 · the bus</td>
+<td>every packet is an envelope with epoch ts and TTL</td>
+</tr>
+<tr>
+<td>3 · recorder</td>
+<td>the single consumer; writes the lake once</td>
+</tr>
+<tr>
+<td>4 · models</td>
+<td>subscribe, compute, publish model.decision</td>
+</tr>
+<tr>
+<td>5 · book</td>
+<td>accumulates the intel, confirms a pattern</td>
+</tr>
+<tr>
+<td>6 · strategy</td>
+<td>opens/closes, publishes model.fill</td>
+</tr>
+<tr>
+<td>7 · lake</td>
+<td>the fill is recorded, joining the same history</td>
+</tr>
+</tbody>
+</table>
+
+<h1>11. The envelope and pipeline</h1>
+<p><strong>What it does.</strong> Defines the envelope (data, meta, refs) and the pipeline every packet
+passes: four interceptors, the operator, a transformer.</p>
+<p><strong>Why it matters.</strong> Provenance and checks are <em>on the packet</em>, not in a log beside it. A
+refusal is recorded as an envelope too, so &quot;why not&quot; is a packet you can open. That is what
+turns a message stream into evidence you can audit.</p>
+<p>Covered in section 2 — reproduced here with the full field dictionary and the worked
+refusal path.</p>
+<h2>11.1 Reading a decision</h2>
+<p>A <code>model.decision</code> envelope carries the verdict, the confidence, and the reason. A refusal
+names the rule and the number that tripped it. The pipeline shows the interceptors that ran.</p>
+<h2>11.2 The refusal path</h2>
+<p>A refusal is not a log line — it is an envelope you can open:</p>
+<pre><code>model.decision NEARUSDT
+  verdict   REFUSED
+  reason    stale signals: 3230s old (max 90s)
+  pipeline  authority pass · keying pass · correlation pass · freshness pass
+  operator  alpha_rank · produced model.decision
+  refs      market.candle 5007ms (derived) · market.depth 906ms (derived)
+</code></pre>
+<p>The freshness interceptor passed because the <em>envelope</em> was fresh; the refusal came from the
+model's own signal-age check — a distinction the record preserves.</p>
+
+<h1>12. The topic registry</h1>
+<p><strong>What it does.</strong> One table lists every topic: its exchange, its allowed producers, and its
+retention (TTL).</p>
+<p><strong>Why it matters.</strong> A single registry is the enforcement point for producer contracts — who
+may write what — and for the TTL that keeps the bus a state channel rather than a job queue.
+Adding a topic is one line; changing a contract is visible to everyone.</p>
+<p>The registry is the single source of truth for who may write what, and how long it lives.</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Plane</th>
+<th>Producers</th>
+<th>Retention</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>market.price</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>market.depth</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>market.candle</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>market.mini24h</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>ticks</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>intel.signal</code></td>
+<td>intel</td>
+<td>signals</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.flow</code></td>
+<td>intel</td>
+<td>signals</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.movers</code></td>
+<td>intel</td>
+<td>market_data, signals</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.board</code></td>
+<td>intel</td>
+<td>market_agent</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.ta</code></td>
+<td>intel</td>
+<td>tad</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.forecast</code></td>
+<td>intel</td>
+<td>forecast</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>alert.pumpdump</code></td>
+<td>alert</td>
+<td>backend, signal_bus</td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>model.decision</code></td>
+<td>model</td>
+<td>models10, curve_rider, …</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>model.fill</code></td>
+<td>model</td>
+<td>same</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>model.pnl</code></td>
+<td>model</td>
+<td>same + supervisor</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>risk.state</code></td>
+<td>risk</td>
+<td>risk</td>
+<td>5m</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why TTL + no backlog:</strong> a market moves on the latest information; the bus is a state
+channel, not a job queue.</p>
+
+<h1>13. The risk governor</h1>
+<p><strong>What it does.</strong> Sits between the tier signal and the trade, and refuses any order the
+account cannot afford: exposure, gross multiple, per-symbol concentration.</p>
+<p><strong>Why it matters.</strong> The models want to trade; the account has limits. The governor is the
+machine-enforced boundary that says no, with the rule and the number recorded. Without it,
+&quot;risk&quot; would be a hope; with it, a refusal is a fact you can audit.</p>
+<p>Between the tier signal and the trade sits the risk governor. It is the machine-enforced
+boundary that refuses a trade the models want but the account cannot afford.</p>
+<section class="landscape"><img src="diagrams/15-risk-governor.png" alt="Figure 13.1 — the governor allows or refuses">
+<p><em>Figure 13.1 — every decision passes the exposure and gross-multiple checks before an order.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>What it refuses</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>exposure</td>
+<td>a position above a fraction of the book</td>
+</tr>
+<tr>
+<td>gross multiple</td>
+<td>total notional beyond a leverage bound</td>
+</tr>
+<tr>
+<td>per-symbol</td>
+<td>concentration in one instrument</td>
+</tr>
+<tr>
+<td>counter-trend</td>
+<td>shorts into an up-regime (when disabled)</td>
+</tr>
+</tbody>
+</table>
+<p>A refusal names the rule and the number, and is recorded — so &quot;why not&quot; is always
+answerable.</p>
+
+<h1>14. The evolution</h1>
+<p><strong>What it does.</strong> Recounts the path from a monolithic script to the decoupled streaming
+forecast.</p>
+<p><strong>Why it matters.</strong> The evolution is the design argument in miniature: each step removed a
+coupling and added a layer of memory. Seeing the steps explains <em>why</em> the end state looks the
+way it does — and warns against sliding back into the coupled pattern that caused the
+trouble in the first place.</p>
+<p>Every step removed a coupling and added a layer of <strong>memory</strong> — which is exactly what a
+forecast needs.</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>What changed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Monolithic script</td>
+<td>models opened positions directly (coupled)</td>
+</tr>
+<tr>
+<td>Streaming</td>
+<td>depth + candles over WebSocket (never poll)</td>
+</tr>
+<tr>
+<td>Pure Go</td>
+<td>TA rules + book ported to Go (goroutines)</td>
+</tr>
+<tr>
+<td>Decoupled bus</td>
+<td>models publish model.decision over STOMP</td>
+</tr>
+<tr>
+<td>Intel + patterns</td>
+<td>book holds a signal window, confirms before trading</td>
+</tr>
+<tr>
+<td>Continuous forecast</td>
+<td>history + live + intel → tier signals</td>
+</tr>
+</tbody>
+</table>
+
+<h1>15. Model reference — the calculation agents in detail</h1>
+<p><strong>What it does.</strong> Documents each of the ten models as a pure function — its exact rule, its
+inputs, its thresholds, and what it returns.</p>
+<p><strong>Why it matters.</strong> The reference is the contract between &quot;what the model computes&quot; and &quot;what
+the system trades&quot;. Having each rule written down means a signal can be reproduced by hand,
+a bug can be localised to one function, and a change can be reasoned about before it is made.</p>
+<p>Each model is a <strong>pure function of its inputs</strong>: candles (and, for the curve rider, the
+depth imbalance). It returns <code>buy</code>, <code>sell</code>, or nothing. It holds no state and knows nothing
+about accounts. That purity is what makes every model testable against generated data.</p>
+<h2>15.1 <code>donchian55</code> — range breakout</h2>
+<p><strong>Question:</strong> is price breaking out of a 55-bar range?</p>
+<pre><code>hi = max(high[-55:]);  lo = min(low[-55:])
+if hi == lo: return none
+c = close[-1]
+if c &gt;= hi: return buy
+if c &lt;= lo: return sell
+return none
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Lookback</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>55-bar high/low</td>
+<td>55 candles</td>
+</tr>
+<tr>
+<td>close</td>
+<td>last candle</td>
+</tr>
+</tbody>
+</table>
+<p>A breakout is the oldest and most persistent edge: a market that leaves its recent range
+tends to keep going. The <code>hi == lo</code> guard rejects a flat symbol, where no breakout is
+possible.</p>
+<h2>15.2 <code>orb</code> — opening range breakout</h2>
+<p><strong>Question:</strong> is price breaking the first 15 minutes of the UTC day?</p>
+<pre><code>session = candles from today
+if len(session) &lt; 20: return none
+hi = max(high of first 15);  lo = min(low of first 15)
+if close &gt; hi: return buy
+if close &lt; lo: return sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Lookback</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>first 15 candles of the day</td>
+<td>session start</td>
+</tr>
+<tr>
+<td>close</td>
+<td>last candle</td>
+</tr>
+</tbody>
+</table>
+<p>The opening range is where the day's conviction is established; breaking it is a genuine
+directional commitment rather than intraday noise.</p>
+<h2>15.3 <code>boll_squeeze</code> — volatility expansion</h2>
+<p><strong>Question:</strong> is a tight Bollinger band starting to expand?</p>
+<pre><code>cl = close[-20:];  m = mean(cl);  sd = stdev(cl)
+width = 2*sd/m
+if close &gt; m + 2*sd and width &lt; 0.01: return buy
+if close &lt; m - 2*sd and width &lt; 0.01: return sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>20-bar mean + stdev</td>
+<td>width &lt; 1% (squeeze)</td>
+</tr>
+<tr>
+<td>close outside ±2σ</td>
+<td>breakout</td>
+</tr>
+</tbody>
+</table>
+<p>A squeeze (narrow band) precedes a move; the breakout direction is the signal. The width
+guard ensures the model only fires when the market was genuinely compressed.</p>
+<h2>15.4 <code>rsi2</code> — mean reversion at the extreme</h2>
+<p><strong>Question:</strong> is the 2-bar RSI overbought or oversold?</p>
+<pre><code>r = rsi(close[-20:], period=2)
+if r &lt; 10: return buy
+if r &gt; 90: return sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2-bar RSI</td>
+<td>&lt; 10 → buy; &gt; 90 → sell</td>
+</tr>
+</tbody>
+</table>
+<p>A very short RSI measures momentum exhaustion. The 2-bar period makes it respond in seconds,
+so it catches the exact moment a move is spent.</p>
+<h2>15.5 <code>vwap_revert</code> — mean reversion to volume</h2>
+<p><strong>Question:</strong> is price stretched from its volume-weighted average?</p>
+<pre><code>vw = sum(close*vol over 30 bars) / sum(vol over 30 bars)
+if close &lt; vw * 0.994: return buy
+if close &gt; vw * 1.006: return sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>30-bar VWAP</td>
+<td>±0.6% band</td>
+</tr>
+</tbody>
+</table>
+<p>Price stretched 0.6% from VWAP is pulled back; the model fades the stretch.</p>
+<h2>15.6 <code>macd_trend</code> — momentum cross</h2>
+<p><strong>Question:</strong> did the MACD histogram cross zero?</p>
+<pre><code>fast = ema(close, 12);  slow = ema(close, 26)
+hist = fast - slow
+prev = ema(close[:-1], 12) - ema(close[:-1], 26)
+if prev &lt;= 0 &lt; hist: return buy
+if prev &gt;= 0 &gt; hist: return sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MACD(12,26) histogram</td>
+<td>cross above/below zero</td>
+</tr>
+</tbody>
+</table>
+<p>The zero cross is the moment short-term momentum overtakes the trend — a clean, binary
+turn signal.</p>
+<h2>15.7 <code>vol_break</code> — volume confirmation</h2>
+<p><strong>Question:</strong> is volume spiking with a directional close?</p>
+<pre><code>avg = mean(volume[-20:-1])
+if volume[-1] &lt; 3*avg: return none
+rng = high[-1] - low[-1]
+if (close-low)/rng &gt; 0.7: return buy
+if (high-close)/rng &gt; 0.7: return sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>volume vs 19-bar average</td>
+<td>&gt; 3×</td>
+</tr>
+<tr>
+<td>close in the bar's range</td>
+<td>top/bottom 30%</td>
+</tr>
+</tbody>
+</table>
+<p>A volume spike that closes near the extreme of the bar is participation with conviction —
+the difference between a move and a wiggle.</p>
+<h2>15.8 <code>ema_pullback</code> — trend continuation</h2>
+<p><strong>Question:</strong> is price pulling back to the EMA trend and holding?</p>
+<pre><code>e20 = ema(close, 20);  e50 = ema(close, 50)
+if e20 &gt; e50 and close &gt; e50 and |close-e20|/e20 &lt; 0.002: return buy
+if e20 &lt; e50 and close &lt; e50 and |close-e20|/e20 &lt; 0.002: return sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EMA20 vs EMA50</td>
+<td>trend</td>
+</tr>
+<tr>
+<td>close vs EMA20</td>
+<td>within 0.2%</td>
+</tr>
+</tbody>
+</table>
+<p>A pullback to a rising EMA that holds is the classic continuation entry — with the trend,
+at a discount.</p>
+<h2>15.9 <code>atr_channel</code> — volatility channel breakout</h2>
+<p><strong>Question:</strong> is price outside an ATR-based channel?</p>
+<pre><code>m = ema(close, 20);  a = atr(14)
+if close &gt; m + 1.5*a: return buy
+if close &lt; m - 1.5*a: return sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EMA20 ± 1.5×ATR</td>
+<td>channel</td>
+</tr>
+</tbody>
+</table>
+<p>The channel adapts to volatility: in a quiet market the channel is tight, in a wild one it
+is wide, so &quot;outside the channel&quot; always means a real move.</p>
+<h2>15.10 <code>curve_rider</code> — order-flow imbalance</h2>
+<p><strong>Question:</strong> which market has the strongest book imbalance, and which way?</p>
+<pre><code>imb = (bid_volume - ask_volume) / (bid_volume + ask_volume)
+if |imb| &gt; 0.3:
+    side = buy if imb &gt; 0 else sell
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Threshold</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>depth5 bid/ask volume</td>
+<td>|imb| &gt; 0.3</td>
+</tr>
+<tr>
+<td>price</td>
+<td>best bid/ask midpoint</td>
+</tr>
+</tbody>
+</table>
+<p>The order book is what the market is <em>thinking</em> right now — heavier bids mean real buying
+pressure, heavier asks real selling. The curve rider enters the strongest and rides it
+with the trail.</p>
+
+<h1>16. Worked examples</h1>
+<h2>16.1 A bull run — how the streak becomes a tier signal</h2>
+<p>During a sustained up-move, a single <code>donchian55</code> buy signal is not enough. The book records
+each signal in its rolling window:</p>
+<table>
+<thead>
+<tr>
+<th>Time</th>
+<th>Signal</th>
+<th>Window state</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>t0</td>
+<td>buy</td>
+<td>[buy]</td>
+<td>wait — 1 signal</td>
+</tr>
+<tr>
+<td>t1</td>
+<td>buy</td>
+<td>[buy, buy]</td>
+<td>wait — 2 signals</td>
+</tr>
+<tr>
+<td>t2</td>
+<td>buy</td>
+<td>[buy, buy, buy]</td>
+<td><strong>pattern confirmed → tier signal</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The model was <em>not sure</em> at t0 and t1; at t2 the streak made it confident. The strategy
+opens, and the <code>trail</code> exit lets the position run while the streak holds — the bull run is
+ridden, not skimmed at the first tick.</p>
+<h2>16.2 A refusal — why the model did nothing</h2>
+<p>A model presents a decision, but the risk governor refuses it:</p>
+<pre><code>model.decision SOXLUSDT  side=buy  confidence=0.71
+  governor   REFUSED  gross multiple 12.4× &gt; limit 8×
+</code></pre>
+<p>The refusal names the rule and the number. Nothing is silent: the refusal is recorded as an
+envelope, and the WHY view lists it with the exact reason. The system did not fail to trade —
+it correctly refused a trade the account could not afford.</p>
+<h2>16.3 A full trade — entry to fill</h2>
+<pre><code>t0  pattern confirmed (3 × donchian55 buy)          → strategy opens 2500 notional
+t1  mark +0.41%  → lock (≥ +0.35%)                  → close, net +0.21%
+    → publish model.fill {reason: lock, net_pct: 0.21}
+t2  the fill joins the lake, correlated to the decision
+</code></pre>
+<p>The whole chain — decision → fill → pnl — is linked by one correlation id, so any trade can
+be traced from the market tick that triggered it to the fill it produced.</p>
+<section class="landscape"><img src="diagrams/20-sequence.png" alt="Figure 16.1 — the async message sequence end to end">
+<p><em>Figure 16.1 — marketdata → bus → model → book → strategy → recorder, one tick's journey.</em></p></section>
+
+<h1>17. Data signals — deep dive</h1>
+<p><strong>What it does.</strong> Explains the three microstructure signals in detail: depth imbalance,
+open interest change, and volume — each with its formula and its thresholds.</p>
+<p><strong>Why it matters.</strong> These signals are what the market is <em>thinking</em>, as opposed to what it
+has <em>done</em> (the candles). Understanding each one — and its limits — is what lets the models
+read intention rather than lag. The depth leads price; OI shows conviction; volume shows
+participation.</p>
+<h2>17.1 Depth imbalance — what the book is thinking</h2>
+<p>The order book is a live vote. Bid volume is money wanting to buy; ask volume is money
+wanting to sell. The imbalance is the net of the two, normalised:</p>
+<pre><code>imbalance = (bid_volume − ask_volume) / (bid_volume + ask_volume)
+</code></pre>
+<section class="landscape"><img src="diagrams/21-depth-signal.png" alt="Figure 17.1 — the depth signal">
+<p><em>Figure 17.1 — heavier bids → long; heavier asks → short; balanced → no signal.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>imbalance</th>
+<th>Reading</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&gt; +0.3</td>
+<td>buy pressure</td>
+<td>consider long</td>
+</tr>
+<tr>
+<td>&lt; −0.3</td>
+<td>sell pressure</td>
+<td>consider short</td>
+</tr>
+<tr>
+<td>near 0</td>
+<td>balanced</td>
+<td>no signal</td>
+</tr>
+</tbody>
+</table>
+<p>The book is what the market is <em>thinking right now</em> — it leads price, because it shows the
+orders already resting that will move the market next.</p>
+<h2>17.2 Open interest — new money entering</h2>
+<p>Open interest is the number of open contracts. A change in OI over an interval tells you
+whether a move is backed by <em>new</em> positions (conviction) or just unwinding (exhaustion).</p>
+<section class="landscape"><img src="diagrams/22-oi-signal.png" alt="Figure 17.2 — the OI signal">
+<p><em>Figure 17.2 — OI rising with price = new longs; OI rising against price = new shorts.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>OI</th>
+<th>Price</th>
+<th>Reading</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>rising</td>
+<td>rising</td>
+<td>new longs — continuation up</td>
+</tr>
+<tr>
+<td>rising</td>
+<td>falling</td>
+<td>new shorts — continuation down</td>
+</tr>
+<tr>
+<td>flat</td>
+<td>either</td>
+<td>no new conviction</td>
+</tr>
+</tbody>
+</table>
+<h2>17.3 Volume — participation and conviction</h2>
+<p>Volume is participation. A price move on high volume is conviction; the same move on thin
+volume is noise. The spike rule catches the difference:</p>
+<section class="landscape"><img src="diagrams/23-volume-signal.png" alt="Figure 17.3 — the volume signal">
+<p><em>Figure 17.3 — a spike with a directional close is conviction; a spike with a middle close is churn.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Volume</th>
+<th>Close position in bar</th>
+<th>Reading</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&gt; 3× average</td>
+<td>top 30%</td>
+<td>buy</td>
+</tr>
+<tr>
+<td>&gt; 3× average</td>
+<td>bottom 30%</td>
+<td>sell</td>
+</tr>
+<tr>
+<td>&gt; 3× average</td>
+<td>middle</td>
+<td>churn — no conviction</td>
+</tr>
+<tr>
+<td>normal</td>
+<td>any</td>
+<td>no signal</td>
+</tr>
+</tbody>
+</table>
+
+<h1>18. Correlation and lineage</h1>
+<p><strong>What it does.</strong> Explains how one correlation id follows a piece of work from the market
+tick through the decision, the fill and the pnl, and how references are declared or derived.</p>
+<p><strong>Why it matters.</strong> Lineage is what turns a pile of packets into a <em>story</em> — and a story you
+can verify. A trade traceable to its trigger is evidence; a trade without a line of descent
+is a rumour. The correlation id is the spine of the audit.</p>
+<p>Every piece of work is followed by one <strong>correlation id</strong>. A market tick leads to a decision,
+the decision to a fill, the fill to a pnl update — all carrying the same cid, so the whole
+chain is resolvable in the lake.</p>
+<section class="landscape"><img src="diagrams/24-correlation.png" alt="Figure 18.1 — one cid follows the work">
+<p><em>Figure 18.1 — tick → decision → fill → pnl, all keyed to correlation id A.</em></p></section>
+<p>The lineage is what turns the platform into evidence: any trade can be traced from the raw
+market packet that triggered it to the fill it produced, with no interpretation required.</p>
+<section class="landscape"><img src="diagrams/35-lineage.png" alt="Figure 18.2 — the full lineage graph">
+<p><em>Figure 18.2 — market data → decision → (fill | refusal) → pnl.</em></p></section>
+<h2>18.1 Declared vs derived references</h2>
+<p>A reference is <strong>declared</strong> when the producer names its inputs; it is <strong>derived</strong> when the
+recorder infers them (the newest envelope of each input topic for that symbol in the window,
+marked with its age). The record always says which — a derived reference is never silently
+presented as declared.</p>
+
+<h1>19. Book states</h1>
+<p><strong>What it does.</strong> Models the book as a small state machine: idle → accumulating →
+confirmed → in position → closed → idle.</p>
+<p><strong>Why it matters.</strong> A state machine makes the book's behaviour finite and testable. The
+window expiring returns &quot;accumulating&quot; to &quot;idle&quot;, so a pattern can never form from stale
+intel. Every transition is a defined, checkable step — which is what makes the book
+deterministic.</p>
+<p>The book is a small state machine. Every position moves through the same states, and the
+exit ladder is the only thing that moves it forward.</p>
+<section class="landscape"><img src="diagrams/25-book-states.png" alt="Figure 19.1 — the book state machine">
+<p><em>Figure 19.1 — idle → accumulating → confirmed → in position → closed → idle.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Idle</code></td>
+<td>no position, waiting for a signal</td>
+</tr>
+<tr>
+<td><code>Accumulating</code></td>
+<td>signals arriving, pattern not yet confirmed</td>
+</tr>
+<tr>
+<td><code>Confirmed</code></td>
+<td>N agreeing signals in the window</td>
+</tr>
+<tr>
+<td><code>InPosition</code></td>
+<td>a position is open, being marked</td>
+</tr>
+<tr>
+<td><code>Closed</code></td>
+<td>the position closed, fill recorded</td>
+</tr>
+</tbody>
+</table>
+<p>The window expiring returns <code>Accumulating</code> to <code>Idle</code> — old signals are dropped, so a pattern
+never forms from stale intel.</p>
+
+<h1>20. The recorder and the lake</h1>
+<p><strong>What it does.</strong> The recorder is the single consumer of the bus: it writes every envelope
+once into the lake (the append-only journal + an indexed store) and fans it out to readers.</p>
+<p><strong>Why it matters.</strong> Single-writer, append-only is what makes the record trustworthy: nothing
+rewrites history, nothing drops a packet silently, and the explorer reads the same lake the
+recorder wrote. The lake is the memory of the whole platform.</p>
+<p>The bus has <strong>one consumer</strong>: the recorder. It writes every envelope <strong>once</strong> into the lake,
+then fans it out to readers (the explorer, the dashboards). This single-writer design is why
+the record is append-only and auditable.</p>
+<section class="landscape"><img src="diagrams/26-recorder-lake.png" alt="Figure 20.1 — the recorder writes once, readers read">
+<p><em>Figure 20.1 — bus → recorder → journal + indexed store → explorer.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Store</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>envelopes.jsonl</code></td>
+<td>the append-only journal</td>
+</tr>
+<tr>
+<td>sqlite / mongo</td>
+<td>the indexed, queryable copy</td>
+</tr>
+<tr>
+<td>hub</td>
+<td>fans envelopes to readers</td>
+</tr>
+</tbody>
+</table>
+
+<h1>21. The supervisor and control plane</h1>
+<p><strong>What it does.</strong> The supervisor launches and restarts the models, watches their health,
+publishes the aggregate pnl, and accepts control commands.</p>
+<p><strong>Why it matters.</strong> The supervisor is the orchestrator that never trades: it keeps the
+trading processes alive and honest without making a single decision itself. Separating
+control from trading means a control failure can't corrupt a book, and a book failure can't
+silence the control plane.</p>
+<p>The supervisor is the orchestrator: it launches and restarts the models, watches health, and
+publishes the aggregate pnl. It never trades — it only keeps the trading processes alive and
+honest.</p>
+<section class="landscape"><img src="diagrams/27-supervisor.png" alt="Figure 21.1 — the supervisor">
+<p><em>Figure 21.1 — launch/restart models, watch health, publish pnl, accept control.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Duty</th>
+<th>Topic / action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>launch + restart models</td>
+<td>process supervision</td>
+</tr>
+<tr>
+<td>watch health</td>
+<td><code>system.health</code></td>
+</tr>
+<tr>
+<td>publish aggregate pnl</td>
+<td><code>model.pnl</code></td>
+</tr>
+<tr>
+<td>accept commands</td>
+<td><code>system.control</code></td>
+</tr>
+</tbody>
+</table>
+
+<h1>22. Example trades — each exit, worked</h1>
+<p><strong>What it does.</strong> Works each exit in the ladder — stop, trail, cascade, funding — as a
+concrete trade with numbers.</p>
+<p><strong>Why it matters.</strong> Each exit exists for a reason (bound the loss, ride the winner, buy the
+flush, collect the funding), and seeing the numbers makes the reason concrete. The ladder is
+a set of <em>guarantees</em>, and each worked example is one guarantee demonstrated.</p>
+<h2>22.1 The stop</h2>
+<section class="landscape"><img src="diagrams/28-stop-example.png" alt="Figure 22.1 — a stopped trade">
+<p><em>Figure 22.1 — a −0.55% mark trips the −0.5% stop, capping the loss.</em></p></section>
+<p>The stop is the non-negotiable floor. On 2,500 notional, a −0.5% gross move is −0.7% net
+after fees — a loss of about $18. The point of the stop is not that it is small, but that it
+is <em>bounded</em>: no position is allowed to bleed beyond it.</p>
+<h2>22.2 The trail</h2>
+<section class="landscape"><img src="diagrams/29-trail-example.png" alt="Figure 22.2 — a trailed winner">
+<p><em>Figure 22.2 — the position peaks +1.4%, arms the trail, and exits on a −0.5% pullback at +0.9%.</em></p></section>
+<p>The trail is how a winner is ridden: once the peak clears +1%, the exit follows the price
+down, so the position stays in while the move holds and exits only when it genuinely turns.</p>
+<h2>22.3 The cascade rebound</h2>
+<section class="landscape"><img src="diagrams/30-cascade-example.png" alt="Figure 22.3 — a cascade trade">
+<p><em>Figure 22.3 — a −3σ drop on 5× volume is bought, and the snap-back is ridden.</em></p></section>
+<p>The cascade model buys the liquidation flush — the sharpest, most frightened sellers — and
+rides the reflexive bounce.</p>
+<h2>22.4 The funding carry</h2>
+<section class="landscape"><img src="diagrams/31-funding-example.png" alt="Figure 22.4 — a funding trade">
+<p><em>Figure 22.4 — negative funding means shorts pay longs; the book longs and collects.</em></p></section>
+<p>When funding is deeply negative, shorts are paying longs to hold. The book goes long those
+perps, collects the funding, and exits on the clock or the lock.</p>
+
+<h1>23. Risk accounting</h1>
+<p><strong>What it does.</strong> Measures the account as a whole — the gross multiple (total notional over
+equity), per-position exposure, and per-symbol concentration — and refuses past the limits.</p>
+<p><strong>Why it matters.</strong> Risk is a portfolio property, not a per-trade property. Ten individually
+small positions can still be a lethal total; the gross multiple catches that. The refusal
+names the rule and the number, so the bound is auditable, not aspirational.</p>
+<p>The governor measures the account as a whole, not trade by trade. The binding number is the
+<strong>gross multiple</strong>: total notional divided by equity.</p>
+<pre><code>gross multiple = Σ notional / equity
+</code></pre>
+<section class="landscape"><img src="diagrams/32-risk-accounting.png" alt="Figure 23.1 — the gross-multiple check">
+<p><em>Figure 23.1 — total exposure is measured against equity, and refused past the limit.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Refuses when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>gross multiple</td>
+<td>total notional exceeds the leverage bound</td>
+</tr>
+<tr>
+<td>exposure</td>
+<td>one position is too large a fraction of the book</td>
+</tr>
+<tr>
+<td>per-symbol</td>
+<td>one instrument is over-concentrated</td>
+</tr>
+</tbody>
+</table>
+<p>The refusal names the rule and the number — <code>gross 12.4× &gt; 8×</code> — so the bound is never a
+vague feeling but a recorded, auditable decision.</p>
+
+<h1>24. The envelope journey, restated</h1>
+<p><strong>What it does.</strong> Restates the pipeline every envelope passes: interceptors → operator →
+transformer → lake, with a refusal recorded at any stage.</p>
+<p><strong>Why it matters.</strong> Repetition is deliberate: the pipeline is the one thing every packet
+shares, so it bears repeating. A refusal at any interceptor is itself an envelope, so the
+record contains both the trades and the reasons for non-trades.</p>
+<section class="landscape"><img src="diagrams/33-envelope-journey.png" alt="Figure 24.1 — every envelope passes the same pipeline">
+<p><em>Figure 24.1 — authority, keying, correlation, freshness, then the operator, then the transformer.</em></p></section>
+<p>A refusal at any interceptor is itself recorded as an envelope, so the record contains both
+the trades <em>and</em> the reasons for non-trades.</p>
+
+<h1>25. Tier decisions, restated</h1>
+<p><strong>What it does.</strong> Restates how numbers are ranked into tiers, and how the tier decides the
+action.</p>
+<p><strong>Why it matters.</strong> The tier ranking is the capital-allocation rule: strong confirmed signals
+act, weak ones are ignored. Restating it alongside the forecast closes the loop — the
+forecast produces the number, the tier decides whether it is worth trading.</p>
+<section class="landscape"><img src="diagrams/34-tier-decision.png" alt="Figure 25.1 — numbers ranked into tiers">
+<p><em>Figure 25.1 — strength + confirmation decide the tier, and the tier decides the action.</em></p></section>
+<p>The tier system is what prevents the strategy from treating every number as equal: a strong
+confirmed signal acts immediately, a weak one is ignored. That ranking is the difference
+between a forecast and a firehose.</p>
+
+<h1>26. Design decisions — why it is built this way</h1>
+<p><strong>What it does.</strong> States each major design choice and its reason: the bus over direct
+calls, the intel window, the TTL, the fixed ladder, the pure models.</p>
+<p><strong>Why it matters.</strong> Decisions should be written down, or they get re-litigated (and
+accidentally reversed) later. This section is the &quot;why&quot; appendix — the reasoning that
+survives the code.</p>
+<p>Every choice is a decision with a consequence. These are the reasons, stated plainly.</p>
+<h2>26.1 Why the bus and not direct calls</h2>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Reason</th>
+<th>Consequence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>models publish numbers</td>
+<td>a model must not know who listens</td>
+<td>any consumer can use any model's output</td>
+</tr>
+<tr>
+<td>envelopes with TTL</td>
+<td>the market moves on the latest state</td>
+<td>stale packets evaporate; no backlog</td>
+</tr>
+<tr>
+<td>a single topic registry</td>
+<td>one source of truth for who may write what</td>
+<td>a producer contract is one line</td>
+</tr>
+<tr>
+<td>correlation ids</td>
+<td>follow the work across components</td>
+<td>any trade is traceable end to end</td>
+</tr>
+</tbody>
+</table>
+<p>The alternative — a model calling a book directly — is faster to write and impossible to
+reason about. The bus trades a little latency for complete observability.</p>
+<h2>26.2 Why the book holds the intel</h2>
+<p>A model that acts on one signal is a coin flip. The same model that waits for a <em>streak</em> is
+a forecast. The book's rolling window is the memory that turns the former into the latter.</p>
+<table>
+<thead>
+<tr>
+<th>Without the window</th>
+<th>With the window</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>one signal → trade</td>
+<td>N agreeing signals → trade</td>
+</tr>
+<tr>
+<td>noise is traded</td>
+<td>noise is filtered</td>
+</tr>
+<tr>
+<td>the model is a blip detector</td>
+<td>the model is a pattern detector</td>
+</tr>
+</tbody>
+</table>
+<h2>26.3 Why TTL and no backlog</h2>
+<p>A queued message is a stale message. If a slow subscriber read a queue, it would act on data
+that is minutes old. With TTL, the bus is a <strong>state channel</strong>: a subscriber reads the current
+picture or nothing. The freshness interceptor enforces the same idea per-envelope.</p>
+<h2>26.4 Why the exit ladder is fixed</h2>
+<p>A fixed ladder is a <em>risk envelope</em>, not a strategy. It says: profit is banked at +0.35%,
+loss is capped at −0.5%, winners are ridden, and nothing is held forever. The ladder does not
+predict the market — it ensures that whatever the market does, the outcome is bounded and
+the winners have room to run.</p>
+<h2>26.5 Why the models are pure</h2>
+<p>A pure function of candles + depth is testable against generated data — no network, no
+clock, no state. That is what the model test harness relies on: every rule is a function, so
+every rule can be verified with synthetic bars before it ever sees a live market.</p>
+
+<h1>27. The forecast — how the layers combine</h1>
+<p><strong>What it does.</strong> Defines the forecast as a function of three layers — live (the trigger),
+historical (the context), and signal intel (the confidence) — and shows a worked combination.</p>
+<p><strong>Why it matters.</strong> A forecast is not one number; it is the combination of <em>now</em>, <em>where we
+are</em>, and <em>is this real</em>. Separating the layers makes the forecast explainable — you can say
+which layer drove a decision, and tune each layer independently.</p>
+<p>The forecast is not one number. It is a function of three layers:</p>
+<pre><code>forecast = f( live · historical · signal intel )
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Contribution</th>
+<th>Weight in the decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>live</td>
+<td>direction of pressure now</td>
+<td>the <em>trigger</em></td>
+</tr>
+<tr>
+<td>historical</td>
+<td>where price is in its range</td>
+<td>the <em>context</em></td>
+</tr>
+<tr>
+<td>signal intel</td>
+<td>whether a pattern is forming</td>
+<td>the <em>confidence</em></td>
+</tr>
+</tbody>
+</table>
+<h2>27.1 The trigger — live</h2>
+<p>The live layer answers &quot;what is happening now&quot;: the depth imbalance, the last price, the
+volume spike. It is the fastest and the noisiest, which is why it alone is never enough.</p>
+<h2>27.2 The context — historical</h2>
+<p>The historical layer answers &quot;where are we&quot;: 200 bars of OHLCV tell the model whether price
+is breaking out of a range (donchian), stretched from VWAP, or at the top of a channel. It
+turns a raw move into a <em>position within a range</em>.</p>
+<h2>27.3 The confidence — signal intel</h2>
+<p>The intel layer answers &quot;is this real&quot;: the recent signal history. Three agreeing signals in
+the window raise confidence from a blip to a pattern. This is the layer that prevents the
+system from trading every tick.</p>
+<h2>27.4 Worked combination</h2>
+<pre><code>live:      SOXLUSDT imbalance +0.41  (buy pressure)
+historical: close breaks the 55-bar high (donchian55 → buy)
+intel:     three donchian55 buy signals in 90s  (pattern confirmed)
+
+forecast = strong long → tier 1 → strategy opens
+</code></pre>
+<p>Each layer on its own would have been a weak or premature signal; combined they are a
+conviction the strategy can act on.</p>
+
+<h1>28. The Go code structure</h1>
+<p><strong>What it does.</strong> Maps the code to the architecture: which module holds the bus, which
+holds the models, which holds the engine, and how the goroutines split the work.</p>
+<p><strong>Why it matters.</strong> The code should mirror the design, or the design is just a diagram.
+Mapping one to the other means a reader can find the model, the book, or the exit ladder in
+the source — and see that the decoupling is real, not aspirational.</p>
+<p>The models and the engine run as Go binaries, split by module.</p>
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Path</th>
+<th>What it holds</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>backend</code></td>
+<td><code>backend/</code></td>
+<td>the market client, the flow engine, the detectors</td>
+</tr>
+<tr>
+<td><code>core</code></td>
+<td><code>scalp5/core/</code></td>
+<td>the bus (stomp, topics, envelope), marketdata, recorder</td>
+</tr>
+<tr>
+<td><code>scalp</code></td>
+<td><code>backend/cmd/scalp/</code></td>
+<td>the TA rules + book + stream feed (pure Go)</td>
+</tr>
+<tr>
+<td><code>scalp-bus</code></td>
+<td><code>scalp5/core/cmd/scalp/</code></td>
+<td>the bus-decoupled models + engine</td>
+</tr>
+</tbody>
+</table>
+<h2>28.1 The <code>scalp-bus</code> binary — one process, four goroutines</h2>
+<pre><code>main
+ ├─ goroutine: marketdata subscription (market.candle / market.depth)
+ ├─ goroutine: TA model publisher  (9 rules → model.decision)
+ ├─ goroutine: depth model publisher (imbalance → model.decision)
+ └─ goroutine: engine (subscribe model.decision → book → model.fill)
+</code></pre>
+<p>Each goroutine is independent: a slow one cannot block the others, a panic is contained,
+and each runs whether or not any other does. This is the runtime mirror of the bus.</p>
+<h2>28.2 The exit ladder in Go</h2>
+<p>The manage loop evaluates the four exits in order on every mark:</p>
+<pre><code>switch {
+case chg &gt;= +0.35:                    reason = &quot;lock&quot;
+case peak &gt;= +1.0 &amp;&amp; chg &lt;= peak-0.5:  reason = &quot;trail&quot;
+case chg &lt;= -0.5:                      reason = &quot;stop&quot;
+case held &gt;= 180 &amp;&amp; chg &gt; 0:           reason = &quot;clock&quot;
+}
+</code></pre>
+<p>The order matters: profit is banked before the trail can give it back, the trail rides
+before the stop can cut a winner, and the stop caps any loser before the clock can let it
+run.</p>
+
+<h1>29. More worked examples</h1>
+<p><strong>What it does.</strong> Four more scenarios: a churn day (why nothing traded), a mean-reversion
+trade (two models agreeing), a generation gap (a silent producer detected), and a full
+session replay.</p>
+<p><strong>Why it matters.</strong> Each example exercises a different property — the honesty of &quot;nothing
+traded&quot;, the power of agreement, the detectability of loss, and the replayability of the
+lake. Together they show the system is not just a happy path.</p>
+<h2>29.1 A churn day — why nothing traded</h2>
+<p>Volume spikes but closes in the middle of the bar; RSI stays between 10 and 90; no range is
+broken. The models publish signals, but none confirm a pattern, and the book stays in
+<code>Accumulating</code> until the window expires.</p>
+<p>The record shows this honestly: the WHY view lists the near-misses with their reasons, and
+the book's trade count is zero <em>for a reason</em> — not because the system broke, but because
+the market gave no confirmable pattern.</p>
+<h2>29.2 A mean-reversion trade</h2>
+<pre><code>vwap_revert:  price 0.5% below VWAP → sell-side stretch → buy signal
+rsi2:         RSI 8 (oversold)      → buy signal
+pattern:      two agreeing buy signals in the window → confirmed
+strategy:     open long, exit on lock at +0.35%
+</code></pre>
+<p>Two independent models agreeing on the same side is the <em>streak</em> — the confirmation that
+turns two weak signals into one strong tier signal.</p>
+<h2>29.3 A generation gap — detecting a silent producer</h2>
+<p>The recorder sees <code>model.decision</code> generation jump from 105 to 108. Three messages are
+missing. The gap is a fact, not a rounding error: a producer dropped three packets, or was
+silent for three cycles. The envelope's <code>generation</code> field is exactly what makes this
+detectable.</p>
+<h2>29.4 A full session, end to end</h2>
+<pre><code>09:00  marketdata connects, depth + candles flow
+09:01  models backfill 200 × 1m bars
+09:02  donchian55 fires on SOLUSDT → model.decision
+09:02  book records the signal in the window (1/3)
+09:04  two more agree (3/3) → pattern confirmed → tier 1
+09:04  strategy opens 2,500 notional
+09:05  mark +0.41% → lock → close net +0.21% → model.fill
+09:05  fill joins the lake, correlated to the decision
+</code></pre>
+<p>Every step is an envelope with an epoch timestamp, so the whole session can be replayed
+from the lake — which is the point of recording once and reading many times.</p>
+
+<h1>30. Operations and monitoring</h1>
+<p><strong>What it does.</strong> Lists what must be running, the health checks, and the restart order.</p>
+<p><strong>Why it matters.</strong> A system that cannot be operated cannot be trusted. The checks (feed
+alive, recorder consuming, generation gaps) turn &quot;is it working?&quot; into a set of numeric
+answers, and the restart order protects the append-only lake.</p>
+<h2>30.1 What must be running</h2>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Port</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>market data</td>
+<td>8796</td>
+<td>the source of price, depth and candle envelopes</td>
+</tr>
+<tr>
+<td>recorder</td>
+<td>8801</td>
+<td>consumes the bus once and writes the lake</td>
+</tr>
+<tr>
+<td>envelope explorer</td>
+<td>8802</td>
+<td>the viewer for every recorded envelope</td>
+</tr>
+<tr>
+<td>the bus</td>
+<td>61613</td>
+<td>STOMP broker</td>
+</tr>
+<tr>
+<td>scalp (models + engine)</td>
+<td>—</td>
+<td>publishes decisions, trades</td>
+</tr>
+</tbody>
+</table>
+<p>Start them in order: broker, market data, recorder, then the models and the explorer. If the
+explorer comes up first it will simply be empty until the recorder starts.</p>
+<h2>30.2 Health checks</h2>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>How</th>
+<th>Expected</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>feed alive</td>
+<td>GET :8796/health</td>
+<td>prices &gt; 0, kline series rising</td>
+</tr>
+<tr>
+<td>recorder consuming</td>
+<td>GET :8801/stats</td>
+<td>received = written, errors 0</td>
+</tr>
+<tr>
+<td>bus bound</td>
+<td>queue q.rec.model.decision</td>
+<td>consumers 1, publish rising</td>
+</tr>
+<tr>
+<td>a model is silent</td>
+<td>producer generation</td>
+<td>no gap between consecutive envelopes</td>
+</tr>
+</tbody>
+</table>
+<p>A generation gap is a fact: if <code>model.decision</code> jumps from 105 to 108, three packets were
+lost or the producer was silent for three cycles. The gap is detectable <em>because</em> the
+envelope carries a monotonic generation.</p>
+<h2>30.3 Restarting</h2>
+<p>Restart order matters. The explorer reads the lake the recorder writes; the models read the
+market data. Stop in reverse, start in order, and the record is never broken — the lake is
+append-only, so a restart never rewrites history.</p>
+
+<h1>31. Testing the models</h1>
+<p><strong>What it does.</strong> Describes the test harness and why generated data is used.</p>
+<p><strong>Why it matters.</strong> A model is a pure function, so it can be tested against deterministic
+bars — no network, no clock, no state. A test that reads the live market is a bet, not a
+test. This is the discipline that makes a rule change safe to ship.</p>
+<p>Every model is a <strong>pure function of its inputs</strong>, so every model is testable against
+generated data — no network, no clock, no state. This is what the test harness relies on.</p>
+<h2>31.1 The harness</h2>
+<table>
+<thead>
+<tr>
+<th>Suite</th>
+<th>What it verifies</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_engine_book_models</code></td>
+<td>the book: open, mark, the exit ladder, the floor</td>
+</tr>
+<tr>
+<td><code>test_signal_scenarios</code></td>
+<td>each rule's signal against synthetic bars</td>
+</tr>
+<tr>
+<td><code>test_realistic_scenarios</code></td>
+<td>realistic price paths</td>
+</tr>
+<tr>
+<td><code>test_crazy_market</code></td>
+<td>a 192-row stress sweep — extreme moves</td>
+</tr>
+<tr>
+<td><code>table_results</code></td>
+<td>the expected-vs-actual result table</td>
+</tr>
+</tbody>
+</table>
+<p>The rule: a behaviour fix ships its regression test in the same commit. A fix without a test
+is half-work.</p>
+<h2>31.2 Why generated data</h2>
+<p>A test that reads the live market is not a test — it is a bet on whatever the market happens
+to be doing. Generated data lets the same input be asserted every time: a 10× volume burst
+must read as a 10× burst, a −3σ drop must read as a cascade, a range breakout must read as
+a breakout. Deterministic inputs, deterministic assertions.</p>
+
+<h1>32. Appendix — the complete topic registry</h1>
+<p><strong>What it does.</strong> Lists every topic with its plane, producers and retention.</p>
+<p><strong>Why it matters.</strong> This is the full producer contract surface — the complete answer to &quot;who
+may write what, and how long it lives&quot;. It is the appendix you consult when adding a topic or
+diagnosing a missing binding.</p>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Plane</th>
+<th>Producers</th>
+<th>Retention</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>market.price</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>market.candle</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>market.depth</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>market.mini24h</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>ticks</code></td>
+<td>market</td>
+<td>market_data</td>
+<td>drop</td>
+</tr>
+<tr>
+<td><code>intel.signal</code></td>
+<td>intel</td>
+<td>signals</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.flow</code></td>
+<td>intel</td>
+<td>signals</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.movers</code></td>
+<td>intel</td>
+<td>market_data, signals</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.board</code></td>
+<td>intel</td>
+<td>market_agent</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.ta</code></td>
+<td>intel</td>
+<td>tad</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>intel.forecast</code></td>
+<td>intel</td>
+<td>forecast</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>alert.pumpdump</code></td>
+<td>alert</td>
+<td>backend, signal_bus</td>
+<td>300s</td>
+</tr>
+<tr>
+<td><code>model.decision</code></td>
+<td>model</td>
+<td>models10, curve_rider, …</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>model.fill</code></td>
+<td>model</td>
+<td>same</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>model.pnl</code></td>
+<td>model</td>
+<td>same + supervisor</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>model.rank</code></td>
+<td>model</td>
+<td>alpha_rank</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>model.evaluate</code></td>
+<td>model</td>
+<td>tad</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>risk.state</code></td>
+<td>risk</td>
+<td>risk</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>review.verdict</code></td>
+<td>review</td>
+<td>portfolio_review</td>
+<td>5m</td>
+</tr>
+<tr>
+<td><code>exec.quote</code></td>
+<td>exec</td>
+<td>maker</td>
+<td>60s</td>
+</tr>
+<tr>
+<td><code>system.health</code></td>
+<td>system</td>
+<td>healthpub, master</td>
+<td>10m</td>
+</tr>
+<tr>
+<td><code>system.control</code></td>
+<td>system</td>
+<td>master, supervisor, cli</td>
+<td>1d</td>
+</tr>
+</tbody>
+</table>
+<h2>32.1 Reading the retention column</h2>
+<ul>
+<li><strong>drop</strong> — live only; a subscriber must be connected to see it (no backlog, by design).</li>
+<li><strong>60s / 5m / 10m</strong> — kept for that window so a late subscriber can catch up on state.</li>
+<li><strong>1d</strong> — control messages persist longest, because a command must survive a slow consumer.</li>
+</ul>
+
+<h1>33. Glossary, expanded</h1>
+<p><strong>What it does.</strong> Defines every term in one place.</p>
+<p><strong>Why it matters.</strong> A shared vocabulary is what lets two people read the same diagram and
+mean the same thing. The glossary is the contract for the words.</p>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>envelope</td>
+<td>the fixed carrier: data, meta, references</td>
+</tr>
+<tr>
+<td>plane</td>
+<td>the traffic class: market, intel, model, risk, control, system</td>
+</tr>
+<tr>
+<td>topic</td>
+<td>the channel an envelope is published on</td>
+</tr>
+<tr>
+<td>producer</td>
+<td>the component that computed a payload</td>
+</tr>
+<tr>
+<td>generation</td>
+<td>a producer's monotonic counter; a gap means loss</td>
+</tr>
+<tr>
+<td>correlation id</td>
+<td>the identity that follows one piece of work</td>
+</tr>
+<tr>
+<td>reference</td>
+<td>a link to an input envelope, declared or derived</td>
+</tr>
+<tr>
+<td>interceptor</td>
+<td>a rule that runs before work and can refuse</td>
+</tr>
+<tr>
+<td>operator</td>
+<td>the capability that produces a payload</td>
+</tr>
+<tr>
+<td>transformer</td>
+<td>a stage that changes an envelope's shape</td>
+</tr>
+<tr>
+<td>hop</td>
+<td>one recorded pipeline stage</td>
+</tr>
+<tr>
+<td>refusal</td>
+<td>a decision the governor declined, with the rule named</td>
+</tr>
+<tr>
+<td>tier signal</td>
+<td>a strength-ranked, pattern-confirmed decision</td>
+</tr>
+<tr>
+<td>intel window</td>
+<td>the book's bounded rolling signal history</td>
+</tr>
+<tr>
+<td>imbalance</td>
+<td>bid volume minus ask volume, normalised</td>
+</tr>
+<tr>
+<td>gross multiple</td>
+<td>total notional divided by equity</td>
+</tr>
+<tr>
+<td>lake</td>
+<td>the recorded store of envelopes</td>
+</tr>
+<tr>
+<td>streak</td>
+<td>several agreeing signals inside the window</td>
+</tr>
+<tr>
+<td>forecast</td>
+<td>f(live · historical · signal intel)</td>
+</tr>
+</tbody>
+</table>
+
+<h1>34. Summary</h1>
+<p><strong>What it does.</strong> Condenses the whole document to one paragraph and three principles.</p>
+<p><strong>Why it matters.</strong> The summary is the answer to &quot;what is this, in one breath&quot;: a decoupled
+streaming forecast, where books hold the intel, the bus keeps it real-time, and the window
+keeps it informed.</p>
+<p>The system is a <strong>decoupled streaming forecast</strong>: market data streams in (never polled), the
+models publish numbers (never trading directly), the bus carries them as stamped envelopes
+(never backlogged), the books accumulate the intel (never too much), and the strategies trade
+only on confirmed patterns (never on a lone blip).</p>
+<ul>
+<li><strong>A model alone is an opinion; a book with history is a conviction.</strong></li>
+<li><strong>Data alone is noise; data + context + memory is a forecast.</strong></li>
+<li><strong>The bus keeps it decoupled and real-time; TTL keeps it fresh; the window keeps it informed.</strong></li>
+</ul>
+<p>That is the architecture, and every diagram in this document is one view of the same
+principle: <strong>combined, historical, and continuously updated — so it can forecast, and fire a
+tier signal worth trading.</strong></p>
+<h1>35. The journey of market data</h1>
+<p><strong>What it does.</strong> Traces market data from the exchange WebSocket all the way to a recorded
+envelope and a model's decision. It is the <em>artery</em> of the system: everything downstream
+consumes this one stream.</p>
+<p><strong>Why it matters.</strong> If you understand this one journey you understand the platform's shape:
+one source of market data, one bus, one recorder, many consumers. Everything else is a
+consumer of this same stream.</p>
+<section class="landscape"><img src="diagrams/m1-market-data-journey.png" alt="Figure 35.1 — the full journey">
+<p><em>Figure 35.1 — Binance → marketdata → bus → recorder → lake, and bus → models → book → fills.</em></p></section>
+<h2>35.1 The marketdata pipeline</h2>
+<section class="landscape"><img src="diagrams/m6-marketdata-pipeline.png" alt="Figure 35.2 — marketdata filters and publishes">
+<p><em>Figure 35.2 — WebSocket frames are filtered at the source into three signals, then published.</em></p></section>
+<p>The marketdata service does three things to every frame, in order: it <strong>filters</strong> (keeps
+only the fields each consumer needs — the BPF idea), it <strong>collapses</strong> (the depth becomes one
+imbalance number, the candles a bounded cache), and it <strong>publishes</strong> (an envelope per signal
+onto the bus). Nothing is stored in the service itself — it is a pure pump.</p>
+<h2>35.2 The depth journey</h2>
+<section class="landscape"><img src="diagrams/m7-depth-journey.png" alt="Figure 35.3 — the depth signal's path">
+<p><em>Figure 35.3 — the order book becomes one imbalance number, published and consumed.</em></p></section>
+<h2>35.3 The candle journey</h2>
+<section class="landscape"><img src="diagrams/m8-candle-journey.png" alt="Figure 35.4 — the candle path">
+<p><em>Figure 35.4 — candles are seeded once (history), then streamed, and the TA models read the cache.</em></p></section>
+<p>The candle history is <strong>backfilled once</strong> — 200 bars per symbol — because the bus carries only
+newly-closed candles (TTL, no backlog). The models read the seeded cache plus the live
+updates, so a model always has the <em>context</em> (history) and the <em>now</em> (the latest bar).</p>
+<h2>35.4 The marketdata subscription</h2>
+<section class="landscape"><img src="diagrams/m20-marketdata-subscription.png" alt="Figure 35.5 — the combined stream subscription">
+<p><em>Figure 35.5 — 90 symbols over one combined stream, dispatched by stream name.</em></p></section>
+<h2>35.5 Ticks to signal</h2>
+<section class="landscape"><img src="diagrams/m17-ticks-to-signal.png" alt="Figure 35.6 — ticks become intelligence">
+<p><em>Figure 35.6 — raw ticks are enriched into intel.signal, which the models consume as context.</em></p></section>
+
+<h1>36. The bus in detail</h1>
+<p><strong>What it does.</strong> Moves every packet between every component, with an exchange per plane and
+a queue per topic, and fans one publisher out to many subscribers.</p>
+<p><strong>Why it matters.</strong> The bus is the <em>single integration point</em>. Understanding its shape —
+exchanges, queues, bindings, fan-out — is understanding how any component talks to any
+other without a single direct call.</p>
+<section class="landscape"><img src="diagrams/m2-bus-topics.png" alt="Figure 36.1 — the topic tree">
+<p><em>Figure 36.1 — exchanges group the planes; queues deliver to consumers.</em></p></section>
+<h2>36.1 Fan-out: one publisher, many subscribers</h2>
+<section class="landscape"><img src="diagrams/m3-fanout.png" alt="Figure 36.2 — fan-out">
+<p><em>Figure 36.2 — one marketdata publish reaches the recorder, the models and the book at once.</em></p></section>
+<p>This is the decoupling made concrete: the publisher does not know the recorder, the models
+or the book exist. It publishes once; the broker fans the packet out to every subscriber.
+Adding a new consumer is subscribing, not wiring.</p>
+<h2>36.2 A binding</h2>
+<section class="landscape"><img src="diagrams/m10-binding.png" alt="Figure 36.3 — topic → exchange → queue → consumer">
+<p><em>Figure 36.3 — the topic binds to an exchange, which feeds a queue, which delivers to a consumer.</em></p></section>
+<h2>36.3 The envelope lifecycle</h2>
+<section class="landscape"><img src="diagrams/m9-envelope-lifecycle.png" alt="Figure 36.4 — the envelope's pipeline">
+<p><em>Figure 36.4 — producer → interceptors → operator → transformer → lake, with refusals recorded.</em></p></section>
+<h2>36.4 The recorder fan-out</h2>
+<section class="landscape"><img src="diagrams/m11-recorder-fanout.png" alt="Figure 36.5 — the recorder writes once, readers read">
+<p><em>Figure 36.5 — the recorder writes the journal and the index, and fans out to the explorer and dashboards.</em></p></section>
+<h2>36.5 The bus, as a sequence</h2>
+<section class="landscape"><img src="diagrams/m19-bus-sequence.png" alt="Figure 36.6 — the async message sequence">
+<p><em>Figure 36.6 — one tick's message sequence, end to end, with no component blocking another.</em></p></section>
+
+<h1>37. Models subscribe, asynchronously</h1>
+<p><strong>What it does.</strong> A model is a subscriber: it receives the latest market state, computes a
+number, and publishes a decision — all without blocking, and all without knowing who listens.</p>
+<p><strong>Why it matters.</strong> Asynchrony is the runtime twin of decoupling. A model that blocks would
+slow the pipeline; a model that panics would kill it. Because each model subscribes, computes
+and publishes independently, neither can happen.</p>
+<section class="landscape"><img src="diagrams/m4-model-subscribe.png" alt="Figure 37.1 — the model's subscribe loop">
+<p><em>Figure 37.1 — subscribe, receive the latest state, compute, publish, repeat.</em></p></section>
+<h2>37.1 The subscription lifecycle</h2>
+<section class="landscape"><img src="diagrams/m18-subscribe-lifecycle.png" alt="Figure 37.2 — a subscriber's states">
+<p><em>Figure 37.2 — disconnected → connecting → subscribed → receiving, with reconnect on error.</em></p></section>
+<h2>37.2 The async flow across goroutines</h2>
+<section class="landscape"><img src="diagrams/m5-async-flow.png" alt="Figure 37.3 — goroutines publish and consume over the bus">
+<p><em>Figure 37.3 — each goroutine is a producer, a consumer, or both; none blocks the others.</em></p></section>
+<h2>37.3 A decision, asynchronously</h2>
+<section class="landscape"><img src="diagrams/m13-decision-async.png" alt="Figure 37.4 — a decision travels async">
+<p><em>Figure 37.4 — tick → model → decision → book → strategy → fill, each hop asynchronous.</em></p></section>
+<h2>37.4 The book subscribes and confirms</h2>
+<section class="landscape"><img src="diagrams/m14-book-subscribe.png" alt="Figure 37.5 — the book's consume-and-confirm loop">
+<p><em>Figure 37.5 — the book records the decision in its window and trades only on a confirmed pattern.</em></p></section>
+<h2>37.5 The supervisor, async</h2>
+<section class="landscape"><img src="diagrams/m16-supervisor-async.png" alt="Figure 37.6 — the supervisor orchestrates without trading">
+<p><em>Figure 37.6 — the supervisor launches and watches, but never makes a trading decision.</em></p></section>
+
+<h1>38. Correlation and the explorer</h1>
+<p><strong>What it does.</strong> One correlation id follows every piece of work; the explorer reads the lake
+and renders the whole journey — the flow, the trace, the why.</p>
+<p><strong>Why it matters.</strong> This is where the architecture pays off for a human: the explorer turns
+the append-only lake into a view of <em>what happened and why</em>, resolved by correlation id.</p>
+<section class="landscape"><img src="diagrams/m15-correlation-chain.png" alt="Figure 38.1 — the correlation chain">
+<p><em>Figure 38.1 — one cid links the trigger, the decision, the fill and the pnl.</em></p></section>
+<section class="landscape"><img src="diagrams/m12-explorer-read.png" alt="Figure 38.2 — the explorer reads the lake">
+<p><em>Figure 38.2 — the explorer is a read-only viewer: ENVELOPES, JOURNEY, EXECUTION, WHY, GANTT, BOOKS, HEALTH.</em></p></section>
+
+<h1>Field dictionary and glossary</h1>
+<h2>15.1 Envelope metadata</h2>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>version</code></td>
+<td>int</td>
+<td>envelope contract revision</td>
+</tr>
+<tr>
+<td><code>plane</code></td>
+<td>string</td>
+<td>market, intel, model, risk, control, system</td>
+</tr>
+<tr>
+<td><code>topic</code></td>
+<td>string</td>
+<td>the bus topic</td>
+</tr>
+<tr>
+<td><code>key</code></td>
+<td>string</td>
+<td>the symbol, when it concerns one</td>
+</tr>
+<tr>
+<td><code>producer</code></td>
+<td>string</td>
+<td>the component that computed it</td>
+</tr>
+<tr>
+<td><code>generation</code></td>
+<td>uint</td>
+<td>the producer's counter; gaps mean loss</td>
+</tr>
+<tr>
+<td><code>cid</code></td>
+<td>string</td>
+<td>correlation id</td>
+</tr>
+<tr>
+<td><code>computed_at</code></td>
+<td>timestamp</td>
+<td>when produced — staleness gates use this</td>
+</tr>
+<tr>
+<td><code>received_at</code></td>
+<td>timestamp</td>
+<td>when the recorder accepted it</td>
+</tr>
+<tr>
+<td><code>refs</code></td>
+<td>array</td>
+<td>inputs with topic, key, generation, age_ms</td>
+</tr>
+<tr>
+<td><code>hops</code></td>
+<td>array</td>
+<td>pipeline stages with outcome</td>
+</tr>
+</tbody>
+</table>
+<h2>15.2 Payload fields by topic</h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model.decision</code></td>
+<td>engine, symbol, side, allowed, reason, confidence</td>
+</tr>
+<tr>
+<td><code>model.fill</code></td>
+<td>engine, symbol, side, entry, exit, gross_pct, net_pct, peak_pct, reason, held_s, notional, pnl_usd</td>
+</tr>
+<tr>
+<td><code>market.depth</code></td>
+<td>symbol, bids[], asks[], bid_qty, ask_qty, imbalance</td>
+</tr>
+<tr>
+<td><code>market.candle</code></td>
+<td>symbol, interval, t, o, h, l, c, v, q, Q</td>
+</tr>
+<tr>
+<td><code>risk.state</code></td>
+<td>snapshot{equity, gross_multiple, longs, shorts, per_symbol}</td>
+</tr>
+</tbody>
+</table>
+<h2>15.3 Glossary</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>envelope</td>
+<td>the fixed carrier: data, meta, references</td>
+</tr>
+<tr>
+<td>interceptor</td>
+<td>a rule that runs before work, and can refuse</td>
+</tr>
+<tr>
+<td>operator</td>
+<td>the capability that produces a payload</td>
+</tr>
+<tr>
+<td>transformer</td>
+<td>a stage that changes an envelope's shape</td>
+</tr>
+<tr>
+<td>correlation id</td>
+<td>the identity that follows one piece of work</td>
+</tr>
+<tr>
+<td>tier signal</td>
+<td>a strength-ranked, pattern-confirmed decision</td>
+</tr>
+<tr>
+<td>intel window</td>
+<td>the book's bounded rolling signal history</td>
+</tr>
+<tr>
+<td>lake</td>
+<td>the recorded store of envelopes</td>
+</tr>
+<tr>
+<td>imbalance</td>
+<td>bid volume minus ask volume, normalised</td>
+</tr>
+</tbody>
+</table>
+<h1>Appendix A — the exit ladder in code</h1>
+<p>The ladder is four checks, in order, on every mark:</p>
+<pre><code>switch {
+case chg &gt;= +0.35:
+    reason = &quot;lock&quot;                          // bank a fee-clearing profit
+case peak &gt;= +1.0 &amp;&amp; chg &lt;= peak-0.5:
+    reason = &quot;trail&quot;                         // ride the winner, exit on a pullback
+case chg &lt;= -0.5:
+    reason = &quot;stop&quot;                          // cap every loss
+case held &gt;= 180 &amp;&amp; chg &gt; 0:
+    reason = &quot;clock&quot;                         // force turnover on winners
+}
+</code></pre>
+<h2>Appendix B — a model rule in code</h2>
+<p><code>rsi2</code> is the whole model: a pure function of candles, nothing else.</p>
+<pre><code>func rsi2(bs []Candle) string {
+    cl := closes(bs)
+    if len(cl) &lt; 3 { return &quot;&quot; }
+    r := rsi(cl, 2)
+    if r &lt; 10  { return &quot;buy&quot;  }
+    if r &gt; 90  { return &quot;sell&quot; }
+    return &quot;&quot;
+}
+</code></pre>
+<p>It holds no state, reads no account, and knows nothing about who consumes its output. That
+purity is what makes it testable — and what makes it a <em>calculation agent</em> rather than a
+trading loop.</p>
+<h2>Appendix C — the imbalance in code</h2>
+<pre><code>imb = (bid_volume - ask_volume) / (bid_volume + ask_volume)
+if |imb| &gt; 0.3:
+    side = buy if imb &gt; 0 else sell
+</code></pre>
+<p>One number, from the order book, is the whole curve-rider signal — the BPF &quot;keep only the
+signal&quot; idea applied to market data.</p>
+
+<h2>Appendix D — the payloads, verbatim</h2>
+<p>A <code>market.depth</code> packet:</p>
+<pre><code>{&quot;symbol&quot;:&quot;BTCUSDT&quot;,&quot;bids&quot;:[{&quot;p&quot;:81777.5,&quot;q&quot;:2.13}],
+ &quot;asks&quot;:[{&quot;p&quot;:81778.0,&quot;q&quot;:19.9}],
+ &quot;bid_qty&quot;:2.13,&quot;ask_qty&quot;:19.9,&quot;imbalance&quot;:-0.81,&quot;ts&quot;:1792741261000}
+</code></pre>
+<p>A <code>model.decision</code> packet:</p>
+<pre><code>{&quot;symbol&quot;:&quot;SOLUSDT&quot;,&quot;side&quot;:&quot;buy&quot;,&quot;model&quot;:&quot;donchian55&quot;,
+ &quot;score&quot;:1.0,&quot;ts_ms&quot;:1792741261000,&quot;why&quot;:&quot;close &gt;= 55-bar high&quot;}
+</code></pre>
+<p>A <code>model.fill</code> packet:</p>
+<pre><code>{&quot;model&quot;:&quot;donchian55&quot;,&quot;symbol&quot;:&quot;SOLUSDT&quot;,&quot;side&quot;:&quot;buy&quot;,
+ &quot;reason&quot;:&quot;lock&quot;,&quot;net_pct&quot;:0.21,&quot;pnl_usd&quot;:5.25,&quot;ts_ms&quot;:1792741267000}
+</code></pre>
+<p>Each is a small, self-describing number — the exact kind of packet the bus was designed to
+carry, and the exact kind of evidence the lake preserves.</p>
+<h2>Appendix E — the planes, their purpose and their producers</h2>
+<table>
+<thead>
+<tr>
+<th>Plane</th>
+<th>Purpose</th>
+<th>Example producers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>market</code></td>
+<td>raw exchange data, live only</td>
+<td>market_data</td>
+</tr>
+<tr>
+<td><code>intel</code></td>
+<td>derived intelligence</td>
+<td>signals, tad, forecast</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>decisions and outcomes</td>
+<td>models10, curve_rider, alpha_rank</td>
+</tr>
+<tr>
+<td><code>risk</code></td>
+<td>the governor's state and refusals</td>
+<td>risk</td>
+</tr>
+<tr>
+<td><code>review</code></td>
+<td>portfolio verdicts</td>
+<td>portfolio_review</td>
+</tr>
+<tr>
+<td><code>exec</code></td>
+<td>execution quotes</td>
+<td>maker</td>
+</tr>
+<tr>
+<td><code>control</code></td>
+<td>orchestration and commands</td>
+<td>supervisor, master</td>
+</tr>
+<tr>
+<td><code>system</code></td>
+<td>health and control</td>
+<td>healthpub, master</td>
+</tr>
+</tbody>
+</table>
+<p>The plane is the first thing any reader checks: it tells you <em>what class of traffic</em> a packet
+is before you read its payload — market data, a model's opinion, or the governor's decision.
+Together with the topic, the plane is the address; the envelope is the letter.</p>
+
+<h1>Appendix F — THE X FILES</h1>
+<blockquote>
+<p>&quot;The truth is out there.&quot; In this system, the truth is <strong>in the envelopes</strong>. Every
+decision, every trade, every refusal is a stamped packet in an append-only lake — so any
+question an investigator can ask, the record can answer. This appendix is the field manual:
+how to <strong>debug a decision</strong>, how to <strong>optimise a model</strong>, and how the <strong>absolute
+traceability</strong> of the platform works. It is the most satisfying part of the whole design.</p>
+</blockquote>
+
+<h2>F.1 The investigation mindset</h2>
+<p>When a model traded — or did not — the first question is never &quot;is it a bug&quot;. It is:</p>
+<ol>
+<li><strong>What did it read?</strong> — the references, with their ages at execution.</li>
+<li><strong>What did it decide?</strong> — the verdict, the confidence, the reason.</li>
+<li><strong>What stopped it?</strong> — the refusal, with the rule and the number.</li>
+</ol>
+<p>The system records all three for every decision, so the investigation is a <em>read</em>, not a
+<em>guess</em>. There is no &quot;it probably did X&quot; — there is only the envelope that says what it did.</p>
+<section class="landscape"><img src="diagrams/x1-debug-decision.png" alt="Figure F.1 — the debugging workflow">
+<p><em>Figure F.1 — every decision resolves to a verdict you can reproduce from the lake.</em></p></section>
+<h2>F.2 Debugging a decision</h2>
+<h3>F.2.1 Traded or refused?</h3>
+<p>The first fork: did the decision become a trade, or a refusal? The answer decides which view
+to open.</p>
+<ul>
+<li><strong>Refused</strong> → the WHY view, which ranks refusals by rule and shows the exact reason.</li>
+<li><strong>Traded</strong> → the EXECUTION view, which shows what the model read and how old each input was.</li>
+</ul>
+<section class="landscape"><img src="diagrams/x2-why-refusal.png" alt="Figure F.2 — the refusal path">
+<p><em>Figure F.2 — a refusal names the rule and the number, and is itself an envelope in the lake.</em></p></section>
+<h3>F.2.2 What the model actually read</h3>
+<p>The execution trace answers the narrowest, most useful question: <em>for this one fill, which
+raw envelopes did the model read, in what order, and how old were they when it acted?</em></p>
+<section class="landscape"><img src="diagrams/x3-execution-trace.png" alt="Figure F.3 — the execution trace">
+<p><em>Figure F.3 — inputs are listed with their age at execution; a stale input is a finding, not a feeling.</em></p></section>
+<table>
+<thead>
+<tr>
+<th>Finding</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>input 0.2s old</td>
+<td>fresh — the decision was well-founded</td>
+</tr>
+<tr>
+<td>input 3.2s old</td>
+<td>still fresh for most topics</td>
+</tr>
+<tr>
+<td>input 3200s old</td>
+<td>stale — the model acted on old data</td>
+</tr>
+</tbody>
+</table>
+<h3>F.2.3 A worked refusal</h3>
+<pre><code>model.decision NEARUSDT  side=buy  confidence=0.62
+  verdict    REFUSED
+  reason     stale signals: 3230s old (max 90s)
+  pipeline   authority pass · keying pass · correlation pass · freshness pass
+  refs       market.candle 0.5s · market.depth 0.2s (both fresh)
+</code></pre>
+<p>The freshness interceptor passed — the <em>envelope</em> was fresh. The refusal came from the
+model's own signal-age check. The market data was seconds old; the <em>signals</em> were 53 minutes
+old. The investigation lands on the real fault: a signal producer was silent for that symbol,
+and the model correctly refused to act on stale information.</p>
+
+<h2>F.3 Optimising the models</h2>
+<p>Optimisation is a loop, not a one-off. The same decoupling that makes the system observable
+makes it tuneable: because every model is a pure function and every outcome is a stamped
+packet, a parameter change can be measured against the exact same inputs.</p>
+<section class="landscape"><img src="diagrams/x6-optimise-loop.png" alt="Figure F.4 — the optimisation loop">
+<p><em>Figure F.4 — evaluate, tune, re-run on generated data, re-evaluate.</em></p></section>
+<h3>F.3.1 The measure</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>What it tells you</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>realised PnL</td>
+<td>the bottom line</td>
+</tr>
+<tr>
+<td>win rate</td>
+<td>how often the model is right</td>
+</tr>
+<tr>
+<td>fee drag</td>
+<td>how much the 0.2% fee eats the edge</td>
+</tr>
+<tr>
+<td>mean hold</td>
+<td>whether exits fire as intended</td>
+</tr>
+<tr>
+<td>largest loss</td>
+<td>whether the stop is actually bounding losses</td>
+</tr>
+</tbody>
+</table>
+<h3>F.3.2 The probation and rotation</h3>
+<p>A model earns its place by surviving probation: its first N minutes of live trading. If the
+PnL falls below the floor, it is stopped, its post-mortem is written, and another model is
+tried.</p>
+<section class="landscape"><img src="diagrams/x7-rotation.png" alt="Figure F.5 — probation and rotation">
+<p><em>Figure F.5 — survive probation or be stopped; a stopped model is post-mortemed and replaced.</em></p></section>
+<h3>F.3.3 Tuning the forecast</h3>
+<p>The forecast is a function of three layers; tuning is calibrating their weights. The tier
+signal is the feedback: a weight change that raises the quality of tier-1 signals is kept,
+one that does not is reverted.</p>
+<section class="landscape"><img src="diagrams/x8-forecast-tune.png" alt="Figure F.6 — tuning the forecast layers">
+<p><em>Figure F.6 — the tier signal feeds back into the layer weights.</em></p></section>
+<h3>F.3.4 A worked tuning</h3>
+<p><code>rsi2</code> was buying at RSI &lt; 10 and losing to fees. The investigation showed the winners were
+real but the losers were fee-sized. Tuning the threshold from &lt;10 to &lt;5 cut the low-quality
+entries, and the win rate rose. The change was measured against the <em>same</em> generated bars
+before and after — so the improvement is a number, not an opinion.</p>
+
+<h2>F.4 Absolute traceability</h2>
+<p>This is the fascinating part: <strong>the platform is evidence</strong>. Nothing is lost, nothing is
+inferred silently, and every step is linked by one correlation id.</p>
+<section class="landscape"><img src="diagrams/x4-traceability.png" alt="Figure F.7 — the correlation chain">
+<p><em>Figure F.7 — one cid follows the work from market tick to fill to pnl, into an append-only lake.</em></p></section>
+<h3>F.4.1 Why this is absolute</h3>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>What it means</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>append-only lake</td>
+<td>history is never rewritten</td>
+</tr>
+<tr>
+<td>monotonic generation</td>
+<td>a gap is detectable, never hidden</td>
+</tr>
+<tr>
+<td>correlation ids</td>
+<td>every step links to its parent</td>
+</tr>
+<tr>
+<td>derived refs are labelled</td>
+<td>inferred lineage is never passed off as declared</td>
+</tr>
+<tr>
+<td>refusals are recorded</td>
+<td>&quot;why not&quot; is evidence, not a gap</td>
+</tr>
+<tr>
+<td>case hash</td>
+<td>two reports are comparable by fingerprint</td>
+</tr>
+</tbody>
+</table>
+<h3>F.4.2 The case file</h3>
+<p>For any decision, the system can produce a <strong>case file</strong>: the verdict, the inputs with ages,
+the pipeline stages, and a case hash that fingerprints the scope — so two copies can be
+compared and a changed one detected.</p>
+<section class="landscape"><img src="diagrams/x5-case-file.png" alt="Figure F.8 — the case file">
+<p><em>Figure F.8 — a case file is the decision, its inputs, its pipeline, and a hash.</em></p></section>
+<h3>F.4.3 Reconstructing a trade from a correlation id</h3>
+<pre><code>$ resolve cid-8c50fc9388443f4e
+
+  market.candle  SOLUSDT  09:02:01.123   (the trigger)
+  model.decision SOLUSDT  buy  cid-8c50fc9388443f4e
+  model.fill     SOLUSDT  buy  net +0.21%  parent cid-8c50fc9388443f4e
+  model.pnl      donchian55  equity 5005.25  cid-8c50fc9388443f4e
+</code></pre>
+<p>From one id, the entire life of a trade is reassembled — the tick that triggered it, the
+decision, the fill, and the resulting pnl. That is what &quot;absolute traceability&quot; means: the
+record is complete enough to replay the trade, and honest enough to show its own gaps.</p>
+
+<h2>F.5 The X FILES, closed</h2>
+<p>The truth is out there — and in this system it is <em>literally</em> out there, in the lake, as a
+chain of stamped envelopes. Debugging is reading that chain. Optimising is measuring it.
+Traceability is the fact that the chain is complete and append-only. That is the reward for
+building decoupled: <strong>every question is answerable, and every answer is evidence.</strong></p>
+
+</body></html>
