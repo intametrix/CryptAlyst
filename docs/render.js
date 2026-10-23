@@ -11,8 +11,7 @@ html = html.replace(/<p><img([^>]*)><\/p>(\s*<p><em>Figure[^<]*<\/em><\/p>)?/g, 
 });
 
 const css = `
-@page { size: A4 portrait; margin: 15mm 16mm 16mm 16mm; }
-@page landscape { size: A4 landscape; margin: 10mm 12mm 12mm 12mm; }
+@page { size: A4 landscape; margin: 11mm 14mm 14mm 14mm; }
 body { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; color: #1a1a1a; line-height: 1.42; }
 h1 { color: #1F4E79; font-size: 16pt; }
 h2 { color: #1F4E79; font-size: 12pt; }
@@ -24,8 +23,8 @@ img { max-width: 100%; }
 em { color: #596370; font-size: 8pt; }
 pre { background: #F1F3F6; font-family: Courier, monospace; font-size: 8pt; padding: 6px; }
 blockquote { border-left: 3px solid #1F4E79; margin-left: 0; padding-left: 12px; color: #444; }
-section.landscape { page: landscape; break-before: page; break-after: page; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-section.landscape img { max-width: 100%; max-height: 72vh; }
+section.landscape { break-before: page; break-after: page; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+section.landscape img { max-width: 100%; max-height: 70vh; }
 section.landscape em { margin-top: 6px; text-align: center; }
 `;
 

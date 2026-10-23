@@ -8,7 +8,8 @@
       "left": "0",
       "right": "0"
     },
-    "printBackground": true
+    "printBackground": true,
+    "landscape": true
   },
   "stylesheet": "style.css"
 }
