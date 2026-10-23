@@ -27,7 +27,7 @@ ENGINES = {
     "alpharank":   [PY_, "-u", "alpha_rank.py", "--start", "5000", "--risk", "10",
                     "--every", "2", "--lock", "0.35", "--stop", "0.7"],
     "models10":    [PY_, "-u", "models10.py", "--start", "5000", "--top", "300",
-                    "--loop", "2", "--probation", "300", "--only", "funding_fade"],
+                    "--loop", "2", "--probation", "300", "--only", "donchian55,orb,boll_squeeze,rsi2,vwap_revert,macd_trend,vol_break,ema_pullback,atr_channel"],
     "alphasignals":[PY_, "-u", "alpha_signals.py", "--every", "2", "--start", "5000", "--risk", "10"],
     "cryptopack":  [PY_, "-u", "crypto_pack.py", "--risk", "10", "--start", "5000",
                     "--top", "300", "--min-liq", "100000000", "--loop", "2"],

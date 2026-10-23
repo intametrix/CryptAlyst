@@ -41,6 +41,9 @@ PROBATION_S = 60.0
 PROBATION_MIN_RET = 0.0      # any negative PnL inside the first minute = stopped
 SKIM = 0.32
 LOCK = 0.35
+TRAIL_ARM = 1.0
+TRAIL = 0.5
+STOP_PCT = 0.5
 STOP = 1.00
 CLOCK = 180
 RISK = 0.25
@@ -420,12 +423,12 @@ def main():
                 reason = None
                 if chg >= float(T.options().get("lock_pct", LOCK)):
                     reason = "lock"
-                elif False:
-                    reason = "stop"   # profit-only: no loss exits
+                elif bk.pos[sym]["peak"] >= TRAIL_ARM and chg <= bk.pos[sym]["peak"] - TRAIL:
+                    reason = "trail"   # ride the curve
+                elif chg <= -STOP_PCT:
+                    reason = "stop"    # tight stop-loss: no heavy losses
                 elif held >= float(T.options().get("clock_s", CLOCK)):
                     reason = "clock"
-                if reason and T.hold_loser(held, chg):
-                    reason = None      # hold losers for a day, by directive
                 if reason:
                     side_now = bk.pos[sym]["side"]
                     bk.close(sym, px[sym], chg, reason)
