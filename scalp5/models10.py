@@ -435,7 +435,7 @@ def main():
                 if sym in bk.pos or sym not in px:
                     continue
                 try:
-                    bs = klines(sym, "1m", 200)
+                    bs = klines(sym, "1s", 200)
                 except Exception:
                     continue
                 if len(bs) < 60:
