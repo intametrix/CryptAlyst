@@ -33,15 +33,15 @@ MASTER = "http://127.0.0.1:8799"
 BACKEND = "http://127.0.0.1:8787"; SPOT = "https://api.binance.com"
 FAPI = "https://fapi.binance.com"; FEE = 0.001
 
-CONFIRM_SECS = 1.0     # a signal must persist this long before we act
+CONFIRM_SECS = 0.0     # HFT: enter immediately (no confirmation)
 TP_PCT = 20.0           # a trade up 20% -> close it out
 LOCK_USD = 800.0        # book unrealised >= this -> bank the winners
 LOCK_PCT = 0.3          # bank only winners that clear the fee
-STOP_SECS = 30.0        # a bad position still bad after 30s -> close it
-STOP_PCT = 0.5          # ...only if it is meaningfully bad (past the fee)
-SKIM_PCT = 0.5          # quick small profit (scalp)
-TRAIL_ARM_PCT = 1.0     # arm the trailing stop once a winner clears this
-TRAIL_PCT = 0.5         # trail this far below the peak
+STOP_SECS = 5.0         # HFT: a bad position still bad after 5s -> close it
+STOP_PCT = 0.2          # HFT: cut tiny losses fast
+SKIM_PCT = 0.1          # HFT: bank a tiny move
+TRAIL_ARM_PCT = 0.3     # HFT: arm the trail fast
+TRAIL_PCT = 0.15        # HFT: trail tight below the peak
 WATCHLIST = ["BTCUSDT", "ETHUSDT", "SOXLUSDT", "XAUUSDT", "SNDKUSDT"]  # always trade the fastest tickers
 PENDING = {}            # (book, symbol, side) -> first time the signal was seen
 
@@ -240,7 +240,7 @@ def main():
         if time.time() - last < a.loop:
             for _b in books.values():
                 _b.dump()
-            time.sleep(2)
+            time.sleep(0.5)
             continue
         last = time.time()
 
@@ -368,6 +368,6 @@ def main():
 
         for b in books.values(): b.dump()
         log("cycle: " + ", ".join("%s %d open" % (k, len(v.pos)) for k, v in books.items()))
-        time.sleep(2)
+        time.sleep(0.5)
 
 if __name__ == "__main__": main()
