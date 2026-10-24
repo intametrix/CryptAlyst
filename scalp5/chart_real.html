@@ -224,6 +224,7 @@ var PROP_META=[
   {id:"highlight",label:"candle highlight"}
 ];
 var BARS=[],MEAS=null,BAND=null,G={mode:null,px:0,py:0,s0:0,c0:0,ay:null,ax:null,pts:new Map(),pinch:null},GEO=null;
+var REQ=0;
 var CURSOR=null;
 var AX={tPrice:0,tTime:0};
 var AUX={ema20:null,ema50:null,vwap:null,rsi:null};
@@ -237,17 +238,27 @@ var SYM=(PARAMS.get("sym")||"BTCUSDT").toUpperCase();
 var ENGINE=PARAMS.get("engine")||null;
 var CONTEXT=PARAMS.get("context")==="1";   // show all fills, dim the others
 var FILLS=[], LAST_ERR="";
-function loadBars(tf, cb){
+function loadBars(tf, cb, my, attempt){
   var iv=tf;
+  attempt=attempt||0;
   fetch("/api/klines?symbol="+encodeURIComponent(SYM)+"&interval="+iv+"&limit=300",{cache:"no-store"})
     .then(function(r){ return r.json(); })
     .then(function(d){
-      if(!d.rows||!d.rows.length){ LAST_ERR="no data"; if(cb)cb(); return; }
+      if(my!=null && REQ!==my) return;
+      if((!d.rows||!d.rows.length) && attempt<2){
+        setTimeout(function(){ loadBars(tf, cb, my, attempt+1); }, 400);
+        return;
+      }
+      if(!d.rows||!d.rows.length){
+        LAST_ERR="no data for "+SYM;
+        var svg=$("svg"); if(svg) svg.innerHTML='<text x="20" y="40" fill="#f85149" font-size="13" font-family="monospace">no data for '+esc(SYM)+'</text>';
+        if(cb)cb(); return;
+      }
       BARS=d.rows; IND=d.indicators||{}; LAST_ERR="";
       S.c=null; S.s=0; S.y=null; MEAS=null;
       if(cb) cb();
     })
-    .catch(function(e){ LAST_ERR=String(e); if(cb)cb(); });
+    .catch(function(e){ if(my==null || REQ===my){ LAST_ERR=String(e); if(cb)cb(); } });
 }
 var SIGNALS={alerts:[],models:[]};
 var SIGPICK=[];
@@ -1451,12 +1462,20 @@ function symKey(ev){
 }
 function setSym(v){
   if(!v) return;
-  SYM=v; $("symlabel").textContent=v; FILLS=[];
+  SYM=v;
+  var inp=$("sym"); if(inp) inp.value=v;
+  $("symlabel").textContent=v; FILLS=[];
+  REQ++;
+  var my=REQ;
+  BARS=[];
+  var svg=$("svg"); if(svg) svg.innerHTML='<text x="20" y="40" fill="#8494a8" font-size="13" font-family="monospace">loading '+esc(v)+'…</text>';
   loadBars(S.tf, function(){
+    if(REQ!==my) return;
     loadSignals(function(){
-      loadFills(function(){ draw(); props(); });
+      if(REQ!==my) return;
+      loadFills(function(){ if(REQ===my){ draw(); props(); } });
     });
-  });
+  }, my);
 }
 function drillModel(m){
   MODEL_FOCUS = (MODEL_FOCUS===m) ? null : m;
