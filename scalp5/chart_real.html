@@ -34,10 +34,23 @@
  button:hover{color:var(--fg);border-color:#3a4f66}
  button.on{color:#dcecff;border-color:#3d6f96;background:#182a3b;box-shadow:0 0 0 1px #58a6ff22}
  button.armed{background:#e0a72a;border-color:#e0a72a;color:#111;font-weight:600}
- .layout{display:grid;grid-template-columns:minmax(0,1fr) 272px;gap:12px;padding:12px 16px;
+ .layout{display:grid;grid-template-columns:230px minmax(0,1fr) 272px;gap:12px;padding:12px 16px;
          max-width:1800px;margin:0 auto;align-items:start;transition:grid-template-columns .25s ease}
- .layout.collapsed{grid-template-columns:minmax(0,1fr) 0px}
+ .layout.collapsed{grid-template-columns:230px minmax(0,1fr) 0px}
  .layout.collapsed #propcol{overflow:hidden;opacity:0;pointer-events:none}
+ #tickerpanel{background:#101821;border:1px solid #22303d;border-radius:12px;padding:10px;
+   display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 80px)}
+ #tickerpanel input{width:100%}
+ #tickerlist{overflow:auto;flex:1;min-height:0}
+ .tickrow{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;
+   padding:5px 8px;border-radius:7px;cursor:pointer;font-family:var(--mono);font-size:11px}
+ .tickrow:hover{background:#16232f}
+ .tickrow.on{background:#182a3b}
+ .tsym{color:#e6edf6;font-weight:600}
+ .tpx{color:#7c8b9d;font-variant-numeric:tabular-nums}
+ .tchg{font-variant-numeric:tabular-nums}
+ .tchg.up{color:#3fb950}
+ .tchg.down{color:#f85149}
  @media(max-width:1100px){.layout{grid-template-columns:1fr}}
  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
  .chartcard{height:calc(100vh - 120px);min-height:420px;display:flex;flex-direction:column}
@@ -92,6 +105,11 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
                color:#e6edf6;padding:14px 7px;cursor:pointer;font-size:15px">▶</button>
 
 <div class="layout">
+  <div id="tickerpanel">
+    <input id="tickersearch" class="symin" placeholder="search tickers…" autocomplete="off" spellcheck="false"
+           oninput="renderTickerList()">
+    <div id="tickerlist"><div class="hint" style="padding:8px">loading tickers…</div></div>
+  </div>
   <div>
     <div id="panel">
       <div class="row"><span class="lab">timeframe</span><div class="chips" id="iv"></div></div>
@@ -1338,7 +1356,7 @@ var UNIVERSE=[], UNIVERSE_AT=0, SYMIDX=-1, SYMHITS=[];
 function loadUniverse(cb){
   if(UNIVERSE.length && Date.now()-UNIVERSE_AT < 60000){ if(cb)cb(); return; }
   fetch("/api/symbols",{cache:"no-store"}).then(function(r){return r.json();})
-    .then(function(d){ UNIVERSE=d.tickers||[]; UNIVERSE_AT=Date.now(); if(cb)cb(); })
+    .then(function(d){ UNIVERSE=d.symbols||d.tickers||[]; UNIVERSE_AT=Date.now(); if(cb)cb(); })
     .catch(function(){ if(cb)cb(); });
 }
 function symListEl(){ return $("symlist"); }
@@ -1381,6 +1399,24 @@ function symFilter(){
     SYMIDX=-1;
   });
 }
+function renderTickerList(){
+  var host=$("tickerlist"); if(!host) return;
+  loadUniverse(function(){
+    var q=($("tickersearch").value||"").trim().toUpperCase();
+    var rows=UNIVERSE.filter(function(t){
+      return !q || t.s.indexOf(q)>=0 || (t.base||"").indexOf(q)>=0;
+    }).slice(0,120);
+    host.innerHTML=rows.map(function(t){
+      var chg=(t.chg==null?0:t.chg);
+      var cls=chg>=0?"up":"down";
+      return '<div class="tickrow'+(t.s===SYM?" on":"")+'" onclick="pickTicker(\''+esc(t.s)+'\')">'+
+        '<span class="tsym">'+esc(t.s)+'</span>'+
+        '<span class="tpx">'+(t.price?Number(t.price).toPrecision(6):"—")+'</span>'+
+        '<span class="tchg '+cls+'">'+(chg>=0?"+":"")+Number(chg).toFixed(1)+'%</span></div>';
+    }).join("") || '<div class="hint" style="padding:8px">no match</div>';
+  });
+}
+function pickTicker(sym){ if(sym) setSym(sym); }
 function pickSym(i){
   var t=SYMHITS[i]; if(!t) return;
   try{
@@ -1513,6 +1549,7 @@ loadBars(S.tf, function(){
   if(panel){ panel.classList.remove("open"); }
   if(p) p.style.display="";
   applyPropsHidden();
+  renderTickerList();
 })();
 function startTick(){
   if(TICK_TIMER) clearInterval(TICK_TIMER);
