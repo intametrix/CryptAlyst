@@ -6795,6 +6795,34 @@ def _evaluate_chain(chain, market):
     final = outputs.get((chain[-1].get("model") if chain else ""), {"dir": 0, "score": 0, "basis": ""})
     return outputs, final
 
+def _training_model_signals(models, sym):
+    """Compute live P/D predictions for Python-trained models (state/models/*.json)
+    so a strategy can trade a ticker with a specialised (training-set) model."""
+    out = []
+    for model in models:
+        mp = os.path.join(HERE, "state", "models", model + ".json")
+        if not os.path.exists(mp):
+            continue
+        try:
+            with open(mp) as fh:
+                m = json.load(fh)
+            if not m.get("fit"):
+                continue
+            d = jget("http://127.0.0.1:8796/klines?symbol=%s&interval=1m&limit=2" % sym, timeout=6)
+            ks = d.get("klines") or []
+            if len(ks) < 2:
+                continue
+            c0 = ks[-2].get("c"); c1 = ks[-1].get("c")
+            ret = (c1 - c0) / (c0 or 1)
+            z = (ret - m["mean"]) / (m["std"] or 1)
+            prob = 1.0 / (1.0 + math.exp(-(m["weight"] * z + m["intercept"])))
+            dirv = 1 if prob > 0.7 else (-1 if prob < 0.3 else 0)
+            if dirv:
+                out.append({"symbol": sym, "model": model, "dir": dirv, "ts": int(time.time() * 1000)})
+        except Exception:
+            pass
+    return out
+
 def strategy_loop():
     """Run every strategy: watch its tickers, run its models, count repeated
     signals, and emit a bull/bear verdict once a symbol crosses confirm_signals."""
@@ -6814,6 +6842,7 @@ def strategy_loop():
                     rel = [x for x in sigs if (not tickers or x["symbol"] in tickers)]
                     for sym in {x["symbol"] for x in rel}:
                         market = [x for x in rel if x["symbol"] == sym]
+                        market = market + _training_model_signals([x.get("model") for x in chain], sym)
                         _, final = _evaluate_chain(chain, market)
                         if final.get("dir", 0) == 0:
                             continue
@@ -6857,6 +6886,20 @@ def strategy_loop():
         except Exception:
             pass
         time.sleep(10)
+
+def _load_training_sets():
+    path = os.path.join(HERE, "state", "training_sets.json")
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+def _save_training_sets(sets):
+    path = os.path.join(HERE, "state", "training_sets.json")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        json.dump(sets, fh)
 
 def _training_collections(model):
     """Load one model's training vectors grouped by symbol, newest first."""
@@ -6903,6 +6946,9 @@ def _fit_model(model, new_points, label_path):
     for p in new_points:
         if p.get("label") in ("P", "D"):
             rows.append({"model": model, "ret": p.get("ret"), "price": p.get("price"), "label": p.get("label")})
+    return _fit_rows(model, rows)
+
+def _fit_rows(model, rows):
     ps = [r for r in rows if r.get("label") == "P"]
     ds = [r for r in rows if r.get("label") == "D"]
     if len(ps) < 2 or len(ds) < 2:
@@ -7078,6 +7124,41 @@ class H(BaseHTTPRequestHandler):
                 if changed:
                     _save_books(books)
                 return self._send(200, json.dumps({"ok": changed}), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path == "/api/trainingsets":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                name = (body.get("name") or "").strip()
+                if not name:
+                    return self._send(400, json.dumps({"error": "training set needs a name"}), "application/json")
+                sets = _load_training_sets()
+                sets[name] = {
+                    "name": name,
+                    "model": body.get("model"),
+                    "symbol": body.get("symbol"),
+                    "points": body.get("points") or [],
+                    "saved_ms": int(time.time() * 1000),
+                    "date": time.strftime("%Y-%m-%d %H:%M:%S"),
+                }
+                _save_training_sets(sets)
+                return self._send(200, json.dumps({"saved": name, "points": len(sets[name]["points"])}), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path == "/api/trainingsets/apply":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                name = (body.get("name") or "").strip()
+                sets = _load_training_sets()
+                ts = sets.get(name)
+                if not ts:
+                    return self._send(404, json.dumps({"error": "no such training set"}), "application/json")
+                # specialised model name = base model + training name (keeps tickers via symbol)
+                base = (ts.get("model") or "manual")
+                specialized = "%s__%s" % (base, name)
+                rows = [{"ret": pt.get("ret"), "price": pt.get("price"), "label": pt.get("label")} for pt in ts.get("points") or []]
+                fit = _fit_rows(specialized, rows)
+                return self._send(200, json.dumps({"model": specialized, "fit": fit}), "application/json")
             except Exception as exc:
                 return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
         if u.path == "/api/trainpoints/delete":
@@ -7414,6 +7495,8 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, fh.read(), "application/json")
             except Exception:
                 return self._send(404, json.dumps({"error": "model not trained"}), "application/json")
+        if p == "/api/trainingsets":
+            return self._send(200, json.dumps({"sets": _load_training_sets()}), "application/json")
         if p.startswith("/api/trainpoints/"):
             model = p[len("/api/trainpoints/"):]
             cols = _training_collections(model)
