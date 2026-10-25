@@ -6795,7 +6795,7 @@ def _evaluate_chain(chain, market):
     final = outputs.get((chain[-1].get("model") if chain else ""), {"dir": 0, "score": 0, "basis": ""})
     return outputs, final
 
-def _training_model_signals(models, sym):
+def _training_model_signals(models, sym, tf="1m"):
     """Compute live P/D predictions for Python-trained models (state/models/*.json)
     so a strategy can trade a ticker with a specialised (training-set) model."""
     out = []
@@ -6808,7 +6808,7 @@ def _training_model_signals(models, sym):
                 m = json.load(fh)
             if not m.get("fit"):
                 continue
-            d = jget("http://127.0.0.1:8796/klines?symbol=%s&interval=1m&limit=2" % sym, timeout=6)
+            d = jget("http://127.0.0.1:8796/klines?symbol=%s&interval=%s&limit=2" % (sym, tf), timeout=6)
             ks = d.get("klines") or []
             if len(ks) < 2:
                 continue
@@ -6842,7 +6842,7 @@ def strategy_loop():
                     rel = [x for x in sigs if (not tickers or x["symbol"] in tickers)]
                     for sym in {x["symbol"] for x in rel}:
                         market = [x for x in rel if x["symbol"] == sym]
-                        market = market + _training_model_signals([x.get("model") for x in chain], sym)
+                        market = market + _training_model_signals([x.get("model") for x in chain], sym, st.get("tf") or "1m")
                         _, final = _evaluate_chain(chain, market)
                         if final.get("dir", 0) == 0:
                             continue
@@ -7063,6 +7063,7 @@ class H(BaseHTTPRequestHandler):
                          "models": models, "chain": chain, "tickers": body.get("tickers") or [],
                          "auto_tickers": bool(body.get("auto_tickers")),
                          "confirm_signals": int(body.get("confirm_signals") or 1),
+                         "tf": body.get("tf") or "1m",
                          "created_ms": int(time.time() * 1000), "notes": []}
                 for book in books["books"]:
                     if book.get("id") == body.get("book_id"):

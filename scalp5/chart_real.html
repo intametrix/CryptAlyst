@@ -2099,7 +2099,7 @@ async function useInStrategy(){
   var name=prompt("strategy name:", model+" on "+SYM);
   if(!name) return;
   var r=await fetch("/api/strategy",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({name:name, models:[model], chain:[{model:model, inputs:[]}], tickers:[SYM], book_id:book.id})});
+    body:JSON.stringify({name:name, models:[model], chain:[{model:model, inputs:[]}], tickers:[SYM], tf:S.tf, book_id:book.id})});
   var d=await r.json();
   alert("strategy '"+d.name+"' created — trading "+SYM+" with "+model);
 }
