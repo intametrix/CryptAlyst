@@ -2394,6 +2394,11 @@ header{margin-left:186px}
         <input id="bookequity" class="finput" type="number" min="1" step="any" value="5000" placeholder="5000">
         <span class="fhint">Starting capital this book trades with (USDT).</span>
       </label>
+      <label class="field">
+        <span class="flabel">Stake per trade (%)</span>
+        <input id="bookstake" class="finput" type="number" min="0.1" max="100" step="any" value="3" placeholder="3">
+        <span class="fhint">% of equity risked on each signal.</span>
+      </label>
       <div class="factions">
         <button class="fbtn primary" onclick="createBook()">Create book</button>
         <button class="fbtn" onclick="closeShelf()">Cancel</button>
@@ -3613,6 +3618,7 @@ async function renderShelf(){
       '<b>📚 '+esc(b.name)+'</b>'+
       '<span class="mk">'+(b.strategies||[]).length+' strategies · '+(b.notes||[]).length+' notes</span>'+
       '<span class="mk">equity '+money(b.equity||b.start_equity||0)+'</span>'+
+      '<span class="mk" title="stake per trade" style="cursor:pointer" onclick="event.stopPropagation();setBookStake('+JSON.stringify(b.id)+')">stake '+(b.stake_pct!=null?b.stake_pct:100)+'%</span>'+
       '<span class="mk" style="color:'+(b.running!==false?'#3fb950':'#f85149')+'">'+(b.running!==false?'running':'stopped')+'</span>'+
       '<span style="flex:1"></span>'+
       '<button class="tbtn" onclick="event.stopPropagation();toggleBook('+JSON.stringify(b.id)+','+(b.running!==false?'false':'true')+')">'+(b.running!==false?'stop':'start')+'</button>'+
@@ -3927,8 +3933,15 @@ async function createBook(){
   var name=($("bookname").value||"").trim();
   if(!name){ alert("book name required"); return; }
   var eq=parseFloat($("bookequity")?$("bookequity").value:5000)||5000;
-  await fetch("/api/book",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,equity:eq})});
+  var st=parseFloat($("bookstake")?$("bookstake").value:3)||3;
+  await fetch("/api/book",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,equity:eq,stake_pct:st})});
   $("bookname").value=""; closeShelf(); renderShelf();
+}
+async function setBookStake(id){
+  var p=prompt("stake % per trade (0.1–100):", "3");
+  if(!p) return;
+  await fetch("/api/book/stake",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({book_id:id,stake_pct:parseFloat(p)})});
+  renderShelf();
 }
 async function toggleBook(id,on){
   await fetch(on?"/api/book/start":"/api/book/stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({book_id:id})});
@@ -7129,12 +7142,27 @@ class H(BaseHTTPRequestHandler):
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                 books = _load_books()
                 eq = float(body.get("equity") or body.get("start_equity") or 5000)
+                stake = float(body.get("stake_pct") or 100)
                 book = {"id": _new_id("book"), "name": body.get("name") or "Untitled book",
-                        "equity": eq, "start_equity": eq, "running": True,
+                        "equity": eq, "start_equity": eq, "running": True, "stake_pct": stake,
                         "created_ms": int(time.time() * 1000), "notes": [], "strategies": []}
                 books["books"].append(book)
                 _save_books(books)
                 return self._send(200, json.dumps(book), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path == "/api/book/stake":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                books = _load_books()
+                bid = body.get("book_id")
+                pct = float(body.get("stake_pct") or 100)
+                for book in books["books"]:
+                    if book.get("id") == bid:
+                        book["stake_pct"] = max(0.1, min(100, pct))
+                        _save_books(books)
+                        return self._send(200, json.dumps(book), "application/json")
+                return self._send(404, json.dumps({"error": "book not found"}), "application/json")
             except Exception as exc:
                 return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
         if u.path in ("/api/book/start", "/api/book/stop"):
