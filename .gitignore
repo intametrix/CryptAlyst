@@ -122,3 +122,7 @@ backend/data/
 docs/*.pdf
 docs/package.json
 docs/package-lock.json
+
+# mermaid tooling + screen recordings (session artifacts)
+.mmd/
+recordings/
