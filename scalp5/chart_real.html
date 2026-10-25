@@ -2105,16 +2105,8 @@ function applySetContext(){
   PENDING_SET=null;
   var ts=ps.ts, name=ps.name;
   var pts=ts.points||[];
-  var tss=pts.map(function(pt){ return pt.ts; }).filter(Boolean);
-  if(tss.length){
-    var minT=Math.min.apply(null,tss), maxT=Math.max.apply(null,tss);
-    var i0=0, i1=BARS.length-1;
-    for(var k=0;k<BARS.length;k++){ if(BARS[k].t<=minT) i0=k; }
-    for(var k=BARS.length-1;k>=0;k--){ if(BARS[k].t>=maxT) i1=k; }
-    var pad=Math.max(6, Math.round((i1-i0)*0.18));
-    S.s=Math.max(0, i0-pad);
-    S.c=Math.min(BARS.length-S.s, (i1-i0)+pad*2+1);
-  }else{ S.s=0; S.c=null; }
+  // full view: whole chart + full price range
+  S.s=0; S.c=null; S.y=null; MEAS=null;
   draw();
   RECALLED=pts;
   drawRecalledVectors();
