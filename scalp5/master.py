@@ -2378,6 +2378,11 @@ header{margin-left:186px}
         <input id="bookname" class="finput" placeholder="e.g. Momentum Lab" autofocus onkeydown="if(event.key==='Enter')createBook()">
         <span class="fhint">A book stores strategies, their models and the verdicts they produce.</span>
       </label>
+      <label class="field">
+        <span class="flabel">Trading equity</span>
+        <input id="bookequity" class="finput" type="number" min="1" step="any" value="5000" placeholder="5000">
+        <span class="fhint">Starting capital this book trades with (USDT).</span>
+      </label>
       <div class="factions">
         <button class="fbtn primary" onclick="createBook()">Create book</button>
         <button class="fbtn" onclick="closeShelf()">Cancel</button>
@@ -3553,7 +3558,10 @@ async function renderShelf(){
       '<span class="carrow">▸</span>'+
       '<b>📚 '+esc(b.name)+'</b>'+
       '<span class="mk">'+(b.strategies||[]).length+' strategies · '+(b.notes||[]).length+' notes</span>'+
+      '<span class="mk">equity '+money(b.equity||b.start_equity||0)+'</span>'+
+      '<span class="mk" style="color:'+(b.running!==false?'#3fb950':'#f85149')+'">'+(b.running!==false?'running':'stopped')+'</span>'+
       '<span style="flex:1"></span>'+
+      '<button class="tbtn" onclick="event.stopPropagation();toggleBook('+JSON.stringify(b.id)+','+(b.running!==false?'false':'true')+')">'+(b.running!==false?'stop':'start')+'</button>'+
       '<button class="tbtn" onclick="event.stopPropagation();newStrategy(\''+b.id+'\')">+ strategy</button>'+
       '<button class="tbtn" onclick="event.stopPropagation();renameBook(\''+b.id+'\')">rename</button>'+
       '<button class="tbtn" onclick="event.stopPropagation();deleteBook(\''+b.id+'\')">delete</button></div>'+
@@ -3864,8 +3872,13 @@ async function deleteStrategy(id){
 async function createBook(){
   var name=($("bookname").value||"").trim();
   if(!name){ alert("book name required"); return; }
-  await fetch("/api/book",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name})});
+  var eq=parseFloat($("bookequity")?$("bookequity").value:5000)||5000;
+  await fetch("/api/book",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name,equity:eq})});
   $("bookname").value=""; closeShelf(); renderShelf();
+}
+async function toggleBook(id,on){
+  await fetch(on?"/api/book/start":"/api/book/stop",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({book_id:id})});
+  renderShelf();
 }
 var STRAT_BOOK=null, STRAT_TICKERS=[];
 var STRAT_MODELS=["flow-imbalance","volume-climax","volatility-expansion","structure-break","mean-reversion","momentum-divergence","bulls-and-bears","flow-onset"];
@@ -6835,6 +6848,8 @@ def strategy_loop():
             verdicts = _load_verdicts()
             changed = False
             for book in books["books"]:
+                if book.get("running") is False:
+                    continue
                 for st in book.get("strategies", []):
                     sid = st.get("id")
                     chain = st.get("chain") or [{"model": m, "inputs": []} for m in (st.get("models") or [])]
@@ -7045,11 +7060,26 @@ class H(BaseHTTPRequestHandler):
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                 books = _load_books()
+                eq = float(body.get("equity") or body.get("start_equity") or 5000)
                 book = {"id": _new_id("book"), "name": body.get("name") or "Untitled book",
+                        "equity": eq, "start_equity": eq, "running": True,
                         "created_ms": int(time.time() * 1000), "notes": [], "strategies": []}
                 books["books"].append(book)
                 _save_books(books)
                 return self._send(200, json.dumps(book), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path in ("/api/book/start", "/api/book/stop"):
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                books = _load_books()
+                bid = body.get("book_id")
+                for book in books["books"]:
+                    if book.get("id") == bid:
+                        book["running"] = (u.path == "/api/book/start")
+                        _save_books(books)
+                        return self._send(200, json.dumps(book), "application/json")
+                return self._send(404, json.dumps({"error": "book not found"}), "application/json")
             except Exception as exc:
                 return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
         if u.path == "/api/strategy":
