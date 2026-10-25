@@ -4245,7 +4245,7 @@ async function renderOptions(){
   html+=nums.map(function(r){
     return '<label style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid #131c26">'+
       '<b style="width:190px">'+r[0]+'</b>'+
-      '<input type="number" step="'+r[3]+'" value="'+r[2]+'" style="width:90px;background:#0b1119;'+
+      '<input type="number" step="'+(r[3]!=null?r[3]:"any")+'" value="'+(r[2]!=null?r[2]:'')+'" style="width:90px;background:#0b1119;'+
       'border:1px solid #24313e;color:#e6edf6;border-radius:5px;padding:3px 6px" '+
       'onchange="setOpt(\''+r[0]+'\',parseFloat(this.value))">'+
       '<span style="color:#7c8b9d">'+r[1]+'</span></label>';
