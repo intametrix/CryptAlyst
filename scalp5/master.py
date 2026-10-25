@@ -7161,7 +7161,10 @@ class H(BaseHTTPRequestHandler):
                 base = (ts.get("model") or "manual")
                 specialized = "%s__%s" % (base, name)
                 rows = [{"ret": pt.get("ret"), "price": pt.get("price"), "label": pt.get("label")} for pt in ts.get("points") or []]
-                conf = (ts.get("confidence") or 70) / 100.0
+                conf_req = body.get("confidence")
+                conf = (conf_req if conf_req is not None else (ts.get("confidence") or 70)) / 100.0
+                ts["confidence"] = int(round(conf * 100))
+                _save_training_sets(sets)
                 fit = _fit_rows(specialized, rows, conf)
                 return self._send(200, json.dumps({"model": specialized, "fit": fit}), "application/json")
             except Exception as exc:

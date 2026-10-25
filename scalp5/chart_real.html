@@ -2074,13 +2074,11 @@ async function loadTrainingSets(){
 async function applyTrainingSet(){
   var name=$("trainingsets").value;
   if(!name){ alert("pick a training set first"); return; }
+  var conf=Math.round(DETECT_THRESH*100);
   var r=await fetch("/api/trainingsets/apply",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({name:name})});
+    body:JSON.stringify({name:name, confidence:conf})});
   var d=await r.json();
   if(d.fit && d.fit.fit){
-    var ts=TRAIN_SETS[name]||{};
-    if(ts.confidence!=null){ DETECT_THRESH=ts.confidence/100; var sl=$("detsens"); if(sl) sl.value=ts.confidence; var dv=$("detsensval"); if(dv) dv.textContent=ts.confidence+"%"; }
-    if(ts.tf && ts.tf!==S.tf){ setTf(ts.tf); }
     var sel=$("trainmodel");
     if(![...sel.options].some(function(o){ return o.value===d.model; })){
       var opt=document.createElement("option"); opt.value=d.model; opt.textContent=d.model; sel.appendChild(opt);
