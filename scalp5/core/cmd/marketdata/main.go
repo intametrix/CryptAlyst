@@ -144,6 +144,7 @@ func loadSymbols(top int) []string {
 func main() {
 	port := flag.Int("port", 8796, "http port")
 	top := flag.Int("top", 40, "symbols to stream")
+	extra := flag.String("extra", "", "extra symbols to always stream (comma-separated)")
 	addr := flag.String("stomp", "127.0.0.1:61613", "broker address")
 	flag.Parse()
 	log.SetFlags(log.Ltime)
@@ -164,6 +165,23 @@ func main() {
 		symbols = fallbackSymbols
 		if *top < len(symbols) {
 			symbols = symbols[:*top]
+		}
+	}
+	for _, s := range strings.Split(*extra, ",") {
+		s = strings.ToUpper(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		dup := false
+		for _, x := range symbols {
+			if x == s {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			symbols = append(symbols, s)
+			log.Printf("extra symbol added: %s", s)
 		}
 	}
 	streams := []string{"!miniTicker@arr"}
