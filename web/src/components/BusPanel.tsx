@@ -8,7 +8,7 @@ interface Props {
   status: StatusMsg | null;
 }
 
-/** GET /api/bus — recorder snapshot; absent until the backend handler lands. */
+/** GET /api/bus — recorder snapshot. */
 interface BusStats {
   received?: number | null;
   written?: number | null;
@@ -18,17 +18,20 @@ interface BusStats {
   ts_ms?: number | null;
 }
 
+type BusSortKey = 'topic' | 'msgs' | 'share';
+
 /**
- * Message bus — messages in/out for the whole pipeline. The top strip is live
- * from the SSE status event (stream messages in, processed out, truncated,
- * clients); the per-topic table fills from GET /api/bus once the backend
- * handler lands, and says so honestly until then.
+ * Message bus — a sortable data grid of the pipeline's topics: message count,
+ * share of the whole, and a relative volume bar. The top strip is live from
+ * the SSE status event; the grid fills from GET /api/bus.
  */
 export const BusPanel = memo(function BusPanel({ status }: Props) {
   const [bus, setBus] = useState<BusStats | null>(null);
   const [busLive, setBusLive] = useState(false);
-  // Live per-type tally of every SSE message this browser session receives —
-  // the genuinely live per-queue count, no backend dependency.
+  const [sortKey, setSortKey] = useState<BusSortKey>('msgs');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Live per-type tally of every SSE message this browser session receives.
   const [tally, setTally] = useState<Record<string, number>>({});
   const tallyRef = useRef<Record<string, number>>({});
   useEffect(() => {
@@ -41,11 +44,6 @@ export const BusPanel = memo(function BusPanel({ status }: Props) {
       window.clearInterval(id);
     };
   }, []);
-  const tallyRows = useMemo(
-    () => Object.entries(tally).sort((a, b) => b[1] - a[1]),
-    [tally],
-  );
-  const tallyPeak = tallyRows.reduce((m, [, v]) => Math.max(m, v), 1);
 
   useEffect(() => {
     let dead = false;
@@ -75,13 +73,63 @@ export const BusPanel = memo(function BusPanel({ status }: Props) {
 
   const topics = useMemo(() => {
     const bt = bus?.by_topic ?? {};
-    return Object.entries(bt).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
+    return Object.entries(bt)
+      .map(([name, count]) => ({ name, count: count ?? 0 }))
+      .filter((r) => r.name !== 'refused');
   }, [bus]);
-  const peak = topics.reduce((m, [, v]) => Math.max(m, v ?? 0), 1);
-  const total = topics.reduce((s, [, v]) => s + (v ?? 0), 0);
+
+  const total = topics.reduce((s, r) => s + r.count, 0);
+  const peak = topics.reduce((m, r) => Math.max(m, r.count), 1);
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    const rows = topics.slice();
+    rows.sort((a, b) => {
+      if (sortKey === 'topic') return dir * a.name.localeCompare(b.name);
+      const av = sortKey === 'msgs' ? a.count : total > 0 ? a.count / total : 0;
+      const bv = sortKey === 'msgs' ? b.count : total > 0 ? b.count / total : 0;
+      return dir * (av - bv);
+    });
+    return rows;
+  }, [topics, sortKey, sortDir, total]);
+
+  const toggleSort = (key: BusSortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setSortKey(key);
+    setSortDir(key === 'topic' ? 'asc' : 'desc');
+  };
+
+  const headerFor = (key: BusSortKey, label: string, numeric: boolean) => {
+    const active = sortKey === key;
+    const arrow = active ? (sortDir === 'asc' ? '▲' : '▼') : '▲▼';
+    return (
+      <th
+        key={key}
+        scope="col"
+        className={`${numeric ? 'num-col' : ''}${active ? ' sorted' : ''}`}
+        aria-sort={active ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <button type="button" className="th-btn" onClick={() => toggleSort(key)} title={`Sort by ${label}`}>
+          {label}
+          <span className={`arrow${active ? ' arrow-active' : ''}`} aria-hidden="true">
+            {arrow}
+          </span>
+        </button>
+      </th>
+    );
+  };
 
   const inTotal = status?.stream_messages ?? null;
   const outTotal = status?.messages ?? null;
+
+  const tallyRows = useMemo(
+    () => Object.entries(tally).sort((a, b) => b[1] - a[1]),
+    [tally],
+  );
+  const tallyPeak = tallyRows.reduce((m, [, v]) => Math.max(m, v), 1);
 
   return (
     <ResizablePanel id="bus.panel" axis="x" minWidth={320} maxWidth={1600} fillHeight>
@@ -120,60 +168,50 @@ export const BusPanel = memo(function BusPanel({ status }: Props) {
               above are live from the status stream
             </p>
           ) : (
-            <div className="bus-rows">
-              <div className="bus-row bus-head" role="row">
-                <span className="col-head">topic</span>
-                <span className="col-head num">msgs</span>
-                <span className="col-head num">share</span>
-                <span className="col-head">flow</span>
-                {bus?.refused != null && <span className="col-head num">refused</span>}
-              </div>
-              {topics.map(([name, count]) => (
-                <div key={name} className="bus-row" role="row">
-                  <span className="bus-topic">{name}</span>
-                  <span className="num">{int(count)}</span>
-                  <span className="num">{pct(total > 0 ? (count ?? 0) / total : 0)}</span>
-                  <span className="bus-bar" title={`${int(count)} msgs`}>
-                    <span className="bar-fill" style={{ width: `${Math.max(2, ((count ?? 0) / peak) * 100)}%` }} />
-                  </span>
-                  {bus?.refused != null && <span className="num bus-refused">{name.startsWith('refused') ? int(count) : ''}</span>}
-                </div>
-              ))}
-              {bus?.refused != null && (
-                <div className="bus-row bus-refused-row" role="row">
-                  <span className="bus-topic">refused (all topics)</span>
-                  <span className="num">{int(bus.refused)}</span>
-                  <span className="num">{pct((bus.received ?? 0) > 0 ? (bus.refused ?? 0) / (bus.received ?? 1) : 0)}</span>
-                  <span className="bus-bar" />
-                  <span />
-                </div>
-              )}
-            </div>
+            <table className="bus-grid">
+              <thead>
+                <tr>
+                  {headerFor('topic', 'topic', false)}
+                  {headerFor('msgs', 'msgs', true)}
+                  {headerFor('share', 'share', true)}
+                  <th scope="col" className="num-col">flow</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(({ name, count }) => (
+                  <tr key={name}>
+                    <td className="bus-topic" title={name}>{name}</td>
+                    <td className="num">{int(count)}</td>
+                    <td className="num">{pct(total > 0 ? count / total : 0)}</td>
+                    <td className="bus-bar-cell">
+                      <span className="bus-bar" title={`${int(count)} msgs`}>
+                        <span
+                          className="bar-fill"
+                          style={{ width: `${Math.max(2, (count / peak) * 100)}%` }}
+                        />
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
+
           {tallyRows.length > 0 && (
-            <div className="bus-rows">
-              <div className="bus-row bus-head" role="row">
-                <span className="col-head">queue (this session)</span>
-                <span className="col-head num">msgs</span>
-                <span className="col-head num">share</span>
-                <span className="col-head">flow</span>
-                <span />
+            <div className="bus-tally">
+              <div className="col-head">queue (this session)</div>
+              <div className="bus-rows">
+                {tallyRows.map(([type, count]) => (
+                  <div key={type} className="bus-row" role="row">
+                    <span className="bus-topic">{type}</span>
+                    <span className="num">{int(count)}</span>
+                    <span className="num">{pct(tallyPeak > 0 ? count / tallyPeak : 0)}</span>
+                  </div>
+                ))}
               </div>
-              {tallyRows.map(([type, count]) => (
-                <div key={type} className="bus-row" role="row">
-                  <span className="bus-topic">{type}</span>
-                  <span className="num">{int(count)}</span>
-                  <span className="num">
-                    {pct(tallyRows.reduce((s, [, v]) => s + v, 0) > 0 ? count / tallyRows.reduce((s, [, v]) => s + v, 0) : 0)}
-                  </span>
-                  <span className="bus-bar" title={`${int(count)} msgs`}>
-                    <span className="bar-fill" style={{ width: `${Math.max(2, (count / tallyPeak) * 100)}%` }} />
-                  </span>
-                  <span />
-                </div>
-              ))}
             </div>
           )}
+
           <p className="bus-note">in = raw stream messages consumed · out = envelopes processed · truncated = dropped by backpressure · session tally counts every SSE message as it lands</p>
         </section>
       )}

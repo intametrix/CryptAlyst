@@ -4622,3 +4622,12 @@ table {
 .bus-refused-row { border-top: 1px solid var(--border, #223046); min-width: 0; }
 .bus-refused-row .bus-topic { color: var(--down, #ff4d5e); }
 .bus-note { margin: 0; padding: 4px 10px 8px; font-size: 10px; color: var(--text-dim, #7f93ad); }
+.bus-grid { width: 100%; border-collapse: collapse; min-width: 0; table-layout: fixed; }
+.bus-grid th, .bus-grid td { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--border, #223046); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bus-grid th.num-col, .bus-grid td.num { text-align: right; }
+.bus-grid td.num { font-variant-numeric: tabular-nums; }
+.bus-grid td.bus-topic { font-size: 11px; font-weight: 600; }
+.bus-grid th:last-child, .bus-grid td:last-child { width: 100%; }
+.bus-bar-cell { padding-top: 8px !important; }
+.bus-bar-cell .bus-bar { min-width: 40px; }
+.bus-tally { margin-top: 10px; padding: 0 10px; }
