@@ -6858,6 +6858,29 @@ def strategy_loop():
             pass
         time.sleep(10)
 
+def _training_collections(model):
+    """Load one model's training vectors grouped by symbol, newest first."""
+    path = os.path.join(HERE, "state", "training_labels.jsonl")
+    by_symbol = {}
+    try:
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                r = json.loads(line)
+                if r.get("model") != model:
+                    continue
+                sym = r.get("symbol") or "unknown"
+                by_symbol.setdefault(sym, []).append(r)
+    except Exception:
+        pass
+    cols = []
+    for sym, pts in sorted(by_symbol.items()):
+        pts.sort(key=lambda x: x.get("ts") or 0)
+        cols.append({"symbol": sym, "count": len(pts), "points": pts})
+    return cols
+
 def _fit_model(model, new_points, label_path):
     """Fit a tiny logistic P-vs-D classifier on the marked points' 1-bar return
     (and the price return if present), and store it per model. Fewer than 2 of
@@ -7057,6 +7080,40 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps({"ok": changed}), "application/json")
             except Exception as exc:
                 return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path == "/api/trainpoints/delete":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                model = body.get("model") or ""
+                symbol = body.get("symbol")
+                ts_list = set(body.get("ts") or [])
+                path = os.path.join(HERE, "state", "training_labels.jsonl")
+                kept = []
+                removed = 0
+                try:
+                    with open(path) as fh:
+                        for line in fh:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            r = json.loads(line)
+                            drop = (r.get("model") == model)
+                            if drop and symbol and r.get("symbol") != symbol:
+                                drop = False
+                            if drop and ts_list and r.get("ts") not in ts_list:
+                                drop = False
+                            if drop:
+                                removed += 1
+                            else:
+                                kept.append(line)
+                except Exception:
+                    pass
+                if removed:
+                    with open(path, "w") as fh:
+                        for line in kept:
+                            fh.write(line + "\n")
+                return self._send(200, json.dumps({"deleted": removed}), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
         if u.path == "/api/train":
             try:
                 length = int(self.headers.get("Content-Length") or 0)
@@ -7068,8 +7125,9 @@ class H(BaseHTTPRequestHandler):
                 with open(path, "a") as fh:
                     for p in points:
                         fh.write(json.dumps({
-                            "model": model, "ts": p.get("ts"), "price": p.get("price"),
-                            "ret": p.get("ret"), "label": p.get("label"),
+                            "model": model, "symbol": p.get("symbol"), "ts": p.get("ts"),
+                            "price": p.get("price"), "ret": p.get("ret"), "label": p.get("label"),
+                            "endTs": p.get("endTs"), "endPrice": p.get("endPrice"),
                             "trained_ms": int(time.time() * 1000),
                         }) + "\n")
                 fit = _fit_model(model, points, path)
@@ -7348,6 +7406,18 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, fh.read(), "application/javascript")
             except Exception:
                 return self._send(500, b"/* lightweight-charts not found */", "application/javascript")
+        if p.startswith("/api/model/"):
+            model = p[len("/api/model/"):]
+            path = os.path.join(HERE, "state", "models", model + ".json")
+            try:
+                with open(path) as fh:
+                    return self._send(200, fh.read(), "application/json")
+            except Exception:
+                return self._send(404, json.dumps({"error": "model not trained"}), "application/json")
+        if p.startswith("/api/trainpoints/"):
+            model = p[len("/api/trainpoints/"):]
+            cols = _training_collections(model)
+            return self._send(200, json.dumps({"model": model, "collections": cols}), "application/json")
         if p == "/api/livesignals":
             return self._send(200, json.dumps({"signals": _fetch_signals()}), "application/json")
         if p == "/api/confirmations":
