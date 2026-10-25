@@ -2627,7 +2627,7 @@ async function renderBus(){
   var rows=qs.slice().sort(function(a,b){ return (b.publish_rate||0)-(a.publish_rate||0); }).map(function(q){
     var pin=q.publish_rate||0, pout=q.deliver_rate||0;
     var fam=q.name.indexOf("q.")===0?"topic":"legacy";
-    return ['<span style="cursor:pointer;color:#58a6ff;text-decoration:underline" onclick="openQueueStream('+JSON.stringify(q.name)+')">'+UI.esc(q.name)+'</span>', fam, (q.messages||0),
+    return ['<span style="cursor:pointer;color:#58a6ff;text-decoration:underline" onclick="openQueueStream('+JSON.stringify(q.name).replace(/"/g,"&quot;")+')">'+UI.esc(q.name)+'</span>', fam, (q.messages||0),
             pin?pin.toFixed(2):"—", pout?pout.toFixed(2):"—",
             q.consumers?UI.pill(String(q.consumers),"ok"):UI.pill("none","bad")];
   });
@@ -3577,7 +3577,7 @@ function openQueueStream(queueName){
       '<span>'+UI.esc(d.key||'')+'</span>'+
       '<span class="mk">'+UI.esc(d.producer||'')+'</span>'+
       '<span class="mk">'+new Date(d.ts||0).toTimeString().slice(0,8)+'</span>'+
-      '<span class="mk" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+UI.esc(String(d.data).slice(0,160))+'</span></div>';
+      '<span class="mk" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+UI.esc(JSON.stringify(d.data).slice(0,160))+'</span></div>';
     b.insertAdjacentHTML("afterbegin", row);
     while(b.children.length>100) b.removeChild(b.lastChild);
   };
@@ -3642,10 +3642,10 @@ async function renderShelf(){
       '<b>📚 '+esc(b.name)+'</b>'+
       '<span class="mk">'+(b.strategies||[]).length+' strategies · '+(b.notes||[]).length+' notes</span>'+
       '<span class="mk">equity '+money(b.equity||b.start_equity||0)+'</span>'+
-      '<span class="mk" title="stake per trade" style="cursor:pointer" onclick="event.stopPropagation();setBookStake('+JSON.stringify(b.id)+')">stake '+(b.stake_pct!=null?b.stake_pct:100)+'%</span>'+
+      '<span class="mk" title="stake per trade" style="cursor:pointer" onclick="event.stopPropagation();setBookStake('+JSON.stringify(b.id).replace(/"/g,"&quot;")+')">stake '+(b.stake_pct!=null?b.stake_pct:100)+'%</span>'+
       '<span class="mk" style="color:'+(b.running!==false?'#3fb950':'#f85149')+'">'+(b.running!==false?'running':'stopped')+'</span>'+
       '<span style="flex:1"></span>'+
-      '<button class="tbtn" onclick="event.stopPropagation();toggleBook('+JSON.stringify(b.id)+','+(b.running!==false?'false':'true')+')">'+(b.running!==false?'stop':'start')+'</button>'+
+      '<button class="tbtn" onclick="event.stopPropagation();toggleBook('+JSON.stringify(b.id).replace(/"/g,"&quot;")+','+(b.running!==false?'false':'true')+')">'+(b.running!==false?'stop':'start')+'</button>'+
       '<button class="tbtn" onclick="event.stopPropagation();newStrategy(\''+b.id+'\')">+ strategy</button>'+
       '<button class="tbtn" onclick="event.stopPropagation();renameBook(\''+b.id+'\')">rename</button>'+
       '<button class="tbtn" onclick="event.stopPropagation();deleteBook(\''+b.id+'\')">delete</button></div>'+
