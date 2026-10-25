@@ -6901,6 +6901,7 @@ def strategy_loop():
             now = int(time.time() * 1000)
             verdicts = _load_verdicts()
             changed = False
+            books_changed = False
             for book in books["books"]:
                 if book.get("running") is False:
                     continue
@@ -6926,13 +6927,16 @@ def strategy_loop():
                         _CONFIRM[k] = c
                         if c["count"] >= confirm:
                             entry = _symbol_price(sym)
+                            eq = book.get("equity") or book.get("start_equity") or 5000
+                            stake = eq * (book.get("stake_pct", 100) / 100.0)
                             verdicts["verdicts"].insert(0, {
                                 "strategy_id": sid, "strategy": st.get("name"), "book": book.get("name"),
                                 "symbol": sym, "dir": "BULL" if c["dir"] > 0 else "BEAR",
                                 "chain": [x.get("model") for x in chain],
                                 "final_model": (chain[-1].get("model") if chain else ""),
                                 "basis": final.get("basis", ""),
-                                "signals": c["count"], "ts_ms": now, "entry": entry})
+                                "signals": c["count"], "ts_ms": now, "entry": entry,
+                                "stake": round(stake, 2), "state": "open"})
                             _CONFIRM[k] = {"count": 0, "dir": 0, "last": now}
                             changed = True
             # outcome tracking: for verdicts older than 60s without an outcome,
@@ -6947,12 +6951,22 @@ def strategy_loop():
                     continue
                 move = (price - v["entry"]) / v["entry"] * 100
                 right = (v["dir"] == "BULL" and move > 0) or (v["dir"] == "BEAR" and move < 0)
+                signed_move = move if v["dir"] == "BULL" else -move
+                pnl = round((v.get("stake") or 0) * signed_move / 100.0, 2)
                 v["outcome"] = "right" if right else "wrong"
                 v["move_pct"] = round(move, 3)
+                v["pnl"] = pnl
+                v["state"] = "closed"
+                for b in books["books"]:
+                    if b.get("name") == v.get("book"):
+                        b["equity"] = round((b.get("equity") or b.get("start_equity") or 5000) + pnl, 2)
+                        books_changed = True
                 changed = True
             if changed:
                 verdicts["verdicts"] = verdicts["verdicts"][:200]
                 _save_verdicts(verdicts)
+            if books_changed:
+                _save_books(books)
         except Exception:
             pass
         time.sleep(10)
