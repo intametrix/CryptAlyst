@@ -271,7 +271,23 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/tools", s.handleTools)
 	mux.HandleFunc("/api/events", s.handleEvents)
 	mux.HandleFunc("/", s.handleStatic)
-	return logRequests(mux)
+	return cors(logRequests(mux))
+}
+
+// cors allows cross-origin reads from the chart lab and the Python dashboard
+// (they are served from a different port than this API). It is permissive on
+// purpose: this is a local, single-user scanner, not a multi-tenant service.
+func cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func logRequests(next http.Handler) http.Handler {
