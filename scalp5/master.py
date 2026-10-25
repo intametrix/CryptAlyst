@@ -2695,6 +2695,7 @@ function showTab(which){
   try{ if(which==="books") renderBooks(); }catch(e){ tabErr("books",e); }
   try{ if(which==="engines") renderEngines(); }catch(e){ tabErr("engines",e); }
   try{ if(which==="health") renderHealth(); }catch(e){ tabErr("health",e); }
+  try{ if(which==="settings") renderSettings(); }catch(e){ tabErr("settings",e); }
 }
 
 
