@@ -1474,6 +1474,8 @@ PAGE = r"""<!doctype html><html lang="en"><head><meta charset="utf-8">
   #moversview.on{display:block}
   #marketlive{display:none}
   #marketlive.on{display:block}
+  #settings{display:none}
+  #settings.on{display:block}
   .mlkpis{position:sticky;top:0;z-index:20;display:grid;
     grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;
     background:rgba(10,14,19,.96);backdrop-filter:blur(10px);
