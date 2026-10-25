@@ -2627,7 +2627,7 @@ async function renderBus(){
   var rows=qs.slice().sort(function(a,b){ return (b.publish_rate||0)-(a.publish_rate||0); }).map(function(q){
     var pin=q.publish_rate||0, pout=q.deliver_rate||0;
     var fam=q.name.indexOf("q.")===0?"topic":"legacy";
-    return [UI.esc(q.name), fam, (q.messages||0),
+    return ['<span style="cursor:pointer;color:#58a6ff;text-decoration:underline" onclick="openQueueStream('+JSON.stringify(q.name)+')">'+UI.esc(q.name)+'</span>', fam, (q.messages||0),
             pin?pin.toFixed(2):"—", pout?pout.toFixed(2):"—",
             q.consumers?UI.pill(String(q.consumers),"ok"):UI.pill("none","bad")];
   });
@@ -3561,6 +3561,30 @@ async function renderVerdicts(){
       '<span class="mk">'+v.signals+' signals</span>'+oc+
       '<span class="mk">'+new Date(v.ts_ms).toTimeString().slice(0,8)+'</span></div>';
   }).join("") || '<div class="mk">no verdicts yet</div>';
+}
+var QUEUE_ES=null;
+function openQueueStream(queueName){
+  var m=$("queuemodal"); if(m) m.classList.add("open");
+  var t=$("queuetitle"); if(t) t.textContent=queueName;
+  var b=$("queuemsgs"); if(b) b.innerHTML='<div class="hint">listening to '+UI.esc(queueName)+'…</div>';
+  if(QUEUE_ES){ try{QUEUE_ES.close();}catch(e){} }
+  QUEUE_ES=new EventSource("/api/bus/stream?queue="+encodeURIComponent(queueName));
+  QUEUE_ES.onmessage=function(ev){
+    var d={}; try{ d=JSON.parse(ev.data); }catch(e){}
+    if(d.error) return;
+    var b=$("queuemsgs"); if(!b) return;
+    var row='<div class="flowrow"><span class="mk">'+UI.esc(d.topic||'')+'</span>'+
+      '<span>'+UI.esc(d.key||'')+'</span>'+
+      '<span class="mk">'+UI.esc(d.producer||'')+'</span>'+
+      '<span class="mk">'+new Date(d.ts||0).toTimeString().slice(0,8)+'</span>'+
+      '<span class="mk" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+UI.esc(String(d.data).slice(0,160))+'</span></div>';
+    b.insertAdjacentHTML("afterbegin", row);
+    while(b.children.length>100) b.removeChild(b.lastChild);
+  };
+}
+function closeQueueStream(){
+  if(QUEUE_ES){ try{QUEUE_ES.close();}catch(e){} QUEUE_ES=null; }
+  var m=$("queuemodal"); if(m) m.classList.remove("open");
 }
 var SETTINGS_GROUPS=[
   {g:"Pump / Dump screen", fields:[
@@ -6707,7 +6731,15 @@ function bindTicks(){
   }
 }
 setInterval(bindTicks,800);
-</script></body></html>"""
+</script><div class="modal" id="queuemodal" onclick="if(event.target===this)closeQueueStream()">
+  <div class="sheet" style="max-width:760px">
+    <div class="head"><h2>queue messages</h2>
+      <span class="mk" id="queuetitle">—</span>
+      <span style="flex:1"></span><span class="close2" onclick="closeQueueStream()">×</span></div>
+    <div id="queuemsgs" style="padding:10px 14px;max-height:60vh;overflow:auto;font-size:11px"></div>
+  </div>
+</div>
+</body></html>"""
 
 try:
     with open(os.path.join(HERE, "ui", "lib.js")) as _fh:
@@ -7895,6 +7927,43 @@ class H(BaseHTTPRequestHandler):
                 return self._send(200, json.dumps(out), "application/json")
             except Exception as exc:
                 return self._send(502, json.dumps({"error": str(exc)[:140]}), "application/json")
+        if p == "/api/bus/stream":
+            import urllib.parse as _up, queue as _q
+            qq = _up.parse_qs(_up.urlparse(self.path).query)
+            queue_name = (qq.get("queue", [""])[0] or "").strip()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            mq = _q.Queue(maxsize=500)
+            try:
+                from lib import bus
+                def _h(env):
+                    try:
+                        mq.put_nowait({"topic": getattr(env, "topic", ""),
+                                       "key": getattr(env, "key", ""),
+                                       "producer": getattr(env, "producer", ""),
+                                       "ts": getattr(env, "ts", 0),
+                                       "data": getattr(env, "data", None)})
+                    except Exception:
+                        pass
+                ok = bus.sub_queue(queue_name, _h) if queue_name else False
+                if not ok:
+                    self.wfile.write(("data: " + json.dumps({"error": "no such queue"}) + "\n\n").encode())
+                    self.wfile.flush()
+                    return
+                while True:
+                    try:
+                        item = mq.get(timeout=10)
+                    except Exception:
+                        self.wfile.write(b": ping\n\n"); self.wfile.flush(); continue
+                    self.wfile.write(("data: " + json.dumps(item) + "\n\n").encode())
+                    self.wfile.flush()
+            except Exception:
+                pass
+            return
         if p == "/api/alert_detail":
             import urllib.parse as _up
             q = _up.parse_qs(_up.urlparse(self.path).query)
