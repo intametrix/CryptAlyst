@@ -19,6 +19,7 @@ type Config struct {
 	MaxSymbols        int
 	ExcludeSymbols    []string
 	ExcludePatterns   []string
+	ExtraSymbols      []string
 }
 
 // DefaultConfig returns sensible spot defaults.
@@ -179,6 +180,26 @@ func (u *Universe) Refresh(ctx context.Context, client *binance.Client) (int, er
 	tracked := make([]string, 0, len(candidates))
 	for _, c := range candidates {
 		tracked = append(tracked, c.Symbol)
+	}
+	// Force-track extra symbols that exist, regardless of their 24h volume.
+	for _, s := range u.cfg.ExtraSymbols {
+		s = strings.ToUpper(strings.TrimSpace(s))
+		if s == "" {
+			continue
+		}
+		if _, ok := updated[s]; !ok {
+			continue
+		}
+		dup := false
+		for _, x := range tracked {
+			if x == s {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			tracked = append(tracked, s)
+		}
 	}
 
 	u.mu.Lock()

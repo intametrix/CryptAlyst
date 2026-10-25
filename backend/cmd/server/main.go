@@ -53,6 +53,7 @@ type options struct {
 	addr            string
 	minLiquidity    float64
 	maxSymbols      int
+	extraSymbols    string
 	windowSec       float64
 	minBurstMult    float64
 	minBurstZ       float64
@@ -136,6 +137,7 @@ func main() {
 		QuoteAssets:       []string{"USDT"},
 		MinQuoteVolume24h: opt.minLiquidity,
 		MaxSymbols:        opt.maxSymbols,
+		ExtraSymbols:      strings.Split(opt.extraSymbols, ","),
 		ExcludePatterns:   []string{"UPUSDT", "DOWNUSDT", "BULLUSDT", "BEARUSDT"},
 		// Stablecoins and fiat pairs trade enormous volume with almost no
 		// price movement, so their flow "bursts" are peg noise. Left in, they
@@ -492,6 +494,7 @@ func parseFlags() options {
 	// flow bursts. This is the precision-over-recall lever.
 	flag.Float64Var(&o.minLiquidity, "min-liq", 5_000_000, "minimum 24h quote volume to track a symbol")
 	flag.IntVar(&o.maxSymbols, "max-symbols", 400, "max symbols tracked (by 24h volume)")
+	flag.StringVar(&o.extraSymbols, "extra", "", "extra symbols to always track (comma-separated)")
 	flag.Float64Var(&o.windowSec, "window", 10, "seconds of flow to measure")
 	flag.Float64Var(&o.minBurstMult, "min-burst-mult", 8, "flow multiple vs the symbol's own baseline")
 	flag.Float64Var(&o.minBurstZ, "min-burst-z", 4, "flow z-score vs the symbol's own baseline")
