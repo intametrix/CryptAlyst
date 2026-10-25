@@ -2105,8 +2105,14 @@ function applySetContext(){
   PENDING_SET=null;
   var ts=ps.ts, name=ps.name;
   var pts=ts.points||[];
-  // full view: whole chart + full price range
-  S.s=0; S.c=null; S.y=null; MEAS=null;
+  // full time view + price range hugging the training set's markers (not the whole history)
+  S.s=0; S.c=null; MEAS=null;
+  var prices=pts.map(function(pt){ return (pt.price!=null?pt.price:pt.endPrice); }).filter(function(v){ return v!=null && isFinite(v); });
+  if(prices.length){
+    var pl=Math.min.apply(null,prices), ph=Math.max.apply(null,prices);
+    var span=ph-pl; if(span<=0) span=(Math.abs(ph)*0.02)||100;
+    S.y={lo:pl-span*0.2, hi:ph+span*0.2};
+  }else{ S.y=null; }
   draw();
   RECALLED=pts;
   drawRecalledVectors();
