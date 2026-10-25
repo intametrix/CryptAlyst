@@ -35,9 +35,12 @@
  button.on{color:#dcecff;border-color:#3d6f96;background:#182a3b;box-shadow:0 0 0 1px #58a6ff22}
  button.armed{background:#e0a72a;border-color:#e0a72a;color:#111;font-weight:600}
  .layout{display:grid;grid-template-columns:230px minmax(0,1fr) 272px;gap:12px;padding:12px 16px;
-         max-width:1800px;margin:0 auto;align-items:start;transition:grid-template-columns .25s ease}
+         max-width:1800px;margin:0 auto;align-items:start}
  .layout.collapsed{grid-template-columns:230px minmax(0,1fr) 0px}
  .layout.collapsed #propcol{overflow:hidden;opacity:0;pointer-events:none}
+ .layout.tickcollapsed{grid-template-columns:0px minmax(0,1fr) 272px}
+ .layout.collapsed.tickcollapsed{grid-template-columns:0px minmax(0,1fr) 0px}
+ .layout.tickcollapsed #tickerpanel{overflow:hidden;opacity:0;pointer-events:none}
  #tickerpanel{background:#101821;border:1px solid #22303d;border-radius:12px;padding:10px;
    display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 80px)}
  #tickerpanel input{width:100%}
@@ -114,9 +117,18 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
         style="display:none;position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:60;
                background:#101923;border:1px solid #24313e;border-right:0;border-radius:9px 0 0 9px;
                color:#e6edf6;padding:14px 7px;cursor:pointer;font-size:15px">▶</button>
+<button id="tickarrow" onclick="showTickers()" title="show tickers"
+        style="display:none;position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:60;
+               background:#101923;border:1px solid #24313e;border-left:0;border-radius:0 9px 9px 0;
+               color:#e6edf6;padding:14px 7px;cursor:pointer;font-size:15px">▶</button>
 
 <div class="layout">
   <div id="tickerpanel">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#7c8b9d">Tickers</span>
+      <span style="flex:1"></span>
+      <button class="tbtn" id="tickhidebtn" onclick="hideTickers()" title="collapse tickers panel" style="padding:2px 8px">◀</button>
+    </div>
     <input id="tickersearch" class="symin" placeholder="search tickers…" autocomplete="off" spellcheck="false"
            oninput="renderTickerList()">
     <div id="tickerlist"><div class="hint" style="padding:8px">loading tickers…</div></div>
@@ -267,8 +279,9 @@ var S={tf:"5m",s:0,c:null,y:null,measure:false,log:false,scaleMode:"auto",tool:"
 var P={grid:true, priceAxis:true, priceAxisRight:false, dualAxis:false, timeAxis:true,
        lastLine:true, crosshair:true, showPxVol:true, axisDrag:true, volumePane:true, scrollPan:true,
        tooltip:true, highlight:true};
+var TICKERS_HIDDEN=false;
 function persist(){
-  try{ localStorage.setItem("chartPrefs", JSON.stringify({S:S, OV:OV, P:P, hidden:PROPS_HIDDEN})); }catch(e){}
+  try{ localStorage.setItem("chartPrefs", JSON.stringify({S:S, OV:OV, P:P, hidden:PROPS_HIDDEN, tickers:TICKERS_HIDDEN})); }catch(e){}
 }
 function restorePrefs(){
   try{
@@ -277,6 +290,7 @@ function restorePrefs(){
     if(v.OV){ Object.assign(OV, v.OV); }
     if(v.P){ Object.assign(P, v.P); }
     PROPS_HIDDEN=!!v.hidden;
+    TICKERS_HIDDEN=!!v.tickers;
   }catch(e){}
 }
 restorePrefs();
@@ -414,6 +428,32 @@ function applyPropsHidden(){
   if(lay){ if(PROPS_HIDDEN) lay.classList.add("collapsed"); else lay.classList.remove("collapsed"); }
   if(b) b.textContent = PROPS_HIDDEN ? "▶ show" : "◀ hide";
   syncPropsArrow();
+}
+function syncTickArrow(){
+  var a=$("tickarrow");
+  if(a) a.style.display = TICKERS_HIDDEN ? "block" : "none";
+}
+function hideTickers(){
+  var lay=document.querySelector(".layout");
+  if(lay) lay.classList.toggle("tickcollapsed");
+  TICKERS_HIDDEN = !!(lay && lay.classList.contains("tickcollapsed"));
+  persist();
+  var b=$("tickhidebtn"); if(b) b.textContent = TICKERS_HIDDEN ? "▶" : "◀";
+  syncTickArrow();
+}
+function showTickers(){
+  var lay=document.querySelector(".layout");
+  if(lay) lay.classList.remove("tickcollapsed");
+  TICKERS_HIDDEN=false;
+  persist();
+  var b=$("tickhidebtn"); if(b) b.textContent="◀";
+  syncTickArrow();
+}
+function applyTickersHidden(){
+  var lay=document.querySelector(".layout");
+  if(lay){ if(TICKERS_HIDDEN) lay.classList.add("tickcollapsed"); else lay.classList.remove("tickcollapsed"); }
+  var b=$("tickhidebtn"); if(b) b.textContent = TICKERS_HIDDEN ? "▶" : "◀";
+  syncTickArrow();
 }
 function toggleChips(id){
   var chips=$(id); if(!chips) return;
@@ -2038,6 +2078,7 @@ async function trainOK(){
   if(panel){ panel.classList.remove("open"); }
   if(p) p.style.display="";
   applyPropsHidden();
+  applyTickersHidden();
   renderTickerList();
 })();
 function startTick(){
