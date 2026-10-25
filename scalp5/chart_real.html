@@ -86,6 +86,9 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
   font-size:13px;font-weight:700;color:#58a6ff;line-height:1;border:1px solid #2a3a4a;border-radius:5px;
   background:#141d27;user-select:none;transition:background .15s,border-color .15s}
 .labrow:hover .carrow{background:#1d2b3a;border-color:#3d6f96}
+.trainpt{cursor:pointer;transition:filter .12s}
+.trainpt:hover circle{stroke:#fff;stroke-width:2.5;filter:brightness(1.6)}
+.trainpt:hover text{font-weight:900;filter:brightness(1.6)}
 </style></head><body>
 
 <header>
@@ -142,17 +145,22 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
           <option>flow-imbalance</option><option>volume-climax</option><option>volatility-expansion</option>
           <option>structure-break</option><option>mean-reversion</option><option>momentum-divergence</option>
         </select>
+        <button class="tbtn" onclick="trainOK()" style="background:#1d3b2a;color:#9ef0b0;font-weight:700;padding:5px 14px;font-size:12px">✓ Finish and Train</button>
         <button class="tbtn" id="trainlabelbtn" onclick="toggleTrainLabel()">label: P</button>
-        <button class="tbtn" onclick="openTrainPicker()">change ticker</button>
-        <button class="tbtn" onclick="trainOK()" style="background:#1d3b2a;color:#9ef0b0">Commit and Train</button>
+        <button class="tbtn" onclick="toggleTrainList()" title="show the list of markers you have defined">List</button>
         <button class="tbtn" onclick="testModel()" title="run the trained model and show its detections">Run test</button>
         <button class="tbtn" onclick="showTrainingData()" title="view + manage this model's training vectors">Training</button>
-        <button class="tbtn" onclick="cancelTrain()" style="color:#ff9c94">✕ close</button>
+        <button class="tbtn" onclick="openTrainPicker()">change ticker</button>
+        <button class="tbtn" onclick="cancelTrain()" style="color:#ff9c94">✕</button>
         <span style="flex-basis:100%;display:flex;gap:8px;font-size:10px;color:#59677a;flex-wrap:wrap">
-          <span id="traincount">0 points</span>
+          <span id="traincount" style="color:#9ef0b0;font-weight:700">0 markers</span>
           <span id="trainrange">—</span>
           <span id="trainquality">—</span>
-          <span>click/P key = start · click/P again = end · Esc cancel</span>
+          <span style="display:flex;align-items:center;gap:5px" title="higher = fewer but more confident detections">
+            <span style="font-size:10px;color:#8494a8">detection sensitivity</span>
+            <input type="range" id="detsens" min="50" max="95" step="1" value="70" oninput="setDetectSens(this.value)" style="width:80px;accent-color:#58a6ff">
+            <span style="font-size:10px;color:#8494a8" id="detsensval">70%</span>
+          </span>
         </span>
       </div>
       <div id="trainpicker" style="position:fixed;inset:0;background:#04070be6;backdrop-filter:blur(4px);display:none;z-index:80;padding:18px;overflow:auto"
@@ -801,6 +809,7 @@ function draw(){
   GEO={vs:vs,vc:vc,LO:LO,HI:HI,x:x,y:y,lo:lo,hi:hi,n:n};
   if(TRAIN_MODE) drawTrainPoints();
   if(TEST_MARKS.length) drawTestMarks();
+  if(document.getElementById("recalledmarks")) drawRecalledVectors();
   if(document.getElementById("vectormarks")) drawTrainingVectors(document.getElementById("vectormarks")._pts||[]);
   $("px").textContent=fmt(last.c);
   var chg=100*(last.c/BARS[0].o-1);
@@ -1345,7 +1354,7 @@ svg.addEventListener("pointerdown",function(e){
 
     // trackpad pinch arrives as ctrl+wheel -> zoom BOTH axes together
     if(e.ctrlKey||e.metaKey){
-      var f=Math.exp(e.deltaY*0.012);
+      var f=Math.exp(e.deltaY*0.006);
       var nc=Math.max(15,Math.min(BARS.length,(S.c||BARS.length)*f));
       var frac=Math.max(0,Math.min(1,(vx-PL)/(W-PL-PR)));
       var a=(S.s||0)+frac*((S.c||BARS.length)-1);
@@ -1578,7 +1587,7 @@ function setSym(v){
     if(REQ!==my) return;
     loadSignals(function(){
       if(REQ!==my) return;
-      loadFills(function(){ if(REQ===my){ draw(); props(); } });
+      loadFills(function(){ if(REQ===my){ draw(); props(); loadRecalledVectors(); } });
     });
   }, my);
 }
@@ -1670,9 +1679,15 @@ document.addEventListener("click", function(ev){
 });
 wire(); chips(); fit();
 loadBars(S.tf, function(){
-  loadSignals(function(){ loadFills(function(){ draw(); props(); }); });
+  loadSignals(function(){ loadFills(function(){ draw(); props(); loadRecalledVectors(); }); });
 });
 var TRAIN_MODE=false, TRAIN_POINTS=[], TRAIN_LABEL="P", trainSort="vol";
+var DETECT_THRESH=0.7;
+function setDetectSens(v){
+  DETECT_THRESH=parseInt(v,10)/100;
+  var lbl=$("detsensval"); if(lbl) lbl.textContent=v+"%";
+  if(document.getElementById("testmarks")) runModelDetections($("trainmodel").value);
+}
 var TRAIN_PENDING=null, TRAIN_CURSOR=null;
 function toggleFullscreen(){
   if(document.fullscreenElement){
@@ -1691,7 +1706,7 @@ function startSplit(e){
   document.addEventListener("mousemove",move); document.addEventListener("mouseup",up); document.body.style.cursor="ns-resize";
 }
 var TRAIN_DESC={
-  "manual":"Hover the start of a <b style=\"color:#3fb950\">PUMP bull run</b> and press <b>P</b>; hover its end and press <b>P</b> again — a line connects them. Do the same for <b style=\"color:#f85149\">dumps</b> with <b>D</b>. <b>Esc</b> cancels the current line. Drag to move, right-click to delete. When happy, click <b>Commit and Train</b>.",
+  "manual":"Hover the start of a <b style=\"color:#3fb950\">PUMP bull run</b> and press <b>P</b>; hover its end and press <b>P</b> again — a line connects them. Do the same for <b style=\"color:#f85149\">dumps</b> with <b>D</b>. <b>Esc</b> cancels the current line. Drag to move, right-click to delete. When happy, click <b>✓ Finish and Train</b>.",
   "flow-imbalance":"Mark where <b style=\"color:#3fb950\">aggressive buying begins</b> (P) and where it <b style=\"color:#f85149\">reverses to selling</b> (D).",
   "volume-climax":"Mark the <b style=\"color:#3fb950\">climax-volume spikes</b> (P) and the <b style=\"color:#f85149\">fade after</b> (D).",
   "volatility-expansion":"Mark the <b style=\"color:#3fb950\">start of a volatility expansion</b> (P) and the <b style=\"color:#f85149\">contraction</b> (D).",
@@ -1773,15 +1788,34 @@ function cancelTrain(){
   var tb=$("trainbar"); if(tb) tb.style.display="none";
   clearTrainMarks();
 }
-function updateTrain(){ $("traincount").textContent=TRAIN_POINTS.length+" points"; drawTrainPoints(); }
+function updateTrain(){ $("traincount").textContent=TRAIN_POINTS.length+(TRAIN_POINTS.length===1?" marker":" markers"); drawTrainPoints(); var l=$("trainlist"); if(l && l.style.display!=="none") renderTrainList(); }
 var TRAIN_DRAGGING=false;
 function deleteTrainPoint(idx){ TRAIN_POINTS.splice(idx,1); updateTrain(); }
+function fmtTime(ts){ return ts?new Date(ts).toTimeString().slice(0,8):"…"; }
+function renderTrainList(){
+  var b=$("trainlistbody"); if(!b) return;
+  b.innerHTML=TRAIN_POINTS.map(function(pt, idx){
+    var col=pt.label==="P"?"#3fb950":"#f85149";
+    return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #1b2632">'+
+      '<b style="color:'+col+'">'+pt.label+'</b>'+
+      '<span style="font-family:var(--mono)">'+fmtTime(pt.ts)+' → '+fmtTime(pt.endTs)+'</span>'+
+      '<span style="flex:1"></span>'+
+      '<button class="tbtn" style="padding:0 6px;color:#ff9c94" onclick="deleteTrainPoint('+idx+');renderTrainList()">×</button>'+
+      '</div>';
+  }).join("") || '<div style="color:#59677a">no markers yet</div>';
+}
+function toggleTrainList(){
+  var l=$("trainlist");
+  if(!l) return;
+  if(l.style.display==="none"){ renderTrainList(); l.style.display="block"; }
+  else l.style.display="none";
+}
 var TEST_MARKS=[];
 async function runModelDetections(model){
   var r=await fetch("/api/model/"+encodeURIComponent(model));
-  if(!r.ok) return {error:"no trained model — train it first (Commit and Train)"};
+  if(!r.ok) return {error:"no trained model for \""+model+"\" yet — mark at least 2 P and 2 D runs, then click \u2713 Finish and Train"};
   var d=await r.json();
-  if(!d.fit) return {error:d.reason||"model not trained"};
+  if(!d.fit) return {error:(d.reason||"model not trained")+" — need at least 2 P and 2 D runs"};
   TEST_MARKS=[];
   for(var i=1;i<BARS.length;i++){
     var b=BARS[i], pv=BARS[i-1];
@@ -1789,8 +1823,8 @@ async function runModelDetections(model){
     var ret=(b.c-pv.c)/pv.c;
     var z=(ret-d.mean)/d.std;
     var prob=1/(1+Math.exp(-(d.weight*z+d.intercept)));
-    if(prob>0.7) TEST_MARKS.push({ts:b.t, price:b.c, label:"P", prob:prob});
-    else if(prob<0.3) TEST_MARKS.push({ts:b.t, price:b.c, label:"D", prob:prob});
+    if(prob>DETECT_THRESH) TEST_MARKS.push({ts:b.t, price:b.c, label:"P", prob:prob});
+    else if(prob<(1-DETECT_THRESH)) TEST_MARKS.push({ts:b.t, price:b.c, label:"D", prob:prob});
   }
   drawTestMarks();
   var ps=TEST_MARKS.filter(function(x){return x.label==="P";}).length;
@@ -1819,7 +1853,7 @@ async function showTrainingData(){
       '<button class="tbtn" style="padding:3px 10px" onclick="viewTrainingCollection(\''+esc(c.symbol)+'\')">view</button>'+
       '<button class="tbtn" style="padding:3px 10px;color:#ff9c94" onclick="deleteTrainingCollection(\''+esc(c.symbol)+'\')">delete</button>'+
       '</div>';
-  }).join("") || '<div style="color:#59677a">no training vectors yet — mark points and Commit and Train</div>';
+  }).join("") || '<div style="color:#59677a">no training vectors yet — mark runs and click ✓ Finish and Train</div>';
   var m=$("traindata"); if(m) m.style.display="flex";
 }
 async function viewTrainingCollection(sym){
@@ -1848,6 +1882,31 @@ function drawTrainingVectors(points){
     return '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3" fill="'+col+'" opacity="0.55"/>';
   }).join("");
 }
+var RECALLED=[];
+async function loadRecalledVectors(){
+  var model=$("trainmodel")?$("trainmodel").value:"manual";
+  var d;
+  try{ d=await (await fetch("/api/trainpoints/"+encodeURIComponent(model))).json(); }catch(e){ return; }
+  var pts=[];
+  (d.collections||[]).forEach(function(c){ if(c.symbol===SYM) pts=pts.concat(c.points); });
+  RECALLED=pts;
+  drawRecalledVectors();
+}
+function drawRecalledVectors(){
+  var g=document.getElementById("recalledmarks");
+  if(!g){ g=document.createElementNS("http://www.w3.org/2000/svg","g"); g.id="recalledmarks"; var svg=$("svg"); if(svg) svg.appendChild(g); }
+  g._pts=RECALLED;
+  g.innerHTML=RECALLED.map(function(pt){
+    var col=pt.label==="P"?"#3fb950":"#f85149";
+    var i=0; for(var k=0;k<BARS.length;k++){ if(BARS[k].t===pt.ts){ i=k; break; } }
+    if(i<GEO.vs||i>=GEO.vs+GEO.vc) return '';
+    var x=GEO.x(i), y=GEO.y(pt.price);
+    return '<g style="pointer-events:none">'+
+      '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="4" fill="'+col+'" opacity="0.45"/>'+
+      '<text x="'+x.toFixed(1)+'" y="'+(y-6).toFixed(1)+'" fill="'+col+'" font-size="8" font-weight="700" text-anchor="middle">'+pt.label+'</text>'+
+      '</g>';
+  }).join("");
+}
 function drawTestMarks(){
   var g=document.getElementById("testmarks");
   if(!g){ g=document.createElementNS("http://www.w3.org/2000/svg","g"); g.id="testmarks"; var svg=$("svg"); if(svg) svg.appendChild(g); }
@@ -1856,7 +1915,10 @@ function drawTestMarks(){
     var i=0; for(var k=0;k<BARS.length;k++){ if(BARS[k].t===pt.ts){ i=k; break; } }
     if(i<GEO.vs||i>=GEO.vs+GEO.vc) return '';
     var x=GEO.x(i), y=GEO.y(pt.price);
-    return '<g style="pointer-events:none"><circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="3.5" fill="none" stroke="'+col+'" stroke-width="1.5" opacity="0.75"/></g>';
+    return '<g style="pointer-events:none">'+
+      '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="5.5" fill="'+col+'" fill-opacity="0.22" stroke="'+col+'" stroke-width="1.6"/>'+
+      '<text x="'+x.toFixed(1)+'" y="'+(y-7).toFixed(1)+'" fill="'+col+'" font-size="9.5" font-weight="800" text-anchor="middle">'+pt.label+'</text>'+
+      '</g>';
   }).join("");
 }
 function startTrainDrag(ev, idx){
@@ -1864,7 +1926,9 @@ function startTrainDrag(ev, idx){
   TRAIN_DRAGGING=true;
   var pt0=TRAIN_POINTS[idx]; if(!pt0){ TRAIN_DRAGGING=false; return; }
   var g=ev.currentTarget;
+  var moved=false;
   function move(e){
+    moved=true;
     var p=pt(e);
     if(p.x<PL||p.x>W-PR||p.y<PT||p.y>H-PB) return;
     pt0.price=GEO.LO+(GEO.HI-GEO.LO)*(1-(p.y-PT)/(H-PT-PB));
@@ -1874,7 +1938,8 @@ function startTrainDrag(ev, idx){
     var c=g.querySelector("circle"); if(c){ c.setAttribute("cx",x.toFixed(1)); c.setAttribute("cy",y.toFixed(1)); }
     var t=g.querySelector("text"); if(t){ t.setAttribute("x",x.toFixed(1)); t.setAttribute("y",(y-8).toFixed(1)); }
   }
-  function up(){ document.removeEventListener("mousemove",move); document.removeEventListener("mouseup",up); TRAIN_DRAGGING=false; updateTrain(); }
+  function up(){ document.removeEventListener("mousemove",move); document.removeEventListener("mouseup",up); TRAIN_DRAGGING=false;
+    if(!moved){ deleteTrainPoint(idx); } else { updateTrain(); } }
   document.addEventListener("mousemove",move); document.addEventListener("mouseup",up);
 }
 function trainClick(ev){
@@ -2029,5 +2094,9 @@ if(window.ResizeObserver){
       <button class="tbtn" onclick="closeTrainingData()" style="padding:7px 16px">Close</button>
     </div>
   </div>
+</div>
+<div id="trainlist" style="display:none;position:fixed;right:12px;top:96px;z-index:85;background:#0b1119f0;border:1px solid #24313e;border-radius:10px;padding:10px;max-width:280px;max-height:320px;overflow:auto">
+  <div style="font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#58a6ff;margin-bottom:6px">markers</div>
+  <div id="trainlistbody" style="font-size:11px;color:#c9d6e3"></div>
 </div>
 </body></html>
