@@ -6816,7 +6816,8 @@ def _training_model_signals(models, sym, tf="1m"):
             ret = (c1 - c0) / (c0 or 1)
             z = (ret - m["mean"]) / (m["std"] or 1)
             prob = 1.0 / (1.0 + math.exp(-(m["weight"] * z + m["intercept"])))
-            dirv = 1 if prob > 0.7 else (-1 if prob < 0.3 else 0)
+            conf = m.get("confidence", 0.7)
+            dirv = 1 if prob > conf else (-1 if prob < (1 - conf) else 0)
             if dirv:
                 out.append({"symbol": sym, "model": model, "dir": dirv, "ts": int(time.time() * 1000)})
         except Exception:
@@ -6948,7 +6949,7 @@ def _fit_model(model, new_points, label_path):
             rows.append({"model": model, "ret": p.get("ret"), "price": p.get("price"), "label": p.get("label")})
     return _fit_rows(model, rows)
 
-def _fit_rows(model, rows):
+def _fit_rows(model, rows, confidence=0.7):
     ps = [r for r in rows if r.get("label") == "P"]
     ds = [r for r in rows if r.get("label") == "D"]
     if len(ps) < 2 or len(ds) < 2:
@@ -6977,7 +6978,7 @@ def _fit_rows(model, rows):
         b -= lr * gb / len(zs)
     out = {"fit": True, "n": len(rows), "p": len(ps), "d": len(ds),
            "feature": "ret", "weight": round(w, 4), "intercept": round(b, 4),
-           "mean": round(mu, 6), "std": round(sd, 6)}
+           "mean": round(mu, 6), "std": round(sd, 6), "confidence": round(confidence, 4)}
     model_path = os.path.join(HERE, "state", "models", model + ".json")
     os.makedirs(os.path.dirname(model_path), exist_ok=True)
     with open(model_path, "w") as fh:
@@ -7139,6 +7140,8 @@ class H(BaseHTTPRequestHandler):
                     "model": body.get("model"),
                     "symbol": body.get("symbol"),
                     "points": body.get("points") or [],
+                    "tf": body.get("tf") or "1m",
+                    "confidence": body.get("confidence") if body.get("confidence") is not None else 70,
                     "saved_ms": int(time.time() * 1000),
                     "date": time.strftime("%Y-%m-%d %H:%M:%S"),
                 }
@@ -7158,7 +7161,8 @@ class H(BaseHTTPRequestHandler):
                 base = (ts.get("model") or "manual")
                 specialized = "%s__%s" % (base, name)
                 rows = [{"ret": pt.get("ret"), "price": pt.get("price"), "label": pt.get("label")} for pt in ts.get("points") or []]
-                fit = _fit_rows(specialized, rows)
+                conf = (ts.get("confidence") or 70) / 100.0
+                fit = _fit_rows(specialized, rows, conf)
                 return self._send(200, json.dumps({"model": specialized, "fit": fit}), "application/json")
             except Exception as exc:
                 return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")

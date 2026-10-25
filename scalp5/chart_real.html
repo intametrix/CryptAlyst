@@ -168,9 +168,9 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
           <span id="traincount" style="color:#9ef0b0;font-weight:700">0 markers</span>
           <span id="trainrange">—</span>
           <span id="trainquality">—</span>
-          <span style="display:flex;align-items:center;gap:5px" title="higher = fewer but more confident detections">
-            <span style="font-size:10px;color:#8494a8">detection sensitivity</span>
-            <input type="range" id="detsens" min="50" max="95" step="1" value="70" oninput="setDetectSens(this.value)" style="width:80px;accent-color:#58a6ff">
+          <span style="display:flex;align-items:center;gap:5px" title="minimum confidence to fire a detection">
+            <span style="font-size:10px;color:#8494a8">Confidence</span>
+            <input type="range" id="detsens" min="1" max="99" step="1" value="70" oninput="setDetectSens(this.value)" style="width:80px;accent-color:#58a6ff">
             <span style="font-size:10px;color:#8494a8" id="detsensval">70%</span>
           </span>
         </span>
@@ -2052,12 +2052,13 @@ function drawTrainPoints(){
   });
 }
 function clearTrainMarks(){ var g=document.getElementById("trainmarks"); if(g) g.innerHTML=""; }
+var TRAIN_SETS={};
 async function saveTrainingSet(){
   var name=prompt("training set name (e.g. BTC-oct25):");
   if(!name) return;
   var model=$("trainmodel").value;
   var r=await fetch("/api/trainingsets",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({name:name, model:model, symbol:SYM, points:TRAIN_POINTS})});
+    body:JSON.stringify({name:name, model:model, symbol:SYM, points:TRAIN_POINTS, tf:S.tf, confidence:Math.round(DETECT_THRESH*100)})});
   var d=await r.json();
   alert("saved training set '"+d.saved+"' with "+d.points+" markers");
   loadTrainingSets();
@@ -2066,7 +2067,8 @@ async function loadTrainingSets(){
   var sel=$("trainingsets"); if(!sel) return;
   var d={};
   try{ d=await (await fetch("/api/trainingsets")).json(); }catch(e){}
-  var names=Object.keys(d.sets||{});
+  TRAIN_SETS=d.sets||{};
+  var names=Object.keys(TRAIN_SETS);
   sel.innerHTML='<option value="">— training sets —</option>'+names.map(function(n){ return '<option value="'+esc(n)+'">'+esc(n)+'</option>'; }).join("");
 }
 async function applyTrainingSet(){
@@ -2076,12 +2078,15 @@ async function applyTrainingSet(){
     body:JSON.stringify({name:name})});
   var d=await r.json();
   if(d.fit && d.fit.fit){
+    var ts=TRAIN_SETS[name]||{};
+    if(ts.confidence!=null){ DETECT_THRESH=ts.confidence/100; var sl=$("detsens"); if(sl) sl.value=ts.confidence; var dv=$("detsensval"); if(dv) dv.textContent=ts.confidence+"%"; }
+    if(ts.tf && ts.tf!==S.tf){ setTf(ts.tf); }
     var sel=$("trainmodel");
     if(![...sel.options].some(function(o){ return o.value===d.model; })){
       var opt=document.createElement("option"); opt.value=d.model; opt.textContent=d.model; sel.appendChild(opt);
     }
     sel.value=d.model;
-    alert("specialized model '"+d.model+"' fitted ("+d.fit.n+" points, P="+d.fit.p+", D="+d.fit.d+")");
+    alert("specialized model '"+d.model+"' fitted ("+d.fit.n+" points, P="+d.fit.p+", D="+d.fit.d+", confidence="+(d.fit.confidence*100)+"%)");
     loadTrainingSets();
   }else{
     alert("apply failed: "+((d.fit&&d.fit.reason)||d.error||"unknown"));
