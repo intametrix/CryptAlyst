@@ -3566,25 +3566,48 @@ async function renderVerdicts(){
       '<span class="mk">'+new Date(v.ts_ms).toTimeString().slice(0,8)+'</span></div>';
   }).join("") || '<div class="mk">no verdicts yet</div>';
 }
-var QUEUE_ES=null;
+var QUEUE_ES=null, QUEUE_MSGS=[], QUEUE_SORT={k:"time", dir:-1};
+function sortQueueMsgs(k){
+  if(QUEUE_SORT.k===k){ QUEUE_SORT.dir=-QUEUE_SORT.dir; }
+  else { QUEUE_SORT.k=k; QUEUE_SORT.dir=(k==="time")?-1:1; }
+  renderQueueMsgs();
+}
+function renderQueueMsgs(){
+  var b=$("queuemsgbody"); if(!b) return;
+  ["time","topic","key","producer"].forEach(function(k){
+    var el=$("sq-"+k); if(el) el.textContent=(QUEUE_SORT.k===k)?(QUEUE_SORT.dir>0?" ▲":" ▼"):"";
+  });
+  var dir=QUEUE_SORT.dir;
+  var rows=QUEUE_MSGS.slice().sort(function(a,b){
+    var x,y;
+    if(QUEUE_SORT.k==="time"){ x=a.ts||0; y=b.ts||0; return dir*(x-y); }
+    if(QUEUE_SORT.k==="topic"){ x=a.topic||""; y=b.topic||""; }
+    else if(QUEUE_SORT.k==="key"){ x=a.key||""; y=b.key||""; }
+    else { x=a.producer||""; y=b.producer||""; }
+    return dir*String(x).localeCompare(String(y));
+  });
+  b.innerHTML=rows.map(function(d){
+    var payload=JSON.stringify(d.data);
+    return '<tr><td class="mk" style="white-space:nowrap">'+new Date(d.ts||0).toTimeString().slice(0,8)+'</td>'+
+      '<td>'+UI.esc(d.topic||'')+'</td>'+
+      '<td>'+UI.esc(d.key||'')+'</td>'+
+      '<td class="mk">'+UI.esc(d.producer||'')+'</td>'+
+      '<td class="mk" style="max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+UI.esc(payload)+'">'+UI.esc(payload.slice(0,160))+'</td></tr>';
+  }).join("");
+}
 function openQueueStream(queueName){
   var m=$("queuemodal"); if(m) m.classList.add("open");
   var t=$("queuetitle"); if(t) t.textContent=queueName;
-  var b=$("queuemsgbody"); if(b) b.innerHTML='';
+  QUEUE_MSGS=[];
+  renderQueueMsgs();
   if(QUEUE_ES){ try{QUEUE_ES.close();}catch(e){} }
   QUEUE_ES=new EventSource("/api/bus/stream?queue="+encodeURIComponent(queueName));
   QUEUE_ES.onmessage=function(ev){
     var d={}; try{ d=JSON.parse(ev.data); }catch(e){}
     if(d.error) return;
-    var b=$("queuemsgbody"); if(!b) return;
-    var payload=JSON.stringify(d.data);
-    var row='<tr><td class="mk" style="white-space:nowrap">'+new Date(d.ts||0).toTimeString().slice(0,8)+'</td>'+
-      '<td>'+UI.esc(d.topic||'')+'</td>'+
-      '<td>'+UI.esc(d.key||'')+'</td>'+
-      '<td class="mk">'+UI.esc(d.producer||'')+'</td>'+
-      '<td class="mk" style="max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+UI.esc(payload)+'">'+UI.esc(payload.slice(0,160))+'</td></tr>';
-    b.insertAdjacentHTML("afterbegin", row);
-    while(b.children.length>100) b.removeChild(b.lastChild);
+    QUEUE_MSGS.unshift(d);
+    if(QUEUE_MSGS.length>200) QUEUE_MSGS.pop();
+    renderQueueMsgs();
   };
 }
 function closeQueueStream(){
@@ -6743,9 +6766,13 @@ setInterval(bindTicks,800);
       <span style="flex:1"></span><span class="close2" onclick="closeQueueStream()">×</span></div>
     <div id="queuemsgs" style="padding:0 0 10px;max-height:60vh;overflow:auto;font-size:11px">
       <table class="wide">
-        <thead><tr><th style="text-align:left">time</th><th style="text-align:left">topic</th>
-          <th style="text-align:left">key</th><th style="text-align:left">producer</th>
-          <th style="text-align:left;width:100%">payload</th></tr></thead>
+        <thead><tr>
+          <th style="text-align:left;cursor:pointer;white-space:nowrap" onclick="sortQueueMsgs('time')">time <span id="sq-time"></span></th>
+          <th style="text-align:left;cursor:pointer;white-space:nowrap" onclick="sortQueueMsgs('topic')">topic <span id="sq-topic"></span></th>
+          <th style="text-align:left;cursor:pointer;white-space:nowrap" onclick="sortQueueMsgs('key')">key <span id="sq-key"></span></th>
+          <th style="text-align:left;cursor:pointer;white-space:nowrap" onclick="sortQueueMsgs('producer')">producer <span id="sq-producer"></span></th>
+          <th style="text-align:left;width:100%">payload</th>
+        </tr></thead>
         <tbody id="queuemsgbody"></tbody>
       </table>
     </div>
