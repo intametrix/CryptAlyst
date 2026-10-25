@@ -2140,6 +2140,9 @@ header{margin-left:186px}
     <div class="mhead"><span class="sym">Message bus</span>
       <span class="mk">RabbitMQ — queues, rates, consumers</span>
       <span style="flex:1"></span>
+      <input id="bussearch" class="finput" placeholder="filter queues…" style="width:180px"
+             oninput="renderBus()">
+      <span style="flex:1"></span>
       <a href="http://127.0.0.1:15672" target="_blank" class="tbtn" style="text-decoration:none">open management UI</a></div>
     <div id="busbody"><div class="hint" style="padding:14px">reading broker…</div></div>
   </div>
@@ -2603,13 +2606,14 @@ function toggleRail(){
 applyRail();
 async function renderBus(){
   var box=$("busbody"); if(!box) return;
+  var search=(($("bussearch")||{}).value||"").toLowerCase();
   var d={};
   try{ d=await (await fetch("/api/bus",{cache:"no-store"})).json(); }catch(e){
     box.innerHTML=UI.panel("message bus", '<div class="empty">broker unreachable</div>'); return; }
   if(d.error){ box.innerHTML=UI.panel("message bus", '<div class="empty">'+UI.esc(d.error)+'</div>'); return; }
 
   var t=d.totals||{};
-  var qs=(d.queues||[]).filter(function(q){ return q.name.indexOf("stomp-")!==0; });
+  var qs=(d.queues||[]).filter(function(q){ return q.name.indexOf("stomp-")!==0 && (!search || q.name.toLowerCase().indexOf(search)>=0); });
   function sum(f){ return qs.reduce(function(a,q){ return a+(f(q)||0); },0); }
   var inRate=sum(function(q){ return q.publish_rate; });
   var outRate=sum(function(q){ return q.deliver_rate; });
@@ -3566,18 +3570,19 @@ var QUEUE_ES=null;
 function openQueueStream(queueName){
   var m=$("queuemodal"); if(m) m.classList.add("open");
   var t=$("queuetitle"); if(t) t.textContent=queueName;
-  var b=$("queuemsgs"); if(b) b.innerHTML='<div class="hint">listening to '+UI.esc(queueName)+'…</div>';
+  var b=$("queuemsgbody"); if(b) b.innerHTML='';
   if(QUEUE_ES){ try{QUEUE_ES.close();}catch(e){} }
   QUEUE_ES=new EventSource("/api/bus/stream?queue="+encodeURIComponent(queueName));
   QUEUE_ES.onmessage=function(ev){
     var d={}; try{ d=JSON.parse(ev.data); }catch(e){}
     if(d.error) return;
-    var b=$("queuemsgs"); if(!b) return;
-    var row='<div class="flowrow"><span class="mk">'+UI.esc(d.topic||'')+'</span>'+
-      '<span>'+UI.esc(d.key||'')+'</span>'+
-      '<span class="mk">'+UI.esc(d.producer||'')+'</span>'+
-      '<span class="mk">'+new Date(d.ts||0).toTimeString().slice(0,8)+'</span>'+
-      '<span class="mk" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+UI.esc(JSON.stringify(d.data).slice(0,160))+'</span></div>';
+    var b=$("queuemsgbody"); if(!b) return;
+    var payload=JSON.stringify(d.data);
+    var row='<tr><td class="mk" style="white-space:nowrap">'+new Date(d.ts||0).toTimeString().slice(0,8)+'</td>'+
+      '<td>'+UI.esc(d.topic||'')+'</td>'+
+      '<td>'+UI.esc(d.key||'')+'</td>'+
+      '<td class="mk">'+UI.esc(d.producer||'')+'</td>'+
+      '<td class="mk" style="max-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+UI.esc(payload)+'">'+UI.esc(payload.slice(0,160))+'</td></tr>';
     b.insertAdjacentHTML("afterbegin", row);
     while(b.children.length>100) b.removeChild(b.lastChild);
   };
@@ -6736,7 +6741,14 @@ setInterval(bindTicks,800);
     <div class="head"><h2>queue messages</h2>
       <span class="mk" id="queuetitle">—</span>
       <span style="flex:1"></span><span class="close2" onclick="closeQueueStream()">×</span></div>
-    <div id="queuemsgs" style="padding:10px 14px;max-height:60vh;overflow:auto;font-size:11px"></div>
+    <div id="queuemsgs" style="padding:0 0 10px;max-height:60vh;overflow:auto;font-size:11px">
+      <table class="wide">
+        <thead><tr><th style="text-align:left">time</th><th style="text-align:left">topic</th>
+          <th style="text-align:left">key</th><th style="text-align:left">producer</th>
+          <th style="text-align:left;width:100%">payload</th></tr></thead>
+        <tbody id="queuemsgbody"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 </body></html>"""
