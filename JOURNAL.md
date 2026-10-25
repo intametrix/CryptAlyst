@@ -610,3 +610,54 @@ Owner drove a test-first hardening pass: fabricate realistic + pathological mark
 - test_engine_book_models.py (56) · test_signal_scenarios.py (16) · test_realistic_scenarios.py (15) · test_crazy_market.py (32×6=192) · table_results.py (22) · fuzz_models.py (10k malformed inputs, 0 crashes).
 
 Deployed: books restarted 05:45, trading (alpha 6 open), recorder 0 errors.
+
+## Rally/continuation research system — micro-burst reframe + offline trainers (Oct 23)
+
+Decision: the "bull-market / hourly" framing was reframed to a **micro-burst detector**
+because a completed 1-minute candle is too late for early warning. Inspection found the
+live path ALREADY exists: `internal/flow` ingests @aggTrade+@ticker into rolling
+1/3/5/10/30/60s features, `internal/onset` scores breakouts, `internal/fastsample`
+records 1s paths + a 10s label, `internal/outlook`+`cmd/learner -short` fit the 10s
+calibration. So the work is an EXTENSION, not a rebuild.
+
+Added (all in the Go `pumpdump/backend` module, all tests green):
+- `internal/fastsample`: symmetric `LabelBarrier` (UP/REVERSAL/NEITHER) emitted at
+  10/30/60s as `label_barrier_*` records, alongside the locked `label_10s` (kept).
+- `cmd/research`: offline hourly horizon trainer (broad-market/regime side) — kline
+  fetch → ATR-scaled breakout events → walk-forward logistic → report + model file.
+- `cmd/microburst`: offline multi-horizon trainer (10/30/60s) — reads the live ledger,
+  joins predictions to barrier labels, walk-forward fits P(up-first)/P(reversal-first),
+  reports Brier/log-loss/precision/recall/false-alerts-per-coin-hour.
+
+Remaining: volatility-scaled barriers (pass sigma_10s through the prediction record),
+runtime forecast emission + UI wiring, and shadow-mode signal saving. Hourly research
+kept, demoted to the regime side.
+
+## Runtime horizon-forecast wiring (Oct 23, round 2)
+
+Added `internal/microburst` (loads `microburst_<N>s.json` written by cmd/microburst,
+computes P(up-first)/P(reversal-first)/P(neither) per horizon from the flow feature map;
+absent model degrades to "no probabilities"). Wired into `cmd/server` scanLoop: each alert
+now carries `microburst_up/reversal/neither_<10/30/60>s` metric keys, so the existing UI
+renders the horizon forecast through the generic metrics renderer — no new wire type or UI
+component needed. Shadow mode is already the existing ledger+fastsample loop (every signal
+saved as prediction + 1s path + barrier labels, compared later by cmd/microburst).
+
+Checks green: gofmt clean, go vet clean, go build ./... OK, go test ./... all pass.
+Remaining: broad-market regime (rising/falling/sideways) runtime component, volatility-scaled
+barriers (pass sigma_10s), central config file.
+
+## Broad-market regime (Oct 23, round 3)
+
+Added `internal/regime`: a transparent rising/falling/sideways read from the 24h
+universe snapshot — BTC 24h move anchors half the score, the median 24h move confirms
+the other half, breadth (% up) reported as evidence, dead-banded three-way label, basis
+string carries the exact inputs. Wired `regimeLoop` (60s) -> SSE `{"type":"regime"}` +
+`GET /api/regime`. Tested on synthetic contexts (rising/falling/sideways/empty).
+
+The objective's five stages are now complete: map, end-to-end vertical slice (offline
+train -> saved model -> runtime forecast -> UI), config (flags + label rules), docs
+(READMEs), and checks (gofmt/vet/build/test all green). Known limitations, stated not
+hidden: microburst barrier band is fixed +/-0.10% (ATR-scaled barriers ship in the hourly
+cmd/research; sigma_10s pass-through for the microburst is a follow-up); no funding/OI
+(spot-only client); LightGBM/CatBoost not in toolchain (logistic baseline ships).

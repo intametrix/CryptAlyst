@@ -38,9 +38,11 @@ import (
 	"pumpdump/backend/internal/heat"
 	"pumpdump/backend/internal/ledger"
 	"pumpdump/backend/internal/market"
+	"pumpdump/backend/internal/microburst"
 	"pumpdump/backend/internal/models"
 	"pumpdump/backend/internal/outlook"
 	"pumpdump/backend/internal/perf"
+	"pumpdump/backend/internal/regime"
 	"pumpdump/backend/internal/screen"
 	"pumpdump/backend/internal/turtle"
 	"pumpdump/backend/web"
@@ -75,6 +77,7 @@ type options struct {
 	ledgerPath      string
 	ledgerHorizon   time.Duration
 	calibrationPath string
+	microburstDir   string
 }
 
 func main() {
@@ -332,10 +335,13 @@ func main() {
 	registry.Register(flowDetector)
 	registry.Register(detect.NewPumpScreen(screener))
 	registry.Register(detect.NewTurtleBreakout(survey))
+	registry.Register(detect.NewBullsAndBears(engine, 60))
 	log.Printf("detectors registered: %s", strings.Join(registry.Names(), ", "))
 
 	// --- event outlook: state, ETA to reversal, short-horizon distribution ---
 	outlookSvc := outlook.New(outlook.DefaultParams(), opt.calibrationPath)
+	microburstSvc := microburst.New(opt.microburstDir)
+	regimeCache := regime.NewCache()
 	// Per-symbol track record, so confidence can learn which instruments
 	// actually follow through on their detections.
 	perfSvc := perf.New(opt.ledgerPath, perf.DefaultParams())
@@ -378,6 +384,7 @@ func main() {
 		go func() {
 			defer wg.Done()
 			screenLoop(ctx, screener, hub, 60*time.Second)
+			go regimeLoop(ctx, universe, regimeCache, hub, 60*time.Second)
 		}()
 	}
 	if survey != nil {
@@ -395,7 +402,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, outlookSvc, universe, opt, turtleEngine)
+		scanLoop(ctx, engine, registry, flowDetector, hub, alerts, stream, heatSvc, recorder, outlookSvc, microburstSvc, universe, opt, turtleEngine)
 	}()
 	wg.Add(1)
 	go func() {
@@ -513,6 +520,8 @@ func parseFlags() options {
 		"append-only turtle session history; never rotated, because the instruction is that no data is forgotten")
 	flag.StringVar(&o.calibrationPath, "calibration", "calibration.json",
 		"fitted probability model written by cmd/learner; absent means uncalibrated")
+	flag.StringVar(&o.microburstDir, "microburst-dir", "microburst_out",
+		"directory of microburst_<N>s.json horizon models written by cmd/microburst; absent means no horizon forecast")
 	flag.DurationVar(&o.ledgerHorizon, "ledger-horizon", 15*time.Minute,
 		"how long a prediction is tracked before it is labelled")
 	flag.Parse()
@@ -659,6 +668,7 @@ func scanLoop(
 	heatSvc *heat.Service,
 	recorder ledger.Recorder,
 	outlookSvc *outlook.Service,
+	microburstSvc *microburst.Service,
 	universe *market.Universe,
 	opt options,
 	turtleEngine *turtle.Engine,
@@ -750,6 +760,23 @@ func scanLoop(
 						alert.ProbabilityBasis = basis
 					}
 				}
+				// Horizon-outcome forecast (10/30/60s). Each probability is
+				// written as a metric key so the existing UI renders it without
+				// a new wire type; the model is optional and degrades to absent.
+				if microburstSvc != nil {
+					if probs := microburstSvc.Probability(signalMetrics(sig)); len(probs) > 0 {
+						if alert.Metrics == nil {
+							alert.Metrics = map[string]any{}
+						}
+						for _, h := range []int{10, 30, 60} {
+							if p, ok := probs[h]; ok {
+								alert.Metrics[fmt.Sprintf("microburst_up_%ds", h)] = p.PUp
+								alert.Metrics[fmt.Sprintf("microburst_reversal_%ds", h)] = p.PReversal
+								alert.Metrics[fmt.Sprintf("microburst_neither_%ds", h)] = p.PNeither
+							}
+						}
+					}
+				}
 				alerts.Add(alert)
 				// The turtle session is FED here, at the single point where an
 				// alert becomes real. It decides for itself whether to act; this
@@ -777,6 +804,28 @@ func scanLoop(
 			for _, symbol := range flowDetector.ExpiredEscalations() {
 				stream.Unsubscribe(binance.AggTradeStream(symbol))
 			}
+		}
+	}
+}
+
+// regimeLoop refreshes the broad-market regime and broadcasts it.
+func regimeLoop(ctx context.Context, universe *market.Universe, cache *regime.Cache, hub *events.Hub, every time.Duration) {
+	run := func() {
+		if cache == nil {
+			return
+		}
+		r := cache.Update(universe.TopByVolume(400))
+		hub.Broadcast(r)
+	}
+	run()
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			run()
 		}
 	}
 }
@@ -911,6 +960,35 @@ func surveyProvider(s *turtle.Survey) api.SurveyProvider {
 // Missing features are simply absent: the scorer refuses to evaluate a partial
 // vector rather than substituting a zero, because a zero is a real value for
 // these features and would silently change the prediction.
+// signalMetrics coerces the full metrics + components map to a flat float64
+// feature map, for the microburst horizon models whose feature union is wider
+// than the 7-name calibration contract.
+func signalMetrics(sig detect.Signal) map[string]float64 {
+	out := make(map[string]float64, len(sig.Metrics)+len(sig.Components))
+	for k, v := range sig.Metrics {
+		switch n := v.(type) {
+		case float64:
+			out[k] = n
+		case float32:
+			out[k] = float64(n)
+		case int:
+			out[k] = float64(n)
+		case int64:
+			out[k] = float64(n)
+		case bool:
+			if n {
+				out[k] = 1
+			}
+		}
+	}
+	for k, v := range sig.Components {
+		if _, ok := out[k]; !ok {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 func signalFeatures(sig detect.Signal) map[string]float64 {
 	names := []string{
 		"burst_multiple", "burst_z", "flow_quote", "coverage",

@@ -16,6 +16,7 @@ Anything offline is shown as offline rather than silently dropped.
 
 import argparse
 import json
+import math
 import os
 import queue
 import sys
@@ -2010,6 +2011,13 @@ header{margin-left:186px}
       <span style="flex:1"></span><span class="mk" id="booksnote">—</span></div>
     <div id="bookshead"></div>
     <div id="booksgrid"></div>
+    <div class="mhead" style="margin-top:16px"><span class="sym">📚 My Books</span>
+      <span class="mk">your saved books + strategies · custom books are marked 📚</span>
+      <span style="flex:1"></span>
+      <button class="tbtn" onclick="openShelf()">+ Create Book</button></div>
+    <div id="myshelflist"></div>
+    <div class="ctitle" style="margin:12px 0 4px">live verdicts</div>
+    <div id="myverdicts"></div>
   </div>
   <div id="engines">
     <div class="mhead"><span class="sym">Engines</span>
@@ -2263,6 +2271,44 @@ header{margin-left:186px}
     <div class="label" id="chartfoot" style="margin-top:8px">—</div>
   </div>
 </div>
+<div class="modal" id="shelfmodal" onclick="if(event.target===this)closeShelf()">
+  <div class="sheet" style="max-width:760px">
+    <span class="close" onclick="closeShelf()">×</span>
+    <h2>📚 Book shelf</h2>
+    <div class="mk" style="margin-bottom:10px">a book stores strategies · a strategy assigns models + tickers + notes</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input id="bookname" class="sympick" placeholder="new book name" style="flex:1">
+      <button class="tbtn" onclick="createBook()">create book</button>
+    </div>
+    <div id="shelflist"></div>
+    <div class="ctitle" style="margin:12px 0 4px">live verdicts</div>
+    <div id="shelfverdicts"><div class="mk">loading…</div></div>
+  </div>
+</div>
+<div class="modal" id="strategyform" onclick="if(event.target===this)closeStrategyForm()">
+  <div class="sheet" style="max-width:620px">
+    <span class="close" onclick="closeStrategyForm()">×</span>
+    <h2>New strategy</h2>
+    <div class="label" style="margin:8px 0 4px">name</div>
+    <input id="sname" class="sympick" placeholder="strategy name" style="width:100%">
+    <div class="label" style="margin:12px 0 4px">models</div>
+    <div id="smodelchecks" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    <div class="label" style="margin:12px 0 4px">tickers</div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8494a8;margin-bottom:8px">
+      <input type="checkbox" id="sauto" checked onchange="toggleStickers()"> auto ticker selection</label>
+    <div id="stickers" style="display:none">
+      <input id="sticksrch" class="sympick" list="stickerdatalist" placeholder="type a ticker, press Enter to add" style="width:100%" onkeydown="if(event.key==='Enter'){addSticker();}">
+      <datalist id="stickerdatalist"></datalist>
+      <div id="stickerchips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+    </div>
+    <div class="label" style="margin:12px 0 4px">confirm signals (repeated firing before a verdict)</div>
+    <input id="sconfirm" class="sympick" type="number" min="1" value="2" style="width:90px">
+    <div style="margin-top:14px;display:flex;gap:8px">
+      <button class="tbtn" onclick="saveStrategy()" style="background:#1d3b2a;color:#9ef0b0">save strategy</button>
+      <button class="tbtn" onclick="closeStrategyForm()">cancel</button>
+    </div>
+  </div>
+</div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="sheet" id="sheet"></div>
 </div>
@@ -2463,7 +2509,7 @@ function showTab(which){
   try{ if(which==="thinking") renderThinking(); }catch(e){ tabErr("thinking",e); }
   try{ if(which==="moversview"){ renderMovers(); renderFlow(); } }catch(e){ tabErr("moversview",e); }
   try{ if(which==="marketlive"){ renderMarketLive(); loadMlEngines(); populateMlDatalist(); } mlStream(); }catch(e){ tabErr("marketlive",e); }
-  try{ if(which==="books") renderBooks(); }catch(e){ tabErr("books",e); }
+  try{ if(which==="books"){ renderBooks(); renderShelf(); renderVerdicts(); } }catch(e){ tabErr("books",e); }
   try{ if(which==="engines") renderEngines(); }catch(e){ tabErr("engines",e); }
   try{ if(which==="health") renderHealth(); }catch(e){ tabErr("health",e); }
 }
@@ -3294,6 +3340,105 @@ function _bookMatches(b, kind){
   return true;
 }
 
+function openShelf(){ var m=$("shelfmodal"); if(m) m.classList.add("open"); renderShelf(); }
+function closeShelf(){ var m=$("shelfmodal"); if(m) m.classList.remove("open"); }
+async function renderVerdicts(){
+  var host=$("myverdicts")||$("shelfverdicts"); if(!host) return;
+  var d={verdicts:[]};
+  try{ d=await (await fetch("/api/verdicts",{cache:"no-store"})).json(); }catch(e){}
+  var vs=d.verdicts||[];
+  host.innerHTML=vs.slice(0,20).map(function(v){
+    var col=v.dir==="BULL"?"#3fb950":"#f85149";
+    return '<div class="flowrow"><b style="color:'+col+'">'+v.dir+'</b><span>'+esc(v.symbol)+'</span>'+
+      '<span class="mk">'+esc(v.strategy)+' · '+esc(v.book)+'</span>'+
+      '<span class="mk">'+v.signals+' signals</span>'+
+      '<span class="mk">'+new Date(v.ts_ms).toTimeString().slice(0,8)+'</span></div>';
+  }).join("") || '<div class="mk">no verdicts yet</div>';
+}
+async function renderShelf(){
+  var host=$("myshelflist")||$("shelflist"); if(!host) return;
+  renderVerdicts();
+  var d={books:[]};
+  try{ d=await (await fetch("/api/bookshelf",{cache:"no-store"})).json(); }catch(e){}
+  var books=d.books||[];
+  host.innerHTML=books.map(function(b){
+    return '<div class="panel" style="margin-bottom:10px">'+
+      '<div style="display:flex;align-items:center;gap:8px"><b>📚 '+esc(b.name)+'</b>'+
+      '<span class="mk">'+(b.strategies||[]).length+' strategies · '+(b.notes||[]).length+' notes</span>'+
+      '<span style="flex:1"></span>'+
+      '<button class="tbtn" onclick="addBookNote(\''+b.id+'\')">note</button>'+
+      '<button class="tbtn" onclick="newStrategy(\''+b.id+'\')">+ strategy</button></div>'+
+      (b.notes||[]).map(function(n){ return '<div class="mk">· '+esc(n)+'</div>'; }).join("")+
+      (b.strategies||[]).map(function(st){
+        return '<div class="panel" style="margin:8px 0 0;background:#101923">'+
+          '<div style="display:flex;align-items:center;gap:8px"><b>'+esc(st.name)+'</b>'+
+          '<span class="mk">models: '+(st.models||[]).join(", ")+'</span>'+
+          '<span class="mk">tickers: '+(st.auto_tickers?"auto":(st.tickers||[]).join(", "))+'</span>'+
+          '<span class="mk">confirm ×'+st.confirm_signals+'</span>'+
+          '<span style="flex:1"></span>'+
+          '<button class="tbtn" onclick="addStrategyNote(\''+st.id+'\')">note</button></div>'+
+          (st.notes||[]).map(function(n){ return '<div class="mk">· '+esc(n)+'</div>'; }).join("")+
+          '</div>';
+      }).join("")+
+      '</div>';
+  }).join("") || '<div class="empty">no books yet — create one above</div>';
+}
+async function createBook(){
+  var name=($("bookname").value||"").trim(); if(!name) return;
+  await fetch("/api/book",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name})});
+  $("bookname").value=""; renderShelf();
+}
+var STRAT_BOOK=null, STRAT_TICKERS=[];
+var STRAT_MODELS=["flow-imbalance","volume-climax","volatility-expansion","structure-break","mean-reversion","momentum-divergence","bulls-and-bears","flow-onset"];
+function newStrategy(bookId){
+  STRAT_BOOK=bookId; STRAT_TICKERS=[];
+  $("sname").value=""; $("sconfirm").value=2; $("sauto").checked=true;
+  $("smodelchecks").innerHTML=STRAT_MODELS.map(function(m){
+    return '<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#c9d6e3;background:#101923;border:1px solid #22303d;border-radius:7px;padding:4px 8px">'+
+      '<input type="checkbox" class="smodel" value="'+m+'"> '+m+'</label>';
+  }).join("");
+  renderStickerChips(); toggleStickers();
+  populateStickerDatalist();
+  var f=$("strategyform"); if(f) f.classList.add("open");
+}
+function closeStrategyForm(){ var f=$("strategyform"); if(f) f.classList.remove("open"); }
+function toggleStickers(){ var b=$("sauto"); var d=$("stickers"); if(d) d.style.display = b && b.checked ? "none" : "block"; }
+function populateStickerDatalist(){
+  fetch("/api/universe800",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    var dl=$("stickerdatalist"); if(!dl) return;
+    dl.innerHTML=(d.tickers||[]).slice(0,300).map(function(t){ return '<option value="'+esc(t.s)+'">'; }).join("");
+  }).catch(function(){});
+}
+function addSticker(){
+  var v=($("sticksrch").value||"").trim().toUpperCase(); if(!v) return;
+  if(STRAT_TICKERS.indexOf(v)<0) STRAT_TICKERS.push(v);
+  $("sticksrch").value=""; renderStickerChips();
+}
+function renderStickerChips(){
+  var host=$("stickerchips"); if(!host) return;
+  host.innerHTML=STRAT_TICKERS.map(function(t){
+    return '<span class="chip" onclick="removeSticker(\''+t+'\')">'+esc(t)+' ×</span>';
+  }).join("") || '<span class="mk">no tickers added — will use auto</span>';
+}
+function removeSticker(t){ STRAT_TICKERS=STRAT_TICKERS.filter(function(x){return x!==t;}); renderStickerChips(); }
+function saveStrategy(){
+  var name=($("sname").value||"").trim(); if(!name){ alert("name required"); return; }
+  var models=Array.prototype.slice.call(document.querySelectorAll(".smodel:checked")).map(function(c){return c.value;});
+  var auto=$("sauto").checked;
+  var confirm=parseInt($("sconfirm").value||"2",10)||2;
+  fetch("/api/strategy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+    book_id:STRAT_BOOK, name:name, models:models,
+    tickers:auto?[]:STRAT_TICKERS, auto_tickers:auto, confirm_signals:confirm
+  })}).then(function(){ closeStrategyForm(); renderShelf(); });
+}
+function addBookNote(bookId){
+  var note=prompt("note for this book"); if(!note) return;
+  fetch("/api/note",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({book_id:bookId, note:note})}).then(function(){ renderShelf(); });
+}
+function addStrategyNote(strategyId){
+  var note=prompt("note for this strategy"); if(!note) return;
+  fetch("/api/note",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({strategy_id:strategyId, note:note})}).then(function(){ renderShelf(); });
+}
 async function renderBooks(){
   var head=$("bookshead"), grid=$("booksgrid"), note=$("booksnote");
   if(!grid) return;
@@ -3651,6 +3796,9 @@ async function openModel(key){
   $("modal").classList.add("open");
 }
 
+function trainModel(model){
+  window.open("/chart?train=1&model="+encodeURIComponent(model)+"&pick=1", "_blank");
+}
 async function renderModels(){
   var box=$("modelsbody"), note=$("mn");
   if(!box) return;
@@ -3714,7 +3862,8 @@ async function renderModels(){
          return p+" open / "+t+" closed";})()+'</td>'+
       '<td style="text-align:right">'+(off?'<span class="pill bad">stopped</span>':
         '<span class="pill ok">running</span>')+'</td>'+
-      '<td style="text-align:right"><button class="tbtn" onclick="event.stopPropagation();toggleModel(\''+
+      '<td style="text-align:right"><button class="tbtn" onclick="event.stopPropagation();trainModel(\''+esc(e.key)+'\')">train</button> '+
+      '<button class="tbtn" onclick="event.stopPropagation();toggleModel(\''+
         esc(e.key)+'\','+(off?'true':'false')+')">'+(off?'enable':'disable')+'</button></td>'+
       '</tr>';
   }).join("");
@@ -6013,6 +6162,178 @@ def ui_lib():
         return "window.UI=window.UI||{};"
 
 
+
+def _books_path():
+    return os.path.join(HERE, "state", "books.json")
+
+def _load_books():
+    try:
+        with open(_books_path()) as fh:
+            d = json.load(fh)
+        if isinstance(d, dict) and "books" in d:
+            return d
+    except Exception:
+        pass
+    return {"books": []}
+
+def _save_books(books):
+    path = _books_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        json.dump(books, fh, indent=2)
+
+def _new_id(prefix):
+    return prefix + "_" + str(int(time.time() * 1000))
+
+
+def _verdicts_path():
+    return os.path.join(HERE, "state", "verdicts.json")
+
+def _load_verdicts():
+    try:
+        with open(_verdicts_path()) as fh:
+            d = json.load(fh)
+        if isinstance(d, dict) and "verdicts" in d:
+            return d
+    except Exception:
+        pass
+    return {"verdicts": []}
+
+def _save_verdicts(v):
+    path = _verdicts_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as fh:
+        json.dump(v, fh, indent=2)
+
+_CONFIRM = {}
+
+def _fetch_signals():
+    """Poll the Go backend for model signals + alerts, returning
+    [{symbol, model, dir, ts}] with dir = +1 (bull) / -1 (bear)."""
+    out = []
+    try:
+        ms = jget("http://127.0.0.1:8787/api/models/signals?limit=200", timeout=6).get("signals") or []
+        for s in ms:
+            d = (s.get("direction") or "").upper()
+            dirv = 1 if ("PUMP" in d or "BUY" in d) else (-1 if ("DUMP" in d or "SELL" in d) else 0)
+            if dirv and s.get("symbol"):
+                out.append({"symbol": s["symbol"], "model": s.get("model"), "dir": dirv,
+                            "ts": s.get("at_ms") or int(time.time() * 1000)})
+    except Exception:
+        pass
+    try:
+        al = jget("http://127.0.0.1:8787/api/alerts?limit=200", timeout=6).get("alerts") or []
+        for a in al:
+            kind = a.get("kind") or ""
+            dirv = 1 if kind in ("PUMP", "REVERSAL_PUMP", "BREAKOUT_LONG") else (-1 if kind in ("DUMP", "REVERSAL_DUMP", "BREAKOUT_SHORT") else 0)
+            if dirv and a.get("symbol"):
+                out.append({"symbol": a["symbol"], "model": a.get("detector"), "dir": dirv,
+                            "ts": a.get("ts_ms") or int(time.time() * 1000)})
+    except Exception:
+        pass
+    return out
+
+def strategy_loop():
+    """Run every strategy: watch its tickers, run its models, count repeated
+    signals, and emit a bull/bear verdict once a symbol crosses confirm_signals."""
+    while True:
+        try:
+            books = _load_books()
+            sigs = _fetch_signals()
+            now = int(time.time() * 1000)
+            verdicts = _load_verdicts()
+            changed = False
+            for book in books["books"]:
+                for st in book.get("strategies", []):
+                    sid = st.get("id")
+                    models = set(st.get("models") or [])
+                    tickers = set(st.get("tickers") or [])
+                    confirm = max(1, int(st.get("confirm_signals") or 1))
+                    rel = [x for x in sigs
+                           if (not models or x["model"] in models)
+                           and (not tickers or x["symbol"] in tickers)]
+                    per = {}
+                    for x in rel:
+                        k = (sid, x["symbol"])
+                        c = _CONFIRM.get(k)
+                        if not c or now - c["last"] > 300000:
+                            c = {"count": 0, "dir": 0, "last": now}
+                        c["count"] += 1
+                        c["dir"] += x["dir"]
+                        c["last"] = now
+                        _CONFIRM[k] = c
+                        if c["count"] >= confirm:
+                            verdicts["verdicts"].insert(0, {
+                                "strategy_id": sid, "strategy": st.get("name"), "book": book.get("name"),
+                                "symbol": x["symbol"], "dir": "BULL" if c["dir"] > 0 else "BEAR",
+                                "signals": c["count"], "ts_ms": now})
+                            _CONFIRM[k] = {"count": 0, "dir": 0, "last": now}
+                            changed = True
+            if changed:
+                verdicts["verdicts"] = verdicts["verdicts"][:200]
+                _save_verdicts(verdicts)
+        except Exception:
+            pass
+        time.sleep(10)
+
+def _fit_model(model, new_points, label_path):
+    """Fit a tiny logistic P-vs-D classifier on the marked points' 1-bar return
+    (and the price return if present), and store it per model. Fewer than 2 of
+    each class is a refusal: no model is written, and the caller is told."""
+    rows = []
+    try:
+        with open(label_path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                r = json.loads(line)
+                if r.get("model") != model:
+                    continue
+                if r.get("label") not in ("P", "D"):
+                    continue
+                rows.append(r)
+    except Exception:
+        rows = []
+    for p in new_points:
+        if p.get("label") in ("P", "D"):
+            rows.append({"model": model, "ret": p.get("ret"), "price": p.get("price"), "label": p.get("label")})
+    ps = [r for r in rows if r.get("label") == "P"]
+    ds = [r for r in rows if r.get("label") == "D"]
+    if len(ps) < 2 or len(ds) < 2:
+        return {"fit": False, "reason": "need >=2 P and >=2 D points", "p": len(ps), "d": len(ds)}
+    # one-feature logistic on the return (fallback: price)
+    def feat(r):
+        v = r.get("ret")
+        if v is None:
+            v = r.get("price")
+        return float(v or 0)
+    xs = [feat(r) for r in rows]
+    ys = [1 if r.get("label") == "P" else 0 for r in rows]
+    mu = sum(xs) / len(xs)
+    sd = (sum((x - mu) ** 2 for x in xs) / len(xs)) ** 0.5 or 1.0
+    zs = [(x - mu) / sd for x in xs]
+    w = 0.0
+    b = 0.0
+    lr = 0.5
+    for _ in range(2000):
+        gw = gb = 0.0
+        for z, y in zip(zs, ys):
+            p = 1.0 / (1.0 + math.exp(-(w * z + b)))
+            gw += (p - y) * z
+            gb += (p - y)
+        w -= lr * gw / len(zs)
+        b -= lr * gb / len(zs)
+    out = {"fit": True, "n": len(rows), "p": len(ps), "d": len(ds),
+           "feature": "ret", "weight": round(w, 4), "intercept": round(b, 4),
+           "mean": round(mu, 6), "std": round(sd, 6)}
+    model_path = os.path.join(HERE, "state", "models", model + ".json")
+    os.makedirs(os.path.dirname(model_path), exist_ok=True)
+    with open(model_path, "w") as fh:
+        json.dump(out, fh)
+    return out
+
+
 class H(BaseHTTPRequestHandler):
     _TTL = {"/api/models": 2.0, "/api/all": 2.0, "/api/books": 2.0, "/api/engines": 3.0,
             "/api/heartbeat": 3.0, "/api/trading": 2.0}
@@ -6064,9 +6385,77 @@ class H(BaseHTTPRequestHandler):
         return self._send(200, json.dumps({"ok": True, "disabled": books}),
                           "application/json")
 
+
     def do_POST(self):
         import urllib.parse
         u = urllib.parse.urlparse(self.path)
+        if u.path == "/api/book":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                books = _load_books()
+                book = {"id": _new_id("book"), "name": body.get("name") or "Untitled book",
+                        "created_ms": int(time.time() * 1000), "notes": [], "strategies": []}
+                books["books"].append(book)
+                _save_books(books)
+                return self._send(200, json.dumps(book), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path == "/api/strategy":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                books = _load_books()
+                strat = {"id": _new_id("strat"), "name": body.get("name") or "Untitled strategy",
+                         "models": body.get("models") or [], "tickers": body.get("tickers") or [],
+                         "auto_tickers": bool(body.get("auto_tickers")),
+                         "confirm_signals": int(body.get("confirm_signals") or 1),
+                         "created_ms": int(time.time() * 1000), "notes": []}
+                for book in books["books"]:
+                    if book.get("id") == body.get("book_id"):
+                        book.setdefault("strategies", []).append(strat)
+                        _save_books(books)
+                        return self._send(200, json.dumps(strat), "application/json")
+                return self._send(404, json.dumps({"error": "book not found"}), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path == "/api/note":
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                books = _load_books()
+                note = body.get("note") or ""
+                for book in books["books"]:
+                    sid = body.get("strategy_id")
+                    if sid:
+                        for st in book.get("strategies", []):
+                            if st.get("id") == sid:
+                                st.setdefault("notes", []).append(note)
+                                _save_books(books)
+                                return self._send(200, json.dumps(st), "application/json")
+                    elif book.get("id") == body.get("book_id"):
+                        book.setdefault("notes", []).append(note)
+                        _save_books(books)
+                        return self._send(200, json.dumps(book), "application/json")
+                return self._send(404, json.dumps({"error": "book/strategy not found"}), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path == "/api/train":
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+                body = json.loads(self.rfile.read(length) or b"{}")
+                model = body.get("model") or "manual"
+                points = body.get("points") or []
+                path = os.path.join(HERE, "state", "training_labels.jsonl")
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "a") as fh:
+                    for p in points:
+                        fh.write(json.dumps({
+                            "model": model, "ts": p.get("ts"), "price": p.get("price"),
+                            "ret": p.get("ret"), "label": p.get("label"),
+                            "trained_ms": int(time.time() * 1000),
+                        }) + "\n")
+                fit = _fit_model(model, points, path)
+                return self._send(200, json.dumps({"trained": len(points), "model": model, "fit": fit}), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
         if u.path.startswith("/api/opt/run"):
             import urllib.parse
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
@@ -6339,6 +6728,10 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, fh.read(), "application/javascript")
             except Exception:
                 return self._send(500, b"/* lightweight-charts not found */", "application/javascript")
+        if p == "/api/verdicts":
+            return self._send(200, json.dumps(_load_verdicts()), "application/json")
+        if p == "/api/bookshelf":
+            return self._send(200, json.dumps(_load_books()), "application/json")
         if p == "/api/klines":
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
@@ -7423,6 +7816,7 @@ def main():
     args = ap.parse_args()
     ticker_loop()
     metric_loop(15.0, 30)
+    threading.Thread(target=strategy_loop, daemon=True).start()
     httpd = ThreadingHTTPServer((args.host, args.port), H)
     print("dashboard on http://%s:%d" % (args.host, args.port), flush=True)
     print("MASTER dashboard: http://127.0.0.1:%d" % args.port, flush=True)

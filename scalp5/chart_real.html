@@ -53,12 +53,12 @@
  .tchg.down{color:#f85149}
  @media(max-width:1100px){.layout{grid-template-columns:1fr}}
  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
- .chartcard{height:calc(100vh - 120px);min-height:420px;display:flex;flex-direction:column}
- svg{width:100%;height:100%;flex:1;min-height:0;display:block;touch-action:none;
+ .chartcard{height:calc(100vh - 120px);min-height:420px;display:flex;flex-direction:column;position:relative}
+ svg{width:100%;height:470px;flex:0 0 auto;min-height:200px;display:block;touch-action:none;
       cursor:crosshair;user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
 svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
  .hint{font-size:10.5px;color:#4c5a6c;padding:5px 2px 0;line-height:1.6}
- #panel{display:none;background:#101821;border:1px solid #22303d;border-radius:12px;padding:12px 14px;margin-bottom:10px}
+ #panel{display:block;background:#101821;border:1px solid #22303d;border-radius:10px;padding:10px 12px;margin-top:8px}
  #panel.open{display:block}
  .row{display:grid;grid-template-columns:86px 1fr;gap:12px;padding:7px 0;border-bottom:1px dashed #1a2430;align-items:start}
  .row:last-child{border:0}
@@ -78,6 +78,14 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
   font-size:9px;color:#9fb0c4;opacity:0;letter-spacing:3px;transition:opacity .15s;pointer-events:none}
 #flowbox:hover #flowresize, #flowresize:hover{background:#1d2b3a;border-top:2px solid #3d6f96}
 #flowbox:hover #flowresize::after, #flowresize:hover::after{opacity:1}
+#splitter{height:8px;cursor:ns-resize;background:transparent;border-top:1px solid #24313e;margin-top:4px;transition:background .15s}
+#splitter:hover{background:#1d2b3a}
+#splitter::after{content:"•••";display:block;text-align:center;font-size:8px;color:#59677a;line-height:8px}
+.labrow{display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:2px 0;gap:8px}
+.carrow{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  font-size:13px;font-weight:700;color:#58a6ff;line-height:1;border:1px solid #2a3a4a;border-radius:5px;
+  background:#141d27;user-select:none;transition:background .15s,border-color .15s}
+.labrow:hover .carrow{background:#1d2b3a;border-color:#3d6f96}
 </style></head><body>
 
 <header>
@@ -111,15 +119,6 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
     <div id="tickerlist"><div class="hint" style="padding:8px">loading tickers…</div></div>
   </div>
   <div>
-    <div id="panel">
-      <div class="row"><span class="lab">timeframe</span><div class="chips" id="iv"></div></div>
-      <div class="row"><span class="lab">chart</span><div class="chips" id="ct"></div></div>
-      <div class="row"><span class="lab">overlays</span><div class="chips" id="ly"></div></div>
-      <div class="row"><span class="lab">scale</span><div class="chips" id="sc"></div></div>
-      <div class="row"><span class="lab">properties</span><div class="chips" id="pr"></div></div>
-      <div class="row"><span class="lab">view</span><div class="chips" id="vw"></div></div>
-      <div class="hint" id="sub"></div>
-    </div>
     <div class="card chartcard">
       <div id="chartbar" style="position:absolute;left:10px;top:8px;z-index:6;display:flex;gap:6px;align-items:center;
            background:#0b1119cc;border:1px solid #1b2632;border-radius:8px;padding:4px 8px">
@@ -127,21 +126,59 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
         <button class="tbtn" onclick="zoomBar(1.55)" title="zoom out (−)">−</button>
         <button class="tbtn" onclick="reset()" title="reset view (0)">reset</button>
         <button class="tbtn" onclick="S.y=null;render()" title="reset price axis (y)">price</button>
+        <button class="tbtn" onclick="startTrain()" title="mark points on the chart and label them P or D">TRAIN</button>
+        <button class="tbtn" onclick="toggleFullscreen()" title="expand chart to full screen">⛶</button>
         <span style="font-size:10px;color:#7c8b9d;margin-left:6px">drag a box to zoom · shift-drag to pan · wheel zooms time · shift+wheel zooms price</span>
+      </div>
+      <div id="trainbar" style="position:absolute;left:10px;top:46px;z-index:7;display:none;gap:6px;align-items:center;
+           background:#0b1119f0;border:1px solid #24313e;border-radius:8px;padding:6px 8px">
+        <span style="font-size:10px;color:#7c8b9d;letter-spacing:.1em">TRAIN</span>
+        <select id="trainmodel" class="symin" style="width:150px">
+          <option value="manual">manual</option>
+          <option>flow-imbalance</option><option>volume-climax</option><option>volatility-expansion</option>
+          <option>structure-break</option><option>mean-reversion</option><option>momentum-divergence</option>
+        </select>
+        <button class="tbtn" id="trainlabelbtn" onclick="toggleTrainLabel()">label: P</button>
+        <button class="tbtn" onclick="openTrainPicker()">change ticker</button>
+        <button class="tbtn" onclick="trainOK()" style="background:#1d3b2a;color:#9ef0b0">OK train</button>
+        <button class="tbtn" onclick="cancelTrain()">cancel</button>
+        <span class="mk" id="traincount">0 points</span>
+        <span class="mk" id="trainrange">—</span>
+        <span class="mk" id="trainquality">—</span>
+        <span class="mk">click chart to mark · P/D to label</span>
+      </div>
+      <div id="trainpicker" style="position:fixed;inset:0;background:#04070be6;backdrop-filter:blur(4px);display:none;z-index:80;padding:18px;overflow:auto"
+           onclick="if(event.target===this)closeTrainPicker()">
+        <div style="max-width:560px;margin:6vh auto;background:#0b1119;border:1px solid #24313e;border-radius:14px;padding:14px 16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <b style="font-size:11px;letter-spacing:.14em;color:#8494a8">SELECT TICKER TO TRAIN</b>
+            <span style="flex:1"></span>
+            <button class="tbtn" onclick="closeTrainPicker()">×</button>
+          </div>
+          <input id="trainsearch" class="symin" placeholder="type a ticker…" autocomplete="off" spellcheck="false"
+                 style="width:100%;margin-bottom:8px" oninput="renderTrainPicker()">
+          <div id="trainfilter" style="display:flex;gap:6px;margin-bottom:8px">
+            <button class="tbtn" onclick="trainSort='vol';renderTrainPicker()">by volume</button>
+            <button class="tbtn" onclick="trainSort='chg';renderTrainPicker()">by change</button>
+            <button class="tbtn" onclick="trainSort='alpha';renderTrainPicker()">A–Z</button>
+          </div>
+          <div id="trainlist" style="max-height:50vh;overflow:auto"></div>
+        </div>
       </div>
       <svg id="svg" viewBox="0 0 1100 470" preserveAspectRatio="none"
            style="width:100%;height:470px;display:block;touch-action:none;cursor:crosshair"></svg>
       <div id="sigpanel" style="display:none;margin-top:10px"></div>
-      <div id="flowbox" style="margin-top:10px;border:1px solid #1b2632;border-radius:10px;background:#0b1119">
+      <div id="splitter" onmousedown="startSplit(event)" title="drag to resize the chart vs the flow panel"></div>
+      <div id="flowbox" style="margin-top:6px;border:1px solid #1b2632;border-radius:10px;background:#0b1119;flex:1;min-height:0;overflow:auto">
         <div onclick="toggleFlows()" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer">
           <span style="font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:#6b7c90">
             money flow by window</span>
           <span id="flowsum" style="font-family:var(--mono);font-size:11px;color:#7c8b9d"></span>
           <span style="flex:1"></span>
-          <span id="flowarrow" style="color:#58a6ff">▸</span>
+          <span id="flowarrow" style="color:#58a6ff">▾</span>
         </div>
         <div style="display:flex;gap:6px;padding:0 12px 6px;flex-wrap:wrap" id="flowwin"></div>
-        <div id="flows" style="display:none;padding:0 12px 12px;max-height:240px;overflow:auto"></div>
+        <div id="flows" style="padding:0 12px 12px;min-height:0;overflow:auto"></div>
         <div id="flowresize" onmousedown="startFlowResize(event)" title="drag to resize the money flow panel"></div>
       </div>
       <div class="hint">drag = zoom box · drag price scale = zoom price · drag time scale = zoom time ·
@@ -154,8 +191,27 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
 
   <div id="propcol" style="display:flex;flex-direction:column;gap:12px;min-height:0;transition:opacity .25s ease">
     <div class="card props">
-      <h2 style="display:flex;justify-content:space-between;align-items:center">properties
-        <button class="tbtn" onclick="hideProps()" title="hide to expand the chart" id="hidebtn">◀ hide</button></h2>
+      <h2 style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="togglePanel('panel')">TA Overlays
+        <span style="display:flex;gap:6px;align-items:center"><span id="panelarrow">▾</span>
+        <button class="tbtn" onclick="event.stopPropagation();hideProps()" id="hidebtn">◀ hide</button></span></h2>
+      <div id="panel">
+        <div class="row"><div class="labrow" onclick="toggleChips('iv')"><span class="lab">timeframe</span><span class="carrow" id="ivarrow">▾</span></div><div class="chips" id="iv"></div></div>
+        <div class="row"><div class="labrow" onclick="toggleChips('ct')"><span class="lab">chart</span><span class="carrow" id="ctarrow">▾</span></div><div class="chips" id="ct"></div></div>
+        <div class="row"><div class="labrow" onclick="toggleChips('ly')"><span class="lab">TA Overlays</span><span class="carrow" id="lyarrow">▾</span></div><div class="chips" id="ly"></div></div>
+        <div class="row"><div class="labrow" onclick="toggleChips('sc')"><span class="lab">scale</span><span class="carrow" id="scarrow">▾</span></div><div class="chips" id="sc"></div></div>
+        <div class="row"><div class="labrow" onclick="toggleChips('pr')"><span class="lab">properties</span><span class="carrow" id="prarrow">▾</span></div><div class="chips" id="pr"></div></div>
+        <div class="row"><div class="labrow" onclick="toggleChips('vw')"><span class="lab">view</span><span class="carrow" id="vwarrow">▾</span></div><div class="chips" id="vw"></div></div>
+        <div class="hint" id="sub"></div>
+      </div>
+    </div>
+    <div class="card props">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="togglePanel('modelslist')">models
+        <span id="modelslistarrow">▾</span></h2>
+      <div id="modelslist" style="margin-top:8px"><div class="hint">loading models…</div></div>
+    </div>
+    <div class="card props">
+      <h2 style="display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="togglePanel('props')">properties
+        <span id="propsarrow">▾</span></h2>
       <div id="props"></div>
     </div>
     <div class="card props" id="modelcard" style="display:none">
@@ -341,6 +397,32 @@ function applyPropsHidden(){
   if(lay){ if(PROPS_HIDDEN) lay.classList.add("collapsed"); else lay.classList.remove("collapsed"); }
   if(b) b.textContent = PROPS_HIDDEN ? "▶ show" : "◀ hide";
   syncPropsArrow();
+}
+function toggleChips(id){
+  var chips=$(id); if(!chips) return;
+  chips.style.display = (chips.style.display==="none") ? "" : "none";
+  var a=$(id+"arrow"); if(a) a.textContent = (chips.style.display==="none") ? "▸" : "▾";
+}
+async function renderModelList(){
+  var host=$("modelslist"); if(!host) return;
+  var models=[], dets=[];
+  try{ models=(await (await fetch("http://127.0.0.1:8787/api/models",{cache:"no-store"})).json()).models||[]; }catch(e){}
+  try{ dets=(await (await fetch("http://127.0.0.1:8787/api/detectors",{cache:"no-store"})).json()).detectors||[]; }catch(e){}
+  var rows=models.map(function(m){ return {name:m.model, alive:m.alive, kind:"model"}; })
+    .concat(dets.map(function(d){ return {name:d.name, alive:d.enabled, kind:"detector"}; }));
+  host.innerHTML=rows.map(function(r){
+    return '<div class="prow2"><span>'+esc(r.name)+' <span class="mk">'+r.kind+(r.alive?" · live":" · stopped")+'</span></span>'+
+      '<button class="tbtn" onclick="trainThisModel(\''+esc(r.name)+'\')">train</button></div>';
+  }).join("") || '<div class="hint">no models</div>';
+}
+function trainThisModel(model){
+  var sel=$("trainmodel"); if(sel) sel.value=model;
+  startTrainHere();
+}
+function togglePanel(id){
+  var p=$(id); if(!p) return;
+  p.style.display = (p.style.display==="none") ? "" : "none";
+  var a=$(id+"arrow"); if(a) a.textContent = (p.style.display==="none") ? "▸" : "▾";
 }
 function toggleProps(){
   PROPS_OPEN=!PROPS_OPEN;
@@ -1041,7 +1123,7 @@ function zoomBar(f){
   S.s=Math.max(0,Math.min(n-S.c,Math.round(centre-S.c/2)));
   render();
 }
-var FLOW_OPEN=false, FLOW_T=null, FLOW_W=[1,5,15,60,240,1440];
+var FLOW_OPEN=true, FLOW_T=null, FLOW_W=[1,5,15,60,240,1440];
 var FLOW_CHOICES=[[1,"1 min"],[5,"5 min"],[15,"15 min"],[30,"30 min"],[60,"1 hour"],
                   [240,"4 hours"],[720,"12 hours"],[1440,"1 day"],[10080,"1 week"]];
 function flowWindows(){
@@ -1122,6 +1204,7 @@ function wire(){
   svg.addEventListener("dblclick", function(ev){
   if(ev.target.tagName==="svg") toggleProps();
 });
+svg.addEventListener("click",function(e){ trainClick(e); });
 svg.addEventListener("pointerdown",function(e){
     e.preventDefault();
     var reg=region(e);
@@ -1562,8 +1645,141 @@ wire(); chips(); fit();
 loadBars(S.tf, function(){
   loadSignals(function(){ loadFills(function(){ draw(); props(); }); });
 });
+var TRAIN_MODE=false, TRAIN_POINTS=[], TRAIN_LABEL="P", trainSort="vol";
+function toggleFullscreen(){
+  if(document.fullscreenElement){
+    document.exitFullscreen();
+  } else if(document.documentElement.requestFullscreen){
+    document.documentElement.requestFullscreen();
+  }
+}
+document.addEventListener("fullscreenchange", function(){ setTimeout(refit, 60); });
+function startSplit(e){
+  e.preventDefault();
+  var svg=$("svg"); if(!svg) return;
+  var startY=e.clientY, startH=svg.getBoundingClientRect().height;
+  function move(ev){ var h=startH+(ev.clientY-startY); if(h<200) h=200; if(h>900) h=900; svg.style.height=h+"px"; fit(); draw(); }
+  function up(){ document.removeEventListener("mousemove",move); document.removeEventListener("mouseup",up); document.body.style.cursor=""; }
+  document.addEventListener("mousemove",move); document.addEventListener("mouseup",up); document.body.style.cursor="ns-resize";
+}
+function startTrain(){
+  // In the chart the ticker is already selected: train on it directly and
+  // show the model selector in the train bar.
+  startTrainHere();
+}
+function startTrainHere(){
+  TRAIN_MODE=true; TRAIN_POINTS=[];
+  var tb=$("trainbar"); if(tb) tb.style.display="flex";
+  $("trainlabelbtn").textContent="label: P"; TRAIN_LABEL="P";
+  clearTrainMarks(); updateTrain();
+  setTimeout(showTrainRange, 900);
+}
+function openTrainPicker(){
+  var pk=$("trainpicker"); if(pk) pk.style.display="block";
+  renderTrainPicker();
+}
+function closeTrainPicker(){ var pk=$("trainpicker"); if(pk) pk.style.display="none"; }
+function renderTrainPicker(){
+  var host=$("trainlist"); if(!host) return;
+  loadUniverse(function(){
+    var q=($("trainsearch").value||"").trim().toUpperCase();
+    var rows=UNIVERSE.filter(function(t){ return !q || t.s.indexOf(q)>=0 || (t.base||"").indexOf(q)>=0; });
+    if(trainSort==="chg") rows.sort(function(a,b){ return (b.chg||0)-(a.chg||0); });
+    else if(trainSort==="alpha") rows.sort(function(a,b){ return a.s<b.s?-1:1; });
+    host.innerHTML=rows.slice(0,60).map(function(t){
+      var chg=(t.chg==null?0:t.chg);
+      return '<div class="tickrow" onclick="pickTrainTicker(\''+esc(t.s)+'\')">'+
+        '<span class="tsym">'+esc(t.s)+'</span>'+
+        '<span class="tpx">'+(t.price?Number(t.price).toPrecision(6):"—")+'</span>'+
+        '<span class="tchg '+(chg>=0?"up":"down")+'">'+(chg>=0?"+":"")+Number(chg).toFixed(1)+'%</span></div>';
+    }).join("") || '<div class="hint" style="padding:8px">no match</div>';
+  });
+}
+function pickTrainTicker(sym){
+  closeTrainPicker();
+  setSym(sym);
+  TRAIN_MODE=true; TRAIN_POINTS=[];
+  var tb=$("trainbar"); if(tb) tb.style.display="flex";
+  $("trainlabelbtn").textContent="label: P"; TRAIN_LABEL="P";
+  clearTrainMarks(); updateTrain();
+  setTimeout(showTrainRange, 900);
+}
+function showTrainRange(){
+  if(!BARS.length) return;
+  var first=BARS[0], last=BARS[BARS.length-1];
+  var hi=-Infinity, lo=Infinity;
+  BARS.forEach(function(b){ hi=Math.max(hi,b.h); lo=Math.min(lo,b.l); });
+  var deltas=[]; for(var i=1;i<BARS.length;i++) deltas.push(BARS[i].t-BARS[i-1].t);
+  deltas.sort(function(a,b){return a-b;});
+  var med=deltas.length?deltas[Math.floor(deltas.length/2)]:0;
+  var gaps=0; deltas.forEach(function(d){ if(med&&d>med*1.5) gaps++; });
+  var pct=med?Math.round(100*BARS.length/Math.max(1,(last.t-first.t)/med+1)):0;
+  var tf=(typeof S!=="undefined"&&S.tf)?S.tf:"";
+  var rng=$("trainrange");
+  if(rng) rng.textContent="range "+new Date(first.t).toISOString().slice(0,16)+" → "+new Date(last.t).toISOString().slice(0,16)+" · "+BARS.length+" bars · "+tf;
+  var ql=$("trainquality");
+  if(ql) ql.textContent="quality: "+(gaps?gaps+" gaps":"no gaps")+" · "+pct+"% complete · range "+((hi-lo)/lo*100).toFixed(2)+"%";
+}
+function toggleTrainLabel(){
+  TRAIN_LABEL = TRAIN_LABEL==="P"?"D":"P";
+  $("trainlabelbtn").textContent="label: "+TRAIN_LABEL;
+}
+function cancelTrain(){
+  TRAIN_MODE=false;
+  var tb=$("trainbar"); if(tb) tb.style.display="none";
+  clearTrainMarks();
+}
+function updateTrain(){ $("traincount").textContent=TRAIN_POINTS.length+" points"; drawTrainPoints(); }
+function trainClick(ev){
+  if(!TRAIN_MODE||!GEO) return;
+  var p=pt(ev);
+  if(p.x<PL||p.x>W-PR||p.y<PT||p.y>H-PB) return;
+  var i=Math.max(GEO.vs,Math.min(GEO.vs+GEO.vc-1,GEO.vs+Math.round((p.x-PL)/(W-PL-PR)*(GEO.vc-1))));
+  var b=BARS[i]; if(!b) return;
+  var price=GEO.LO+(GEO.HI-GEO.LO)*(1-(p.y-PT)/(H-PT-PB));
+  var ret=(i>0 && BARS[i-1] && BARS[i-1].c) ? (b.c-BARS[i-1].c)/BARS[i-1].c : 0;
+  TRAIN_POINTS.push({ts:b.t, price:price, ret:ret, label:TRAIN_LABEL});
+  updateTrain();
+}
+function drawTrainPoints(){
+  var g=document.getElementById("trainmarks");
+  if(!g){ g=document.createElementNS("http://www.w3.org/2000/svg","g"); g.id="trainmarks";
+         var svg=$("svg"); if(svg) svg.appendChild(g); }
+  g.innerHTML=TRAIN_POINTS.map(function(pt){
+    var col=pt.label==="P"?"#3fb950":"#f85149";
+    var i=0; for(var k=0;k<BARS.length;k++){ if(BARS[k].t===pt.ts){ i=k; break; } }
+    var x=GEO.x(i), y=GEO.y(pt.price);
+    return '<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="4" fill="'+col+'" stroke="#0b1119"/>'+
+      '<text x="'+x.toFixed(1)+'" y="'+(y-6).toFixed(1)+'" fill="'+col+'" font-size="10" font-weight="700" text-anchor="middle">'+pt.label+'</text>';
+  }).join("");
+}
+function clearTrainMarks(){ var g=document.getElementById("trainmarks"); if(g) g.innerHTML=""; }
+async function trainOK(){
+  var model=$("trainmodel").value;
+  try{
+    var r=await fetch("/api/train",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:model, points:TRAIN_POINTS})});
+    var d=await r.json();
+    var msg="trained "+d.trained+" points on "+d.model;
+    if(d.fit && d.fit.fit){ msg+="\nmodel fitted: weight="+d.fit.weight+" intercept="+d.fit.intercept+" (n="+d.fit.n+", P="+d.fit.p+", D="+d.fit.d+")"; }
+    else if(d.fit){ msg+="\n"+d.fit.reason; }
+    alert(msg);
+  }catch(e){ alert("train error: "+e.message); }
+  cancelTrain();
+}
+
 (function(){
   PROPS_OPEN=true;
+  renderModelList();
+  flowWindows(); loadFlows();
+  try{
+    var tp=new URLSearchParams(location.search);
+    if(tp.get("train")==="1"){
+      var m=tp.get("model");
+      if(m){ var sel=$("trainmodel"); if(sel) sel.value=m; }
+      setTimeout(function(){ if(tp.get("pick")==="1") startTrain(); else startTrainHere(); }, 700);
+    }
+  }catch(e){}
   var p=$("props"), panel=$("panel");
   if(panel){ panel.classList.remove("open"); }
   if(p) p.style.display="";

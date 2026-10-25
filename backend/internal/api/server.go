@@ -27,6 +27,7 @@ import (
 	"pumpdump/backend/internal/models"
 	"pumpdump/backend/internal/outlook"
 	"pumpdump/backend/internal/perf"
+	"pumpdump/backend/internal/regime"
 	"pumpdump/backend/internal/screen"
 	"pumpdump/backend/internal/turtle"
 )
@@ -196,6 +197,8 @@ type Deps struct {
 	Outlook *outlook.Service
 	// Perf reports what each symbol's predictions have actually done.
 	Perf *perf.Service
+	// Regime is the cached broad-market regime (rising/falling/sideways).
+	Regime *regime.Cache
 	// Market is the REST client used for chart klines. The survey and screen
 	// own their own clients, but the chart endpoint is ad-hoc per request, so
 	// it borrows this one.
@@ -257,6 +260,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/klines/latest", s.handleKlinesLatest)
 	mux.HandleFunc("/api/ticker", s.handleTicker)
 	mux.HandleFunc("/api/outlook", s.handleOutlook)
+	mux.HandleFunc("/api/regime", s.handleRegime)
 	mux.HandleFunc("/api/colors", s.handleColors)
 	mux.HandleFunc("/api/zoom-presets", s.handleZoomPresets)
 	mux.HandleFunc("/api/tools", s.handleTools)
@@ -640,6 +644,14 @@ func (s *Server) handleScreen(w http.ResponseWriter, r *http.Request) {
 		"thresholds":      s.deps.Screener.Thresholds(),
 		"rows":            rows,
 	})
+}
+
+func (s *Server) handleRegime(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Regime == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"type": "regime", "label": "sideways", "basis": "no regime service"})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.deps.Regime.Get())
 }
 
 func (s *Server) handleScreenRefresh(w http.ResponseWriter, r *http.Request) {

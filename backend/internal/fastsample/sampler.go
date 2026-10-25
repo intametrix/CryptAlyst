@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"log"
 	"math"
@@ -186,6 +187,7 @@ func (s *Sampler) sample(ctx context.Context, pred prediction) {
 	// the DETECTION, not from when this goroutine happened to start.
 	started := time.UnixMilli(pred.TSMS)
 	peakHigh, peakLow := pred.EntryPrice, pred.EntryPrice
+	emitted := map[string]bool{}
 
 	for time.Now().Before(deadline) {
 		select {
@@ -216,8 +218,12 @@ func (s *Sampler) sample(ctx context.Context, pred prediction) {
 			"horizon": "1s",
 		})
 
-		// Emit the short-horizon label exactly once, at the locked horizon.
-		if time.Since(started) >= LabelHorizon {
+		elapsed := time.Since(started)
+
+		// The locked 10s direction-adjusted label (existing consumer) is
+		// emitted once, as before.
+		if elapsed >= LabelHorizon && !emitted["label_10s"] {
+			emitted["label_10s"] = true
 			if label, ok := Label10s(pred.EntryPrice, price, pred.Direction); ok {
 				s.append(map[string]any{
 					"type":       "label_10s",
@@ -232,9 +238,6 @@ func (s *Sampler) sample(ctx context.Context, pred prediction) {
 					"label_rule": "locked before data collection",
 				})
 			} else {
-				// The move is inside the no-information band. Recording it as a
-				// discard is the point of a three-way label: it must not be
-				// silently forced into win or loss.
 				s.append(map[string]any{
 					"type":       "label_10s",
 					"id":         pred.ID,
@@ -248,8 +251,53 @@ func (s *Sampler) sample(ctx context.Context, pred prediction) {
 					"label_rule": "locked before data collection",
 				})
 			}
-			return
 		}
+
+		// Symmetric up/reversal barrier labels at 10/30/60s: the micro-burst
+		// outcome the horizon models are trained on. "UP" means price rose by
+		// the band first, "REVERSAL" means it fell by the band first, and the
+		// no-hit case is simply not recorded (NEITHER).
+		for _, h := range []time.Duration{10 * time.Second, 30 * time.Second, 60 * time.Second} {
+			key := fmt.Sprintf("label_barrier_%ds", int(h/time.Second))
+			if elapsed >= h && !emitted[key] {
+				emitted[key] = true
+				if label, hit := LabelBarrier(pred.EntryPrice, price, LockedLabelBandPct); hit {
+					s.append(map[string]any{
+						"type":       key,
+						"id":         pred.ID,
+						"symbol":     pred.Symbol,
+						"label":      label,
+						"ts_ms":      time.Now().UnixMilli(),
+						"price":      price,
+						"entry":      pred.EntryPrice,
+						"band_pct":   LockedLabelBandPct,
+						"direction":  pred.Direction,
+						"label_rule": "symmetric up/reversal barrier, locked before data collection",
+					})
+				}
+			}
+		}
+	}
+}
+
+// LabelBarrier applies the symmetric up/reversal rule used by the micro-burst
+// horizon models. It is NOT direction-adjusted: for any alert, a move of
+// +band% from entry is "UP" (continuation of the burst's direction) and a move
+// of -band% is "REVERSAL". A move inside the band returns hit=false (NEITHER),
+// which is simply not recorded so a no-information sample is never forced into
+// win or loss.
+func LabelBarrier(entry, price, bandPct float64) (string, bool) {
+	if entry <= 0 || price <= 0 {
+		return "", false
+	}
+	move := (price - entry) / entry * 100
+	switch {
+	case move >= bandPct:
+		return "UP", true
+	case move <= -bandPct:
+		return "REVERSAL", true
+	default:
+		return "NEITHER", false
 	}
 }
 
