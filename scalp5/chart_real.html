@@ -1225,7 +1225,12 @@ function wire(){
   svg.addEventListener("dblclick", function(ev){
   if(ev.target.tagName==="svg") toggleProps();
 });
-svg.addEventListener("click",function(e){ trainClick(e); });
+var TAP=null;
+svg.addEventListener("pointerdown",function(e){ if(e.isPrimary) TAP={x:e.clientX,y:e.clientY}; });
+svg.addEventListener("pointerup",function(e){
+  if(TAP && Math.abs(e.clientX-TAP.x)<6 && Math.abs(e.clientY-TAP.y)<6){ trainClick(e); }
+  TAP=null;
+});
 svg.addEventListener("mousemove",function(e){
   TRAIN_CURSOR=pt(e);
   if(TRAIN_MODE && TRAIN_PENDING) drawTrainPoints();
@@ -1938,9 +1943,9 @@ function startTrainDrag(ev, idx){
     var c=g.querySelector("circle"); if(c){ c.setAttribute("cx",x.toFixed(1)); c.setAttribute("cy",y.toFixed(1)); }
     var t=g.querySelector("text"); if(t){ t.setAttribute("x",x.toFixed(1)); t.setAttribute("y",(y-8).toFixed(1)); }
   }
-  function up(){ document.removeEventListener("mousemove",move); document.removeEventListener("mouseup",up); TRAIN_DRAGGING=false;
+  function up(){ document.removeEventListener("pointermove",move); document.removeEventListener("pointerup",up); TRAIN_DRAGGING=false;
     if(!moved){ deleteTrainPoint(idx); } else { updateTrain(); } }
-  document.addEventListener("mousemove",move); document.addEventListener("mouseup",up);
+  document.addEventListener("pointermove",move); document.addEventListener("pointerup",up);
 }
 function trainClick(ev){
   if(!TRAIN_MODE||!GEO||TRAIN_DRAGGING) return;
@@ -1995,7 +2000,7 @@ function drawTrainPoints(){
   }
   g.innerHTML=html;
   g.querySelectorAll(".trainpt").forEach(function(el){
-    el.addEventListener("mousedown", function(ev){ startTrainDrag(ev, parseInt(el.getAttribute("data-idx"),10)); });
+    el.addEventListener("pointerdown", function(ev){ startTrainDrag(ev, parseInt(el.getAttribute("data-idx"),10)); });
     el.addEventListener("contextmenu", function(ev){ ev.preventDefault(); deleteTrainPoint(parseInt(el.getAttribute("data-idx"),10)); });
   });
 }
