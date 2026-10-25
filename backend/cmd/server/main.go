@@ -50,36 +50,41 @@ import (
 )
 
 type options struct {
-	addr            string
-	minLiquidity    float64
-	maxSymbols      int
-	extraSymbols    string
-	windowSec       float64
-	minBurstMult    float64
-	minBurstZ       float64
-	minMovePct      float64
-	minSigmaMult    float64
-	minCoverage     float64
-	minTrades       int64
-	minFlowUSD      float64
-	cooldownSec     float64
-	turtleLog       string
-	severityMin     string
-	bootstrapTopN   int
-	screenTopN      int
-	surveyTopN      int
-	equity          float64
-	timeframes      string
-	adxMin          float64
-	longOnly        bool
-	disableScreen   bool
-	disableSurvey   bool
-	dataDir         string
-	alertHistory    string
-	ledgerPath      string
-	ledgerHorizon   time.Duration
-	calibrationPath string
-	microburstDir   string
+	addr                 string
+	minLiquidity         float64
+	maxSymbols           int
+	extraSymbols         string
+	windowSec            float64
+	minBurstMult         float64
+	minBurstZ            float64
+	minMovePct           float64
+	minSigmaMult         float64
+	minCoverage          float64
+	minTrades            int64
+	minFlowUSD           float64
+	cooldownSec          float64
+	turtleLog            string
+	severityMin          string
+	bootstrapTopN        int
+	screenTopN           int
+	screenMinMove        float64
+	screenMinVolRatio    float64
+	screenMinVolZ        float64
+	screenMinRecentUSD   float64
+	screenMinQuoteVolume float64
+	surveyTopN           int
+	equity               float64
+	timeframes           string
+	adxMin               float64
+	longOnly             bool
+	disableScreen        bool
+	disableSurvey        bool
+	dataDir              string
+	alertHistory         string
+	ledgerPath           string
+	ledgerHorizon        time.Duration
+	calibrationPath      string
+	microburstDir        string
 }
 
 func main() {
@@ -269,7 +274,13 @@ func main() {
 	go stream.Run(ctx)
 
 	// --- collaborators -----------------------------------------------------
-	screener := screen.New(client, universe, screen.DefaultThresholds(),
+	th := screen.DefaultThresholds()
+	th.MinMove5m = opt.screenMinMove
+	th.MinVolRatio = opt.screenMinVolRatio
+	th.MinVolZ = opt.screenMinVolZ
+	th.MinRecentUSD = opt.screenMinRecentUSD
+	th.MinQuoteVolume24h = opt.screenMinQuoteVolume
+	screener := screen.New(client, universe, th,
 		opt.screenTopN, screen.DefaultKlineLimit, 8, "1m")
 
 	var survey *turtle.Survey
@@ -509,6 +520,11 @@ func parseFlags() options {
 	flag.StringVar(&o.severityMin, "min-severity", "WATCH", "WATCH | ALERT | CRITICAL")
 	flag.IntVar(&o.bootstrapTopN, "bootstrap-top-n", 150, "symbols to seed flow baselines for at startup")
 	flag.IntVar(&o.screenTopN, "screen-top", 200, "symbols to include in the pump/dump screen")
+	flag.Float64Var(&o.screenMinMove, "screen-min-move", 0.8, "pump/dump screen minimum 5m move %")
+	flag.Float64Var(&o.screenMinVolRatio, "screen-min-vol-ratio", 1.8, "pump/dump screen minimum volume ratio")
+	flag.Float64Var(&o.screenMinVolZ, "screen-min-vol-z", 1.2, "pump/dump screen minimum volume z-score")
+	flag.Float64Var(&o.screenMinRecentUSD, "screen-min-recent-usd", 5000, "pump/dump screen minimum recent USD flow")
+	flag.Float64Var(&o.screenMinQuoteVolume, "screen-min-quote-volume", 50000, "pump/dump screen minimum 24h quote volume")
 	flag.IntVar(&o.surveyTopN, "survey-top", 150, "symbols to include in the Turtle survey")
 	flag.Float64Var(&o.equity, "equity", 10_000, "account equity for position sizing")
 	flag.StringVar(&o.timeframes, "timeframes", "1d,4h,1h", "survey timeframes")
