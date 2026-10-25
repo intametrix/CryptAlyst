@@ -28,6 +28,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"pumpdump/backend/internal/gpuagent"
 )
 
 // Job is one training job.
@@ -370,6 +372,7 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/sweep", gpuagent.HandleSweep)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true, "jobs": len(ag.list())})
 	})

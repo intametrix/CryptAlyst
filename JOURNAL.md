@@ -731,3 +731,35 @@ context), a VerdictNode sink, and Backtest.Run — replays over pre-computed con
 measures each directional signal against the close Forward bars later, and reports hit
 rate + compounded equity + per-trade returns. Tested rising (100% hit) and falling
 (0% hit) against a rising price. Full backend gate green.
+
+## Signal-flow graph — parameter sweep (Oct 25)
+
+Added `Sweep`: the same graph replayed over the same history for every combination of a
+parameter grid (cartesian product), results sorted by hit rate/equity. This is the
+CPU-first, correct foundation the GPU agent later accelerates — the sweep enumeration
+is embarrassingly parallel, which is exactly the GPU's value. Full backend gate green.
+
+## GPU-agent envelope (Oct 25)
+
+Added `internal/envelope`: the versioned wire contract between the Go backend and the
+GPU agent. Envelope = version + id + kind (job/ack/result/error) + opaque payload +
+provenance. Payloads: SweepJob (GraphSpec nodes/links + Grid + Symbols + HistoryRef +
+Forward + Seed) and SweepResult (per-combo hit rate/equity + device + duration).
+HistoryRef is a reference (klines/file/store) so the packet stays small. Round-trip
+marshalling tested; unknown versions rejected. Full backend gate green (16 packages).
+
+## GPU-agent CPU executor (Oct 25)
+
+Added `internal/gpuagent`: the CPU-side sweep executor that decodes a SweepJob envelope,
+validates the spec, rebuilds the graph (node factory: constant/threshold/combine/equation/
+verdict + the context sources), runs the parameter sweep, and returns a SweepResult. This
+is the audit path the GPU agent must reproduce within tolerance. Full backend gate green
+(17 packages).
+
+## GPU-agent HTTP transport (Oct 25)
+
+Added `gpuagent.Client` + `HandleSweep` (the /sweep transport: SweepRequest = job +
+inline contexts/closes) and wired `POST /sweep` into the CryptALAS agent. Client-server
+round-trip tested over httptest (job -> run -> result). The envelope now flows end-to-end
+on CPU; the GPU path reproduces the same result behind -device gpu. Full backend gate
+green (18 packages).
