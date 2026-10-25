@@ -11,6 +11,7 @@ import { BusPanel } from './components/BusPanel';
 import { FlowSplit } from './components/FlowSplit';
 import { Header } from './components/Header';
 import { ScreenTable } from './components/ScreenTable';
+import { SettingsPanel } from './components/SettingsPanel';
 import { StatStrip } from './components/StatStrip';
 import { SurveyPanel } from './components/SurveyPanel';
 import { TooltipViewer } from './components/TooltipViewer';
@@ -56,12 +57,12 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   // Top-level surface switch: the full overview, or the dedicated pump/dump
   // dashboard (owner ruling 2026-10-21: pump and dump is a first-class view).
   // Hash-addressable so the view is linkable and screenshot-able: #pumpdump.
-  const [view, setViewState] = useState<'main' | 'pumpdump' | 'bus'>(() => {
+  const [view, setViewState] = useState<'main' | 'pumpdump' | 'bus' | 'settings'>(() => {
     if (typeof window === 'undefined') return 'main';
     const h = window.location.hash;
-    return h === '#pumpdump' ? 'pumpdump' : h === '#bus' ? 'bus' : 'main';
+    return h === '#pumpdump' ? 'pumpdump' : h === '#bus' ? 'bus' : h === '#settings' ? 'settings' : 'main';
   });
-  const setView = useCallback((v: 'main' | 'pumpdump' | 'bus') => {
+  const setView = useCallback((v: 'main' | 'pumpdump' | 'bus' | 'settings') => {
     setViewState(v);
     if (typeof window !== 'undefined') {
       window.location.hash = v === 'main' ? '' : v;
@@ -463,9 +464,21 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           >
             message bus
           </button>
+          <button
+            type="button"
+            className={`view-btn${view === 'settings' ? ' active' : ''}`}
+            aria-pressed={view === 'settings'}
+            onClick={() => setView('settings')}
+          >
+            settings
+          </button>
         </nav>
 
-        {view === 'bus' ? (
+        {view === 'settings' ? (
+          <div className="settings-view">
+            <SettingsPanel />
+          </div>
+        ) : view === 'bus' ? (
           <div className="bus-grid">
             <BusPanel status={status} />
           </div>

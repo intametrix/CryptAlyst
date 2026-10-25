@@ -4631,3 +4631,14 @@ table {
 .bus-bar-cell { padding-top: 8px !important; }
 .bus-bar-cell .bus-bar { min-width: 40px; }
 .bus-tally { margin-top: 10px; padding: 0 10px; }
+.settings-view { padding: 10px 14px; min-width: 0; }
+.settings { max-width: 760px; }
+.settings-groups { display: flex; flex-direction: column; gap: 12px; margin: 8px 0; min-height: 0; }
+.settings-group { border: 1px solid var(--border, #223046); border-radius: 9px; padding: 8px 12px; }
+.settings-group-title { font-size: 10px; letter-spacing: .11em; text-transform: uppercase; color: var(--text-dim, #7f93ad); margin-bottom: 6px; }
+.settings-field { display: flex; align-items: center; gap: 10px; padding: 4px 0; min-width: 0; }
+.settings-label { width: 200px; font-size: 12px; color: var(--text, #d5e0ef); }
+.settings-input { width: 160px; background: var(--panel, #0d1622); border: 1px solid var(--border, #223046); color: var(--text, #d5e0ef); border-radius: 6px; padding: 4px 8px; font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; }
+.settings-input:focus { outline: none; border-color: var(--accent, #4d8dfd); }
+.settings-hint { font-size: 10px; color: var(--text-dim, #7f93ad); }
+.settings-actions { display: flex; gap: 10px; margin-top: 10px; min-width: 0; }
