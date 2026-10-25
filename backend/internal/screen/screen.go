@@ -52,15 +52,15 @@ type Thresholds struct {
 // DefaultThresholds returns the tuned defaults.
 func DefaultThresholds() Thresholds {
 	return Thresholds{
-		MinMove5m:         1.5,
-		MinMove15m:        2.5,
-		MinVolRatio:       3.0,
-		MinVolZ:           2.0,
-		MinRecentUSD:      20_000,
-		MinQuoteVolume24h: 750_000,
-		ReversalPriorPct:  6.0,
-		ReversalFastPct:   3.0,
-		ReversalVolRatio:  1.5,
+		MinMove5m:         0.8,
+		MinMove15m:        1.5,
+		MinVolRatio:       1.8,
+		MinVolZ:           1.2,
+		MinRecentUSD:      5_000,
+		MinQuoteVolume24h: 50_000,
+		ReversalPriorPct:  4.0,
+		ReversalFastPct:   2.0,
+		ReversalVolRatio:  1.2,
 		WickFadeRatio:     0.5,
 	}
 }
