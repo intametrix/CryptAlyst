@@ -218,8 +218,8 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
       </div>
       <div class="hint">drag = zoom box · drag price scale = zoom price · drag time scale = zoom time ·
         drag a box = zoom · shift-drag = pan · alt-drag = zoom price ·
-        scroll = pan · shift+scroll or option+scroll = zoom price · pinch = zoom both ·
-        pinch = zoom (horizontal = time, vertical = price) · double-click = full zoom out<br>
+        scroll = pan · shift+scroll or option+scroll = zoom price ·
+        pinch horizontal = time zoom · pinch vertical = price zoom · pinch diagonal = zoom both · double-click = full zoom out<br>
         keys: + / − zoom time · shift + / − zoom price · ← → pan · 0 reset</div>
     </div>
   </div>
@@ -1404,14 +1404,31 @@ svg.addEventListener("pointerdown",function(e){
     var r=svg.getBoundingClientRect();
     var vx=(e.clientX-r.left)/r.width*W;
 
-    // trackpad pinch arrives as ctrl+wheel -> zoom BOTH axes together
+    // trackpad pinch arrives as ctrl+wheel; the axis follows the gesture:
+    // horizontal squeeze = time zoom, vertical squeeze = price zoom, diagonal = both
     if(e.ctrlKey||e.metaKey){
-      var f=Math.exp(e.deltaY*0.006);
-      var nc=Math.max(15,Math.min(BARS.length,(S.c||BARS.length)*f));
-      var frac=Math.max(0,Math.min(1,(vx-PL)/(W-PL-PR)));
-      var a=(S.s||0)+frac*((S.c||BARS.length)-1);
-      S.c=Math.round(nc);
-      S.s=Math.max(0,Math.min(BARS.length-S.c,a-frac*(S.c-1)));
+      var dx=e.deltaX||0, dy=e.deltaY||0;
+      var ax=Math.abs(dx), ay=Math.abs(dy);
+      if(ax>ay*1.5){
+        var fh=Math.exp(dx*0.006);
+        var nc=Math.max(15,Math.min(BARS.length,(S.c||BARS.length)*fh));
+        var frac=Math.max(0,Math.min(1,(vx-PL)/(W-PL-PR)));
+        var a2=(S.s||0)+frac*((S.c||BARS.length)-1);
+        S.c=Math.round(nc);
+        S.s=Math.max(0,Math.min(BARS.length-S.c,a2-frac*(S.c-1)));
+        draw();
+        return;
+      }
+      if(ay>=ax*1.5){
+        zoomY(p.y,Math.exp(dy*0.006));
+        return;
+      }
+      var f=Math.exp(dy*0.006);
+      var nc2=Math.max(15,Math.min(BARS.length,(S.c||BARS.length)*f));
+      var frac2=Math.max(0,Math.min(1,(vx-PL)/(W-PL-PR)));
+      var a3=(S.s||0)+frac2*((S.c||BARS.length)-1);
+      S.c=Math.round(nc2);
+      S.s=Math.max(0,Math.min(BARS.length-S.c,a3-frac2*(S.c-1)));
       zoomY(p.y,f);
       return;
     }
