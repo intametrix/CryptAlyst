@@ -218,8 +218,8 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
       </div>
       <div class="hint">drag = zoom box · drag price scale = zoom price · drag time scale = zoom time ·
         drag a box = zoom · shift-drag = pan · alt-drag = zoom price ·
-        two-finger swipe: horizontal = time zoom · vertical = price zoom · pinch = zoom both ·<br>
-        shift+scroll or option+scroll = zoom price · + / − = zoom time · double-click = full zoom out
+        scroll = pan · shift+scroll or option+scroll = zoom price · pinch = zoom both ·
+        pinch = zoom (horizontal = time, vertical = price) · double-click = full zoom out<br>
         keys: + / − zoom time · shift + / − zoom price · ← → pan · 0 reset</div>
     </div>
   </div>
@@ -312,7 +312,7 @@ var PROP_META=[
   {id:"showPxVol",label:"show price/volume"},
   {id:"axisDrag",label:"axis drag zoom"},
   {id:"volumePane",label:"volume pane"},
-  {id:"scrollPan",label:"swipe zooms axis"},
+  {id:"scrollPan",label:"scroll pans"},
   {id:"tooltip",label:"candle tooltip"},
   {id:"highlight",label:"candle highlight"}
 ];
@@ -1419,16 +1419,30 @@ svg.addEventListener("pointerdown",function(e){
     if(e.shiftKey||e.altKey){ zoomY(p.y,e.deltaY>0?1.1:0.91); return; }
 
     var vc0=S.c||BARS.length;
-    // two-finger swipe -> axis-specific zoom (horizontal = time, vertical = price)
+    // plain scroll -> PAN (no zoom): horizontal moves time, vertical moves price
     if(P.scrollPan){
-      if(e.deltaX){
-        zoomX(vx, vc0*Math.exp(e.deltaX*0.006));
-        return;
+      var moved=false;
+
+      // --- horizontal: shift the bar window ---
+      var perBar=(W-PL-PR)/Math.max(1,vc0-1);
+      var bars=Math.round((e.deltaX||0)/perBar);
+      if(bars!==0){
+        var ns=Math.max(0,Math.min(BARS.length-vc0,(S.s||0)+bars));
+        if(ns!==S.s){ S.s=ns; moved=true; }
       }
+
+      // --- vertical: slide the price range ---
       if(e.deltaY){
-        zoomY(p.y, Math.exp(e.deltaY*0.006));
-        return;
+        var span=(GEO?GEO.HI-GEO.LO:1)||1;
+        var plotH=Math.max(40,H-PT-PB);
+        var shift=-span*(e.deltaY/plotH);     // reversed: drag down lowers the range
+        var baseLo=S.y?S.y.lo:(GEO?GEO.LO:0);
+        var baseHi=S.y?S.y.hi:(GEO?GEO.HI:1);
+        S.y={lo:baseLo+shift, hi:baseHi+shift};
+        moved=true;
       }
+
+      if(moved) draw();
       return;
     }
     zoomX(vx,vc0*(e.deltaY>0?1.12:0.89));
