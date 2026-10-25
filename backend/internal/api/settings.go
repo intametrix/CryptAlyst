@@ -88,9 +88,35 @@ func (s *Server) handleSettingsApply(w http.ResponseWriter, r *http.Request) {
 		s.deps.Universe.SetMaxSymbols(next.MaxSymbols)
 	}
 
+	// Merge onto the current settings so a partial POST does not zero the
+	// fields the caller did not mention.
+	cur := s.deps.Settings.Snapshot()
+	if next.ScreenMinMove != 0 {
+		cur.ScreenMinMove = next.ScreenMinMove
+	}
+	if next.ScreenMinVolRatio != 0 {
+		cur.ScreenMinVolRatio = next.ScreenMinVolRatio
+	}
+	if next.ScreenMinVolZ != 0 {
+		cur.ScreenMinVolZ = next.ScreenMinVolZ
+	}
+	if next.ScreenMinRecentUSD != 0 {
+		cur.ScreenMinRecentUSD = next.ScreenMinRecentUSD
+	}
+	if next.ScreenMinQuoteVolume != 0 {
+		cur.ScreenMinQuoteVolume = next.ScreenMinQuoteVolume
+	}
+	if next.ScreenTopN > 0 {
+		cur.ScreenTopN = next.ScreenTopN
+	}
+	if next.MinLiquidity > 0 {
+		cur.MinLiquidity = next.MinLiquidity
+	}
+	if next.MaxSymbols > 0 {
+		cur.MaxSymbols = next.MaxSymbols
+	}
 	s.deps.Settings.mu.Lock()
-	next.mu = s.deps.Settings.mu // keep the shared lock across the copy
-	*s.deps.Settings = next
+	*s.deps.Settings = cur
 	s.deps.Settings.mu.Unlock()
 
 	writeJSON(w, http.StatusOK, s.deps.Settings.Snapshot())
