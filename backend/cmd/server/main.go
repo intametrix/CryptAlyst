@@ -35,6 +35,7 @@ import (
 	"pumpdump/backend/internal/events"
 	"pumpdump/backend/internal/fastsample"
 	"pumpdump/backend/internal/flow"
+	"pumpdump/backend/internal/graph"
 	"pumpdump/backend/internal/heat"
 	"pumpdump/backend/internal/ledger"
 	"pumpdump/backend/internal/market"
@@ -336,6 +337,7 @@ func main() {
 	registry.Register(detect.NewPumpScreen(screener))
 	registry.Register(detect.NewTurtleBreakout(survey))
 	registry.Register(detect.NewBullsAndBears(engine, 60))
+	graphCatalog := graph.Catalog(registry)
 	log.Printf("detectors registered: %s", strings.Join(registry.Names(), ", "))
 
 	// --- event outlook: state, ETA to reversal, short-horizon distribution ---
@@ -424,6 +426,7 @@ func main() {
 		Alerts:        alerts,
 		Survey:        surveyProvider(survey),
 		Detectors:     registry,
+		Graph:         graphCatalog,
 		Heat:          heatSvc,
 		KlinesCache:   api.NewKlinesCache(),
 		TickerPump:    tickerPump,

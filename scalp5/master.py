@@ -1876,7 +1876,7 @@ header{margin-left:186px}
     if(b){ b.style.display="block"; b.textContent="JS error: "+e.message+" @"+e.lineno; }
     window.__earlyErr = e.message;
   });
-  var PANELS=["dash","market","why","review","control","lb","opt","models","tape","signals","advisor","forecast","thinking","busview","moversview","marketlive","engines","health"];
+  var PANELS=["dash","market","why","review","control","lb","opt","models","tape","signals","advisor","forecast","thinking","busview","moversview","marketlive","engines","books","health"];
   window.showTab = window.showTab || function(which){
     PANELS.forEach(function(k){
       var el=document.getElementById(k); if(!el) return;
@@ -1906,6 +1906,92 @@ header{margin-left:186px}
 .drillpos{display:grid;grid-template-columns:150px 60px 1fr 1fr 1fr 1fr 70px 70px;
           gap:6px;align-items:center;font-family:var(--mono);font-size:10.5px;
           color:#93a5b8;padding:3px 0 3px 14px;border-top:1px solid #101a24}
+.tabrow .tbtn.on{background:#182a3b;color:#58a6ff;border-color:#3d6f96}
+.tabbar{display:flex;gap:10px;margin:0 0 16px;border-bottom:1px solid #1e2733}
+.tabbtn{background:transparent;border:0;border-bottom:2px solid transparent;color:#8494a8;
+  font:inherit;font-size:14px;font-weight:600;letter-spacing:.03em;padding:12px 20px;cursor:pointer;
+  transition:color .15s,border-color .15s,background .15s;border-radius:8px 8px 0 0}
+.tabbtn:hover{color:#e6edf6;background:#101923}
+.tabbtn.on{color:#58a6ff;border-bottom-color:#58a6ff;background:#101923}
+
+  /* ---------- form modals (create book / strategy / book detail) ---------- */
+  .form-sheet{max-width:560px}
+  .fbody{padding:20px 28px 24px;max-height:calc(100vh - 150px);overflow:auto}
+  .field{display:block;margin:0 0 16px}
+  .flabel{display:block;font-size:11px;letter-spacing:.09em;text-transform:uppercase;
+          color:#8494a8;font-weight:600;margin-bottom:7px}
+  .fhint{font-size:11px;color:#59677a;margin-top:6px;line-height:1.55}
+  .finput{width:100%;box-sizing:border-box;background:#0f1721;border:1px solid #2a3a4a;
+          border-radius:9px;color:#e8eef6;padding:10px 13px;font:inherit;font-size:13px}
+  .finput:focus{border-color:#3d6f96;outline:none;box-shadow:0 0 0 3px #3d6f9622}
+  .frow{display:flex;flex-wrap:wrap;gap:8px}
+  .fcheck{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:#c9d6e3;
+          background:#101923;border:1px solid #22303d;border-radius:8px;padding:7px 13px;
+          cursor:pointer;line-height:1.4}
+  .fcheck:hover{border-color:#31506b;background:#121e2a}
+  .fcheck input{accent-color:#58a6ff;margin:0}
+  .fchain{max-height:200px;overflow:auto;display:flex;flex-direction:column;gap:7px}
+  .fchain .node{background:#0e161e;border:1px solid #1d2836;border-radius:9px;padding:9px 12px}
+  .fchain .node .nm{font-size:12px;color:#e8eef6;font-family:var(--mono)}
+  .fchain .node .in{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+  .factions{display:flex;gap:10px;margin-top:20px;padding-top:16px;border-top:1px solid #1e2733}
+  .factions.top{margin-top:0;padding-top:0;border-top:0}
+  .fbtn{padding:9px 20px;border-radius:8px;font:inherit;font-size:13px;font-weight:600;
+        cursor:pointer;border:1px solid #2a3a4a;background:#111a23;color:#cfe4f7;line-height:1.4}
+  .fbtn:hover{background:#16232f;border-color:#31506b}
+  .fbtn.primary{background:#1d4a2f;border-color:#2f6b47;color:#9ef0b0}
+  .fbtn.primary:hover{background:#245c3a}
+  .fbtn.danger{color:#ff9c94;border-color:#3a1d1d;background:#240f0f}
+  .fbtn.danger:hover{background:#2e1414}
+
+
+  /* ---------- strategy designer ---------- */
+  #designer{position:fixed;inset:0;z-index:130;background:#05090e;display:none;flex-direction:column}
+  #designer.open{display:flex}
+  .dhead{display:flex;align-items:center;gap:12px;padding:14px 20px;background:#0c141d;border-bottom:1px solid #1e2733}
+  .dhead .ttl{font-size:15px;font-weight:700;color:#e8eef6;letter-spacing:.02em}
+  .dbody{display:flex;flex:1;min-height:0}
+  .dpalette{width:230px;background:#0b1219;border-right:1px solid #1e2733;padding:16px;overflow:auto}
+  .dpalette .pl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#59677a;margin:0 0 10px}
+  .dmodel{display:block;width:100%;text-align:left;background:#0f1721;border:1px solid #1d2836;border-radius:9px;
+          padding:9px 12px;margin-bottom:8px;cursor:pointer;color:#c9d6e3;font:inherit;font-size:12px}
+  .dmodel:hover{border-color:#3d6f96;background:#121e2a}
+  .dmodel .nm{font-weight:600;color:#e8eef6}
+  .dmodel .ex{font-size:10.5px;color:#59677a;margin-top:3px;line-height:1.4}
+  .dcanvas{flex:1;position:relative;overflow:auto;background:
+           radial-gradient(#14202b 1px, transparent 1px);background-size:22px 22px}
+  .dcanvas svg{position:absolute;inset:0;width:100%;height:100%}
+  .dnode{position:absolute;min-width:170px;max-width:210px;background:#101923;border:1px solid #24313e;
+         border-radius:11px;padding:10px 12px;cursor:grab;user-select:none;box-shadow:0 14px 30px -18px #000}
+  .dnode:hover{border-color:#3d6f96}
+  .dnode.dragging{cursor:grabbing;border-color:#58a6ff}
+  .dnode.sel{border-color:#58a6ff;box-shadow:0 0 0 3px #58a6ff22}
+  .dnode .t{font-size:13px;font-weight:700;color:#e8eef6}
+  .dnode .lb{font-size:13px;margin-left:7px;color:#59677a}
+  .dnode .s{font-size:10.5px;color:#59677a;margin-top:3px;line-height:1.45}
+  .dnode .port{position:absolute;top:50%;width:20px;height:20px;border-radius:50%;background:#0b1119;
+               border:2px solid #3d6f96;transform:translateY(-50%);display:flex;align-items:center;
+               justify-content:center;font-size:11px;line-height:1;color:#7ab3e8;cursor:pointer}
+  .dnode .port:hover{width:24px;height:24px;color:#fff}
+  .dnode .port.in{left:-11px}
+  .dnode .port.out{right:-11px;border-color:#2f6b47;color:#7cd69a}
+  .dnode .del{position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;background:#240f0f;
+              border:1px solid #3a1d1d;color:#ff9c94;font-size:11px;line-height:1;cursor:pointer;display:none}
+  .dnode:hover .del{display:block}
+
+
+  .dprops{width:270px;background:#0b1219;border-left:1px solid #1e2733;padding:16px;overflow:auto;
+          transition:width .2s ease,padding .2s ease;flex-shrink:0}
+  .dprops.collapsed{width:0;padding:0;overflow:hidden;border-left:0}
+  .dph{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .dprops .pl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#59677a}
+  .dprops .mttl{font-size:14px;font-weight:700;color:#e8eef6;margin-bottom:4px}
+  .dprops .sec{margin:14px 0 6px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#8494a8;font-weight:600}
+  .dprops .kv{font-size:11.5px;color:#c9d6e3;line-height:1.6}
+  .dprops .kv .k{color:#59677a}
+  .dprops .tag{display:inline-block;padding:2px 8px;border-radius:999px;background:#131c26;border:1px solid #1e2733;
+              color:#8494a8;font-size:10.5px;margin:0 4px 4px 0}
+
 </style></head><body>
 <aside id="rail">
   <div class="rlogo"><b>Crypt<span>Alyst</span></b>
@@ -1920,7 +2006,7 @@ header{margin-left:186px}
     <a onclick="showTab('forecast')" id="nav-forecast" class="nav"><i>◈</i><span>Forecast</span></a>
     <a onclick="showTab('moversview')" id="nav-moversview" class="nav"><i>↕</i><span>Movers</span></a>
     <a onclick="showTab('marketlive')" id="nav-marketlive" class="nav"><i>◇</i><span>Market live</span></a>
-    <a onclick="showTab('market')" id="nav-market" class="nav"><i>◧</i><span>Chart</span></a>
+    <a onclick="showTab('market')" id="nav-market" class="nav"><i>◧</i><span>Charts</span></a>
     <a onclick="showTab('lb')" id="nav-lb" class="nav"><i>▲</i><span>Leaderboard</span></a>
     <a onclick="showTab('models')" id="nav-models" class="nav"><i>◈</i><span>Models</span></a>
     <a onclick="showTab('opt')" id="nav-opt" class="nav"><i>⚙</i><span>Optimiser</span></a>
@@ -2006,18 +2092,26 @@ header{margin-left:186px}
                    border-radius:12px;display:block;background:#0b0f14"></iframe>
   </div>
   <div id="books">
-    <div class="mhead"><span class="sym">Books</span>
-      <span class="mk">every model's own account · click a book to open it</span>
-      <span style="flex:1"></span><span class="mk" id="booksnote">—</span></div>
-    <div id="bookshead"></div>
-    <div id="booksgrid"></div>
-    <div class="mhead" style="margin-top:16px"><span class="sym">📚 My Books</span>
-      <span class="mk">your saved books + strategies · custom books are marked 📚</span>
-      <span style="flex:1"></span>
-      <button class="tbtn" onclick="openShelf()">+ Create Book</button></div>
-    <div id="myshelflist"></div>
-    <div class="ctitle" style="margin:12px 0 4px">live verdicts</div>
-    <div id="myverdicts"></div>
+    <div class="tabbar">
+      <button class="tabbtn on" id="btab-books" onclick="switchBooksTab('books')">Books</button>
+      <button class="tabbtn" id="btab-mine" onclick="switchBooksTab('mine')">My Books</button>
+    </div>
+    <div id="booksview">
+      <div class="mhead"><span class="sym">Books</span>
+        <span class="mk">every model's own account · click a book to open it</span>
+        <span style="flex:1"></span><span class="mk" id="booksnote">—</span></div>
+      <div id="bookshead"></div>
+      <div id="booksgrid"></div>
+    </div>
+    <div id="mineview" style="display:none">
+      <div class="mhead"><span class="sym">📚 My Books</span>
+        <span class="mk">your saved books + strategies · custom books are marked 📚</span>
+        <span style="flex:1"></span>
+        <button class="tbtn" onclick="openShelf()">+ Create Book</button></div>
+      <div id="myshelflist"></div>
+      <div class="ctitle" style="margin:12px 0 4px">live verdicts</div>
+      <div id="myverdicts"></div>
+    </div>
   </div>
   <div id="engines">
     <div class="mhead"><span class="sym">Engines</span>
@@ -2271,47 +2365,122 @@ header{margin-left:186px}
     <div class="label" id="chartfoot" style="margin-top:8px">—</div>
   </div>
 </div>
+</div>
 <div class="modal" id="shelfmodal" onclick="if(event.target===this)closeShelf()">
-  <div class="sheet" style="max-width:760px">
-    <span class="close" onclick="closeShelf()">×</span>
-    <h2>📚 Book shelf</h2>
-    <div class="mk" style="margin-bottom:10px">a book stores strategies · a strategy assigns models + tickers + notes</div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <input id="bookname" class="sympick" placeholder="new book name" style="flex:1">
-      <button class="tbtn" onclick="createBook()">create book</button>
+  <div class="sheet form-sheet">
+    <div class="head">
+      <h2>New book</h2>
+      <span class="close2" onclick="closeShelf()">×</span>
     </div>
-    <div id="shelflist"></div>
-    <div class="ctitle" style="margin:12px 0 4px">live verdicts</div>
-    <div id="shelfverdicts"><div class="mk">loading…</div></div>
+    <div class="fbody">
+      <label class="field">
+        <span class="flabel">Name</span>
+        <input id="bookname" class="finput" placeholder="e.g. Momentum Lab" autofocus onkeydown="if(event.key==='Enter')createBook()">
+        <span class="fhint">A book stores strategies, their models and the verdicts they produce.</span>
+      </label>
+      <div class="factions">
+        <button class="fbtn primary" onclick="createBook()">Create book</button>
+        <button class="fbtn" onclick="closeShelf()">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
 <div class="modal" id="strategyform" onclick="if(event.target===this)closeStrategyForm()">
-  <div class="sheet" style="max-width:620px">
-    <span class="close" onclick="closeStrategyForm()">×</span>
-    <h2>New strategy</h2>
-    <div class="label" style="margin:8px 0 4px">name</div>
-    <input id="sname" class="sympick" placeholder="strategy name" style="width:100%">
-    <div class="label" style="margin:12px 0 4px">models</div>
-    <div id="smodelchecks" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-    <div class="label" style="margin:12px 0 4px">tickers</div>
-    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#8494a8;margin-bottom:8px">
-      <input type="checkbox" id="sauto" checked onchange="toggleStickers()"> auto ticker selection</label>
-    <div id="stickers" style="display:none">
-      <input id="sticksrch" class="sympick" list="stickerdatalist" placeholder="type a ticker, press Enter to add" style="width:100%" onkeydown="if(event.key==='Enter'){addSticker();}">
-      <datalist id="stickerdatalist"></datalist>
-      <div id="stickerchips" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
+  <div class="sheet form-sheet" style="max-width:620px">
+    <div class="head">
+      <h2>New strategy</h2>
+      <span class="close2" onclick="closeStrategyForm()">×</span>
     </div>
-    <div class="label" style="margin:12px 0 4px">confirm signals (repeated firing before a verdict)</div>
-    <input id="sconfirm" class="sympick" type="number" min="1" value="2" style="width:90px">
-    <div style="margin-top:14px;display:flex;gap:8px">
-      <button class="tbtn" onclick="saveStrategy()" style="background:#1d3b2a;color:#9ef0b0">save strategy</button>
-      <button class="tbtn" onclick="closeStrategyForm()">cancel</button>
+    <div class="fbody">
+      <label class="field">
+        <span class="flabel">Name</span>
+        <input id="sname" class="finput" placeholder="e.g. Bull Confirm">
+      </label>
+      <div class="field">
+        <span class="flabel">Models</span>
+        <div id="smodelchecks" class="frow"></div>
+      </div>
+      <div class="field">
+        <span class="flabel">Chain — which models feed each model</span>
+        <div id="schain" class="fchain"></div>
+      </div>
+      <div class="field">
+        <span class="flabel">Tickers</span>
+        <label class="fcheck" style="margin-bottom:9px">
+          <input type="checkbox" id="sauto" checked onchange="toggleStickers()"> Auto selection
+        </label>
+        <div id="stickers" style="display:none">
+          <input id="sticksrch" class="finput" list="stickerdatalist" placeholder="Type a ticker, press Enter to add" onkeydown="if(event.key==='Enter'){addSticker();}">
+          <datalist id="stickerdatalist"></datalist>
+          <div id="stickerchips" class="frow" style="margin-top:9px"></div>
+        </div>
+      </div>
+      <div class="field">
+        <span class="flabel">Confirm signals</span>
+        <input id="sconfirm" class="finput" type="number" min="1" value="2" style="width:120px">
+        <span class="fhint">How many repeated firings before a verdict is emitted.</span>
+      </div>
+      <div class="factions">
+        <button class="fbtn primary" onclick="saveStrategy()">Save strategy</button>
+        <button class="fbtn" onclick="closeStrategyForm()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal" id="bookdetail" onclick="if(event.target===this)closeBookDetail()">
+  <div class="sheet form-sheet" style="max-width:760px">
+    <div class="head">
+      <h2 id="bdname">📚 Book</h2>
+      <span class="close2" onclick="closeBookDetail()">×</span>
+    </div>
+    <div class="fbody">
+      <div class="fhint" id="bdsummary" style="margin:0 0 14px">—</div>
+      <div class="factions top">
+        <button class="fbtn primary" onclick="newStrategy(BOOK_DETAIL_ID)">+ Strategy</button>
+        <button class="fbtn" onclick="openDesigner(BOOK_DETAIL_ID)">⚙ Design</button>
+        <button class="fbtn" onclick="addBookNote(BOOK_DETAIL_ID)">Note</button>
+        <button class="fbtn" onclick="renameBook(BOOK_DETAIL_ID)">Rename</button>
+        <button class="fbtn danger" onclick="deleteBook(BOOK_DETAIL_ID);closeBookDetail()">Delete</button>
+      </div>
+      <div class="hd"><h3>Strategies</h3></div>
+      <div id="bdstrategies"></div>
+      <div class="hd"><h3>Live verdicts</h3></div>
+      <div id="bdverdicts"></div>
     </div>
   </div>
 </div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="sheet" id="sheet"></div>
 </div>
+<div id="designer">
+  <div class="dhead">
+    <span class="ttl">⚙ Strategy Designer</span>
+    <input id="dname" class="finput" placeholder="strategy name" style="width:220px;background:#0f1721">
+    <span style="flex:1"></span>
+    <span class="mk" id="dstatus"></span>
+    <button class="fbtn" id="livebtn" onclick="toggleLive()">● Live</button>
+    <button class="fbtn" onclick="flowClear()">Clear</button>
+    <button class="fbtn primary" onclick="saveDesigner()">Save strategy</button>
+    <button class="fbtn" onclick="closeDesigner()">Cancel</button>
+  </div>
+  <div class="dbody">
+    <div class="dpalette">
+      <div class="pl">Models — click to add</div>
+      <div id="dpalette"></div>
+      <div class="pl" style="margin:18px 0 6px">How to connect</div>
+      <div class="fhint">1. click a node to see its properties<br>
+        2. click its <b style="color:#7cd69a">→</b> (output)<br>
+        3. click another model's <b style="color:#7ab3e8">←</b> (input)<br><br>
+        drag a node to move it · hover for <b>×</b> to delete</div>
+    </div>
+    <div class="dcanvas" id="dcanvas">
+      <svg id="dflow"></svg>
+    </div>
+    <div class="dprops" id="dprops">
+      <div class="dph"><span class="pl">Properties</span><button class="fbtn" style="padding:2px 9px;font-size:12px" onclick="toggleDprops()">⟨</button></div>
+      <div id="dpropsbody"><div class="fhint">Select a model to see its properties.</div></div>
+    </div>
+  </div>
 </div>
 <footer id="foot">—</footer>
 <script>
@@ -2509,7 +2678,7 @@ function showTab(which){
   try{ if(which==="thinking") renderThinking(); }catch(e){ tabErr("thinking",e); }
   try{ if(which==="moversview"){ renderMovers(); renderFlow(); } }catch(e){ tabErr("moversview",e); }
   try{ if(which==="marketlive"){ renderMarketLive(); loadMlEngines(); populateMlDatalist(); } mlStream(); }catch(e){ tabErr("marketlive",e); }
-  try{ if(which==="books"){ renderBooks(); renderShelf(); renderVerdicts(); } }catch(e){ tabErr("books",e); }
+  try{ if(which==="books") renderBooks(); }catch(e){ tabErr("books",e); }
   try{ if(which==="engines") renderEngines(); }catch(e){ tabErr("engines",e); }
   try{ if(which==="health") renderHealth(); }catch(e){ tabErr("health",e); }
 }
@@ -3340,68 +3509,409 @@ function _bookMatches(b, kind){
   return true;
 }
 
-function openShelf(){ var m=$("shelfmodal"); if(m) m.classList.add("open"); renderShelf(); }
+function switchBooksTab(tab){
+  var bv=$("booksview"), mv=$("mineview");
+  if(bv) bv.style.display = (tab==="books") ? "" : "none";
+  if(mv) mv.style.display = (tab==="mine") ? "" : "none";
+  var bb=$("btab-books"), bm=$("btab-mine");
+  if(bb) bb.classList.toggle("on", tab==="books");
+  if(bm) bm.classList.toggle("on", tab==="mine");
+  if(tab==="mine"){ renderShelf(); renderVerdicts(); }
+}
+function openShelf(){ var m=$("shelfmodal"); if(m) m.classList.add("open"); var i=$("bookname"); if(i){ i.value=""; setTimeout(function(){ i.focus(); }, 60); } }
 function closeShelf(){ var m=$("shelfmodal"); if(m) m.classList.remove("open"); }
 async function renderVerdicts(){
   var host=$("myverdicts")||$("shelfverdicts"); if(!host) return;
   var d={verdicts:[]};
   try{ d=await (await fetch("/api/verdicts",{cache:"no-store"})).json(); }catch(e){}
   var vs=d.verdicts||[];
-  host.innerHTML=vs.slice(0,20).map(function(v){
+  var done=vs.filter(function(v){return v.outcome;});
+  var rights=done.filter(function(v){return v.outcome==="right";}).length;
+  var hr=done.length?Math.round(100*rights/done.length):0;
+  var head='<div class="mk" style="margin-bottom:6px">hit rate: '+rights+'/'+done.length+' ('+hr+'%) · '+vs.length+' verdicts</div>';
+  host.innerHTML=head+vs.slice(0,20).map(function(v){
     var col=v.dir==="BULL"?"#3fb950":"#f85149";
+    var oc=v.outcome
+      ? '<span style="color:'+(v.outcome==="right"?"#3fb950":"#f85149")+'">'+(v.outcome==="right"?"✓ right":"✗ wrong")+(v.move_pct!=null?" "+v.move_pct+"%":"")+'</span>'
+      : '<span class="mk">pending</span>';
     return '<div class="flowrow"><b style="color:'+col+'">'+v.dir+'</b><span>'+esc(v.symbol)+'</span>'+
       '<span class="mk">'+esc(v.strategy)+' · '+esc(v.book)+'</span>'+
-      '<span class="mk">'+v.signals+' signals</span>'+
+      '<span class="mk">'+v.signals+' signals</span>'+oc+
       '<span class="mk">'+new Date(v.ts_ms).toTimeString().slice(0,8)+'</span></div>';
   }).join("") || '<div class="mk">no verdicts yet</div>';
 }
 async function renderShelf(){
   var host=$("myshelflist")||$("shelflist"); if(!host) return;
   renderVerdicts();
-  var d={books:[]};
+  var d={books:[]}, confs={};
   try{ d=await (await fetch("/api/bookshelf",{cache:"no-store"})).json(); }catch(e){}
+  try{ confs=(await (await fetch("/api/confirmations",{cache:"no-store"})).json()).confirmations||{}; }catch(e){}
   var books=d.books||[];
   host.innerHTML=books.map(function(b){
     return '<div class="panel" style="margin-bottom:10px">'+
-      '<div style="display:flex;align-items:center;gap:8px"><b>📚 '+esc(b.name)+'</b>'+
+      '<div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="openBookDetail(\''+b.id+'\')">'+
+      '<span class="carrow">▸</span>'+
+      '<b>📚 '+esc(b.name)+'</b>'+
       '<span class="mk">'+(b.strategies||[]).length+' strategies · '+(b.notes||[]).length+' notes</span>'+
       '<span style="flex:1"></span>'+
-      '<button class="tbtn" onclick="addBookNote(\''+b.id+'\')">note</button>'+
-      '<button class="tbtn" onclick="newStrategy(\''+b.id+'\')">+ strategy</button></div>'+
+      '<button class="tbtn" onclick="event.stopPropagation();newStrategy(\''+b.id+'\')">+ strategy</button>'+
+      '<button class="tbtn" onclick="event.stopPropagation();renameBook(\''+b.id+'\')">rename</button>'+
+      '<button class="tbtn" onclick="event.stopPropagation();deleteBook(\''+b.id+'\')">delete</button></div>'+
       (b.notes||[]).map(function(n){ return '<div class="mk">· '+esc(n)+'</div>'; }).join("")+
       (b.strategies||[]).map(function(st){
+        var chain=(st.chain||[]).map(function(c){
+          return esc(c.model)+(c.inputs&&c.inputs.length?"("+c.inputs.map(esc).join("+")+")":"");
+        }).join(" → ");
+        var cprog=confs[st.id]||{};
+        var prog=Object.keys(cprog).map(function(sym){
+          var c=cprog[sym];
+          var pct=Math.min(100, Math.round(c.count/(st.confirm_signals||1)*100));
+          return '<div style="display:flex;align-items:center;gap:6px;font-size:11px">'+esc(sym)+
+            '<span style="flex:1;height:5px;background:#16202b;border-radius:3px;overflow:hidden">'+
+            '<i style="display:block;height:100%;width:'+pct+'%;background:'+(c.dir>0?"#3fb950":"#f85149")+'"></i></span>'+
+            '<span class="mk">'+c.count+'/'+st.confirm_signals+'</span></div>';
+        }).join("");
         return '<div class="panel" style="margin:8px 0 0;background:#101923">'+
-          '<div style="display:flex;align-items:center;gap:8px"><b>'+esc(st.name)+'</b>'+
-          '<span class="mk">models: '+(st.models||[]).join(", ")+'</span>'+
-          '<span class="mk">tickers: '+(st.auto_tickers?"auto":(st.tickers||[]).join(", "))+'</span>'+
-          '<span class="mk">confirm ×'+st.confirm_signals+'</span>'+
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b>'+esc(st.name)+'</b>'+
+          '<span class="mk" style="color:#58a6ff">'+chain+'</span>'+
+          '<span class="mk">'+(st.auto_tickers?"auto":(st.tickers||[]).join(", "))+'</span>'+
+          '<span class="mk">×'+st.confirm_signals+'</span>'+
           '<span style="flex:1"></span>'+
-          '<button class="tbtn" onclick="addStrategyNote(\''+st.id+'\')">note</button></div>'+
+          '<button class="tbtn" onclick="addStrategyNote(\''+st.id+'\')">note</button>'+
+          '<button class="tbtn" onclick="renameStrategy(\''+st.id+'\')">rename</button>'+
+          '<button class="tbtn" onclick="deleteStrategy(\''+st.id+'\')">delete</button></div>'+
+          (prog?('<div style="margin-top:6px">'+prog+'</div>'):'')+
           (st.notes||[]).map(function(n){ return '<div class="mk">· '+esc(n)+'</div>'; }).join("")+
           '</div>';
       }).join("")+
       '</div>';
   }).join("") || '<div class="empty">no books yet — create one above</div>';
 }
+var BOOK_DETAIL_ID=null;
+function openBookDetail(id){
+  BOOK_DETAIL_ID=id;
+  fetch("/api/bookshelf",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    var book=(d.books||[]).find(function(b){return b.id===id;});
+    if(!book) return;
+    renderBookDetail(book);
+    var m=$("bookdetail"); if(m) m.classList.add("open");
+  }).catch(function(){});
+}
+function renderBookDetail(book){
+  $("bdname").textContent="📚 "+book.name;
+  $("bdsummary").textContent=(book.strategies||[]).length+" strategies · "+(book.notes||[]).length+" notes";
+  $("bdstrategies").innerHTML=(book.strategies||[]).map(function(st){
+    var chain=(st.chain||[]).map(function(c){return esc(c.model)+(c.inputs&&c.inputs.length?"("+c.inputs.map(esc).join("+")+")":"");}).join(" → ");
+    return '<div class="expo" style="margin-top:9px">'+
+      '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap"><b style="font-size:13px">'+esc(st.name)+'</b>'+
+      '<span class="mk" style="color:#58a6ff">'+chain+'</span>'+
+      '<span class="mk">'+(st.auto_tickers?"auto":(st.tickers||[]).join(", "))+'</span>'+
+      '<span class="mk">×'+st.confirm_signals+' confirm</span>'+
+      '<span style="flex:1"></span>'+
+      '<button class="fbtn" style="padding:5px 12px;font-size:12px" onclick="renameStrategy(\''+st.id+'\')">Rename</button>'+
+      '<button class="fbtn danger" style="padding:5px 12px;font-size:12px" onclick="deleteStrategy(\''+st.id+'\')">Delete</button></div></div>';
+  }).join("") || '<div style="font-size:11px;color:#59677a">No strategies yet — add one.</div>';
+  fetch("/api/verdicts",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    var vs=(d.verdicts||[]).filter(function(v){return v.book===book.name;});
+    var done=vs.filter(function(v){return v.outcome;});
+    var rights=done.filter(function(v){return v.outcome==="right";}).length;
+    var hr=done.length?Math.round(100*rights/done.length):0;
+    $("bdverdicts").innerHTML='<div class="mk" style="margin-bottom:6px">hit rate: '+rights+'/'+done.length+' ('+hr+'%)</div>'+
+      vs.slice(0,15).map(function(v){
+        var col=v.dir==="BULL"?"#3fb950":"#f85149";
+        var oc=v.outcome?('<span style="color:'+(v.outcome==="right"?"#3fb950":"#f85149")+'">'+(v.outcome==="right"?"✓ right":"✗ wrong")+(v.move_pct!=null?" "+v.move_pct+"%":"")+'</span>'):'<span class="mk">pending</span>';
+        return '<div class="flowrow"><b style="color:'+col+'">'+v.dir+'</b><span>'+esc(v.symbol)+'</span>'+
+          '<span class="mk">'+esc(v.strategy)+'</span>'+oc+
+          '<span class="mk" style="color:#7d8b9e;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(v.basis?esc(v.basis):'')+'</span>'+
+          '<span class="mk">'+new Date(v.ts_ms).toTimeString().slice(0,8)+'</span></div>';
+      }).join("") || '<div class="mk">no verdicts yet</div>';
+  }).catch(function(){});
+}
+var FLOW_NODES=[], FLOW_EDGES=[], FLOW_BOOK=null, FLOW_CONNECT=null, FLOW_SELECT=null, FLOW_LIVE={}, FLOW_TIMER=null, FLOW_LINK=null;
+function toggleLive(){
+  if(FLOW_TIMER){ clearInterval(FLOW_TIMER); FLOW_TIMER=null; FLOW_LIVE={}; var lb=$("livebtn"); if(lb) lb.textContent="● Live"; updateLiveBadges(); }
+  else { var lb=$("livebtn"); if(lb) lb.textContent="● Live ON"; pollLive(); FLOW_TIMER=setInterval(pollLive, 2000); }
+}
+function pollLive(){
+  fetch("/api/livesignals",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
+    var sigs=d.signals||[]; FLOW_LIVE={};
+    sigs.forEach(function(x){
+      if(x.dir && x.model && !FLOW_LIVE[x.model]) FLOW_LIVE[x.model]={dir:x.dir, sym:x.symbol};
+    });
+    updateLiveBadges();
+  }).catch(function(){});
+}
+function updateLiveBadges(){
+  FLOW_NODES.forEach(function(n){
+    var el=$("live-"+n.model); if(!el) return;
+    var l=FLOW_LIVE[n.model];
+    if(l && l.dir){ el.textContent=(l.dir>0?"▲":"▼"); el.style.color=(l.dir>0?"#3fb950":"#f85149"); el.title=l.sym||""; }
+    else { el.textContent="•"; el.style.color="#59677a"; el.title=""; }
+  });
+}
+function flowSelectLink(i){
+  FLOW_LINK=(FLOW_LINK===i)?null:i;
+  FLOW_SELECT=null;
+  renderProps();
+  drawFlow();
+}
+function flowSetLink(field, val){
+  if(FLOW_LINK===null || !FLOW_EDGES[FLOW_LINK]) return;
+  FLOW_EDGES[FLOW_LINK][field]=val;
+  renderProps();
+}
+function flowSetParam(key, val){
+  var node=FLOW_NODES.find(function(n){return n.model===FLOW_SELECT;});
+  if(node){ node.params=node.params||{}; node.params[key]=val; }
+}
+function toggleDprops(){ var d=$("dprops"); if(d) d.classList.toggle("collapsed"); }
+function flowSelect(model){
+  FLOW_SELECT=(FLOW_SELECT===model)?null:model;
+  renderProps();
+  drawFlow();
+}
+function renderProps(){
+  var host=$("dpropsbody"); if(!host) return;
+  if(FLOW_LINK!==null && FLOW_EDGES[FLOW_LINK]){
+    var lk=FLOW_EDGES[FLOW_LINK];
+    var fa=(MODEL_META[lk.from]||{}).t||lk.from, ta=(MODEL_META[lk.to]||{}).t||lk.to;
+    host.innerHTML=
+      '<div class="mttl">Link — data mapping</div>'+
+      '<div class="fhint" style="margin:0 0 12px">'+fa+' <b style="color:#2f6b47">→</b> '+ta+'</div>'+
+      '<div class="sec">Weight</div>'+
+      '<div class="fhint" style="margin-bottom:10px">how strongly this output feeds the next model.</div>'+
+      '<input class="finput" type="number" step="0.1" style="width:90px" value="'+lk.weight+'" onchange="flowSetLink(\'weight\', parseFloat(this.value)||0)">'+
+      '<div class="sec" style="margin-top:14px">Equation</div>'+
+      '<div class="fhint" style="margin-bottom:6px">variables: <b>score</b> (0–100), <b>direction</b> (-1/0/+1), <b>weight</b></div>'+
+      '<input class="finput" style="width:100%;font-family:var(--mono)" value="'+esc(lk.expr)+'" onchange="flowSetLink(\'expr\', this.value)">'+
+      '<div class="fhint" style="margin-top:6px" id="eqprev"></div>'+
+      '<div class="sec">Outputs</div>'+
+      '<div class="kv">the link maps <span class="k">'+fa+'</span> output → <span class="k">'+ta+'</span> input via this equation.</div>';
+    try{
+      var fn=new Function("score","direction","weight","return ("+lk.expr+")");
+      $("eqprev").textContent="preview: "+Math.round(fn(80,1,lk.weight)*10)/10+"  (score=80, direction=+1)";
+    }catch(e){ $("eqprev").textContent="invalid equation"; }
+    return;
+  }
+  var meta=FLOW_SELECT?(MODEL_META[FLOW_SELECT]||{}):null;
+  if(!meta){ host.innerHTML='<div class="fhint">Select a model to see its properties.</div>'; return; }
+  var ins=FLOW_EDGES.filter(function(e){return e.to===FLOW_SELECT;}).map(function(e){return (MODEL_META[e.from]||{}).t||e.from;});
+  var outs=FLOW_EDGES.filter(function(e){return e.from===FLOW_SELECT;}).map(function(e){return (MODEL_META[e.to]||{}).t||e.to;});
+  host.innerHTML=
+    '<div class="mttl">'+(meta.t||FLOW_SELECT)+'</div>'+
+    '<div class="fhint" style="margin:0 0 4px">'+(meta.d||'')+'</div>'+
+    '<div class="sec">Expertise</div>'+
+    '<div class="kv"><span class="k">good at</span> '+(meta.g||'')+'<br>'+
+    '<span class="k">regime</span> '+(meta.r||'')+'<br>'+
+    '<span class="k">timeframe</span> '+(meta.tf||'')+'</div>'+
+    '<div class="sec">Outputs</div>'+
+    '<div class="kv"><span class="k">direction</span> -1 / 0 / +1<br><span class="k">score</span> 0–100<br><span class="k">basis</span> the "why" string</div>'+
+    (meta.params?('<div class="sec">Settings</div>'+
+      Object.keys(meta.params).map(function(k){
+        var n2=FLOW_NODES.find(function(x){return x.model===FLOW_SELECT;});
+        var pv=(n2&&n2.params&&n2.params[k]!==undefined)?n2.params[k]:meta.params[k];
+        return '<div style="display:flex;align-items:center;justify-content:space-between;margin:5px 0">'+
+          '<span class="kv">'+k+'</span>'+
+          '<input class="finput" style="width:70px;padding:4px 8px;font-size:11px" value="'+pv+'" onchange="flowSetParam(\''+k+'\',this.value)">'+
+          '</div>';
+      }).join("")):"")+
+    '<div class="sec">Connections</div>'+
+    '<div class="kv"><span class="k">inputs</span> '+(ins.length?ins.join(", "):'none — source')+'<br>'+
+    '<span class="k">outputs</span> '+(outs.length?outs.join(", "):'none')+'</div>';
+}
+
+function openDesigner(bookId){
+  FLOW_BOOK=bookId; FLOW_NODES=[]; FLOW_EDGES=[]; FLOW_CONNECT=null;
+  $("dname").value="";
+  $("dpalette").innerHTML=STRAT_MODELS.map(function(m){
+    var meta=MODEL_META[m]||{};
+    return '<button class="dmodel" onclick="flowAdd(\''+m+'\')"><div class="nm">'+(meta.t||m)+'</div><div class="ex">'+(meta.g||'')+'</div></button>';
+  }).join("");
+  var d=$("designer"); if(d) d.classList.add("open");
+  drawFlow();
+}
+function closeDesigner(){ var d=$("designer"); if(d) d.classList.remove("open"); }
+
+function flowAdd(model){
+  if(FLOW_NODES.some(function(n){return n.model===model;})) return;
+  var c=$("dcanvas"); var cols=Math.max(1, Math.floor((c?c.clientWidth:900)/220));
+  var i=FLOW_NODES.length;
+  FLOW_NODES.push({model:model, x:30+(i%cols)*220, y:30+Math.floor(i/cols)*140});
+  FLOW_SELECT=model;
+  drawFlow();
+  renderProps();
+}
+function flowClear(){ FLOW_NODES=[]; FLOW_EDGES=[]; FLOW_CONNECT=null; drawFlow(); }
+function flowRemove(model){
+  FLOW_NODES=FLOW_NODES.filter(function(n){return n.model!==model;});
+  FLOW_EDGES=FLOW_EDGES.filter(function(e){return e.from!==model && e.to!==model;});
+  if(FLOW_CONNECT===model) FLOW_CONNECT=null;
+  drawFlow();
+}
+function flowPos(model){
+  var n=FLOW_NODES.find(function(x){return x.model===model;});
+  return n?{x:n.x+100, y:n.y+30}:{x:0,y:0};
+}
+function flowPath(e){
+  var a=flowPos(e.from), b=flowPos(e.to);
+  var cx=Math.max(50, Math.abs(b.x-a.x)/2);
+  return 'M '+a.x+' '+a.y+' C '+(a.x+cx)+' '+a.y+', '+(b.x-cx)+' '+b.y+', '+b.x+' '+b.y;
+}
+var SVGNS="http://www.w3.org/2000/svg";
+function svgEl(tag){ return document.createElementNS(SVGNS, tag); }
+function drawFlow(){
+  var svg=$("dflow"); if(!svg) return;
+  while(svg.firstChild) svg.removeChild(svg.firstChild);
+  var defs=svgEl("defs"), marker=svgEl("marker");
+  marker.setAttribute("id","arrow"); marker.setAttribute("viewBox","0 0 10 10");
+  marker.setAttribute("refX","9"); marker.setAttribute("refY","5");
+  marker.setAttribute("markerWidth","7"); marker.setAttribute("markerHeight","7");
+  marker.setAttribute("orient","auto");
+  var mp=svgEl("path"); mp.setAttribute("d","M0,0 L10,5 L0,10 z"); mp.setAttribute("fill","#2f6b47");
+  marker.appendChild(mp); defs.appendChild(marker); svg.appendChild(defs);
+  FLOW_EDGES.forEach(function(e, i){
+    var p=svgEl("path");
+    p.setAttribute("class","edge"+(FLOW_LINK===i?" sel":""));
+    p.setAttribute("d",flowPath(e));
+    p.setAttribute("fill","none"); p.setAttribute("stroke",(FLOW_LINK===i?"#58a6ff":"#2f6b47"));
+    p.setAttribute("stroke-width",(FLOW_LINK===i?"3":"2")); p.setAttribute("marker-end","url(#arrow)");
+    p.style.cursor="pointer";
+    p.addEventListener("click", function(ev){ ev.stopPropagation(); flowSelectLink(i); });
+    svg.appendChild(p);
+  });
+  var host=$("dcanvas"); if(!host) return;
+  host.querySelectorAll(".dnode").forEach(function(x){x.remove();});
+  FLOW_NODES.forEach(function(n){
+    var meta=MODEL_META[n.model]||{};
+    var el=document.createElement("div");
+    el.className="dnode"+(FLOW_CONNECT===n.model?" dragging":"")+(FLOW_SELECT===n.model?" sel":"");
+    el.style.left=n.x+"px"; el.style.top=n.y+"px";
+    el.innerHTML='<span class="del" onclick="flowRemove(\''+n.model+'\')">×</span>'+
+      '<span class="port in" title="receive input — click here after choosing an output" onclick="flowConnectTo(\''+n.model+'\')">←</span>'+
+      '<div class="t">'+(meta.t||n.model)+'<span class="lb" id="live-'+n.model+'">•</span></div>'+
+      '<div class="s">'+(meta.g||'')+'</div>'+
+      '<span class="port out" title="send output — click here, then another model ←" onclick="flowConnectFrom(\''+n.model+'\')">→</span>';
+    el.addEventListener("mousedown", function(ev){ flowDragStart(ev, n); });
+    el.addEventListener("click", function(ev){ if(ev.target===el || ev.target.className==="t" || ev.target.className==="s") flowSelect(n.model); });
+    host.appendChild(el);
+  });
+  $("dstatus").textContent=FLOW_NODES.length+" models · "+FLOW_EDGES.length+" links"+(FLOW_CONNECT?(" · connecting from "+FLOW_CONNECT):"");
+}
+function flowConnectFrom(model){ FLOW_CONNECT=(FLOW_CONNECT===model)?null:model; drawFlow(); if(FLOW_CONNECT) $("dstatus").textContent="Routing from "+((MODEL_META[model]||{}).t||model)+" → click a ← on another model"; }
+function flowConnectTo(model){
+  if(FLOW_CONNECT && FLOW_CONNECT!==model){
+    if(!FLOW_EDGES.some(function(e){return e.from===FLOW_CONNECT && e.to===model;}))
+      FLOW_EDGES.push({from:FLOW_CONNECT, to:model, weight:1.0, expr:"weight * score"});
+    FLOW_CONNECT=null;
+  }
+  drawFlow();
+}
+function flowDragStart(ev, node){
+  var el=ev.currentTarget, startX=ev.clientX, startY=ev.clientY, origX=node.x, origY=node.y;
+  el.classList.add("dragging");
+  function move(e){
+    node.x=origX+(e.clientX-startX); node.y=origY+(e.clientY-startY);
+    el.style.left=node.x+"px"; el.style.top=node.y+"px";
+    var svg=$("dflow");
+    if(svg){ var ps=svg.querySelectorAll("path.edge"); FLOW_EDGES.forEach(function(ed,i){ if(ps[i]) ps[i].setAttribute("d", flowPath(ed)); }); }
+  }
+  function up(){ document.removeEventListener("mousemove",move); document.removeEventListener("mouseup",up); el.classList.remove("dragging"); drawFlow(); }
+  document.addEventListener("mousemove",move); document.addEventListener("mouseup",up);
+  ev.preventDefault();
+}
+function saveDesigner(){
+  var name=($("dname").value||"").trim();
+  if(!name){ alert("strategy name required"); return; }
+  if(!FLOW_NODES.length){ alert("add at least one model"); return; }
+  var chain=FLOW_NODES.map(function(n){
+    var inputs=FLOW_EDGES.filter(function(e){return e.to===n.model;}).map(function(e){return e.from;});
+    var links=FLOW_EDGES.filter(function(e){return e.to===n.model;}).map(function(e){return {from:e.from, to:e.to, weight:e.weight, expr:e.expr};});
+    return {model:n.model, inputs:inputs, params:n.params||{}, links:links};
+  });
+  var models=FLOW_NODES.map(function(n){return n.model;});
+  fetch("/api/strategy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+    book_id:FLOW_BOOK, name:name, models:models, chain:chain,
+    tickers:[], auto_tickers:true, confirm_signals:2
+  })}).then(function(){ closeDesigner(); renderShelf(); });
+}
+
+function closeBookDetail(){ var m=$("bookdetail"); if(m) m.classList.remove("open"); }
+function toggleBook(id){
+  var body=$("bookbody-"+id); if(!body) return;
+  body.style.display = (body.style.display==="none") ? "" : "none";
+  var a=$("bookarrow-"+id); if(a) a.textContent = (body.style.display==="none") ? "▸" : "▾";
+}
+async function renameBook(id){
+  var name=prompt("rename book"); if(!name) return;
+  await fetch("/api/book/rename",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({book_id:id,name:name})});
+  renderShelf();
+}
+async function deleteBook(id){
+  if(!confirm("delete this book and all its strategies?")) return;
+  await fetch("/api/book/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({book_id:id})});
+  renderShelf();
+}
+async function renameStrategy(id){
+  var name=prompt("rename strategy"); if(!name) return;
+  await fetch("/api/strategy/rename",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({strategy_id:id,name:name})});
+  renderShelf();
+}
+async function deleteStrategy(id){
+  if(!confirm("delete this strategy?")) return;
+  await fetch("/api/strategy/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({strategy_id:id})});
+  renderShelf();
+}
 async function createBook(){
-  var name=($("bookname").value||"").trim(); if(!name) return;
+  var name=($("bookname").value||"").trim();
+  if(!name){ alert("book name required"); return; }
   await fetch("/api/book",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:name})});
-  $("bookname").value=""; renderShelf();
+  $("bookname").value=""; closeShelf(); renderShelf();
 }
 var STRAT_BOOK=null, STRAT_TICKERS=[];
 var STRAT_MODELS=["flow-imbalance","volume-climax","volatility-expansion","structure-break","mean-reversion","momentum-divergence","bulls-and-bears","flow-onset"];
+var MODEL_META={
+  "flow-imbalance":      {t:"Flow Imbalance",        d:"Taker buy/sell imbalance over a rolling window.", g:"short bursts of aggressive buying/selling", r:"rising / falling", tf:"1s–10s", params:{imbalance:0.35}},
+  "volume-climax":       {t:"Volume Climax",         d:"Volume spike vs its own baseline.",               g:"climax volume events",                    r:"all",             tf:"1s–30s", params:{multiple:2.0}},
+  "volatility-expansion":{t:"Volatility Expansion",  d:"Volatility spike above baseline.",                g:"breakouts / expansions",                  r:"rising / falling", tf:"5s–60s", params:{sigma:2.0}},
+  "structure-break":     {t:"Structure Break",       d:"Price breaking a recent level.",                  g:"trend breaks / range breaks",             r:"trending",        tf:"15s–5m", params:{lookback:20}},
+  "mean-reversion":      {t:"Mean Reversion",        d:"Price extended vs its rolling mean.",             g:"over-extension reversals",                r:"sideways",        tf:"5s–60s", params:{zscore:2.0}},
+  "momentum-divergence": {t:"Momentum Divergence",   d:"Price vs momentum divergence.",                   g:"exhaustion / fading moves",               r:"topping / bottoming", tf:"15s–5m", params:{window:15}},
+  "bulls-and-bears":     {t:"Bulls And Bears",       d:"Aggregates upstream model outputs into one view.", g:"chaining / combining signals",            r:"all",             tf:"any", in:"upstream model outputs", params:{votes:2}},
+  "flow-onset":          {t:"Flow Onset",            d:"Detects the onset of a burst.",                   g:"burst onset (up-burst in 60s)",           r:"rising",          tf:"1s–60s", params:{horizon:60}}
+};
 function newStrategy(bookId){
+  closeBookDetail();
   STRAT_BOOK=bookId; STRAT_TICKERS=[];
   $("sname").value=""; $("sconfirm").value=2; $("sauto").checked=true;
   $("smodelchecks").innerHTML=STRAT_MODELS.map(function(m){
-    return '<label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#c9d6e3;background:#101923;border:1px solid #22303d;border-radius:7px;padding:4px 8px">'+
-      '<input type="checkbox" class="smodel" value="'+m+'"> '+m+'</label>';
+    var meta=MODEL_META[m]||{};
+    var hint=(meta.d||'')+' · good at: '+(meta.g||'')+' · regime: '+(meta.r||'')+' · timeframe: '+(meta.tf||'');
+    return '<label class="fcheck" title="'+esc(hint)+'"><input type="checkbox" class="smodel" value="'+m+'" onchange="renderChain()"> <span>'+(meta.t||m)+'</span></label>';
   }).join("");
+  renderChain();
   renderStickerChips(); toggleStickers();
   populateStickerDatalist();
   var f=$("strategyform"); if(f) f.classList.add("open");
 }
 function closeStrategyForm(){ var f=$("strategyform"); if(f) f.classList.remove("open"); }
+function renderChain(){
+  var host=$("schain"); if(!host) return;
+  var checked=Array.prototype.slice.call(document.querySelectorAll(".smodel:checked")).map(function(c){return c.value;});
+  host.innerHTML=checked.map(function(m){
+    var others=checked.filter(function(x){return x!==m;});
+    var meta=MODEL_META[m]||{};
+    var exp='<span style="font-size:11px;color:#59677a">'+(meta.g||'')+' · '+(meta.r||'')+' · '+(meta.tf||'')+'</span>';
+    return '<div class="node">'+
+      '<div class="nm">'+(meta.t||m)+' <span style="color:#59677a;font-weight:400;font-size:11px">← '+(others.length?'feeds from':'source · reads the market')+'</span></div>'+
+      '<div class="in">'+
+      (others.length?others.map(function(x){
+        var mt=MODEL_META[x]||{};
+        return '<label class="fcheck" style="padding:4px 10px;font-size:11px">'+
+          '<input type="checkbox" class="chainin" data-model="'+m+'" value="'+x+'"> '+(mt.t||x)+'</label>';
+      }).join(""):exp)+
+      '</div></div>';
+  }).join("") || '<div style="font-size:11px;color:#59677a">Tick models above to build the chain.</div>';
+}
 function toggleStickers(){ var b=$("sauto"); var d=$("stickers"); if(d) d.style.display = b && b.checked ? "none" : "block"; }
 function populateStickerDatalist(){
   fetch("/api/universe800",{cache:"no-store"}).then(function(r){return r.json();}).then(function(d){
@@ -3424,10 +3934,14 @@ function removeSticker(t){ STRAT_TICKERS=STRAT_TICKERS.filter(function(x){return
 function saveStrategy(){
   var name=($("sname").value||"").trim(); if(!name){ alert("name required"); return; }
   var models=Array.prototype.slice.call(document.querySelectorAll(".smodel:checked")).map(function(c){return c.value;});
+  var chain=models.map(function(m){
+    var inputs=Array.prototype.slice.call(document.querySelectorAll('.chainin[data-model="'+m+'"]:checked')).map(function(c){return c.value;});
+    return {model:m, inputs:inputs};
+  });
   var auto=$("sauto").checked;
   var confirm=parseInt($("sconfirm").value||"2",10)||2;
   fetch("/api/strategy",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
-    book_id:STRAT_BOOK, name:name, models:models,
+    book_id:STRAT_BOOK, name:name, models:models, chain:chain,
     tickers:auto?[]:STRAT_TICKERS, auto_tickers:auto, confirm_signals:confirm
   })}).then(function(){ closeStrategyForm(); renderShelf(); });
 }
@@ -6207,6 +6721,13 @@ def _save_verdicts(v):
 
 _CONFIRM = {}
 
+def _symbol_price(sym):
+    try:
+        d = jget("http://127.0.0.1:8787/api/tick?syms=" + sym, timeout=5)
+        return (d.get("p") or {}).get(sym)
+    except Exception:
+        return None
+
 def _fetch_signals():
     """Poll the Go backend for model signals + alerts, returning
     [{symbol, model, dir, ts}] with dir = +1 (bull) / -1 (bear)."""
@@ -6233,6 +6754,47 @@ def _fetch_signals():
         pass
     return out
 
+def _topo_order(chain):
+    """Resolve a model chain into evaluation order. Each step is
+    {"model": name, "inputs": [upstream model names]}. A step is ready once
+    every upstream model it names has produced an output. Cycles/missing
+    dependencies are skipped defensively rather than deadlocking."""
+    order, remaining = [], list(chain)
+    while remaining:
+        ready = [st for st in remaining
+                 if all(i in [o["model"] for o in order] for i in (st.get("inputs") or []))]
+        if not ready:
+            break
+        for st in ready:
+            remaining.remove(st)
+            order.append(st)
+    return order
+
+def _evaluate_chain(chain, market):
+    """Evaluate a chain: source models read the market; a chained model also
+    receives each upstream model's output (dir + score) as its inputs. Returns
+    {model: {"dir": +1/-1, "score": 0..100}} plus the FINAL model's output."""
+    outputs = {}
+    for st in _topo_order(chain):
+        model = st.get("model")
+        m = next((x for x in market if x.get("model") == model), None)
+        dirv = m.get("dir", 0) if m else 0
+        ups = [outputs[i] for i in (st.get("inputs") or []) if i in outputs]
+        if ups:
+            # Chained: the upstream directions vote, the upstream scores weigh it.
+            net = sum(u["dir"] for u in ups)
+            dirv = 1 if net > 0 else (-1 if net < 0 else dirv)
+            score = sum(u["score"] for u in ups) / len(ups)
+            basis = model + " combines " + ", ".join(u.get("basis", "") for u in ups)
+        else:
+            score = 0.0  # source model carries no numeric score in this feed
+            reason = (m or {}).get("reason") or ""
+            word = "bull" if dirv > 0 else ("bear" if dirv < 0 else "neutral")
+            basis = model + " " + word + ((": " + reason) if reason else "")
+        outputs[model] = {"dir": dirv, "score": round(score, 1), "basis": basis}
+    final = outputs.get((chain[-1].get("model") if chain else ""), {"dir": 0, "score": 0, "basis": ""})
+    return outputs, final
+
 def strategy_loop():
     """Run every strategy: watch its tickers, run its models, count repeated
     signals, and emit a bull/bear verdict once a symbol crosses confirm_signals."""
@@ -6246,29 +6808,49 @@ def strategy_loop():
             for book in books["books"]:
                 for st in book.get("strategies", []):
                     sid = st.get("id")
-                    models = set(st.get("models") or [])
+                    chain = st.get("chain") or [{"model": m, "inputs": []} for m in (st.get("models") or [])]
                     tickers = set(st.get("tickers") or [])
                     confirm = max(1, int(st.get("confirm_signals") or 1))
-                    rel = [x for x in sigs
-                           if (not models or x["model"] in models)
-                           and (not tickers or x["symbol"] in tickers)]
-                    per = {}
-                    for x in rel:
-                        k = (sid, x["symbol"])
+                    rel = [x for x in sigs if (not tickers or x["symbol"] in tickers)]
+                    for sym in {x["symbol"] for x in rel}:
+                        market = [x for x in rel if x["symbol"] == sym]
+                        _, final = _evaluate_chain(chain, market)
+                        if final.get("dir", 0) == 0:
+                            continue
+                        k = (sid, sym)
                         c = _CONFIRM.get(k)
                         if not c or now - c["last"] > 300000:
                             c = {"count": 0, "dir": 0, "last": now}
                         c["count"] += 1
-                        c["dir"] += x["dir"]
+                        c["dir"] += final["dir"]
                         c["last"] = now
                         _CONFIRM[k] = c
                         if c["count"] >= confirm:
+                            entry = _symbol_price(sym)
                             verdicts["verdicts"].insert(0, {
                                 "strategy_id": sid, "strategy": st.get("name"), "book": book.get("name"),
-                                "symbol": x["symbol"], "dir": "BULL" if c["dir"] > 0 else "BEAR",
-                                "signals": c["count"], "ts_ms": now})
+                                "symbol": sym, "dir": "BULL" if c["dir"] > 0 else "BEAR",
+                                "chain": [x.get("model") for x in chain],
+                                "final_model": (chain[-1].get("model") if chain else ""),
+                                "basis": final.get("basis", ""),
+                                "signals": c["count"], "ts_ms": now, "entry": entry})
                             _CONFIRM[k] = {"count": 0, "dir": 0, "last": now}
                             changed = True
+            # outcome tracking: for verdicts older than 60s without an outcome,
+            # compare the current price with the entry and mark right/wrong.
+            for v in verdicts["verdicts"]:
+                if v.get("outcome") or v.get("entry") is None:
+                    continue
+                if now - v.get("ts_ms", 0) < 60000:
+                    continue
+                price = _symbol_price(v["symbol"])
+                if price is None:
+                    continue
+                move = (price - v["entry"]) / v["entry"] * 100
+                right = (v["dir"] == "BULL" and move > 0) or (v["dir"] == "BEAR" and move < 0)
+                v["outcome"] = "right" if right else "wrong"
+                v["move_pct"] = round(move, 3)
+                changed = True
             if changed:
                 verdicts["verdicts"] = verdicts["verdicts"][:200]
                 _save_verdicts(verdicts)
@@ -6404,8 +6986,12 @@ class H(BaseHTTPRequestHandler):
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                 books = _load_books()
+                models = body.get("models") or []
+                chain = body.get("chain")
+                if not chain:
+                    chain = [{"model": m, "inputs": []} for m in models]
                 strat = {"id": _new_id("strat"), "name": body.get("name") or "Untitled strategy",
-                         "models": body.get("models") or [], "tickers": body.get("tickers") or [],
+                         "models": models, "chain": chain, "tickers": body.get("tickers") or [],
                          "auto_tickers": bool(body.get("auto_tickers")),
                          "confirm_signals": int(body.get("confirm_signals") or 1),
                          "created_ms": int(time.time() * 1000), "notes": []}
@@ -6435,6 +7021,40 @@ class H(BaseHTTPRequestHandler):
                         _save_books(books)
                         return self._send(200, json.dumps(book), "application/json")
                 return self._send(404, json.dumps({"error": "book/strategy not found"}), "application/json")
+            except Exception as exc:
+                return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
+        if u.path in ("/api/book/rename", "/api/book/delete", "/api/strategy/rename", "/api/strategy/delete"):
+            try:
+                body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                books = _load_books()
+                changed = False
+                if u.path == "/api/book/rename":
+                    for book in books["books"]:
+                        if book.get("id") == body.get("book_id"):
+                            book["name"] = body.get("name") or book["name"]
+                            changed = True
+                            break
+                elif u.path == "/api/book/delete":
+                    before = len(books["books"])
+                    books["books"] = [b for b in books["books"] if b.get("id") != body.get("book_id")]
+                    changed = before != len(books["books"])
+                elif u.path == "/api/strategy/rename":
+                    for book in books["books"]:
+                        for st in book.get("strategies", []):
+                            if st.get("id") == body.get("strategy_id"):
+                                st["name"] = body.get("name") or st["name"]
+                                changed = True
+                                break
+                elif u.path == "/api/strategy/delete":
+                    for book in books["books"]:
+                        before = len(book.get("strategies", []))
+                        book["strategies"] = [x for x in book.get("strategies", []) if x.get("id") != body.get("strategy_id")]
+                        if before != len(book.get("strategies", [])):
+                            changed = True
+                            break
+                if changed:
+                    _save_books(books)
+                return self._send(200, json.dumps({"ok": changed}), "application/json")
             except Exception as exc:
                 return self._send(500, json.dumps({"error": str(exc)[:120]}), "application/json")
         if u.path == "/api/train":
@@ -6728,6 +7348,13 @@ class H(BaseHTTPRequestHandler):
                     return self._send(200, fh.read(), "application/javascript")
             except Exception:
                 return self._send(500, b"/* lightweight-charts not found */", "application/javascript")
+        if p == "/api/livesignals":
+            return self._send(200, json.dumps({"signals": _fetch_signals()}), "application/json")
+        if p == "/api/confirmations":
+            out = {}
+            for (sid, sym), c in _CONFIRM.items():
+                out.setdefault(sid, {})[sym] = {"count": c["count"], "dir": c["dir"]}
+            return self._send(200, json.dumps({"confirmations": out}), "application/json")
         if p == "/api/verdicts":
             return self._send(200, json.dumps(_load_verdicts()), "application/json")
         if p == "/api/bookshelf":

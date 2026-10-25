@@ -661,3 +661,73 @@ train -> saved model -> runtime forecast -> UI), config (flags + label rules), d
 hidden: microburst barrier band is fixed +/-0.10% (ATR-scaled barriers ship in the hourly
 cmd/research; sigma_10s pass-through for the microburst is a follow-up); no funding/OI
 (spot-only client); LightGBM/CatBoost not in toolchain (logistic baseline ships).
+
+## Signal-flow graph foundation (Oct 25)
+
+Started the strategy-designer rework as a signal-flow graph (Node-RED/ComfyUI/LabVIEW
+shape): a strategy is a network of typed nodes wired by links. Added `backend/internal/graph`
+— the lowest layer only: `Signal` envelope (type/symbol/value/ts/basis/meta), typed `Port`
+contract with `Compatible`, the `Node` interface + `Kind` (source/transform/model/sink),
+and a `Registry`. Two proof nodes ship: `calc.threshold` (score -> direction) and
+`calc.combine` (weighted majority vote -> direction + mean score). Full backend gate green
+(gofmt/vet/build/test, 15 packages). Design plan is docs/STRATEGY-DESIGNER-PLAN.md;
+equation scope kept simple for now, a fuller DSL is brainstormed later. Decision logged:
+stateless nodes first (windows/delays later), single-symbol signals with per-symbol
+fan-out, evaluator in Go.
+
+## Signal-flow graph Phase 2 — link equations (Oct 25)
+
+Added the Link (an edge that maps a source output port to a target input port through
+an equation) and a sandboxed expression language. `Eval` parses a fixed grammar
+(arithmetic, comparison, ternary, and whitelisted min/max/abs/clamp/if) over the closed
+variable set {score, direction, value, weight} — no arbitrary code, division-by-zero and
+unknown names are errors. `Link.Transform` threads symbol/ts/basis through so provenance
+survives the transform. Full backend gate green.
+
+## Signal-flow graph Phase 2 — swap to expr-lang/expr (Oct 25)
+
+Replaced the hand-rolled expression parser with expr-lang/expr v1.17.8 (the de-facto Go
+expression engine: bytecode-compiled, typed, sandboxed) after web research — the 2026
+comparison names expr-lang/expr for internal+user rules and cel-go for untrusted external
+rules; our equations are the trader's own, so expr is the right fit. Kept the Eval
+signature; added clamp/abs as custom functions and bool->float coercion (a bare comparison
+becomes a 0/1 gate), plus an Inf/NaN guard. Full backend gate green.
+
+## Signal-flow graph Phase 3 — graph evaluator (Oct 25)
+
+Added the Graph: it owns the wiring (nodes + links), validates each link against real
+nodes and compatible port types, and evaluates eagerly in topological order (Kahn's
+algorithm) with cycle detection. Links thread source outputs into target inputs through
+their equation. Tested: source->threshold->sink chain, weighted link, cycle rejection,
+type mismatch rejection, unknown node. Full backend gate green.
+
+## Signal-flow graph Phase 4 — model adapter + equation node (Oct 25)
+
+Added `calc.equation` (the generic calc unit: named inputs become equation variables,
+one output via expr-lang/expr) and `ModelNode` (adapts a detect.Detector into a graph
+Model source: emits direction + score from the detector's most recent signal, summary as
+basis, neutral when no signal yet). Full backend gate green.
+
+## Signal-flow graph Phase 4 done — catalog + bus source + API (Oct 25)
+
+Added `source.constant` (fixed-value bus source), `Catalog(detectors)` (the palette:
+built-in nodes + one ModelNode per detector), and `detect.Registry.Get`. Wired
+`GET /api/graph/nodes` into the api server (id/title/kind/typed ports per node) and built
+the catalog in cmd/server/main.go. Full backend gate green.
+
+## Signal-flow graph Phase 5 — bus sources (Oct 25)
+
+Added the bus source nodes as provider-based sources: source.price, source.volume,
+source.flow (taker ratio -> 0..100 score), source.ta, source.regime (rising/falling/
+sideways -> +1/-1/0), source.sentiment (placeholder provider). Each wraps a provider
+function so it is mock-testable and wired to the real engines in the server later.
+Registered them in the Catalog palette. Full backend gate green.
+
+## Signal-flow graph Phase 6 — replay/backtest (Oct 25)
+
+Added the backtest: a shared *Context the graph's source nodes read (so a live graph
+replays unchanged), ContextSources (price/volume/flow/ta/regime/sentiment reading the
+context), a VerdictNode sink, and Backtest.Run — replays over pre-computed contexts,
+measures each directional signal against the close Forward bars later, and reports hit
+rate + compounded equity + per-trade returns. Tested rising (100% hit) and falling
+(0% hit) against a rising price. Full backend gate green.

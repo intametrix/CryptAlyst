@@ -22,6 +22,7 @@ import (
 	"pumpdump/backend/internal/detect"
 	"pumpdump/backend/internal/events"
 	"pumpdump/backend/internal/flow"
+	"pumpdump/backend/internal/graph"
 	"pumpdump/backend/internal/heat"
 	"pumpdump/backend/internal/market"
 	"pumpdump/backend/internal/models"
@@ -185,6 +186,9 @@ type Deps struct {
 	Survey   SurveyProvider
 	// Detectors is the pluggable-model registry driving detection.
 	Detectors *detect.Registry
+	// Graph is the strategy-graph node catalog (built-in nodes + model adapters).
+	// Nil disables /api/graph/nodes.
+	Graph *graph.Registry
 	// Heat scores how interesting each symbol currently is, for the UI glow.
 	Heat *heat.Service
 	// KlinesCache collapses duplicate concurrent chart fetches so the browser
@@ -234,6 +238,7 @@ func (s *Server) Routes() http.Handler {
 	// The turtle session: state on GET, start/stop on POST, plus its two lists.
 	mux.HandleFunc("/api/models", s.handleModels)
 	mux.HandleFunc("/api/models/signals", s.handleModelSignals)
+	mux.HandleFunc("/api/graph/nodes", s.handleGraphNodes)
 	mux.HandleFunc("/api/movers", s.handleMovers)
 	mux.HandleFunc("/api/moneyflow", s.handleMoneyFlow)
 	mux.HandleFunc("/api/impulse", s.handleImpulse)

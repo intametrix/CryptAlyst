@@ -372,6 +372,14 @@ func (r *Registry) Names() []string {
 	return out
 }
 
+// Get returns the registered detector with the given name.
+func (r *Registry) Get(name string) (Detector, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	d, ok := r.detectors[name]
+	return d, ok
+}
+
 // Reset clears every detector's accumulated state. Used when the universe is
 // rebuilt, so a detector cannot carry baselines for symbols that are no longer
 // tracked.

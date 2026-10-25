@@ -102,3 +102,23 @@ web/node_modules/
 # dependencies are installed, never committed
 node_modules/
 tools/kimi_err.log
+
+# --- CryptALAS + research build artifacts (rebuild with go build) ---
+backend/microburst
+backend/onset
+backend/research
+backend/server
+backend/cryptalas
+backend/cryptalas.watch.log
+backend/cryptalas_state/
+
+# --- agent comms + local tooling ---
+.comms/
+.mmd/node_modules/
+.mmd/package-lock.json
+backend/data/
+
+# --- generated documents ---
+docs/*.pdf
+docs/package.json
+docs/package-lock.json
