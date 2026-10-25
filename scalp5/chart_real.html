@@ -176,7 +176,7 @@ svg *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-s
         </span>
         <span style="flex-basis:100%;display:flex;gap:6px;align-items:center">
           <span style="font-size:10px;color:#8494a8">training set</span>
-          <select id="trainingsets" class="symin" style="width:170px"></select>
+          <select id="trainingsets" class="symin" style="width:170px" onchange="selectTrainingSet(this.value)"></select>
           <button class="tbtn" onclick="applyTrainingSet()" title="fit the model with this training set">apply</button>
           <button class="tbtn" onclick="useInStrategy()" title="create a strategy that trades the current ticker with this model">use in strategy</button>
           <button class="tbtn" onclick="saveTrainingSet()" title="save these markers as a named training set">save as…</button>
@@ -2091,6 +2091,37 @@ async function applyTrainingSet(){
   }else{
     alert("apply failed: "+((d.fit&&d.fit.reason)||d.error||"unknown"));
   }
+}
+var PENDING_SET=null;
+function selectTrainingSet(name){
+  if(!name) return;
+  var ts=TRAIN_SETS[name]; if(!ts) return;
+  PENDING_SET={ts:ts, name:name};
+  if(ts.tf && ts.tf!==S.tf){ S.tf=ts.tf; chips(); props(); }
+  setSym(ts.symbol || SYM);
+  setTimeout(applySetContext, 1000);
+}
+function applySetContext(){
+  var ps=PENDING_SET; if(!ps) return;
+  if(!BARS.length){ setTimeout(applySetContext, 800); return; }
+  PENDING_SET=null;
+  var ts=ps.ts, name=ps.name;
+  var pts=ts.points||[];
+  var tss=pts.map(function(pt){ return pt.ts; }).filter(Boolean);
+  if(tss.length){
+    var minT=Math.min.apply(null,tss), maxT=Math.max.apply(null,tss);
+    var i0=0, i1=BARS.length-1;
+    for(var k=0;k<BARS.length;k++){ if(BARS[k].t<=minT) i0=k; }
+    for(var k=BARS.length-1;k>=0;k--){ if(BARS[k].t>=maxT) i1=k; }
+    var pad=Math.max(6, Math.round((i1-i0)*0.18));
+    S.s=Math.max(0, i0-pad);
+    S.c=Math.min(BARS.length-S.s, (i1-i0)+pad*2+1);
+  }else{ S.s=0; S.c=null; }
+  draw();
+  RECALLED=pts;
+  drawRecalledVectors();
+  var specialized=(ts.model||"manual")+"__"+name;
+  runModelDetections(specialized);
 }
 async function useInStrategy(){
   var model=$("trainmodel").value;
