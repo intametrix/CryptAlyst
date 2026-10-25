@@ -138,7 +138,33 @@ func New(client *binance.Client, universe *market.Universe, thresholds Threshold
 }
 
 // Thresholds returns the active thresholds.
-func (s *Screener) Thresholds() Thresholds { return s.thresholds }
+func (s *Screener) Thresholds() Thresholds {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.thresholds
+}
+
+// SetThresholds updates the detection thresholds live.
+func (s *Screener) SetThresholds(th Thresholds) {
+	s.mu.Lock()
+	s.thresholds = th
+	s.mu.Unlock()
+}
+
+// SetTopN updates how many symbols the screen scans, live.
+func (s *Screener) SetTopN(n int) {
+	s.mu.Lock()
+	if n > 0 {
+		s.topN = n
+	}
+	s.mu.Unlock()
+}
+
+func (s *Screener) snapshot() (Thresholds, int) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.thresholds, s.topN
+}
 
 // Cached returns the most recent result set.
 func (s *Screener) Cached() ([]Row, int64, int) {
@@ -151,9 +177,10 @@ func (s *Screener) Cached() ([]Row, int64, int) {
 
 // Run performs one screening pass over the top-N liquid symbols.
 func (s *Screener) Run(ctx context.Context) ([]Row, int, error) {
+	th, topN := s.snapshot()
 	symbols := s.universe.Tracked()
-	if s.topN > 0 && len(symbols) > s.topN {
-		symbols = symbols[:s.topN]
+	if topN > 0 && len(symbols) > topN {
+		symbols = symbols[:topN]
 	}
 	if len(symbols) == 0 {
 		return nil, 0, nil
@@ -174,7 +201,7 @@ func (s *Screener) Run(ctx context.Context) ([]Row, int, error) {
 				return
 			}
 			ctx24, _ := s.universe.Get(symbol)
-			row, ok := Analyse(symbol, klines, s.thresholds, ctx24.QuoteVolume24h, ctx24.PriceChangePct/100)
+			row, ok := Analyse(symbol, klines, th, ctx24.QuoteVolume24h, ctx24.PriceChangePct/100)
 			if ok {
 				results[i] = result{row: row, ok: true}
 			}

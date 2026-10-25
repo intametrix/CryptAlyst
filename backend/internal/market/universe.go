@@ -163,9 +163,10 @@ func (u *Universe) Refresh(ctx context.Context, client *binance.Client) (int, er
 	}
 
 	// Rank by liquidity, keep the top N above the floor.
+	minLiq, maxSym := u.cfgSnapshot()
 	candidates := make([]Context, 0, len(updated))
 	for _, c := range updated {
-		if c.QuoteVolume24h >= u.cfg.MinQuoteVolume24h {
+		if c.QuoteVolume24h >= minLiq {
 			candidates = append(candidates, c)
 		}
 	}
@@ -173,7 +174,7 @@ func (u *Universe) Refresh(ctx context.Context, client *binance.Client) (int, er
 		return candidates[i].QuoteVolume24h > candidates[j].QuoteVolume24h
 	})
 
-	limit := u.cfg.MaxSymbols
+	limit := maxSym
 	if limit > 0 && len(candidates) > limit {
 		candidates = candidates[:limit]
 	}
@@ -217,6 +218,26 @@ func (u *Universe) Tracked() []string {
 	out := make([]string, len(u.tracked))
 	copy(out, u.tracked)
 	return out
+}
+
+// SetMinQuoteVolume updates the liquidity floor live; the next Refresh applies it.
+func (u *Universe) SetMinQuoteVolume(v float64) {
+	u.mu.Lock()
+	u.cfg.MinQuoteVolume24h = v
+	u.mu.Unlock()
+}
+
+// SetMaxSymbols updates the tracked-symbol cap live; the next Refresh applies it.
+func (u *Universe) SetMaxSymbols(n int) {
+	u.mu.Lock()
+	u.cfg.MaxSymbols = n
+	u.mu.Unlock()
+}
+
+func (u *Universe) cfgSnapshot() (float64, int) {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+	return u.cfg.MinQuoteVolume24h, u.cfg.MaxSymbols
 }
 
 // Get returns a symbol's 24h context.

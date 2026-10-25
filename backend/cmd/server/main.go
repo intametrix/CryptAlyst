@@ -436,6 +436,7 @@ func main() {
 		Engine:        engine,
 		Universe:      universe,
 		Screener:      screener,
+		Settings:      api.NewSettings(th, opt.screenTopN, opt.minLiquidity, opt.maxSymbols),
 		Alerts:        alerts,
 		Survey:        surveyProvider(survey),
 		Detectors:     registry,

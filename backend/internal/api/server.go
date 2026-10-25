@@ -182,6 +182,7 @@ type Deps struct {
 	Engine   *flow.Engine
 	Universe *market.Universe
 	Screener *screen.Screener
+	Settings *Settings
 	Alerts   *AlertBuffer
 	Survey   SurveyProvider
 	// Detectors is the pluggable-model registry driving detection.
@@ -229,6 +230,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/api/bus", s.handleBus)
 	mux.HandleFunc("/api/config", s.handleConfig)
+	mux.HandleFunc("/api/settings", s.handleSettings)
+	mux.HandleFunc("/api/settings/apply", s.handleSettingsApply)
 	mux.HandleFunc("/api/universe", s.handleUniverse)
 	mux.HandleFunc("/api/flow", s.handleFlow)
 	mux.HandleFunc("/api/flow/history", s.handleFlowHistory)

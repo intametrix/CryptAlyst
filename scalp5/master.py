@@ -1876,7 +1876,7 @@ header{margin-left:186px}
     if(b){ b.style.display="block"; b.textContent="JS error: "+e.message+" @"+e.lineno; }
     window.__earlyErr = e.message;
   });
-  var PANELS=["dash","market","why","review","control","lb","opt","models","tape","signals","advisor","forecast","thinking","busview","moversview","marketlive","engines","books","health"];
+  var PANELS=["dash","market","why","review","control","lb","opt","models","tape","signals","advisor","forecast","thinking","busview","moversview","marketlive","engines","books","health","settings"];
   window.showTab = window.showTab || function(which){
     PANELS.forEach(function(k){
       var el=document.getElementById(k); if(!el) return;
@@ -2015,6 +2015,7 @@ header{margin-left:186px}
     <a onclick="showTab('control')" id="nav-control" class="nav"><i>⏻</i><span>TA Analysis</span></a>
     <a onclick="showTab('books')" id="nav-books" class="nav"><i>▤</i><span>Books</span></a>
     <a onclick="showTab('engines')" id="nav-engines" class="nav"><i>⚙</i><span>Engines</span></a>
+    <a onclick="showTab('settings')" id="nav-settings" class="nav"><i>⚙</i><span>Settings</span></a>
     <a onclick="showTab('health')" id="nav-health" class="nav"><i>✚</i><span>Health</span></a>
   </nav>
   <div class="rfoot" style="flex-direction:column;gap:6px">
@@ -2124,6 +2125,14 @@ header{margin-left:186px}
       <span class="mk">every view and the data it needs</span>
       <span style="flex:1"></span><button class="tbtn" onclick="renderHealth()">recheck</button></div>
     <div class="panel"><div id="healthbody"><div class="hint">checking…</div></div></div>
+  </div>
+  <div id="settings">
+    <div class="mhead"><span class="sym">Settings</span>
+      <span class="mk">detection + universe thresholds · apply immediately, no restart</span>
+      <span style="flex:1"></span>
+      <button class="tbtn" onclick="renderSettings()">reload</button>
+      <button class="fbtn primary" onclick="applySettings()">Apply</button></div>
+    <div class="panel"><div id="settingsbody"><div class="hint">loading…</div></div></div>
   </div>
   <div id="busview">
     <div class="mhead"><span class="sym">Message bus</span>
@@ -3544,6 +3553,48 @@ async function renderVerdicts(){
       '<span class="mk">'+v.signals+' signals</span>'+oc+
       '<span class="mk">'+new Date(v.ts_ms).toTimeString().slice(0,8)+'</span></div>';
   }).join("") || '<div class="mk">no verdicts yet</div>';
+}
+var SETTINGS_GROUPS=[
+  {g:"Pump / Dump screen", fields:[
+    {k:"screen_min_move", l:"min 5m move %", h:"lower = more/faster signals"},
+    {k:"screen_min_vol_ratio", l:"min volume ratio", h:""},
+    {k:"screen_min_vol_z", l:"min volume z-score", h:""},
+    {k:"screen_min_recent_usd", l:"min recent USD flow", h:""},
+    {k:"screen_min_quote_volume", l:"min 24h quote volume", h:"lower = include smaller pairs"},
+    {k:"screen_top_n", l:"symbols to screen", h:"", step:1},
+  ]},
+  {g:"Universe", fields:[
+    {k:"min_liq", l:"min 24h volume to track", h:""},
+    {k:"max_symbols", l:"max tracked symbols", h:"", step:1},
+  ]},
+];
+async function renderSettings(){
+  var host=$("settingsbody"); if(!host) return;
+  var d={};
+  try{ d=await (await fetch("http://127.0.0.1:8787/api/settings",{cache:"no-store"})).json(); }catch(e){}
+  host.innerHTML=SETTINGS_GROUPS.map(function(grp){
+    return '<div class="ctitle" style="margin:12px 0 4px">'+grp.g+'</div>'+
+      grp.fields.map(function(f){
+        return '<label style="display:flex;align-items:center;gap:10px;margin:5px 0">'+
+          '<span style="width:200px;font-size:11px;color:#9fb0c4">'+f.l+'</span>'+
+          '<input id="set_'+f.k+'" class="finput" type="number" step="'+(f.step||"any")+'" value="'+(d[f.k]!=null?d[f.k]:'')+'" style="width:170px">'+
+          (f.h?('<span class="mk">'+f.h+'</span>'):'')+
+          '</label>';
+      }).join("");
+  }).join("");
+}
+async function applySettings(){
+  var body={};
+  SETTINGS_GROUPS.forEach(function(grp){ grp.fields.forEach(function(f){
+    var el=$("set_"+f.k); if(!el) return;
+    var v=parseFloat(el.value);
+    if(!isNaN(v)) body[f.k]=v;
+  });});
+  if(!Object.keys(body).length){ alert("nothing to apply"); return; }
+  var r=await fetch("http://127.0.0.1:8787/api/settings/apply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  var d=await r.json();
+  alert("settings applied");
+  renderSettings();
 }
 async function renderShelf(){
   var host=$("myshelflist")||$("shelflist"); if(!host) return;
