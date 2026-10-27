@@ -389,6 +389,7 @@ func main() {
 	cudaRunner := flag.String("cuda-runner", "gpu/cuda_train.py", "path to the CUDA/GPU python trainer")
 	register := flag.String("register", "", "platform base URL to enroll on (e.g. http://127.0.0.1:8787)")
 	advertise := flag.String("advertise", "", "this agent's own base URL to report (defaults to http://<addr>)")
+	beaconInterval := flag.Duration("beacon-interval", 30*time.Second, "how often to broadcast the agent beacon (full status)")
 	updateManifest := flag.String("update-manifest", "", "URL of the self-update manifest {version,binary,sha256}")
 	updateInterval := flag.Duration("update-interval", 5*time.Minute, "how often to check for a new build")
 	name := flag.String("name", "", "friendly name for this agent (shown in the registry)")
@@ -451,7 +452,7 @@ func main() {
 		if host == "" {
 			host = "http://" + *addr
 		}
-		go enrollAndHeartbeat(ag, *register, host, dev)
+		go beaconLoop(ag, *register, host, dev, *beaconInterval)
 	}
 	log.Printf("CryptALAS agent on %s (device=%s)", *addr, *device)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
@@ -459,12 +460,15 @@ func main() {
 	}
 }
 
-// enrollAndHeartbeat registers this agent on the platform and then refreshes
-// its heartbeat every 30s so the platform knows it is still alive.
-func enrollAndHeartbeat(a *Agent, platform, host, device string) {
-	gpuName, gpuVRAM, gpuCount := probeGPU()
-	memTotal := probeMemBytes()
+// beaconLoop broadcasts this agent's beacon on an interval: the full status
+// (name, host, device, resources) is re-posted each tick, so the platform
+// always holds a fresh snapshot and can see resources as they change. The
+// register endpoint upserts and refreshes last-seen, so one beacon both
+// announces presence and proves liveness.
+func beaconLoop(a *Agent, platform, host, device string, interval time.Duration) {
 	payload := func() []byte {
+		gpuName, gpuVRAM, gpuCount := probeGPU()
+		memTotal := probeMemBytes()
 		b, _ := json.Marshal(map[string]any{
 			"id":          host,
 			"host":        host,
@@ -491,17 +495,16 @@ func enrollAndHeartbeat(a *Agent, platform, host, device string) {
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := client.Do(req)
 		if err != nil {
-			log.Printf("enroll %s: %v", path, err)
+			log.Printf("beacon %s: %v", path, err)
 			return
 		}
 		resp.Body.Close()
 	}
 	post("/api/agents/register", payload())
-	tick := time.NewTicker(30 * time.Second)
+	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for range tick.C {
-		hb, _ := json.Marshal(map[string]any{"id": host})
-		post("/api/agents/heartbeat", hb)
+		post("/api/agents/register", payload())
 	}
 }
 
