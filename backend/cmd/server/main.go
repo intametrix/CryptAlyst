@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -85,6 +86,7 @@ type options struct {
 	ledgerHorizon        time.Duration
 	calibrationPath      string
 	microburstDir        string
+	agentBeaconPort      int
 }
 
 func main() {
@@ -428,6 +430,10 @@ func main() {
 	// --- HTTP --------------------------------------------------------------
 	startedAt := time.Now()
 	summary := configSummary(opt, cfg)
+	agentRegistry := api.NewAgentRegistry()
+	if opt.agentBeaconPort > 0 {
+		go listenForAgentBeacons(agentRegistry, opt.agentBeaconPort)
+	}
 	server := api.New(api.Deps{
 		Hub:           hub,
 		Turtle:        turtleEngine,
@@ -437,7 +443,7 @@ func main() {
 		Universe:      universe,
 		Screener:      screener,
 		Settings:      api.NewSettings(th, opt.screenTopN, opt.minLiquidity, opt.maxSymbols),
-		Agents:        api.NewAgentRegistry(),
+		Agents:        agentRegistry,
 		Alerts:        alerts,
 		Survey:        surveyProvider(survey),
 		Detectors:     registry,
@@ -546,6 +552,7 @@ func parseFlags() options {
 		"fitted probability model written by cmd/learner; absent means uncalibrated")
 	flag.StringVar(&o.microburstDir, "microburst-dir", "microburst_out",
 		"directory of microburst_<N>s.json horizon models written by cmd/microburst; absent means no horizon forecast")
+	flag.IntVar(&o.agentBeaconPort, "agent-beacon-port", 8788, "UDP port to listen for agent beacons (0 disables)")
 	flag.DurationVar(&o.ledgerHorizon, "ledger-horizon", 15*time.Minute,
 		"how long a prediction is tracked before it is labelled")
 	flag.Parse()
@@ -1170,4 +1177,33 @@ func valueOr(v *float64, def float64) float64 {
 		return def
 	}
 	return *v
+}
+
+// listenForAgentBeacons receives UDP agent beacons on the given port and
+// registers each one, recording the packet's source IP. This is the automatic
+// discovery path: an agent with no -register flag still shows up because its
+// beacon broadcast reaches any platform on the same subnet.
+func listenForAgentBeacons(reg *api.AgentRegistry, port int) {
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
+	if err != nil {
+		log.Printf("agent beacon listener disabled: %v", err)
+		return
+	}
+	defer conn.Close()
+	log.Printf("agent beacon listener on UDP :%d", port)
+	buf := make([]byte, 65535)
+	for {
+		n, remote, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			continue
+		}
+		var info api.AgentInfo
+		if err := json.Unmarshal(buf[:n], &info); err != nil || info.Host == "" {
+			continue
+		}
+		if info.IP == "" {
+			info.IP = remote.IP.String()
+		}
+		reg.Upsert(info)
+	}
 }

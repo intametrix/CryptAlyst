@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -390,6 +391,7 @@ func main() {
 	register := flag.String("register", "", "platform base URL to enroll on (e.g. http://127.0.0.1:8787)")
 	advertise := flag.String("advertise", "", "this agent's own base URL to report (defaults to http://<addr>)")
 	beaconInterval := flag.Duration("beacon-interval", 30*time.Second, "how often to broadcast the agent beacon (full status)")
+	beaconPort := flag.Int("beacon-port", 8788, "UDP port to broadcast the beacon on")
 	updateManifest := flag.String("update-manifest", "", "URL of the self-update manifest {version,binary,sha256}")
 	updateInterval := flag.Duration("update-interval", 5*time.Minute, "how often to check for a new build")
 	name := flag.String("name", "", "friendly name for this agent (shown in the registry)")
@@ -447,32 +449,40 @@ func main() {
 	if *updateManifest != "" {
 		go ag.selfUpdateLoop(*updateManifest, *updateInterval)
 	}
-	if *register != "" {
-		host := *advertise
-		if host == "" {
-			host = "http://" + *addr
-		}
-		go beaconLoop(ag, *register, host, dev, *beaconInterval)
+	host := *advertise
+	if host == "" {
+		host = autoHost(*addr)
 	}
+	go beaconLoop(ag, *register, host, dev, *beaconInterval, *beaconPort)
 	log.Printf("CryptALAS agent on %s (device=%s)", *addr, *device)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// beaconLoop broadcasts this agent's beacon on an interval: the full status
-// (name, host, device, resources) is re-posted each tick, so the platform
-// always holds a fresh snapshot and can see resources as they change. The
-// register endpoint upserts and refreshes last-seen, so one beacon both
-// announces presence and proves liveness.
-func beaconLoop(a *Agent, platform, host, device string, interval time.Duration) {
+// beaconLoop broadcasts this agent's beacon on an interval. The full status
+// (auto-detected name, host, IP, device, resources) goes out over UDP broadcast
+// so any platform on the subnet discovers the agent with zero configuration;
+// when -register is set the same beacon is also POSTed to that platform.
+func beaconLoop(a *Agent, platform, host, device string, interval time.Duration, port int) {
+	name := a.name
+	if name == "" {
+		if h, err := os.Hostname(); err == nil {
+			name = h
+		}
+	}
+	ip := localIP()
+	if host == "" {
+		host = "http://" + ip
+	}
 	payload := func() []byte {
 		gpuName, gpuVRAM, gpuCount := probeGPU()
 		memTotal := probeMemBytes()
 		b, _ := json.Marshal(map[string]any{
 			"id":          host,
 			"host":        host,
-			"name":        a.name,
+			"name":        name,
+			"ip":          ip,
 			"device":      device,
 			"arch":        runtime.GOARCH,
 			"num_cpu":     runtime.NumCPU(),
@@ -486,26 +496,69 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration)
 		})
 		return b
 	}
-	client := &http.Client{Timeout: 5 * time.Second}
-	post := func(path string, body []byte) {
-		req, err := http.NewRequest(http.MethodPost, platform+path, bytes.NewReader(body))
+	broadcast := func(body []byte) {
+		conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: net.IPv4bcast, Port: port})
+		if err != nil {
+			return
+		}
+		_, _ = conn.Write(body)
+		conn.Close()
+	}
+	var client *http.Client
+	if platform != "" {
+		client = &http.Client{Timeout: 5 * time.Second}
+	}
+	post := func(body []byte) {
+		if platform == "" {
+			return
+		}
+		req, err := http.NewRequest(http.MethodPost, platform+"/api/agents/register", bytes.NewReader(body))
 		if err != nil {
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("beacon %s: %v", path, err)
-			return
+		if resp, err := client.Do(req); err != nil {
+			log.Printf("beacon %s: %v", platform, err)
+		} else {
+			resp.Body.Close()
 		}
-		resp.Body.Close()
 	}
-	post("/api/agents/register", payload())
+	emit := func() {
+		body := payload()
+		broadcast(body)
+		post(body)
+	}
+	emit()
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for range tick.C {
-		post("/api/agents/register", payload())
+		emit()
 	}
+}
+
+// localIP returns the first non-loopback IPv4 address on this host, or "".
+func localIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+	for _, a := range addrs {
+		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
+			return ipnet.IP.String()
+		}
+	}
+	return ""
+}
+
+// autoHost builds this agent's own base URL from its listen address, replacing
+// a loopback bind with the machine's real IP so remote platforms can reach it.
+func autoHost(addr string) string {
+	ip := localIP()
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "http://" + ip
+	}
+	return "http://" + net.JoinHostPort(ip, port)
 }
 
 // updateManifest is the self-update manifest served by -update-manifest.
