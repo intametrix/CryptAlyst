@@ -183,8 +183,11 @@ type Deps struct {
 	Universe *market.Universe
 	Screener *screen.Screener
 	Settings *Settings
-	Alerts   *AlertBuffer
-	Survey   SurveyProvider
+	// Agents is the enrolled CryptALAS agent directory. Nil disables the
+	// /api/agents routes rather than panicking.
+	Agents *AgentRegistry
+	Alerts *AlertBuffer
+	Survey SurveyProvider
 	// Detectors is the pluggable-model registry driving detection.
 	Detectors *detect.Registry
 	// Graph is the strategy-graph node catalog (built-in nodes + model adapters).
@@ -232,6 +235,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/settings", s.handleSettings)
 	mux.HandleFunc("/api/settings/apply", s.handleSettingsApply)
+	mux.HandleFunc("/api/agents", s.handleAgents)
+	mux.HandleFunc("/api/agents/register", s.handleAgentsRegister)
+	mux.HandleFunc("/api/agents/heartbeat", s.handleAgentsHeartbeat)
 	mux.HandleFunc("/api/universe", s.handleUniverse)
 	mux.HandleFunc("/api/flow", s.handleFlow)
 	mux.HandleFunc("/api/flow/history", s.handleFlowHistory)

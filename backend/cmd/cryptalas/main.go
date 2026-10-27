@@ -382,6 +382,8 @@ func main() {
 	gitSHA := flag.String("git-sha", "", "git commit this agent runs")
 	ollama := flag.String("ollama", "http://localhost:11434", "Ollama base URL on the GPU box")
 	cudaRunner := flag.String("cuda-runner", "gpu/cuda_train.py", "path to the CUDA/GPU python trainer")
+	register := flag.String("register", "", "platform base URL to enroll on (e.g. http://127.0.0.1:8787)")
+	advertise := flag.String("advertise", "", "this agent's own base URL to report (defaults to http://<addr>)")
 	flag.Parse()
 
 	dev := *device
@@ -432,9 +434,55 @@ func main() {
 		writeJSON(w, 200, j)
 	})
 
+	if *register != "" {
+		host := *advertise
+		if host == "" {
+			host = "http://" + *addr
+		}
+		go enrollAndHeartbeat(ag, *register, host, dev)
+	}
 	log.Printf("CryptALAS agent on %s (device=%s)", *addr, *device)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// enrollAndHeartbeat registers this agent on the platform and then refreshes
+// its heartbeat every 30s so the platform knows it is still alive.
+func enrollAndHeartbeat(a *Agent, platform, host, device string) {
+	payload := func() []byte {
+		b, _ := json.Marshal(map[string]any{
+			"id":          host,
+			"host":        host,
+			"device":      device,
+			"arch":        runtime.GOARCH,
+			"num_cpu":     runtime.NumCPU(),
+			"go_version":  runtime.Version(),
+			"git_sha":     a.gitSHA,
+			"gpu_present": device == "gpu" || device == "cuda" || device == "metal",
+		})
+		return b
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	post := func(path string, body []byte) {
+		req, err := http.NewRequest(http.MethodPost, platform+path, bytes.NewReader(body))
+		if err != nil {
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("enroll %s: %v", path, err)
+			return
+		}
+		resp.Body.Close()
+	}
+	post("/api/agents/register", payload())
+	tick := time.NewTicker(30 * time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		hb, _ := json.Marshal(map[string]any{"id": host})
+		post("/api/agents/heartbeat", hb)
 	}
 }
 
