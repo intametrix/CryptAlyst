@@ -191,13 +191,17 @@ else
     ( cd "$ROOT/../backend" && /opt/homebrew/bin/go build -o bin/server ./cmd/server ) || die "backend build failed"
   fi
   ( cd "$ROOT/../backend" && nohup ./bin/server --addr 127.0.0.1:8787 --timeframes 1d,4h,1h,30m \
+      --min-liq "${MIN_LIQ:-50000}" --max-symbols "${MAX_SYMBOLS:-500}" --extra "${EXTRA_SYMS:-RIFUSDT}" \
+      --screen-min-move "${SCREEN_MIN_MOVE:-0.5}" --screen-min-vol-ratio "${SCREEN_MIN_VOL_RATIO:-1.2}" \
+      --screen-min-vol-z "${SCREEN_MIN_VOL_Z:-0.8}" --screen-min-recent-usd "${SCREEN_MIN_RECENT_USD:-100}" \
+      --screen-min-quote-volume "${SCREEN_MIN_QUOTE_VOLUME:-100}" \
       --alert-history "$ROOT/alerts.jsonl" --ledger "$ROOT/ledger/backend.jsonl" \
       >"$LOGS/backend.log" 2>&1 & )
   wait_http "http://127.0.0.1:8787/health" 60 "backend on :8787" || die "backend did not answer"
 fi
 
 say "3 · market data (the only process that talks to the exchange)"
-(cd "$CORE" && nohup ./bin/marketdata --port 8796 --top 400 >"$LOGS/marketdata.log" 2>&1 &)
+(cd "$CORE" && nohup ./bin/marketdata --port 8796 --top "${MARKETDATA_TOP:-400}" --extra "${EXTRA_SYMS:-RIFUSDT}" >"$LOGS/marketdata.log" 2>&1 &)
 wait_http "http://127.0.0.1:8796/health" 25 "market data on :8796" || die "market data did not answer"
 
 say "4 · signal bus (alerts to the models, :8793)"
