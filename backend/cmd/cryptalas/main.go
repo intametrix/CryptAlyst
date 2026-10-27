@@ -16,9 +16,12 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -384,6 +387,8 @@ func main() {
 	cudaRunner := flag.String("cuda-runner", "gpu/cuda_train.py", "path to the CUDA/GPU python trainer")
 	register := flag.String("register", "", "platform base URL to enroll on (e.g. http://127.0.0.1:8787)")
 	advertise := flag.String("advertise", "", "this agent's own base URL to report (defaults to http://<addr>)")
+	updateManifest := flag.String("update-manifest", "", "URL of the self-update manifest {version,binary,sha256}")
+	updateInterval := flag.Duration("update-interval", 5*time.Minute, "how often to check for a new build")
 	flag.Parse()
 
 	dev := *device
@@ -434,6 +439,9 @@ func main() {
 		writeJSON(w, 200, j)
 	})
 
+	if *updateManifest != "" {
+		go ag.selfUpdateLoop(*updateManifest, *updateInterval)
+	}
 	if *register != "" {
 		host := *advertise
 		if host == "" {
@@ -484,6 +492,115 @@ func enrollAndHeartbeat(a *Agent, platform, host, device string) {
 		hb, _ := json.Marshal(map[string]any{"id": host})
 		post("/api/agents/heartbeat", hb)
 	}
+}
+
+// updateManifest is the self-update manifest served by -update-manifest.
+type updateManifest struct {
+	Version string `json:"version"`
+	Binary  string `json:"binary"`
+	SHA256  string `json:"sha256"`
+}
+
+// needsUpdate reports whether a manifest version is newer than the running one.
+func needsUpdate(current, latest string) bool {
+	return latest != "" && latest != current
+}
+
+// selfUpdateLoop polls the manifest on an interval and swaps in a newer build.
+func (a *Agent) selfUpdateLoop(manifestURL string, interval time.Duration) {
+	run := func() {
+		if err := a.selfUpdate(manifestURL); err != nil {
+			log.Printf("self-update: %v", err)
+		}
+	}
+	run()
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	for range tick.C {
+		run()
+	}
+}
+
+// selfUpdate downloads and installs a newer binary. On Unix it replaces the
+// running binary and re-execs; on Windows (where the running exe is locked) it
+// leaves <exe>.new for the supervisor to swap in on the next restart.
+func (a *Agent) selfUpdate(manifestURL string) error {
+	resp, err := http.Get(manifestURL)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	var m updateManifest
+	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {
+		return err
+	}
+	if !needsUpdate(a.gitSHA, m.Version) || m.Binary == "" {
+		return nil
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	resp2, err := http.Get(m.Binary)
+	if err != nil {
+		return err
+	}
+	defer resp2.Body.Close()
+	tmp, err := os.CreateTemp(filepath.Dir(exe), "cryptalas.new.*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := io.Copy(tmp, resp2.Body); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	tmp.Close()
+	if m.SHA256 != "" {
+		if err := verifySHA256(tmpName, m.SHA256); err != nil {
+			os.Remove(tmpName)
+			return err
+		}
+	}
+	if err := os.Chmod(tmpName, 0o755); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	newPath := exe + ".new"
+	os.Remove(newPath)
+	if err := os.Rename(tmpName, newPath); err != nil {
+		return err
+	}
+	if err := os.Rename(newPath, exe); err == nil {
+		log.Printf("self-update: %s -> %s, restarting", a.gitSHA, m.Version)
+		cmd := exec.Command(exe, os.Args[1:]...)
+		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+		cmd.Env = os.Environ()
+		if err := cmd.Start(); err == nil {
+			os.Exit(0)
+		}
+		return err
+	}
+	log.Printf("self-update: %s staged at %s (supervisor will swap on restart)", m.Version, newPath)
+	return nil
+}
+
+func verifySHA256(path, want string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return err
+	}
+	got := hex.EncodeToString(h.Sum(nil))
+	if !strings.EqualFold(got, want) {
+		return fmt.Errorf("sha256 mismatch: got %s want %s", got, want)
+	}
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
