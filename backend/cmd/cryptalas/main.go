@@ -49,18 +49,20 @@ type Job struct {
 
 // Agent holds the job queue.
 type Agent struct {
-	mu     sync.Mutex
-	jobs   map[string]*Job
-	order  []string
-	state  string
-	device string
-	gitSHA string
-	ollama string
+	mu         sync.Mutex
+	jobs       map[string]*Job
+	order      []string
+	state      string
+	device     string
+	gitSHA     string
+	ollama     string
+	cudaRunner string
 }
 
-func newAgent(stateDir, device, gitSHA, ollama string) *Agent {
+func newAgent(stateDir, device, gitSHA, ollama, cudaRunner string) *Agent {
 	os.MkdirAll(stateDir, 0o755)
-	return &Agent{jobs: map[string]*Job{}, state: filepath.Join(stateDir, "jobs.jsonl"), device: device, gitSHA: gitSHA, ollama: ollama}
+	return &Agent{jobs: map[string]*Job{}, state: filepath.Join(stateDir, "jobs.jsonl"),
+		device: device, gitSHA: gitSHA, ollama: ollama, cudaRunner: cudaRunner}
 }
 
 func (a *Agent) submit(model string, payload map[string]any, device, callback, jobType string) *Job {
@@ -94,13 +96,15 @@ func (a *Agent) run(j *Job, callback string) {
 	var result map[string]any
 	if j.Type == "ollama" {
 		result = a.runOllama(j)
+	} else if (j.Device == "cuda" || j.Device == "gpu" || j.Device == "metal") && a.cudaRunner != "" {
+		result = a.runCUDA(j)
 	} else {
 		result = map[string]any{
 			"trained": true,
 			"n":       len(j.Payload),
 			"model":   j.Model,
 			"device":  j.Device,
-			"note":    "custom training algorithm — JAX/CUDA runner slots in behind the same contract",
+			"note":    "CPU training — request -device cuda and a cuda-runner for the GPU path",
 		}
 	}
 
@@ -150,7 +154,7 @@ func (a *Agent) gpuReport() map[string]any {
 		"git_sha":     a.gitSHA,
 		"gpu_present": a.device == "gpu" || a.device == "cuda" || a.device == "metal",
 		"ollama":      a.ollamaStatus(),
-		"note":        "trainer runs on CPU; the JAX/CUDA runner slots in behind -device",
+		"note":        "train jobs route to " + a.cudaRunner + " (JAX/CUDA with CPU fallback)",
 	}
 }
 
@@ -203,6 +207,25 @@ func (a *Agent) runOllama(j *Job) map[string]any {
 	var out map[string]any
 	json.NewDecoder(resp.Body).Decode(&out)
 	return map[string]any{"trained": true, "ollama": out, "model": model}
+}
+
+// runCUDA hands a train job to the Python CUDA runner (JAX/CUDA with a CPU
+// fallback) and returns its result, which reports the device actually used.
+func (a *Agent) runCUDA(j *Job) map[string]any {
+	b, _ := json.Marshal(j)
+	cmd := exec.Command("python3", a.cudaRunner)
+	cmd.Stdin = bytes.NewReader(b)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return map[string]any{"trained": false, "error": err.Error(), "detail": out.String()}
+	}
+	var res map[string]any
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		return map[string]any{"trained": false, "error": "bad runner output: " + err.Error(), "detail": out.String()}
+	}
+	return res
 }
 
 func (a *Agent) list() []*Job {
@@ -358,6 +381,7 @@ func main() {
 	tty := flag.Bool("tty", false, "interactive terminal instead of the HTTP server")
 	gitSHA := flag.String("git-sha", "", "git commit this agent runs")
 	ollama := flag.String("ollama", "http://localhost:11434", "Ollama base URL on the GPU box")
+	cudaRunner := flag.String("cuda-runner", "gpu/cuda_train.py", "path to the CUDA/GPU python trainer")
 	flag.Parse()
 
 	dev := *device
@@ -365,7 +389,7 @@ func main() {
 		dev = detectGPU()
 		log.Printf("device auto -> %s", dev)
 	}
-	ag := newAgent(*stateDir, dev, *gitSHA, *ollama)
+	ag := newAgent(*stateDir, dev, *gitSHA, *ollama, *cudaRunner)
 	if *tty {
 		runTTY(ag)
 		return
