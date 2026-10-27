@@ -44,6 +44,21 @@ bad() { printf '  \033[1;31m✗\033[0m %s\n' "$*"; }
 warn(){ printf '  \033[1;33m!\033[0m %s\n' "$*"; }
 die() { bad "$*"; echo; echo "  stopped at this stage; nothing further was started."; exit 1; }
 
+# rotate_ledger <path> — move a JSONL ledger aside once it outgrows LEDGER_MAX_BYTES
+# (default 1 GiB). The backend replays the whole file into memory on startup, so a
+# multi-gigabyte ledger stalls boot; rotate instead of deleting.
+rotate_ledger() {
+  local path=$1 max=${LEDGER_MAX_BYTES:-1073741824}
+  [ -f "$path" ] || return 0
+  local size
+  size=$(wc -c < "$path" 2>/dev/null | tr -d ' ')
+  if [ -n "$size" ] && [ "$size" -gt "$max" ]; then
+    local bak="$path.bak-$(date +%Y%m%d-%H%M%S)"
+    warn "ledger $path is ${size} bytes (> ${max}) — rotating to $bak"
+    mv "$path" "$bak"
+  fi
+}
+
 port_busy() { lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
 
 wait_http() { # wait_http <url> <seconds> <name>
@@ -183,6 +198,7 @@ ok "trading is OFF (state/STOP written)"
 
 # ------------------------------------------------------------- 2 · core
 say "2 · the Go backend (detectors and alerts, :8787)"
+rotate_ledger "$ROOT/ledger/backend.jsonl"
 if curl -sS --max-time 2 -o /dev/null http://127.0.0.1:8787/health 2>/dev/null; then
   ok "backend already answering on :8787"
 else
