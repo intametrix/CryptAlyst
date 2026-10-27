@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -17,8 +18,15 @@ type AgentInfo struct {
 	GoVersion  string `json:"go_version"`  // runtime.Version()
 	GitSHA     string `json:"git_sha"`     // the commit the agent runs
 	GPUPresent bool   `json:"gpu_present"` // true when device is gpu/cuda/metal
-	FirstSeen  int64  `json:"first_seen_ms"`
-	LastSeen   int64  `json:"last_seen_ms"`
+	// Friendly name, actual IP as the platform sees it, and machine resources.
+	Name      string `json:"name"`
+	IP        string `json:"ip"`
+	MemTotal  uint64 `json:"mem_total"` // system memory in bytes (0 = unknown)
+	GPUName   string `json:"gpu_name"`  // first GPU model ("" = none)
+	GPUVRAM   string `json:"gpu_vram"`  // first GPU memory ("" = none)
+	GPUCount  int    `json:"gpu_count"` // number of GPUs
+	FirstSeen int64  `json:"first_seen_ms"`
+	LastSeen  int64  `json:"last_seen_ms"`
 }
 
 // AgentRegistry is the in-memory directory of enrolled agents. It is keyed by
@@ -107,6 +115,9 @@ func (s *Server) handleAgentsRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "host is required", http.StatusBadRequest)
 		return
 	}
+	if info.IP == "" {
+		info.IP = remoteIP(r)
+	}
 	writeJSON(w, http.StatusOK, s.deps.Agents.Upsert(info))
 }
 
@@ -132,4 +143,13 @@ func (s *Server) handleAgentsHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// remoteIP extracts the source IP from a request's RemoteAddr ("IP:port").
+func remoteIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }

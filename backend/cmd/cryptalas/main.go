@@ -28,6 +28,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +61,7 @@ type Agent struct {
 	gitSHA     string
 	ollama     string
 	cudaRunner string
+	name       string
 }
 
 func newAgent(stateDir, device, gitSHA, ollama, cudaRunner string) *Agent {
@@ -389,6 +391,7 @@ func main() {
 	advertise := flag.String("advertise", "", "this agent's own base URL to report (defaults to http://<addr>)")
 	updateManifest := flag.String("update-manifest", "", "URL of the self-update manifest {version,binary,sha256}")
 	updateInterval := flag.Duration("update-interval", 5*time.Minute, "how often to check for a new build")
+	name := flag.String("name", "", "friendly name for this agent (shown in the registry)")
 	flag.Parse()
 
 	dev := *device
@@ -397,6 +400,7 @@ func main() {
 		log.Printf("device auto -> %s", dev)
 	}
 	ag := newAgent(*stateDir, dev, *gitSHA, *ollama, *cudaRunner)
+	ag.name = *name
 	if *tty {
 		runTTY(ag)
 		return
@@ -458,16 +462,23 @@ func main() {
 // enrollAndHeartbeat registers this agent on the platform and then refreshes
 // its heartbeat every 30s so the platform knows it is still alive.
 func enrollAndHeartbeat(a *Agent, platform, host, device string) {
+	gpuName, gpuVRAM, gpuCount := probeGPU()
+	memTotal := probeMemBytes()
 	payload := func() []byte {
 		b, _ := json.Marshal(map[string]any{
 			"id":          host,
 			"host":        host,
+			"name":        a.name,
 			"device":      device,
 			"arch":        runtime.GOARCH,
 			"num_cpu":     runtime.NumCPU(),
 			"go_version":  runtime.Version(),
 			"git_sha":     a.gitSHA,
 			"gpu_present": device == "gpu" || device == "cuda" || device == "metal",
+			"mem_total":   memTotal,
+			"gpu_name":    gpuName,
+			"gpu_vram":    gpuVRAM,
+			"gpu_count":   gpuCount,
 		})
 		return b
 	}
@@ -601,6 +612,53 @@ func verifySHA256(path, want string) error {
 		return fmt.Errorf("sha256 mismatch: got %s want %s", got, want)
 	}
 	return nil
+}
+
+// probeMemBytes reports total system memory in bytes, best-effort and without
+// an external dependency (Linux /proc/meminfo, then macOS/BSD sysctl).
+func probeMemBytes() uint64 {
+	if b, err := os.ReadFile("/proc/meminfo"); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if strings.HasPrefix(line, "MemTotal:") {
+				f := strings.Fields(line)
+				if len(f) >= 2 {
+					if kb, err := strconv.ParseUint(f[1], 10, 64); err == nil {
+						return kb * 1024
+					}
+				}
+			}
+		}
+	}
+	if out, err := exec.Command("sysctl", "-n", "hw.memsize").Output(); err == nil {
+		if v, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 64); err == nil {
+			return v
+		}
+	}
+	return 0
+}
+
+// probeGPU reports the first GPU's model, its memory, and the GPU count, via
+// nvidia-smi when present. It returns zero values on a box without NVIDIA.
+func probeGPU() (name, vram string, count int) {
+	out, err := exec.Command("nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader").Output()
+	if err != nil {
+		return "", "", 0
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		count++
+		if i == 0 {
+			if parts := strings.SplitN(line, ",", 2); len(parts) == 2 {
+				name = strings.TrimSpace(parts[0])
+				vram = strings.TrimSpace(parts[1])
+			}
+		}
+	}
+	return name, vram, count
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
