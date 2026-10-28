@@ -19,12 +19,23 @@ mkdir -p "$OUT"
 
 VERSION="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
 BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-LDFLAGS="-X main.version=$VERSION -X main.buildTime=$BUILDTIME"
+# Where the agent looks for updates by default. Point this at your release
+# host (GitHub releases, a static server, etc.). Override with MANIFEST_BASE.
+MANIFEST_BASE="${MANIFEST_BASE:-https://github.com/intametrix/CryptAlyst/releases/latest/download}"
+
+manifest_for() { # manifest_for <os>
+  case "$1" in
+    darwin)  echo "$MANIFEST_BASE/manifest-cryptalas.json" ;;
+    linux)   echo "$MANIFEST_BASE/manifest-cryptalas-linux-amd64.json" ;;
+    windows) echo "$MANIFEST_BASE/manifest-cryptalas.exe.json" ;;
+  esac
+}
 
 build() { # build <os> <arch> <suffix>
   local os=$1 arch=$2 suffix=$3
-  printf 'building cryptalas for %s/%s (%s) ... ' "$os" "$arch" "$VERSION"
-  if GOOS=$os GOARCH=$arch "$GO" build -ldflags "$LDFLAGS" -o "$OUT/cryptalas$suffix" ./cmd/cryptalas; then
+  local ldflags="-X main.version=$VERSION -X main.buildTime=$BUILDTIME -X main.defaultManifest=$(manifest_for "$os")"
+  printf 'building cryptalas for %s/%s (%s, manifest %s) ... ' "$os" "$arch" "$VERSION" "$(manifest_for "$os")"
+  if GOOS=$os GOARCH=$arch "$GO" build -ldflags "$ldflags" -o "$OUT/cryptalas$suffix" ./cmd/cryptalas; then
     printf '\033[1;32mok\033[0m -> %s/cryptalas%s\n' "$OUT" "$suffix"
   else
     printf '\033[1;31mfailed\033[0m\n'

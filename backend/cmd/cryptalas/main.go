@@ -49,6 +49,10 @@ import (
 var (
 	version   = "dev"
 	buildTime = ""
+	// defaultManifest is the self-update manifest URL baked in at build time via
+	// -ldflags "-X main.defaultManifest=<url>". When set, the agent checks for a
+	// newer build and updates itself with no manual -update-manifest flag.
+	defaultManifest = ""
 )
 
 // msgLog is a ring buffer of recent log lines, shown persistently in the
@@ -491,7 +495,7 @@ func main() {
 	beaconInterval := flag.Duration("beacon-interval", 30*time.Second, "how often to broadcast the agent beacon (full status)")
 	beaconPort := flag.Int("beacon-port", 8788, "UDP port to broadcast the beacon on")
 	healInterval := flag.Duration("heal-interval", 15*time.Second, "self-heal probe interval; exits after 3 failed probes so the supervisor restarts")
-	updateManifest := flag.String("update-manifest", "", "URL of the self-update manifest {version,binary,sha256}")
+	updateManifest := flag.String("update-manifest", defaultManifest, "URL of the self-update manifest {version,binary,sha256} (defaults to the baked-in value)")
 	updateInterval := flag.Duration("update-interval", 5*time.Minute, "how often to check for a new build")
 	name := flag.String("name", "", "friendly name for this agent (shown in the registry)")
 	flag.Parse()
