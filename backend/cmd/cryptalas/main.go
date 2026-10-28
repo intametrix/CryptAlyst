@@ -634,6 +634,26 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		return b
 	}
 	broadcast := func(body []byte) {
+		// Send out every up, multicast-capable interface explicitly. DialUDP with
+		// a nil local address uses only the default route, so on a multi-homed
+		// host (Wi-Fi + Ethernet, VPN, bridge) the beacon could leave on an
+		// interface the platform never hears. Sending per-interface guarantees
+		// the beacon reaches the LAN the platform is on.
+		if ifaces, err := net.Interfaces(); err == nil {
+			for i := range ifaces {
+				ifi := ifaces[i]
+				if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagMulticast == 0 {
+					continue
+				}
+				conn, err := net.DialUDP("udp", &net.UDPAddr{IP: ifaceIP(ifi)}, &net.UDPAddr{IP: net.ParseIP(beaconGroup), Port: port})
+				if err != nil {
+					continue
+				}
+				_, _ = conn.Write(body)
+				conn.Close()
+			}
+			return
+		}
 		conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: net.ParseIP(beaconGroup), Port: port})
 		if err != nil {
 			return
@@ -677,6 +697,20 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 }
 
 // localIP returns the first non-loopback IPv4 address on this host, or "".
+// ifaceIP returns the interface's IPv4 address, or nil if it has none.
+func ifaceIP(ifi net.Interface) net.IP {
+	addrs, err := ifi.Addrs()
+	if err != nil {
+		return nil
+	}
+	for _, a := range addrs {
+		if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil && !ipn.IP.IsLoopback() {
+			return ipn.IP
+		}
+	}
+	return net.IPv4zero
+}
+
 // localIP returns the machine's actual outbound IPv4 — the interface the
 // default route uses — so the beacon advertises the real LAN IP, not a
 // loopback or a stray VPN/bridge address. The UDP dial resolves the route
