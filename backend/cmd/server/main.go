@@ -1183,8 +1183,11 @@ func valueOr(v *float64, def float64) float64 {
 // registers each one, recording the packet's source IP. This is the automatic
 // discovery path: an agent with no -register flag still shows up because its
 // beacon broadcast reaches any platform on the same subnet.
+// beaconGroup is the multicast group every agent broadcasts to.
+const beaconGroup = "239.255.42.99"
+
 func listenForAgentBeacons(reg *api.AgentRegistry, port int) {
-	conn, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
+	conn, err := net.ListenMulticastUDP("udp", nil, &net.UDPAddr{IP: net.ParseIP(beaconGroup), Port: port})
 	if err != nil {
 		log.Printf("agent beacon listener disabled: %v", err)
 		return

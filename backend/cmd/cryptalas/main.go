@@ -497,7 +497,7 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		return b
 	}
 	broadcast := func(body []byte) {
-		conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: net.IPv4bcast, Port: port})
+		conn, err := net.DialUDP("udp", nil, &net.UDPAddr{IP: net.ParseIP(beaconGroup), Port: port})
 		if err != nil {
 			return
 		}
@@ -728,6 +728,11 @@ func probeGPU() (name, vram string, count int) {
 	}
 	return name, vram, count
 }
+
+// beaconGroup is the site-local multicast group every agent broadcasts to and
+// every platform listens on. Multicast (not broadcast) so the discovery works
+// across switches and is routable within the site.
+const beaconGroup = "239.255.42.99"
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
