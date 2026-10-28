@@ -914,19 +914,20 @@ func (a *Agent) statusLoop() {
 
 // renderStatus clears and redraws the full debug panel.
 func (a *Agent) renderStatus() {
+	host := a.rt.host
 	beaconPort, beaconInterval := a.rt.beaconPort, a.rt.beaconInterval
+	manifest := a.rt.manifest
 
 	gs := probeGPUStats()
 	memTotal := probeMemBytes()
-	cpu := probeCPUUtil()
-	rxBps, txBps := a.netSpeed.current()
-
-	a.mu.Lock()
-	jobs := make([]*Job, len(a.order))
-	for i, id := range a.order {
-		jobs[i] = a.jobs[id]
+	last := a.lastBeacon.Load()
+	beaconAgo := "—"
+	if last > 0 {
+		beaconAgo = fmt.Sprintf("%ds ago", (time.Now().UnixMilli()-last)/1000)
 	}
+
 	var queued, running, done, failed int
+	a.mu.Lock()
 	for _, j := range a.jobs {
 		switch j.Status {
 		case "queued":
@@ -941,58 +942,36 @@ func (a *Agent) renderStatus() {
 	}
 	a.mu.Unlock()
 
-	spin := []string{"|", "/", "-", "\\"}[time.Now().UnixNano()/200000000%4]
-	memPct := 0.0
-	if memTotal > 0 {
-		memPct = 100 * float64(memTotal) / float64(memTotal) // placeholder, real used below
-	}
-	_ = memPct
-
 	var b strings.Builder
 	line := strings.Repeat("─", 44)
 	b.WriteString("\033[2J\033[H")
-
-	// ── sci-fi banner ────────────────────────────────────────────────
-	fmt.Fprintf(&b, "  %s%s╔══════════════════════════════════════════╗%s\n", bld, cyn, rst)
-	fmt.Fprintf(&b, "  %s║%s   %s⚡ CRYPTALAS%s  %s// COMPUTE NODE%s             %s║%s\n", cyn, rst, bld, rst, dim, rst, cyn, rst)
-	fmt.Fprintf(&b, "  %s║%s   %s%s%s%s  %s·%s  %s%s%s  %s·%s  %s%s%s            %s║%s\n",
-		cyn, rst, dim, grn, a.gitSHA, rst, dim, rst, deviceColor(a.device), a.device, rst, dim, rst, ylw, a.rt.ip, rst, cyn, rst)
-	fmt.Fprintf(&b, "  %s%s╚══════════════════════════════════════════════╝%s\n", bld, cyn, rst)
-
-	// ── resource gauges ──────────────────────────────────────────────
-	fmt.Fprintf(&b, "  %sCPU%s  %s  %s%d cores%s\n", dim, rst, gauge(cpu, 22), bld, runtime.NumCPU(), rst)
-	fmt.Fprintf(&b, "  %sMEM%s  %s  %s%s%s\n", dim, rst, gauge(100*float64(probeMemUsed())/float64(max(memTotal, 1)), 22), bld, formatBytes(probeMemUsed()), rst)
-	if gs.Count > 0 {
-		fmt.Fprintf(&b, "  %sGPU%s  %s  %s%d× %s %s%s\n", dim, rst, gauge(gs.Util, 22), bld, gs.Count, gs.Name, gs.VRAM, rst)
-	}
-	fmt.Fprintf(&b, "  %sNET%s  %s  ↓ %s  ↑ %s  %s%s%s\n", dim, rst, gauge(netSpeedPct(rxBps), 22), formatRate(rxBps), formatRate(txBps), cyn, spin, rst)
+	fmt.Fprintf(&b, "  %s%sCryptALAS agent%s  %s%s%s\n", bld, cyn, rst, dim, a.gitSHA, rst)
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-
-	// ── tasks ────────────────────────────────────────────────────────
-	fmt.Fprintf(&b, "  %sTASKS%s  %squeued %d%s  %srunning %d%s  %sdone %d%s  %sfailed %d%s\n",
-		bld, rst, dim, queued, rst, ylw, running, rst, grn, done, rst, red, failed, rst)
-	for _, j := range jobs {
-		if j.Status == "running" {
-			fmt.Fprintf(&b, "    %s%s%s  %-9s %-16s %sRUNNING%s  %s\n", cyn, spin, rst, j.Type, j.Model, ylw, rst, fmtDuration(time.Since(time.UnixMilli(j.Created))))
-		} else if j.Status == "done" {
-			fmt.Fprintf(&b, "    %s✓%s  %-9s %-16s %sdone%s\n", grn, rst, j.Type, j.Model, dim, rst)
-		} else if j.Status == "failed" {
-			fmt.Fprintf(&b, "    %s✗%s  %-9s %-16s %sfailed%s\n", red, rst, j.Type, j.Model, red, rst)
-		}
+	fmt.Fprintf(&b, "  %sname%s      %s%s%s\n", dim, rst, bld, a.name, rst)
+	fmt.Fprintf(&b, "  %shost%s      %s\n", dim, rst, host)
+	fmt.Fprintf(&b, "  %sdevice%s    %s%s%s   %sarch%s %s\n", dim, rst, deviceColor(a.device), a.device, rst, dim, rst, runtime.GOARCH)
+	fmt.Fprintf(&b, "  %sversion%s   %s\n", dim, rst, a.gitSHA)
+	if buildTime != "" {
+		fmt.Fprintf(&b, "  %sbuilt%s     %s\n", dim, rst, buildTime)
+	}
+	fmt.Fprintf(&b, "  %sgo%s        %s\n", dim, rst, runtime.Version())
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %sresources%s cpu %s%d%s   mem %s   gpu %s\n", dim, rst, bld, runtime.NumCPU(), rst, formatBytes(memTotal), formatGPU(gs.Name, gs.VRAM, gs.Count))
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %sbeacon%s    multicast 239.255.42.99:%d\n", dim, rst, beaconPort)
+	fmt.Fprintf(&b, "           every %s   %slast sent%s %s\n", beaconInterval, dim, rst, beaconAgo)
+	if a.rt.platform != "" {
+		fmt.Fprintf(&b, "           platform %s\n", a.rt.platform)
+	}
+	if manifest != "" {
+		fmt.Fprintf(&b, "  %supdate%s    manifest %s\n", dim, rst, manifest)
 	}
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-
-	// ── beacon + health ─────────────────────────────────────────────
-	lastAgo := "—"
-	if lb := a.lastBeacon.Load(); lb > 0 {
-		lastAgo = fmt.Sprintf("%ds ago", (time.Now().UnixMilli()-lb)/1000)
-	}
-	fmt.Fprintf(&b, "  %sbeacon%s  multicast 239.255.42.99:%d  every %s  %slast sent %s%s\n",
-		dim, rst, beaconPort, beaconInterval, dim, lastAgo, rst)
-	fmt.Fprintf(&b, "  %shealth%s  %d probes  %d failures\n", dim, rst, a.healthProbes.Load(), a.healthFails.Load())
+	fmt.Fprintf(&b, "  %sjobs%s      queued %d  running %d  %sdone %d%s  %sfailed %d%s\n", dim, rst, queued, running, grn, done, rst, red, failed, rst)
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-
-	// ── messages (persistent) ────────────────────────────────────────
+	fmt.Fprintf(&b, "  %shealth%s    %d probes  %d failures\n", dim, rst, a.healthProbes.Load(), a.healthFails.Load())
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %smessages%s\n", dim, rst)
 	for _, m := range msgBuffer.recent() {
 		fmt.Fprintf(&b, "  %s%s%s\n", dim, strings.TrimSpace(m), rst)
 	}
