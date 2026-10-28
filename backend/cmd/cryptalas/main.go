@@ -31,6 +31,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -121,6 +122,7 @@ type Agent struct {
 	gitSHA     string
 	ollama     string
 	cudaRunner string
+	nameMu     sync.RWMutex
 	name       string
 
 	// live status for the terminal UI
@@ -415,6 +417,24 @@ func runTTY(ag *Agent) {
 			ag.renderStatus()
 		case line == "version":
 			fmt.Printf("  VERSION %s   built %s   go %s   %s/%s\n", ag.gitSHA, buildTime, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		case strings.HasPrefix(line, "rename "):
+			n := strings.TrimSpace(strings.TrimPrefix(line, "rename "))
+			if n == "" {
+				fmt.Println("  usage: rename <name>")
+			} else {
+				ag.SetName(n)
+			}
+		case line == "scan":
+			fmt.Println("  scanning the local subnet…")
+			res := ag.scanNetwork()
+			if hosts, ok := res["found"].([]string); ok {
+				for _, h := range hosts {
+					fmt.Printf("    ✓ %s\n", h)
+				}
+				fmt.Printf("  %d hosts reachable on %s\n", res["hosts"], res["subnet"])
+			} else {
+				printJSON(res)
+			}
 		case line == "beacon", line == "connection", line == "conn":
 			fmt.Printf("  server   %s\n", ag.rt.platform)
 			if lr := ag.lastRegister.Load(); lr > 0 {
@@ -477,6 +497,8 @@ func printHelp() {
 	fmt.Println("  " + hexc(0, 220, 255, bld+"jobs") + hexc(120, 140, 165, "         job list"))
 	fmt.Println("  " + hexc(0, 220, 255, bld+"job <id>") + hexc(120, 140, 165, "     inspect one job"))
 	fmt.Println("  " + hexc(0, 220, 255, bld+"submit <m>") + hexc(120, 140, 165, "   queue a train job"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"rename <n>") + hexc(120, 140, 165, "  change this agent's name"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"scan") + hexc(120, 140, 165, "         ping-scan the local subnet"))
 	fmt.Println("  " + hexc(0, 220, 255, bld+"watch") + hexc(120, 140, 165, "        live status for 30s"))
 	fmt.Println("  " + hexc(0, 220, 255, bld+"clear") + hexc(120, 140, 165, "        redraw"))
 	fmt.Println("  " + hexc(0, 220, 255, bld+"quit") + hexc(120, 140, 165, "         exit"))
@@ -592,6 +614,27 @@ func main() {
 		signalEmergencyUpdate()
 		writeJSON(w, 200, map[string]any{"ok": true, "emergency": true})
 	})
+	// Rename this agent: POST {"name":"R1"}.
+	mux.HandleFunc("/api/agent/rename", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSON(w, 405, map[string]any{"error": "POST only"})
+			return
+		}
+		var body struct {
+			Name string `json:"name"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if strings.TrimSpace(body.Name) == "" {
+			writeJSON(w, 400, map[string]any{"error": "name required"})
+			return
+		}
+		ag.SetName(body.Name)
+		writeJSON(w, 200, map[string]any{"ok": true, "name": ag.Name()})
+	})
+	// Network scan: reports hosts reachable on this agent's subnet.
+	mux.HandleFunc("/api/agent/scan", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, ag.scanNetwork())
+	})
 
 	if *updateManifest != "" {
 		go ag.selfUpdateLoop(*updateManifest, *updateInterval)
@@ -609,7 +652,7 @@ func main() {
 // so any platform on the subnet discovers the agent with zero configuration;
 // when -register is set the same beacon is also POSTed to that platform.
 func beaconLoop(a *Agent, platform, host, device string, interval time.Duration, port int) {
-	name := a.name
+	name := a.Name()
 	if name == "" {
 		if h, err := os.Hostname(); err == nil {
 			name = h
@@ -1134,7 +1177,7 @@ func (a *Agent) renderStatus() {
 
 	// identity
 	fmt.Fprintf(&b, "  %s\n", hdr("IDENTITY"))
-	fmt.Fprintf(&b, "    name      %s\n", rgb(255, 255, 180, bld+a.name))
+	fmt.Fprintf(&b, "    name      %s\n", rgb(255, 255, 180, bld+a.Name()))
 	fmt.Fprintf(&b, "    host      %s\n", rgb(80, 220, 255, host))
 	fmt.Fprintf(&b, "    device    %s   arch %s\n", rgb(100, 255, 150, bld+a.device), rgb(160, 190, 210, runtime.GOARCH))
 	fmt.Fprintf(&b, "    version   %s   go %s\n", rgb(90, 255, 150, a.gitSHA), rgb(160, 190, 210, runtime.Version()))
@@ -1441,6 +1484,80 @@ func (a *Agent) capabilities() []string {
 }
 
 // jobSummary counts the agent's jobs by status.
+// Name returns the current agent name (thread-safe).
+func (a *Agent) Name() string {
+	a.nameMu.RLock()
+	defer a.nameMu.RUnlock()
+	return a.name
+}
+
+// SetName changes the agent name and re-registers it under the new name on the
+// next beacon so the platform sees the change immediately.
+func (a *Agent) SetName(n string) {
+	n = strings.TrimSpace(n)
+	if n == "" {
+		return
+	}
+	a.nameMu.Lock()
+	a.name = n
+	a.nameMu.Unlock()
+	log.Printf("rename: agent is now %q", n)
+	// Force a re-register so the new name reaches the platform right away.
+	a.connected.Store(false)
+}
+
+// scanNetwork pings a /24 around this host's /24 and reports which addresses
+// answer, so the platform can see what else is on the agent's subnet.
+func (a *Agent) scanNetwork() map[string]any {
+	ip := localIP()
+	if ip == "" {
+		return map[string]any{"error": "cannot determine host IP"}
+	}
+	parts := strings.Split(ip, ".")
+	if len(parts) != 4 {
+		return map[string]any{"error": "unexpected IP form: " + ip}
+	}
+	base := strings.Join(parts[:3], ".")
+	var found []string
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	sem := make(chan struct{}, 50)
+	for i := 1; i <= 254; i++ {
+		host := fmt.Sprintf("%s.%d", base, i)
+		wg.Add(1)
+		go func(h string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			if alive(h) {
+				mu.Lock()
+				found = append(found, h)
+				mu.Unlock()
+			}
+		}(host)
+	}
+	wg.Wait()
+	sort.Strings(found)
+	return map[string]any{
+		"subnet": base + ".0/24",
+		"hosts":  len(found),
+		"found":  found,
+	}
+}
+
+// alive reports whether a host answers a TCP connect on a common port, as a
+// lightweight reachability probe (ICMP ping needs privileges on Windows).
+func alive(host string) bool {
+	for _, port := range []int{22, 80, 135, 445, 3389, 8810} {
+		c, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 400*time.Millisecond)
+		if err == nil {
+			c.Close()
+			return true
+		}
+	}
+	return false
+}
+
 func (a *Agent) jobSummary() (queued, running, done, failed int) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
