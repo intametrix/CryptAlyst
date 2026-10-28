@@ -394,23 +394,27 @@ func banner(ag *Agent) {
 // at the bottom. Type help for commands.
 func runTTY(ag *Agent) {
 	sc := bufio.NewScanner(os.Stdin)
-	render := func() {
-		ag.renderStatus()
-		fmt.Print(cyn + "cryptalas> " + rst)
-	}
-	render()
+	// Render the status once up front, then keep a command prompt. Command
+	// output prints BELOW the prompt and is never erased.
+	ag.renderStatus()
+	fmt.Println()
+	fmt.Println(cyn + "type 'help' for commands" + rst)
+	fmt.Println()
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		switch {
 		case line == "":
-		case line == "help":
+		case line == "help", line == "?":
 			printHelp()
 		case line == "quit" || line == "exit":
-			fmt.Println()
+			fmt.Println("bye")
 			return
-		case line == "clear", line == "status":
+		case line == "clear":
+			ag.renderStatus()
+		case line == "status":
+			ag.renderStatus()
 		case line == "version":
-			fmt.Printf("  version %s   built %s   go %s   %s/%s\n", ag.gitSHA, buildTime, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+			fmt.Printf("  VERSION %s   built %s   go %s   %s/%s\n", ag.gitSHA, buildTime, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 		case line == "beacon", line == "connection", line == "conn":
 			fmt.Printf("  server   %s\n", ag.rt.platform)
 			if lr := ag.lastRegister.Load(); lr > 0 {
@@ -455,7 +459,7 @@ func runTTY(ag *Agent) {
 		default:
 			fmt.Println("  unknown — type help")
 		}
-		render()
+		fmt.Print(cyn + "cryptalas> " + rst)
 	}
 }
 
@@ -1123,7 +1127,6 @@ func (a *Agent) renderStatus() {
 
 	var b strings.Builder
 	line := rgb(90, 120, 150, strings.Repeat("─", 52))
-	b.WriteString("\033[2J\033[H")
 
 	// Banner
 	fmt.Fprintf(&b, "  %s  %s\n", rgb(0, 220, 255, bld+"⚡ CRYPTALAS AGENT"+rst), rgb(100, 120, 140, "// compute node "+a.gitSHA))
