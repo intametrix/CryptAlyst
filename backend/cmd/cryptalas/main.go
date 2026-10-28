@@ -667,15 +667,26 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 }
 
 // localIP returns the first non-loopback IPv4 address on this host, or "".
+// localIP returns the machine's actual outbound IPv4 — the interface the
+// default route uses — so the beacon advertises the real LAN IP, not a
+// loopback or a stray VPN/bridge address. The UDP dial resolves the route
+// without sending traffic.
 func localIP() string {
-	addrs, err := net.InterfaceAddrs()
+	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil {
+		// fall back to the first non-loopback interface
+		if addrs, err := net.InterfaceAddrs(); err == nil {
+			for _, a := range addrs {
+				if ipn, ok := a.(*net.IPNet); ok && !ipn.IP.IsLoopback() && ipn.IP.To4() != nil {
+					return ipn.IP.String()
+				}
+			}
+		}
 		return ""
 	}
-	for _, a := range addrs {
-		if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
-			return ipnet.IP.String()
-		}
+	defer conn.Close()
+	if ua, ok := conn.LocalAddr().(*net.UDPAddr); ok && ua.IP != nil && ua.IP.To4() != nil {
+		return ua.IP.String()
 	}
 	return ""
 }
@@ -968,12 +979,36 @@ func (a *Agent) renderStatus() {
 	}
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Fprintf(&b, "  %sjobs%s      queued %d  running %d  %sdone %d%s  %sfailed %d%s\n", dim, rst, queued, running, grn, done, rst, red, failed, rst)
+	a.mu.Lock()
+	order := make([]*Job, len(a.order))
+	for i, id := range a.order {
+		order[i] = a.jobs[id]
+	}
+	a.mu.Unlock()
+	if len(order) > 0 {
+		show := order
+		if len(show) > 5 {
+			show = show[len(show)-5:]
+		}
+		for _, j := range show {
+			sc := dim
+			switch j.Status {
+			case "running":
+				sc = ylw
+			case "done":
+				sc = grn
+			case "failed":
+				sc = red
+			}
+			fmt.Fprintf(&b, "    %s%-18s %-9s %-16s %s%s\n", sc, j.ID, j.Type, j.Model, j.Status, rst)
+		}
+	}
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Fprintf(&b, "  %shealth%s    %d probes  %d failures\n", dim, rst, a.healthProbes.Load(), a.healthFails.Load())
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Fprintf(&b, "  %smessages%s\n", dim, rst)
 	for _, m := range msgBuffer.recent() {
-		fmt.Fprintf(&b, "  %s%s%s\n", dim, strings.TrimSpace(m), rst)
+		fmt.Fprintf(&b, "  %s\n", colorizeMsg(strings.TrimSpace(m)))
 	}
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Print(b.String())
@@ -1016,6 +1051,23 @@ func max(a, b uint64) uint64 {
 		return a
 	}
 	return b
+}
+
+// colorizeMsg colours a log line by what it reports.
+func colorizeMsg(line string) string {
+	l := strings.ToLower(line)
+	switch {
+	case strings.Contains(l, "error") || strings.Contains(l, "failed") || strings.Contains(l, "self-heal"):
+		return red + line + rst
+	case strings.Contains(l, "self-update") || strings.Contains(l, "update"):
+		return ylw + line + rst
+	case strings.Contains(l, "beacon") || strings.Contains(l, "register") || strings.Contains(l, "enroll"):
+		return cyn + line + rst
+	case strings.Contains(l, "job") || strings.Contains(l, "done"):
+		return grn + line + rst
+	default:
+		return dim + line + rst
+	}
 }
 
 // deviceColor colours the device badge by capability.
