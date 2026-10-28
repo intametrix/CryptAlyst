@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -174,18 +176,27 @@ func (a *Agent) run(j *Job, callback string) {
 	// box; "train" runs our own algorithm (CPU now, JAX/CUDA behind -device).
 	time.Sleep(200 * time.Millisecond)
 	var result map[string]any
-	if j.Type == "ollama" {
+	switch j.Type {
+	case "ollama":
 		result = a.runOllama(j)
-	} else if (j.Device == "cuda" || j.Device == "gpu" || j.Device == "metal") && a.cudaRunner != "" {
-		result = a.runCUDA(j)
-	} else {
-		result = map[string]any{
-			"trained": true,
-			"n":       len(j.Payload),
-			"model":   j.Model,
-			"device":  j.Device,
-			"note":    "CPU training — request -device cuda and a cuda-runner for the GPU path",
+	case "forecast":
+		result = a.runForecast(j)
+	case "backtest":
+		result = a.runBacktest(j)
+	case "train", "regression", "":
+		if (j.Device == "cuda" || j.Device == "gpu" || j.Device == "metal") && a.cudaRunner != "" {
+			result = a.runCUDA(j)
+		} else {
+			result = map[string]any{
+				"trained": true,
+				"n":       len(j.Payload),
+				"model":   j.Model,
+				"device":  j.Device,
+				"note":    "CPU training — request -device cuda and a cuda-runner for the GPU path",
+			}
 		}
+	default:
+		result = map[string]any{"trained": false, "error": "unknown job type: " + j.Type}
 	}
 
 	a.mu.Lock()
@@ -1262,6 +1273,186 @@ func (t *netSpeedTracker) current() (rxBps, txBps float64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.rxBps, t.txBps
+}
+
+// runForecast runs a time-series forecast via gpu/forecast.py, resolving a
+// history_ref against the marketdata service first when present.
+func (a *Agent) runForecast(j *Job) map[string]any {
+	a.resolveHistory(j)
+	b, _ := json.Marshal(j)
+	cmd := exec.Command("python3", "gpu/forecast.py")
+	cmd.Stdin = bytes.NewReader(b)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return map[string]any{"trained": false, "error": err.Error(), "detail": out.String()}
+	}
+	var res map[string]any
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		return map[string]any{"trained": false, "error": "bad forecast output: " + err.Error(), "detail": out.String()}
+	}
+	return res
+}
+
+// runBacktest runs a simple SMA-momentum backtest over a close series (or a
+// history_ref), returning equity, total return and Sharpe.
+func (a *Agent) runBacktest(j *Job) map[string]any {
+	a.resolveHistory(j)
+	closes := extractCloses(j.Payload["series"])
+	if len(closes) < 5 {
+		return map[string]any{"error": "need >= 5 closes", "runner": "backtest"}
+	}
+	window := int(toFloat(j.Payload["window"]))
+	if window < 2 || window > len(closes) {
+		window = 10
+	}
+	if window > len(closes) {
+		window = len(closes)
+	}
+	eq := 1.0
+	prev := 0.0
+	trades := 0
+	var rets []float64
+	for i := 1; i < len(closes); i++ {
+		sig := 0.0
+		if i >= window {
+			sma := 0.0
+			for k := i - window; k < i; k++ {
+				sma += closes[k]
+			}
+			sma /= float64(window)
+			if closes[i] > sma {
+				sig = 1
+			}
+		}
+		if sig != prev {
+			trades++
+			prev = sig
+		}
+		r := sig * (closes[i]/closes[i-1] - 1)
+		rets = append(rets, r)
+		eq *= 1 + r
+	}
+	return map[string]any{
+		"runner": "backtest", "method": "sma-momentum", "window": window,
+		"points": len(closes), "trades": trades,
+		"final_equity": round(eq, 6), "total_return": round(eq-1, 6),
+		"sharpe": round(sharpe(rets), 4),
+	}
+}
+
+// resolveHistory fetches the close series when the payload carries a history_ref.
+func (a *Agent) resolveHistory(j *Job) {
+	ref, ok := j.Payload["history_ref"].(map[string]any)
+	if !ok {
+		return
+	}
+	if s := fetchHistory(ref); s != nil {
+		j.Payload["series"] = s
+	}
+}
+
+// fetchHistory pulls klines from the marketdata service and returns [{t,v}] closes.
+func fetchHistory(ref map[string]any) []map[string]any {
+	symbol, _ := ref["symbol"].(string)
+	interval, _ := ref["interval"].(string)
+	if interval == "" {
+		interval = "1m"
+	}
+	limit := 200
+	if n := toFloat(ref["limit"]); n > 0 {
+		limit = int(n)
+	}
+	base, _ := ref["marketdata"].(string)
+	if base == "" {
+		base = "http://127.0.0.1:8796"
+	}
+	u := fmt.Sprintf("%s/klines?symbol=%s&interval=%s&limit=%d", base, url.QueryEscape(symbol), url.QueryEscape(interval), limit)
+	resp, err := http.Get(u)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Klines []struct {
+			T int64   `json:"t"`
+			C float64 `json:"c"`
+		} `json:"klines"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil
+	}
+	out := make([]map[string]any, len(body.Klines))
+	for i, k := range body.Klines {
+		out[i] = map[string]any{"t": k.T, "v": k.C}
+	}
+	return out
+}
+
+func toFloat(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case int:
+		return float64(n)
+	case json.Number:
+		f, _ := n.Float64()
+		return f
+	default:
+		return 0
+	}
+}
+
+func round(v float64, places int) float64 {
+	shift := math.Pow10(places)
+	return math.Round(v*shift) / shift
+}
+
+func extractCloses(series any) []float64 {
+	var out []float64
+	add := func(m map[string]any) {
+		if v, ok := m["v"]; ok {
+			out = append(out, toFloat(v))
+		} else if c, ok := m["c"]; ok {
+			out = append(out, toFloat(c))
+		}
+	}
+	switch s := series.(type) {
+	case []map[string]any:
+		for _, m := range s {
+			add(m)
+		}
+	case []any:
+		for _, e := range s {
+			if m, ok := e.(map[string]any); ok {
+				add(m)
+			} else {
+				out = append(out, toFloat(e))
+			}
+		}
+	}
+	return out
+}
+
+func sharpe(rets []float64) float64 {
+	if len(rets) < 2 {
+		return 0
+	}
+	mean := 0.0
+	for _, r := range rets {
+		mean += r
+	}
+	mean /= float64(len(rets))
+	var v float64
+	for _, r := range rets {
+		v += (r - mean) * (r - mean)
+	}
+	sd := math.Sqrt(v / float64(len(rets)))
+	if sd == 0 {
+		return 0
+	}
+	return mean / sd
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
