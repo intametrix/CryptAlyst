@@ -1,0 +1,58 @@
+name: release
+
+# Builds the CryptALAS agent for all three platforms and publishes a GitHub
+# release on every tag. The agent binaries bake in a default self-update
+# manifest URL pointing at this release, so a deployed agent polls here and
+# updates itself automatically.
+#
+#   git tag v1.0.0 && git push --tags
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Build + package all platforms
+        env:
+          VERSION: ${{ github.ref_name }}
+          MANIFEST_BASE: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+        run: |
+          set -e
+          cd backend
+          ./build-agent.sh all
+          ./package-agent.sh
+          # copy binaries to the top-level dist/ so the manifest URLs resolve
+          cp dist/cryptalas-agent/cryptalas dist/
+          cp dist/cryptalas-agent/cryptalas-linux-amd64 dist/
+          cp dist/cryptalas-agent/cryptalas.exe dist/
+          # generate per-platform manifests pointing at this release's assets
+          for f in cryptalas cryptalas-linux-amd64 cryptalas.exe; do
+            SHA=$(sha256sum "dist/$f" | awk '{print $1}')
+            printf '{"version":"%s","binary":"%s/%s","sha256":"%s"}\n' \
+              "$VERSION" "$MANIFEST_BASE" "$f" "$SHA" > "dist/manifest-$f.json"
+          done
+          ls -la dist/
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            backend/dist/cryptalas
+            backend/dist/cryptalas-linux-amd64
+            backend/dist/cryptalas.exe
+            backend/dist/manifest-cryptalas.json
+            backend/dist/manifest-cryptalas-linux-amd64.json
+            backend/dist/manifest-cryptalas.exe.json
+            backend/dist/cryptalas-agent.zip

@@ -17,7 +17,7 @@ GO="${GO:-go}"
 OUT=bin
 mkdir -p "$OUT"
 
-VERSION="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
+VERSION="${VERSION:-$(git rev-parse --short HEAD 2>/dev/null || echo dev)}"
 BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Where the agent looks for updates by default. Point this at your release
 # host (GitHub releases, a static server, etc.). Override with MANIFEST_BASE.
