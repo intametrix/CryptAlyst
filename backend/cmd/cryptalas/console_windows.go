@@ -3,6 +3,7 @@
 package main
 
 import (
+	"os/exec"
 	"syscall"
 	"unsafe"
 )
@@ -43,4 +44,10 @@ func enableANSIConsole() error {
 	)
 	_ = unsafe.Pointer(nil)
 	return nil
+}
+
+// detachProcess starts a command in a new, detached console on Windows so the
+// self-update helper can swap the exe even after the agent exits.
+func detachProcess(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x00000008} // DETACHED_PROCESS
 }

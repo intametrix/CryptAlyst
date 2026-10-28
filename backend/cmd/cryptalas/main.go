@@ -835,6 +835,8 @@ func (a *Agent) selfUpdate(manifestURL string) error {
 	if err := os.Rename(tmpName, newPath); err != nil {
 		return err
 	}
+	// Try the in-place swap first (works on Unix). On Windows the running exe
+	// is locked, so fall through to a self-restart that swaps it for us.
 	if err := os.Rename(newPath, exe); err == nil {
 		log.Printf("self-update: %s -> %s, restarting", a.gitSHA, m.Version)
 		cmd := exec.Command(exe, os.Args[1:]...)
@@ -845,7 +847,27 @@ func (a *Agent) selfUpdate(manifestURL string) error {
 		}
 		return err
 	}
-	log.Printf("self-update: %s staged at %s (supervisor will swap on restart)", m.Version, newPath)
+
+	// Windows / locked exe path: write a swap helper, launch it detached, and
+	// exit. The helper waits for this process to die, moves <exe>.new onto
+	// <exe>, then restarts the agent. Fully automatic — no manual step and no
+	// supervisor needed.
+	log.Printf("self-update: %s -> %s staged; swapping via helper + restart", a.gitSHA, m.Version)
+	header := exe + ".update.cmd"
+	lines := []string{
+		"@echo off",
+		":w",
+		"taskkill /IM " + strconv.Quote(filepath.Base(exe)) + " /F >nul 2>&1",
+		"timeout /t 1 /nobreak >nul",
+		"if exist " + strconv.Quote(newPath) + " goto w",
+		"move /Y " + strconv.Quote(newPath) + " " + strconv.Quote(exe) + " >nul",
+		"start \"\" " + strconv.Quote(exe) + " " + strings.Join(os.Args[1:], " "),
+	}
+	_ = os.WriteFile(header, []byte(strings.Join(lines, "\r\n")), 0o644)
+	cmd := exec.Command("cmd", "/C", header)
+	detachProcess(cmd) // Windows: new detached console; Unix: no-op
+	_ = cmd.Start()
+	os.Exit(0)
 	return nil
 }
 
