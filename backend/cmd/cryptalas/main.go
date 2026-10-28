@@ -527,6 +527,7 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		body := payload()
 		broadcast(body)
 		post(body)
+		log.Printf("beacon sent — name=%s ip=%s host=%s device=%s udp=:%d", name, ip, host, device, port)
 	}
 	emit()
 	tick := time.NewTicker(interval)
@@ -688,6 +689,17 @@ func probeMemBytes() uint64 {
 	if out, err := exec.Command("sysctl", "-n", "hw.memsize").Output(); err == nil {
 		if v, err := strconv.ParseUint(strings.TrimSpace(string(out)), 10, 64); err == nil {
 			return v
+		}
+	}
+	// Windows: wmic reports total physical memory in bytes.
+	if out, err := exec.Command("wmic", "computersystem", "get", "TotalPhysicalMemory", "/value").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "TotalPhysicalMemory=") {
+				if v, err := strconv.ParseUint(strings.TrimPrefix(line, "TotalPhysicalMemory="), 10, 64); err == nil {
+					return v
+				}
+			}
 		}
 	}
 	return 0
