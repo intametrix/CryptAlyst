@@ -1199,31 +1199,54 @@ func (a *Agent) renderStatus() {
 	// Banner
 	fmt.Fprintf(&b, "  %s\n", rgb(0, 220, 255, bld+"⚡ CRYPTALAS AGENT"+rst))
 
-	// big ASCII-art VERSION block, highlighting an update when one is active.
-	ver := a.gitSHA
-	verCol := rgb(90, 255, 150, "")
-	switch a.updateState.Load() {
+	// ASCII-art identity card: NAME, IP, VERSION (with update state).
+	name := a.Name()
+	ip := a.rt.ip
+	if ip == "" {
+		ip = "(unknown)"
+	}
+	verState := a.updateState.Load()
+	verTxt := a.gitSHA
+	switch verState {
 	case 1:
-		ver = a.updateVer
-		verCol = rgb(255, 200, 40, "")
+		verTxt = a.updateVer
 	case 2:
-		ver = a.updateVer
+		verTxt = a.updateVer
+	}
+
+	// box colours
+	C := rgb(0, 220, 255, "")   // border
+	L := rgb(120, 140, 165, "") // labels / dim
+	nameCol := rgb(255, 255, 180, bld)
+	ipCol := rgb(80, 220, 255, "")
+	verCol := rgb(90, 255, 150, "")
+	if verState == 1 {
+		verCol = rgb(255, 200, 40, "")
+	} else if verState == 2 {
 		verCol = rgb(80, 255, 120, "")
 	}
-	fmt.Fprintf(&b, "  %s\n", line)
-	fmt.Fprintf(&b, "  %s  ╔══════════════════════════╗\n", verCol)
-	fmt.Fprintf(&b, "  %s  ║   VERSION %-15s║\n", verCol, "")
-	fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(255, 255, 180, bld+center(ver, 28)), verCol)
-	fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(120, 140, 165, strings.Repeat("·", 26)), verCol)
-	switch a.updateState.Load() {
-	case 1:
-		fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(255, 220, 90, "⬆ UPDATE AVAILABLE"+strings.Repeat(" ", 9)), verCol)
-	case 2:
-		fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(120, 255, 160, "✔ UPDATE RECEIVED"+strings.Repeat(" ", 10)), verCol)
-	default:
-		fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(120, 140, 165, "running"+strings.Repeat(" ", 21)), verCol)
+
+	const w = 40 // interior width
+	top := C + "╔" + strings.Repeat("═", w) + "╗" + rst
+	bot := C + "╚" + strings.Repeat("═", w) + "╝" + rst
+	lineIn := func(content string) string {
+		return "  " + C + "║" + content + strings.Repeat(" ", w-visualLen(content)) + "║" + rst
 	}
-	fmt.Fprintf(&b, "  %s  ╚══════════════════════════╝%s\n", verCol, rst)
+	fmt.Fprintf(&b, "  %s\n", top)
+	fmt.Fprintf(&b, "%s\n", lineIn(nameCol+center(name, w-2)+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(L+"NAME      "+nameCol+pad(name, 16)+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(L+"IP        "+ipCol+pad(ip, 16)+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(L+"VERSION   "+verCol+pad(verTxt, 16)+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(L+strings.Repeat("·", w-2)+rst))
+	stCol, stTxt := L, "running"
+	switch verState {
+	case 1:
+		stCol, stTxt = rgb(255, 220, 90, bld), "⬆ UPDATE AVAILABLE"
+	case 2:
+		stCol, stTxt = rgb(120, 255, 160, bld), "✔ UPDATE RECEIVED"
+	}
+	fmt.Fprintf(&b, "%s\n", lineIn(stCol+pad(stTxt, w-2)+rst))
+	fmt.Fprintf(&b, "  %s\n", bot)
 	fmt.Fprintf(&b, "  %s\n", line)
 
 	// identity
@@ -1323,6 +1346,39 @@ func center(s string, width int) string {
 	pad := width - len(s)
 	left := pad / 2
 	return strings.Repeat(" ", left) + s + strings.Repeat(" ", pad-left)
+}
+
+// pad right-pads a string to width (no-op if already at/over width).
+func pad(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-len(s))
+}
+
+// stripANSI removes ANSI escapes so len() measures the visible width.
+func stripANSI(s string) string {
+	var b strings.Builder
+	inEscape := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == 0x1b {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if s[i] == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
+}
+
+// visualLen returns the printable width of a string (ANSI escapes ignored).
+func visualLen(s string) int {
+	return len([]rune(stripANSI(s)))
 }
 
 func gauge(pct float64, width int) string {
