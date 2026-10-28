@@ -9,6 +9,10 @@ set DEVICE=%2
 set REGISTER=%3
 if "%DEVICE%"=="" set DEVICE=auto
 
+REM Kill any running agent first so the install replaces it cleanly.
+taskkill /IM cryptalas.exe /F 2>nul
+taskkill /FI "IMAGENAME eq cryptalas.exe" /F 2>nul
+
 set IP=%LOCALAPPDATA%\CryptALAS
 mkdir "%IP%" 2>nul
 copy /Y "%~dp0cryptalas.exe" "%IP%\cryptalas.exe" >nul
@@ -28,6 +32,10 @@ echo echo cryptalas exited, restarting...
 echo timeout /t 2 /nobreak ^>nul
 echo goto loop
 ) > "%IP%\supervise.bat"
+
+REM Open the Windows Firewall so the beacon + HTTP server are reachable.
+netsh advfirewall firewall add rule name="CryptALAS Agent" dir=in action=allow program="%IP%\cryptalas.exe" enable=yes >nul 2>&1
+netsh advfirewall firewall add rule name="CryptALAS Agent" dir=out action=allow program="%IP%\cryptalas.exe" enable=yes >nul 2>&1
 
 schtasks /Create /TN "CryptALAS Agent" /TR "\"%IP%\supervise.bat\"" /SC ONLOGON /RL LIMITED /F >nul
 schtasks /Run /TN "CryptALAS Agent" >nul

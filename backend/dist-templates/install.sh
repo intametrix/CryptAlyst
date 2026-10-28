@@ -30,6 +30,10 @@ case "$OS/$ARCH" in
   *) echo "unsupported platform: $OS $ARCH" >&2; exit 2 ;;
 esac
 
+# Kill any running agent first so the install replaces it cleanly.
+pkill -9 -f cryptalas 2>/dev/null
+sleep 1
+
 LABEL="com.cryptalyst.agent"
 BIN="$PREFIX/cryptalas"
 LOG="$PREFIX/agent.log"

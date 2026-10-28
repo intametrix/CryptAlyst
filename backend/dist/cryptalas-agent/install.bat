@@ -9,6 +9,10 @@ set DEVICE=%2
 set REGISTER=%3
 if "%DEVICE%"=="" set DEVICE=auto
 
+REM Kill any running agent first so the install replaces it cleanly.
+taskkill /IM cryptalas.exe /F 2>nul
+taskkill /FI "IMAGENAME eq cryptalas.exe" /F 2>nul
+
 set IP=%LOCALAPPDATA%\CryptALAS
 mkdir "%IP%" 2>nul
 copy /Y "%~dp0cryptalas.exe" "%IP%\cryptalas.exe" >nul
