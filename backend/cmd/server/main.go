@@ -1208,5 +1208,6 @@ func listenForAgentBeacons(reg *api.AgentRegistry, port int) {
 			info.IP = remote.IP.String()
 		}
 		reg.Upsert(info)
+		log.Printf("agent beacon received: %s (%s) from %s", info.Host, info.Name, remote.IP)
 	}
 }
