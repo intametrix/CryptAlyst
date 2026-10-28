@@ -1197,7 +1197,33 @@ func (a *Agent) renderStatus() {
 	line := rgb(90, 120, 150, strings.Repeat("─", 52))
 
 	// Banner
-	fmt.Fprintf(&b, "  %s  %s\n", rgb(0, 220, 255, bld+"⚡ CRYPTALAS AGENT"+rst), rgb(100, 120, 140, "// compute node "+a.gitSHA))
+	fmt.Fprintf(&b, "  %s\n", rgb(0, 220, 255, bld+"⚡ CRYPTALAS AGENT"+rst))
+
+	// big ASCII-art VERSION block, highlighting an update when one is active.
+	ver := a.gitSHA
+	verCol := rgb(90, 255, 150, "")
+	switch a.updateState.Load() {
+	case 1:
+		ver = a.updateVer
+		verCol = rgb(255, 200, 40, "")
+	case 2:
+		ver = a.updateVer
+		verCol = rgb(80, 255, 120, "")
+	}
+	fmt.Fprintf(&b, "  %s\n", line)
+	fmt.Fprintf(&b, "  %s  ╔══════════════════════════╗\n", verCol)
+	fmt.Fprintf(&b, "  %s  ║   VERSION %-15s║\n", verCol, "")
+	fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(255, 255, 180, bld+center(ver, 28)), verCol)
+	fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(120, 140, 165, strings.Repeat("·", 26)), verCol)
+	switch a.updateState.Load() {
+	case 1:
+		fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(255, 220, 90, "⬆ UPDATE AVAILABLE"+strings.Repeat(" ", 9)), verCol)
+	case 2:
+		fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(120, 255, 160, "✔ UPDATE RECEIVED"+strings.Repeat(" ", 10)), verCol)
+	default:
+		fmt.Fprintf(&b, "  %s  ║   %s%s║\n", verCol, rgb(120, 140, 165, "running"+strings.Repeat(" ", 21)), verCol)
+	}
+	fmt.Fprintf(&b, "  %s  ╚══════════════════════════╝%s\n", verCol, rst)
 	fmt.Fprintf(&b, "  %s\n", line)
 
 	// identity
@@ -1287,6 +1313,16 @@ func (a *Agent) renderStatus() {
 	}
 	fmt.Fprintf(&b, "  %s\n", line)
 	fmt.Print(b.String())
+}
+
+// center pads a string to the given width, centred.
+func center(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	pad := width - len(s)
+	left := pad / 2
+	return strings.Repeat(" ", left) + s + strings.Repeat(" ", pad-left)
 }
 
 func gauge(pct float64, width int) string {
