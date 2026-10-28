@@ -21,7 +21,7 @@ VERSION="${VERSION:-$(git rev-parse --short HEAD 2>/dev/null || echo dev)}"
 BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Where the agent looks for updates by default. Point this at your release
 # host (GitHub releases, a static server, etc.). Override with MANIFEST_BASE.
-MANIFEST_BASE="${MANIFEST_BASE:-https://github.com/intametrix/CryptAlyst/releases/latest/download}"
+MANIFEST_BASE="${MANIFEST_BASE:-http://192.168.1.111:8899}"
 # Platform the agent registers to over HTTP (baked in so it needs no -register).
 REGISTER_URL="${REGISTER_URL:-http://192.168.1.111:8787}"
 
