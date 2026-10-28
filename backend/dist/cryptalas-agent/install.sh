@@ -15,7 +15,9 @@ while [ $# -gt 0 ]; do
     --register) REGISTER="$2"; shift 2 ;;
     --prefix) PREFIX="$2"; shift 2 ;;
     --uninstall) UNINSTALL=1; shift ;;
-    --help|-h) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    --help|-h)
+      echo "usage: ./install.sh [--name N] [--device D] [--register URL] [--prefix DIR] [--uninstall]"
+      exit 0 ;;
     *) echo "unknown: $1" >&2; exit 2 ;;
   esac
 done
