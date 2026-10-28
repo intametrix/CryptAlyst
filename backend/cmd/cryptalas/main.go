@@ -133,6 +133,8 @@ type Agent struct {
 	netSpeed     netSpeedTracker
 	lastRegister atomic.Int64 // UnixMilli of the last successful platform register
 	connected    atomic.Bool  // true once the platform has acknowledged a register
+	updateState  atomic.Int64 // 0=none, 1=update available, 2=update received/applying
+	updateVer    string       // version being applied (guarded by nameMu)
 }
 
 // NetIface is one network interface.
@@ -908,6 +910,18 @@ func (a *Agent) selfUpdate(manifestURL string) error {
 	if !needsUpdate(a.gitSHA, m.Version) || m.Binary == "" {
 		return nil
 	}
+
+	// UPDATE AVAILABLE — surface it in the TTY with a distinct colour.
+	a.nameMu.Lock()
+	a.updateVer = m.Version
+	a.nameMu.Unlock()
+	a.updateState.Store(1)
+	if m.Priority == "emergency" {
+		log.Printf("🔴 UPDATE AVAILABLE (EMERGENCY): %s -> %s", a.gitSHA, m.Version)
+	} else {
+		log.Printf("🟡 UPDATE AVAILABLE: %s -> %s", a.gitSHA, m.Version)
+	}
+
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -943,6 +957,15 @@ func (a *Agent) selfUpdate(manifestURL string) error {
 	if err := os.Rename(tmpName, newPath); err != nil {
 		return err
 	}
+	// UPDATE RECEIVED — the fresh binary is on disk and verified.
+	a.updateState.Store(2)
+	log.Printf("🟢 UPDATE RECEIVED — %s (verified, %d bytes)", m.Version, func() int64 {
+		fi, _ := os.Stat(newPath)
+		if fi == nil {
+			return 0
+		}
+		return fi.Size()
+	}())
 	// Try the in-place swap first (works on Unix). On Windows the running exe
 	// is locked, so fall through to a self-restart that swaps it for us.
 	if err := os.Rename(newPath, exe); err == nil {
@@ -1217,6 +1240,13 @@ func (a *Agent) renderStatus() {
 	if manifest != "" {
 		fmt.Fprintf(&b, "    update      %s\n", rgb(150, 255, 170, manifest))
 	}
+	// Update state line — changes colour as an update is available / received.
+	switch a.updateState.Load() {
+	case 1:
+		fmt.Fprintf(&b, "    update      %s  %s\n", rgb(255, 200, 40, bld+"🟡 UPDATE AVAILABLE"+rst), rgb(255, 230, 120, a.updateVer))
+	case 2:
+		fmt.Fprintf(&b, "    update      %s  %s\n", rgb(80, 255, 120, bld+"🟢 UPDATE RECEIVED"+rst), rgb(160, 255, 180, a.updateVer))
+	}
 	fmt.Fprintf(&b, "  %s\n", line)
 
 	// jobs
@@ -1300,6 +1330,12 @@ func max(a, b uint64) uint64 {
 func colorizeMsg(line string) string {
 	l := strings.ToLower(line)
 	switch {
+	case strings.Contains(l, "update received"):
+		return grn + line + rst
+	case strings.Contains(l, "update available") && strings.Contains(l, "emergency"):
+		return red + line + rst
+	case strings.Contains(l, "update available"):
+		return ylw + line + rst
 	case strings.Contains(l, "error") || strings.Contains(l, "failed") || strings.Contains(l, "self-heal"):
 		return red + line + rst
 	case strings.Contains(l, "self-update") || strings.Contains(l, "update"):
