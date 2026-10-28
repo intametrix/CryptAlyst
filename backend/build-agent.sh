@@ -17,10 +17,14 @@ GO="${GO:-go}"
 OUT=bin
 mkdir -p "$OUT"
 
+VERSION="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
+BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+LDFLAGS="-X main.version=$VERSION -X main.buildTime=$BUILDTIME"
+
 build() { # build <os> <arch> <suffix>
   local os=$1 arch=$2 suffix=$3
-  printf 'building cryptalas for %s/%s ... ' "$os" "$arch"
-  if GOOS=$os GOARCH=$arch "$GO" build -o "$OUT/cryptalas$suffix" ./cmd/cryptalas; then
+  printf 'building cryptalas for %s/%s (%s) ... ' "$os" "$arch" "$VERSION"
+  if GOOS=$os GOARCH=$arch "$GO" build -ldflags "$LDFLAGS" -o "$OUT/cryptalas$suffix" ./cmd/cryptalas; then
     printf '\033[1;32mok\033[0m -> %s/cryptalas%s\n' "$OUT" "$suffix"
   else
     printf '\033[1;31mfailed\033[0m\n'

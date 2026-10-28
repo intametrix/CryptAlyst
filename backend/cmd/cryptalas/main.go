@@ -38,6 +38,17 @@ import (
 	"pumpdump/backend/internal/gpuagent"
 )
 
+// version and buildTime are stamped by the build via
+//
+//	-ldflags "-X main.version=<sha> -X main.buildTime=<RFC3339>"
+//
+// They default to "dev" so a source-built agent still runs; the released
+// binaries carry the real values, which drive self-update comparison.
+var (
+	version   = "dev"
+	buildTime = ""
+)
+
 // Job is one training job.
 type Job struct {
 	ID         string            `json:"id"`
@@ -392,7 +403,7 @@ func main() {
 	device := flag.String("device", "auto", "training device: auto | cpu | gpu | cuda | metal")
 	tty := flag.Bool("tty", false, "interactive terminal instead of the HTTP server")
 	ui := flag.Bool("ui", false, "render the live status screen in the terminal")
-	gitSHA := flag.String("git-sha", "", "git commit this agent runs")
+	gitSHA := flag.String("git-sha", version, "git commit this agent runs (defaults to the embedded build version)")
 	ollama := flag.String("ollama", "http://localhost:11434", "Ollama base URL on the GPU box")
 	cudaRunner := flag.String("cuda-runner", "gpu/cuda_train.py", "path to the CUDA/GPU python trainer")
 	register := flag.String("register", "", "platform base URL to enroll on (e.g. http://127.0.0.1:8787)")
@@ -747,6 +758,17 @@ func probeGPU() (name, vram string, count int) {
 // across switches and is routable within the site.
 const beaconGroup = "239.255.42.99"
 
+// ANSI colours for the terminal UI.
+const (
+	rst = "\033[0m"
+	dim = "\033[2m"
+	bld = "\033[1m"
+	cyn = "\033[36m"
+	grn = "\033[32m"
+	ylw = "\033[33m"
+	red = "\033[31m"
+)
+
 // healLoop is the self-heal watchdog: it probes this agent's own /health and
 // exits after three consecutive failures so the supervisor (launchd/systemd/
 // supervise-cryptalas.sh) restarts it. This recovers from a hang, not just a
@@ -812,31 +834,49 @@ func (a *Agent) renderStatus(host, platform string, beaconPort int, beaconInterv
 	}
 
 	var b strings.Builder
+	line := strings.Repeat("─", 44)
 	b.WriteString("\033[2J\033[H")
-	b.WriteString("\033[1;36mCryptALAS agent\033[0m\n")
-	b.WriteString(strings.Repeat("─", 46) + "\n")
-	fmt.Fprintf(&b, "name      %s\n", a.name)
-	fmt.Fprintf(&b, "host      %s\n", host)
-	fmt.Fprintf(&b, "device    %s   arch %s\n", a.device, runtime.GOARCH)
-	fmt.Fprintf(&b, "git-sha   %s\n", a.gitSHA)
-	fmt.Fprintf(&b, "go        %s\n", runtime.Version())
-	b.WriteString(strings.Repeat("─", 46) + "\n")
-	fmt.Fprintf(&b, "resources cpu %d   mem %s   gpu %s\n", runtime.NumCPU(), formatBytes(memTotal), formatGPU(gpuName, gpuVRAM, gpuCount))
-	b.WriteString(strings.Repeat("─", 46) + "\n")
-	fmt.Fprintf(&b, "beacon    multicast 239.255.42.99:%d\n", beaconPort)
-	fmt.Fprintf(&b, "          every %s   last sent %s\n", beaconInterval, beaconAgo)
+	fmt.Fprintf(&b, "  %s%sCryptALAS agent%s  %s%s%s\n", bld, cyn, rst, dim, a.gitSHA, rst)
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %sname%s      %s%s%s\n", dim, rst, bld, a.name, rst)
+	fmt.Fprintf(&b, "  %shost%s      %s\n", dim, rst, host)
+	fmt.Fprintf(&b, "  %sdevice%s    %s%s%s   %sarch%s %s\n", dim, rst, deviceColor(a.device), a.device, rst, dim, rst, runtime.GOARCH)
+	fmt.Fprintf(&b, "  %sversion%s   %s\n", dim, rst, a.gitSHA)
+	if buildTime != "" {
+		fmt.Fprintf(&b, "  %sbuilt%s     %s\n", dim, rst, buildTime)
+	}
+	fmt.Fprintf(&b, "  %sgo%s        %s\n", dim, rst, runtime.Version())
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %sresources%s cpu %s%d%s   mem %s   gpu %s\n", dim, rst, bld, runtime.NumCPU(), rst, formatBytes(memTotal), formatGPU(gpuName, gpuVRAM, gpuCount))
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %sbeacon%s    multicast 239.255.42.99:%d\n", dim, rst, beaconPort)
+	fmt.Fprintf(&b, "           every %s   %slast sent%s %s\n", beaconInterval, dim, rst, beaconAgo)
 	if platform != "" {
-		fmt.Fprintf(&b, "          platform %s\n", platform)
+		fmt.Fprintf(&b, "           platform %s\n", platform)
 	}
 	if manifest != "" {
-		fmt.Fprintf(&b, "update    manifest %s\n", manifest)
+		fmt.Fprintf(&b, "  %supdate%s    manifest %s\n", dim, rst, manifest)
 	}
-	b.WriteString(strings.Repeat("─", 46) + "\n")
-	fmt.Fprintf(&b, "jobs      queued %d  running %d  done %d  failed %d\n", queued, running, done, failed)
-	b.WriteString(strings.Repeat("─", 46) + "\n")
-	fmt.Fprintf(&b, "health    %d probes  %d failures\n", a.healthProbes.Load(), a.healthFails.Load())
-	b.WriteString(strings.Repeat("─", 46) + "\n")
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %sjobs%s      queued %d  running %d  %sdone %d%s  %sfailed %d%s\n", dim, rst, queued, running, grn, done, rst, red, failed, rst)
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %shealth%s    %d probes  %d failures\n", dim, rst, a.healthProbes.Load(), a.healthFails.Load())
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Print(b.String())
+}
+
+// deviceColor colours the device badge by capability.
+func deviceColor(d string) string {
+	switch d {
+	case "cuda", "gpu":
+		return grn
+	case "metal":
+		return cyn
+	case "cpu", "auto":
+		return ylw
+	default:
+		return dim
+	}
 }
 
 func formatBytes(n uint64) string {
