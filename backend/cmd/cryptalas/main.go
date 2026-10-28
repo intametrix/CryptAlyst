@@ -514,6 +514,8 @@ func main() {
 	name := flag.String("name", "", "friendly name for this agent (shown in the registry)")
 	flag.Parse()
 
+	_ = enableANSIConsole()
+
 	dev := *device
 	if dev == "auto" {
 		dev = detectGPU()
