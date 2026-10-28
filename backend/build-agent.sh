@@ -22,6 +22,8 @@ BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Where the agent looks for updates by default. Point this at your release
 # host (GitHub releases, a static server, etc.). Override with MANIFEST_BASE.
 MANIFEST_BASE="${MANIFEST_BASE:-https://github.com/intametrix/CryptAlyst/releases/latest/download}"
+# Platform the agent registers to over HTTP (baked in so it needs no -register).
+REGISTER_URL="${REGISTER_URL:-http://192.168.1.111:8787}"
 
 manifest_for() { # manifest_for <os>
   case "$1" in
@@ -33,7 +35,7 @@ manifest_for() { # manifest_for <os>
 
 build() { # build <os> <arch> <suffix>
   local os=$1 arch=$2 suffix=$3
-  local ldflags="-X main.version=$VERSION -X main.buildTime=$BUILDTIME -X main.defaultManifest=$(manifest_for "$os")"
+  local ldflags="-X main.version=$VERSION -X main.buildTime=$BUILDTIME -X main.defaultManifest=$(manifest_for "$os") -X main.defaultRegister=$REGISTER_URL"
   printf 'building cryptalas for %s/%s (%s, manifest %s) ... ' "$os" "$arch" "$VERSION" "$(manifest_for "$os")"
   if GOOS=$os GOARCH=$arch "$GO" build -ldflags "$ldflags" -o "$OUT/cryptalas$suffix" ./cmd/cryptalas; then
     printf '\033[1;32mok\033[0m -> %s/cryptalas%s\n' "$OUT" "$suffix"

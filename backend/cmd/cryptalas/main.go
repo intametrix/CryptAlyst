@@ -53,6 +53,11 @@ var (
 	// -ldflags "-X main.defaultManifest=<url>". When set, the agent checks for a
 	// newer build and updates itself with no manual -update-manifest flag.
 	defaultManifest = ""
+	// defaultRegister is the platform URL baked in at build time via
+	// -ldflags "-X main.defaultRegister=<url>". When set, the agent registers to
+	// that platform over HTTP on boot, so it shows up even when multicast is
+	// blocked (e.g. Windows firewall).
+	defaultRegister = ""
 )
 
 // msgLog is a ring buffer of recent log lines, shown persistently in the
@@ -490,7 +495,7 @@ func main() {
 	gitSHA := flag.String("git-sha", version, "git commit this agent runs (defaults to the embedded build version)")
 	ollama := flag.String("ollama", "http://localhost:11434", "Ollama base URL on the GPU box")
 	cudaRunner := flag.String("cuda-runner", "gpu/cuda_train.py", "path to the CUDA/GPU python trainer")
-	register := flag.String("register", "", "platform base URL to enroll on (e.g. http://127.0.0.1:8787)")
+	register := flag.String("register", defaultRegister, "platform base URL to enroll on (defaults to the baked-in value)")
 	advertise := flag.String("advertise", "", "this agent's own base URL to report (defaults to http://<addr>)")
 	beaconInterval := flag.Duration("beacon-interval", 30*time.Second, "how often to broadcast the agent beacon (full status)")
 	beaconPort := flag.Int("beacon-port", 8788, "UDP port to broadcast the beacon on")
