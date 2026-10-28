@@ -510,7 +510,7 @@ func main() {
 	beaconPort := flag.Int("beacon-port", 8788, "UDP port to broadcast the beacon on")
 	healInterval := flag.Duration("heal-interval", 15*time.Second, "self-heal probe interval; exits after 3 failed probes so the supervisor restarts")
 	updateManifest := flag.String("update-manifest", defaultManifest, "URL of the self-update manifest {version,binary,sha256} (defaults to the baked-in value)")
-	updateInterval := flag.Duration("update-interval", 5*time.Minute, "how often to check for a new build")
+	updateInterval := flag.Duration("update-interval", 5*time.Second, "how often to check for a new build")
 	name := flag.String("name", "", "friendly name for this agent (shown in the registry)")
 	flag.Parse()
 
