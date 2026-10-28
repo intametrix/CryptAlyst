@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"pumpdump/backend/internal/gpuagent"
@@ -63,6 +64,11 @@ type Agent struct {
 	ollama     string
 	cudaRunner string
 	name       string
+
+	// live status for the terminal UI
+	lastBeacon   atomic.Int64 // UnixMilli of the last beacon sent
+	healthProbes atomic.Int64 // self-heal probes issued
+	healthFails  atomic.Int64 // self-heal probes that failed
 }
 
 func newAgent(stateDir, device, gitSHA, ollama, cudaRunner string) *Agent {
@@ -385,6 +391,7 @@ func main() {
 	stateDir := flag.String("state", "cryptalas_state", "job state directory")
 	device := flag.String("device", "auto", "training device: auto | cpu | gpu | cuda | metal")
 	tty := flag.Bool("tty", false, "interactive terminal instead of the HTTP server")
+	ui := flag.Bool("ui", false, "render the live status screen in the terminal")
 	gitSHA := flag.String("git-sha", "", "git commit this agent runs")
 	ollama := flag.String("ollama", "http://localhost:11434", "Ollama base URL on the GPU box")
 	cudaRunner := flag.String("cuda-runner", "gpu/cuda_train.py", "path to the CUDA/GPU python trainer")
@@ -392,6 +399,7 @@ func main() {
 	advertise := flag.String("advertise", "", "this agent's own base URL to report (defaults to http://<addr>)")
 	beaconInterval := flag.Duration("beacon-interval", 30*time.Second, "how often to broadcast the agent beacon (full status)")
 	beaconPort := flag.Int("beacon-port", 8788, "UDP port to broadcast the beacon on")
+	healInterval := flag.Duration("heal-interval", 15*time.Second, "self-heal probe interval; exits after 3 failed probes so the supervisor restarts")
 	updateManifest := flag.String("update-manifest", "", "URL of the self-update manifest {version,binary,sha256}")
 	updateInterval := flag.Duration("update-interval", 5*time.Minute, "how often to check for a new build")
 	name := flag.String("name", "", "friendly name for this agent (shown in the registry)")
@@ -454,6 +462,10 @@ func main() {
 		host = autoHost(*addr)
 	}
 	go beaconLoop(ag, *register, host, dev, *beaconInterval, *beaconPort)
+	go ag.healLoop(*addr, *healInterval)
+	if *ui {
+		go ag.statusLoop(host, *register, *beaconPort, *beaconInterval, *updateManifest)
+	}
 	log.Printf("CryptALAS agent on %s (device=%s)", *addr, *device)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
 		log.Fatal(err)
@@ -527,6 +539,7 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		body := payload()
 		broadcast(body)
 		post(body)
+		a.lastBeacon.Store(time.Now().UnixMilli())
 		log.Printf("beacon sent — name=%s ip=%s host=%s device=%s udp=:%d", name, ip, host, device, port)
 	}
 	emit()
@@ -733,6 +746,121 @@ func probeGPU() (name, vram string, count int) {
 // every platform listens on. Multicast (not broadcast) so the discovery works
 // across switches and is routable within the site.
 const beaconGroup = "239.255.42.99"
+
+// healLoop is the self-heal watchdog: it probes this agent's own /health and
+// exits after three consecutive failures so the supervisor (launchd/systemd/
+// supervise-cryptalas.sh) restarts it. This recovers from a hang, not just a
+// crash.
+func (a *Agent) healLoop(addr string, interval time.Duration) {
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	failures := 0
+	for range tick.C {
+		a.healthProbes.Add(1)
+		resp, err := http.Get("http://" + addr + "/health")
+		if err == nil && resp.StatusCode == http.StatusOK {
+			resp.Body.Close()
+			failures = 0
+			continue
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+		failures++
+		a.healthFails.Add(1)
+		log.Printf("self-heal: health probe failed (%d/3)", failures)
+		if failures >= 3 {
+			log.Printf("self-heal: unresponsive, exiting for supervisor restart")
+			os.Exit(1)
+		}
+	}
+}
+
+// statusLoop renders the live status panel once a second.
+func (a *Agent) statusLoop(host, platform string, beaconPort int, beaconInterval time.Duration, manifest string) {
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	for range tick.C {
+		a.renderStatus(host, platform, beaconPort, beaconInterval, manifest)
+	}
+}
+
+// renderStatus clears and redraws the full debug panel.
+func (a *Agent) renderStatus(host, platform string, beaconPort int, beaconInterval time.Duration, manifest string) {
+	var queued, running, done, failed int
+	a.mu.Lock()
+	for _, j := range a.jobs {
+		switch j.Status {
+		case "queued":
+			queued++
+		case "running":
+			running++
+		case "done":
+			done++
+		case "failed":
+			failed++
+		}
+	}
+	a.mu.Unlock()
+
+	gpuName, gpuVRAM, gpuCount := probeGPU()
+	memTotal := probeMemBytes()
+	last := a.lastBeacon.Load()
+	beaconAgo := "—"
+	if last > 0 {
+		beaconAgo = fmt.Sprintf("%ds ago", (time.Now().UnixMilli()-last)/1000)
+	}
+
+	var b strings.Builder
+	b.WriteString("\033[2J\033[H")
+	b.WriteString("\033[1;36mCryptALAS agent\033[0m\n")
+	b.WriteString(strings.Repeat("─", 46) + "\n")
+	fmt.Fprintf(&b, "name      %s\n", a.name)
+	fmt.Fprintf(&b, "host      %s\n", host)
+	fmt.Fprintf(&b, "device    %s   arch %s\n", a.device, runtime.GOARCH)
+	fmt.Fprintf(&b, "git-sha   %s\n", a.gitSHA)
+	fmt.Fprintf(&b, "go        %s\n", runtime.Version())
+	b.WriteString(strings.Repeat("─", 46) + "\n")
+	fmt.Fprintf(&b, "resources cpu %d   mem %s   gpu %s\n", runtime.NumCPU(), formatBytes(memTotal), formatGPU(gpuName, gpuVRAM, gpuCount))
+	b.WriteString(strings.Repeat("─", 46) + "\n")
+	fmt.Fprintf(&b, "beacon    multicast 239.255.42.99:%d\n", beaconPort)
+	fmt.Fprintf(&b, "          every %s   last sent %s\n", beaconInterval, beaconAgo)
+	if platform != "" {
+		fmt.Fprintf(&b, "          platform %s\n", platform)
+	}
+	if manifest != "" {
+		fmt.Fprintf(&b, "update    manifest %s\n", manifest)
+	}
+	b.WriteString(strings.Repeat("─", 46) + "\n")
+	fmt.Fprintf(&b, "jobs      queued %d  running %d  done %d  failed %d\n", queued, running, done, failed)
+	b.WriteString(strings.Repeat("─", 46) + "\n")
+	fmt.Fprintf(&b, "health    %d probes  %d failures\n", a.healthProbes.Load(), a.healthFails.Load())
+	b.WriteString(strings.Repeat("─", 46) + "\n")
+	fmt.Print(b.String())
+}
+
+func formatBytes(n uint64) string {
+	if n == 0 {
+		return "—"
+	}
+	const unit = uint64(1024)
+	div, exp := unit, 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+func formatGPU(name, vram string, count int) string {
+	if count == 0 {
+		return "—"
+	}
+	if name == "" {
+		return fmt.Sprintf("%d×", count)
+	}
+	return fmt.Sprintf("%d× %s %s", count, name, vram)
+}
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
