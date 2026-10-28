@@ -130,6 +130,7 @@ type Agent struct {
 	rt           agentRuntime // runtime config for the TUI
 	netSpeed     netSpeedTracker
 	lastRegister atomic.Int64 // UnixMilli of the last successful platform register
+	connected    atomic.Bool  // true once the platform has acknowledged a register
 }
 
 // NetIface is one network interface.
@@ -693,22 +694,37 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		}
 		req, err := http.NewRequest(http.MethodPost, platform+"/api/agents/register", bytes.NewReader(body))
 		if err != nil {
+			log.Printf("register: ERROR %v (server %s)", err, platform)
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
-		if resp, err := client.Do(req); err != nil {
-			log.Printf("beacon %s: %v", platform, err)
-		} else {
-			resp.Body.Close()
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("register: NO REPLY from %s — %v", platform, err)
+			return
+		}
+		body2, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 			a.lastRegister.Store(time.Now().UnixMilli())
+			if a.connected.CompareAndSwap(false, true) {
+				log.Printf("CONNECTED — platform %s acknowledged this agent", platform)
+			} else {
+				log.Printf("register: ✓ REPLY RECEIVED from %s (%s)", platform, resp.Status)
+			}
+		} else {
+			log.Printf("register: ✗ HTTP %s from %s — %s", resp.Status, platform, strings.TrimSpace(string(body2)))
 		}
 	}
 	emit := func() {
 		body := payload()
-		broadcast(body)
-		post(body)
 		a.lastBeacon.Store(time.Now().UnixMilli())
-		log.Printf("beacon sent — name=%s ip=%s host=%s device=%s udp=:%d", name, ip, host, device, port)
+		log.Printf("beacon: SENT multicast %s:%d (name=%s)", beaconGroup, port, name)
+		if platform != "" {
+			log.Printf("beacon: registering to %s", platform)
+			post(body)
+		}
+		broadcast(body)
 	}
 	emit()
 	tick := time.NewTicker(interval)
