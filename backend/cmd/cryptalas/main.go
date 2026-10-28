@@ -499,23 +499,33 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		host = "http://" + ip
 	}
 	payload := func() []byte {
-		gpuName, gpuVRAM, gpuCount := probeGPU()
+		gs := probeGPUStats()
 		memTotal := probeMemBytes()
+		q, r, d, f := a.jobSummary()
 		b, _ := json.Marshal(map[string]any{
-			"id":          host,
-			"host":        host,
-			"name":        name,
-			"ip":          ip,
-			"device":      device,
-			"arch":        runtime.GOARCH,
-			"num_cpu":     runtime.NumCPU(),
-			"go_version":  runtime.Version(),
-			"git_sha":     a.gitSHA,
-			"gpu_present": device == "gpu" || device == "cuda" || device == "metal",
-			"mem_total":   memTotal,
-			"gpu_name":    gpuName,
-			"gpu_vram":    gpuVRAM,
-			"gpu_count":   gpuCount,
+			"id":           host,
+			"host":         host,
+			"name":         name,
+			"ip":           ip,
+			"device":       device,
+			"arch":         runtime.GOARCH,
+			"num_cpu":      runtime.NumCPU(),
+			"go_version":   runtime.Version(),
+			"git_sha":      a.gitSHA,
+			"gpu_present":  device == "gpu" || device == "cuda" || device == "metal",
+			"mem_total":    memTotal,
+			"mem_used":     probeMemUsed(),
+			"cpu_util":     probeCPUUtil(),
+			"gpu_name":     gs.Name,
+			"gpu_vram":     gs.VRAM,
+			"gpu_count":    gs.Count,
+			"gpu_util":     gs.Util,
+			"gpu_mem_used": gs.MemUsed,
+			"capabilities": a.capabilities(),
+			"jobs_queued":  q,
+			"jobs_running": r,
+			"jobs_done":    d,
+			"jobs_failed":  f,
 		})
 		return b
 	}
@@ -825,7 +835,7 @@ func (a *Agent) renderStatus(host, platform string, beaconPort int, beaconInterv
 	}
 	a.mu.Unlock()
 
-	gpuName, gpuVRAM, gpuCount := probeGPU()
+	gs := probeGPUStats()
 	memTotal := probeMemBytes()
 	last := a.lastBeacon.Load()
 	beaconAgo := "—"
@@ -847,7 +857,7 @@ func (a *Agent) renderStatus(host, platform string, beaconPort int, beaconInterv
 	}
 	fmt.Fprintf(&b, "  %sgo%s        %s\n", dim, rst, runtime.Version())
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sresources%s cpu %s%d%s   mem %s   gpu %s\n", dim, rst, bld, runtime.NumCPU(), rst, formatBytes(memTotal), formatGPU(gpuName, gpuVRAM, gpuCount))
+	fmt.Fprintf(&b, "  %sresources%s cpu %s%d%s   mem %s   gpu %s\n", dim, rst, bld, runtime.NumCPU(), rst, formatBytes(memTotal), formatGPU(gs.Name, gs.VRAM, gs.Count))
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Fprintf(&b, "  %sbeacon%s    multicast 239.255.42.99:%d\n", dim, rst, beaconPort)
 	fmt.Fprintf(&b, "           every %s   %slast sent%s %s\n", beaconInterval, dim, rst, beaconAgo)
@@ -900,6 +910,158 @@ func formatGPU(name, vram string, count int) string {
 		return fmt.Sprintf("%d×", count)
 	}
 	return fmt.Sprintf("%d× %s %s", count, name, vram)
+}
+
+// gpuStats is the fuller GPU snapshot reported by nvidia-smi.
+type gpuStats struct {
+	Name    string
+	VRAM    string
+	Count   int
+	Util    float64
+	MemUsed uint64
+}
+
+// probeGPUStats reports the first GPU's model, total/used memory, count and
+// utilization via nvidia-smi. Zero values on a box without NVIDIA.
+func probeGPUStats() gpuStats {
+	out, err := exec.Command("nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu", "--format=csv,noheader,nounits").Output()
+	if err != nil {
+		return gpuStats{}
+	}
+	var gs gpuStats
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		parts := strings.Split(line, ", ")
+		if len(parts) < 4 {
+			continue
+		}
+		gs.Count++
+		if gs.Count == 1 {
+			gs.Name = parts[0]
+			gs.VRAM = parts[1] + " MiB"
+			if mb, err := strconv.ParseUint(parts[2], 10, 64); err == nil {
+				gs.MemUsed = mb * 1024 * 1024
+			}
+			gs.Util, _ = strconv.ParseFloat(parts[3], 64)
+		}
+	}
+	return gs
+}
+
+// probeCPUUtil reports the CPU utilisation % (0-100), best-effort across
+// Linux (/proc/stat), macOS (top) and Windows (wmic).
+func probeCPUUtil() float64 {
+	if b, err := os.ReadFile("/proc/stat"); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if !strings.HasPrefix(line, "cpu ") {
+				continue
+			}
+			f := strings.Fields(line)
+			var total, idle uint64
+			for i := 1; i < len(f); i++ {
+				v, _ := strconv.ParseUint(f[i], 10, 64)
+				total += v
+				if i == 4 { // idle is the 4th field after "cpu"
+					idle = v
+				}
+			}
+			if total > 0 {
+				return 100 * float64(total-idle) / float64(total)
+			}
+		}
+	}
+	// macOS: top -l 1 prints "CPU usage: ..% user, ..% sys, ..% idle".
+	if out, err := exec.Command("top", "-l", "1", "-n", "0").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			if !strings.Contains(line, "CPU usage") {
+				continue
+			}
+			if idx := strings.Index(line, "idle"); idx > 0 {
+				fields := strings.Fields(line[:idx])
+				if len(fields) > 0 {
+					idleStr := strings.TrimSuffix(fields[len(fields)-1], "%")
+					if idle, err := strconv.ParseFloat(idleStr, 64); err == nil {
+						return 100 - idle
+					}
+				}
+			}
+		}
+	}
+	if out, err := exec.Command("wmic", "cpu", "get", "LoadPercentage", "/value").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "LoadPercentage=") {
+				if v, err := strconv.ParseFloat(strings.TrimPrefix(line, "LoadPercentage="), 64); err == nil {
+					return v
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// probeMemUsed reports memory in use (bytes), best-effort across Linux
+// (/proc/meminfo) and Windows (wmic). 0 when unknown.
+func probeMemUsed() uint64 {
+	if b, err := os.ReadFile("/proc/meminfo"); err == nil {
+		var total, avail uint64
+		for _, line := range strings.Split(string(b), "\n") {
+			f := strings.Fields(line)
+			if len(f) < 2 {
+				continue
+			}
+			switch f[0] {
+			case "MemTotal:":
+				total, _ = strconv.ParseUint(f[1], 10, 64)
+			case "MemAvailable:":
+				avail, _ = strconv.ParseUint(f[1], 10, 64)
+			}
+		}
+		if total > avail {
+			return (total - avail) * 1024
+		}
+	}
+	return 0
+}
+
+// capabilities lists what this agent can do.
+func (a *Agent) capabilities() []string {
+	caps := []string{"train", "sweep", "beacon"}
+	switch a.device {
+	case "cuda", "gpu":
+		caps = append(caps, "cuda")
+	case "metal":
+		caps = append(caps, "metal")
+	}
+	if a.ollama != "" {
+		caps = append(caps, "ollama")
+	}
+	if a.cudaRunner != "" {
+		caps = append(caps, "cuda-runner")
+	}
+	return caps
+}
+
+// jobSummary counts the agent's jobs by status.
+func (a *Agent) jobSummary() (queued, running, done, failed int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, j := range a.jobs {
+		switch j.Status {
+		case "queued":
+			queued++
+		case "running":
+			running++
+		case "done":
+			done++
+		case "failed":
+			failed++
+		}
+	}
+	return
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

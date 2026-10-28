@@ -4642,3 +4642,23 @@ table {
 .settings-input:focus { outline: none; border-color: var(--accent, #4d8dfd); }
 .settings-hint { font-size: 10px; color: var(--text-dim, #7f93ad); }
 .settings-actions { display: flex; gap: 10px; margin-top: 10px; min-width: 0; }
+.ag-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; padding: 10px; min-width: 0; min-height: 0; }
+.ag-card { border: 1px solid var(--border, #223046); border-radius: 10px; padding: 10px 12px; background: var(--panel, #0d1622); min-width: 0; }
+.ag-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; min-width: 0; }
+.ag-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ag-name { font-size: 14px; font-weight: 700; color: var(--text, #d5e0ef); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-seen { font-size: 11px; color: var(--text-dim, #7f93ad); white-space: nowrap; }
+.ag-meta { display: flex; flex-wrap: wrap; gap: 4px; font-size: 11px; color: var(--text-dim, #7f93ad); margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; }
+.ag-sep { opacity: .5; }
+.ag-res { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; min-height: 0; }
+.ag-row { display: grid; grid-template-columns: 42px 1fr auto 90px; gap: 8px; align-items: center; min-width: 0; min-height: 0; }
+.ag-label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-dim, #7f93ad); }
+.ag-val { font-size: 11px; color: var(--text, #d5e0ef); white-space: nowrap; }
+.ag-bar { position: relative; height: 5px; border-radius: 3px; background: var(--panel, #0d1622); overflow: hidden; }
+.ag-bar-fill { display: block; height: 100%; background: var(--accent, #4d8dfd); }
+.ag-bar-fill.down { background: var(--down, #ff4d5e); }
+.ag-caps { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.ag-cap { font-size: 10px; padding: 1px 7px; border-radius: 9px; background: var(--panel, #0d1622); border: 1px solid var(--border, #223046); color: var(--text-dim, #7f93ad); }
+.ag-tasks { display: flex; flex-wrap: wrap; gap: 10px; font-size: 11px; color: var(--text-dim, #7f93ad); border-top: 1px solid var(--border, #223046); padding-top: 6px; }
+.ag-tasks .ag-done { color: var(--up, #3fb950); }
+.ag-tasks .ag-fail { color: var(--down, #ff4d5e); }

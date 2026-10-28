@@ -19,14 +19,24 @@ type AgentInfo struct {
 	GitSHA     string `json:"git_sha"`     // the commit the agent runs
 	GPUPresent bool   `json:"gpu_present"` // true when device is gpu/cuda/metal
 	// Friendly name, actual IP as the platform sees it, and machine resources.
-	Name      string `json:"name"`
-	IP        string `json:"ip"`
-	MemTotal  uint64 `json:"mem_total"` // system memory in bytes (0 = unknown)
-	GPUName   string `json:"gpu_name"`  // first GPU model ("" = none)
-	GPUVRAM   string `json:"gpu_vram"`  // first GPU memory ("" = none)
-	GPUCount  int    `json:"gpu_count"` // number of GPUs
-	FirstSeen int64  `json:"first_seen_ms"`
-	LastSeen  int64  `json:"last_seen_ms"`
+	Name     string `json:"name"`
+	IP       string `json:"ip"`
+	MemTotal uint64 `json:"mem_total"` // system memory in bytes (0 = unknown)
+	GPUName  string `json:"gpu_name"`  // first GPU model ("" = none)
+	GPUVRAM  string `json:"gpu_vram"`  // first GPU memory ("" = none)
+	GPUCount int    `json:"gpu_count"` // number of GPUs
+	// Live utilisation, capabilities, and running tasks.
+	MemUsed      uint64   `json:"mem_used"`
+	CPUUtil      float64  `json:"cpu_util"`
+	GPUUtil      float64  `json:"gpu_util"`
+	GPUMemUsed   uint64   `json:"gpu_mem_used"`
+	Capabilities []string `json:"capabilities"`
+	JobsQueued   int      `json:"jobs_queued"`
+	JobsRunning  int      `json:"jobs_running"`
+	JobsDone     int      `json:"jobs_done"`
+	JobsFailed   int      `json:"jobs_failed"`
+	FirstSeen    int64    `json:"first_seen_ms"`
+	LastSeen     int64    `json:"last_seen_ms"`
 }
 
 // AgentRegistry is the in-memory directory of enrolled agents. It is keyed by

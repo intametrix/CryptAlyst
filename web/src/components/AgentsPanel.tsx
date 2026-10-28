@@ -18,16 +18,21 @@ interface AgentInfo {
   go_version: string;
   git_sha: string;
   gpu_present: boolean;
+  mem_used: number;
+  cpu_util: number;
+  gpu_util: number;
+  gpu_mem_used: number;
+  capabilities: string[];
+  jobs_queued: number;
+  jobs_running: number;
+  jobs_done: number;
+  jobs_failed: number;
   first_seen_ms: number;
   last_seen_ms: number;
 }
 
 const DEVICE_LABEL: Record<string, string> = {
-  auto: 'auto',
-  cpu: 'CPU',
-  gpu: 'GPU',
-  cuda: 'CUDA',
-  metal: 'Metal',
+  auto: 'auto', cpu: 'CPU', gpu: 'GPU', cuda: 'CUDA', metal: 'Metal',
 };
 
 function gib(v: unknown): string {
@@ -36,20 +41,34 @@ function gib(v: unknown): string {
   return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
 }
 
+function pct1(v: unknown): string {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return `${n.toFixed(0)}%`;
+}
+
+/** A small horizontal utilisation bar. */
+function Bar({ value, tone }: { value: number; tone?: 'down' }) {
+  const w = Math.max(0, Math.min(100, Number(value) || 0));
+  return (
+    <span className="ag-bar" aria-hidden="true">
+      <span className={`ag-bar-fill${tone === 'down' ? ' down' : ''}`} style={{ width: `${w}%` }} />
+    </span>
+  );
+}
+
 function gpuLabel(a: AgentInfo): string {
   if (!a.gpu_name && !a.gpu_count) return '—';
   const parts: string[] = [];
   if (a.gpu_count > 0) parts.push(`${int(a.gpu_count)}×`);
   if (a.gpu_name) parts.push(text(a.gpu_name));
-  if (a.gpu_vram) parts.push(text(a.gpu_vram));
   return parts.join(' ');
 }
 
 /**
- * Agents — the enrolled CryptALAS fleet. Polls GET /api/agents and shows each
- * agent's name, the IP the platform sees, device, and the resources it
- * reported (CPU count, memory, GPUs). Agents self-enroll via
- * `cryptalas -register <platform> -name <name>`.
+ * Agents — the enrolled CryptALAS fleet as cards. Each card shows identity,
+ * live resources (CPU/mem/GPU with utilisation bars), capabilities, and the
+ * running-task counts. Polls GET /api/agents.
  */
 export const AgentsPanel = memo(function AgentsPanel() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
@@ -61,27 +80,18 @@ export const AgentsPanel = memo(function AgentsPanel() {
     const tick = async () => {
       try {
         const res = await fetch('/api/agents', { headers: { accept: 'application/json' } });
-        if (!res.ok) {
-          if (!dead) setLive(false);
-          return;
-        }
+        if (!res.ok) { if (!dead) setLive(false); return; }
         const body = (await res.json()) as { agents?: AgentInfo[] };
         if (!dead) {
           setAgents(Array.isArray(body.agents) ? body.agents : []);
           setLive(true);
         }
-      } catch {
-        if (!dead) setLive(false);
-      }
+      } catch { if (!dead) setLive(false); }
     };
     void tick();
     const poll = window.setInterval(() => void tick(), 5000);
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      dead = true;
-      window.clearInterval(poll);
-      window.clearInterval(clock);
-    };
+    return () => { dead = true; window.clearInterval(poll); window.clearInterval(clock); };
   }, []);
 
   const sorted = useMemo(
@@ -101,40 +111,73 @@ export const AgentsPanel = memo(function AgentsPanel() {
           {!live ? (
             <p className="empty">agent registry unavailable — /api/agents isn't answering</p>
           ) : sorted.length === 0 ? (
-            <p className="empty">
-              no agents enrolled — run <code>cryptalas -register http://&lt;platform&gt;:8787 -name &lt;name&gt;</code>
-            </p>
+            <p className="empty">no agents enrolled — run <code>cryptalas</code> on a box; it multicasts its beacon</p>
           ) : (
-            <table className="bus-grid agents-grid">
-              <thead>
-                <tr>
-                  <th scope="col">name</th>
-                  <th scope="col">ip</th>
-                  <th scope="col">device</th>
-                  <th scope="col" className="num-col">cpu</th>
-                  <th scope="col" className="num-col">mem</th>
-                  <th scope="col">gpu</th>
-                  <th scope="col" className="num-col">last seen</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((a) => (
-                  <tr key={a.id || a.host}>
-                    <td className="bus-topic" title={a.host}>{text(a.name) || text(a.host)}</td>
-                    <td>{text(a.ip) || '—'}</td>
-                    <td>
+            <div className="ag-cards">
+              {sorted.map((a) => (
+                <article key={a.id || a.host} className="ag-card">
+                  <header className="ag-card-head">
+                    <div className="ag-title">
+                      <span className="ag-name">{text(a.name) || text(a.host)}</span>
                       <span className={`pill${a.gpu_present ? ' pill-live' : ''}`}>
                         {DEVICE_LABEL[a.device] ?? text(a.device)}
                       </span>
-                    </td>
-                    <td className="num">{int(a.num_cpu)}</td>
-                    <td className="num">{gib(a.mem_total)}</td>
-                    <td className="bus-topic" title={gpuLabel(a)}>{gpuLabel(a)}</td>
-                    <td className="num">{age(a.last_seen_ms, now)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    </div>
+                    <span className="num ag-seen" title={`last seen ${a.last_seen_ms}`}>
+                      {age(a.last_seen_ms, now)}
+                    </span>
+                  </header>
+
+                  <div className="ag-meta">
+                    <span title={a.host}>{text(a.ip) || '—'}</span>
+                    <span className="ag-sep">·</span>
+                    <span title={a.host}>{text(a.host)}</span>
+                    <span className="ag-sep">·</span>
+                    <span>{text(a.arch)}</span>
+                    <span className="ag-sep">·</span>
+                    <span title={a.git_sha}>{a.git_sha ? a.git_sha.slice(0, 7) : '—'}</span>
+                  </div>
+
+                  <div className="ag-res">
+                    <div className="ag-row">
+                      <span className="ag-label">CPU</span>
+                      <span className="num">{int(a.num_cpu)} core{Number(a.num_cpu) === 1 ? '' : 's'}</span>
+                      <span className="num ag-val">{pct1(a.cpu_util)}</span>
+                      <Bar value={a.cpu_util} />
+                    </div>
+                    <div className="ag-row">
+                      <span className="ag-label">MEM</span>
+                      <span className="num">{gib(a.mem_used)} / {gib(a.mem_total)}</span>
+                      <Bar value={a.mem_total > 0 ? (Number(a.mem_used || 0) / a.mem_total) * 100 : 0} />
+                    </div>
+                    {a.gpu_count > 0 && (
+                      <div className="ag-row">
+                        <span className="ag-label">GPU</span>
+                        <span className="num">{gpuLabel(a)}</span>
+                        <span className="num ag-val">{pct1(a.gpu_util)}</span>
+                        <Bar value={a.gpu_util} />
+                      </div>
+                    )}
+                  </div>
+
+                  {Array.isArray(a.capabilities) && a.capabilities.length > 0 && (
+                    <div className="ag-caps">
+                      {a.capabilities.map((c) => (
+                        <span key={c} className="ag-cap">{text(c)}</span>
+                      ))}
+                    </div>
+                  )}
+
+                  <footer className="ag-tasks">
+                    <span>tasks</span>
+                    <span className="num">queued {int(a.jobs_queued)}</span>
+                    <span className="num">running {int(a.jobs_running)}</span>
+                    <span className="num ag-done">done {int(a.jobs_done)}</span>
+                    <span className="num ag-fail">failed {int(a.jobs_failed)}</span>
+                  </footer>
+                </article>
+              ))}
+            </div>
           )}
         </section>
       )}
