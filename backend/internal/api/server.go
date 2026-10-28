@@ -238,6 +238,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/agents", s.handleAgents)
 	mux.HandleFunc("/api/agents/register", s.handleAgentsRegister)
 	mux.HandleFunc("/api/agents/heartbeat", s.handleAgentsHeartbeat)
+	mux.HandleFunc("/api/compute", s.handleCompute)
 	mux.HandleFunc("/api/universe", s.handleUniverse)
 	mux.HandleFunc("/api/flow", s.handleFlow)
 	mux.HandleFunc("/api/flow/history", s.handleFlowHistory)

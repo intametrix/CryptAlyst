@@ -585,34 +585,38 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		gs := probeGPUStats()
 		memTotal := probeMemBytes()
 		q, r, d, f := a.jobSummary()
+		diskTotal, diskFree := probeDisk()
 		b, _ := json.Marshal(map[string]any{
-			"id":           host,
-			"host":         host,
-			"name":         name,
-			"ip":           ip,
-			"device":       device,
-			"arch":         runtime.GOARCH,
-			"num_cpu":      runtime.NumCPU(),
-			"go_version":   runtime.Version(),
-			"git_sha":      a.gitSHA,
-			"gpu_present":  device == "gpu" || device == "cuda" || device == "metal",
-			"mem_total":    memTotal,
-			"mem_used":     probeMemUsed(),
-			"cpu_util":     probeCPUUtil(),
-			"gpu_name":     gs.Name,
-			"gpu_vram":     gs.VRAM,
-			"gpu_count":    gs.Count,
-			"gpu_util":     gs.Util,
-			"gpu_mem_used": gs.MemUsed,
-			"capabilities": a.capabilities(),
-			"interfaces":   probeNetInterfaces(),
-			"privileges":   a.privileges(),
-			"net_rx_bps":   rxBps,
-			"net_tx_bps":   txBps,
-			"jobs_queued":  q,
-			"jobs_running": r,
-			"jobs_done":    d,
-			"jobs_failed":  f,
+			"id":            host,
+			"host":          host,
+			"name":          name,
+			"ip":            ip,
+			"device":        device,
+			"arch":          runtime.GOARCH,
+			"num_cpu":       runtime.NumCPU(),
+			"go_version":    runtime.Version(),
+			"git_sha":       a.gitSHA,
+			"gpu_present":   device == "gpu" || device == "cuda" || device == "metal",
+			"mem_total":     memTotal,
+			"mem_used":      probeMemUsed(),
+			"cpu_util":      probeCPUUtil(),
+			"gpu_name":      gs.Name,
+			"gpu_vram":      gs.VRAM,
+			"gpu_count":     gs.Count,
+			"gpu_util":      gs.Util,
+			"gpu_mem_used":  gs.MemUsed,
+			"capabilities":  a.capabilities(),
+			"ollama_models": a.ollamaModels(),
+			"interfaces":    probeNetInterfaces(),
+			"privileges":    a.privileges(),
+			"net_rx_bps":    rxBps,
+			"net_tx_bps":    txBps,
+			"disk_total":    diskTotal,
+			"disk_free":     diskFree,
+			"jobs_queued":   q,
+			"jobs_running":  r,
+			"jobs_done":     d,
+			"jobs_failed":   f,
 		})
 		return b
 	}
@@ -906,11 +910,19 @@ func (a *Agent) statusLoop() {
 
 // renderStatus clears and redraws the full debug panel.
 func (a *Agent) renderStatus() {
-	host, platform := a.rt.host, a.rt.platform
 	beaconPort, beaconInterval := a.rt.beaconPort, a.rt.beaconInterval
-	manifest := a.rt.manifest
-	var queued, running, done, failed int
+
+	gs := probeGPUStats()
+	memTotal := probeMemBytes()
+	cpu := probeCPUUtil()
+	rxBps, txBps := a.netSpeed.current()
+
 	a.mu.Lock()
+	jobs := make([]*Job, len(a.order))
+	for i, id := range a.order {
+		jobs[i] = a.jobs[id]
+	}
+	var queued, running, done, failed int
 	for _, j := range a.jobs {
 		switch j.Status {
 		case "queued":
@@ -925,49 +937,102 @@ func (a *Agent) renderStatus() {
 	}
 	a.mu.Unlock()
 
-	gs := probeGPUStats()
-	memTotal := probeMemBytes()
-	last := a.lastBeacon.Load()
-	beaconAgo := "—"
-	if last > 0 {
-		beaconAgo = fmt.Sprintf("%ds ago", (time.Now().UnixMilli()-last)/1000)
+	spin := []string{"|", "/", "-", "\\"}[time.Now().UnixNano()/200000000%4]
+	memPct := 0.0
+	if memTotal > 0 {
+		memPct = 100 * float64(memTotal) / float64(memTotal) // placeholder, real used below
 	}
+	_ = memPct
 
 	var b strings.Builder
 	line := strings.Repeat("─", 44)
 	b.WriteString("\033[2J\033[H")
-	fmt.Fprintf(&b, "  %s%sCryptALAS agent%s  %s%s%s\n", bld, cyn, rst, dim, a.gitSHA, rst)
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sname%s      %s%s%s\n", dim, rst, bld, a.name, rst)
-	fmt.Fprintf(&b, "  %shost%s      %s\n", dim, rst, host)
-	fmt.Fprintf(&b, "  %sdevice%s    %s%s%s   %sarch%s %s\n", dim, rst, deviceColor(a.device), a.device, rst, dim, rst, runtime.GOARCH)
-	fmt.Fprintf(&b, "  %sversion%s   %s\n", dim, rst, a.gitSHA)
-	if buildTime != "" {
-		fmt.Fprintf(&b, "  %sbuilt%s     %s\n", dim, rst, buildTime)
+
+	// ── sci-fi banner ────────────────────────────────────────────────
+	fmt.Fprintf(&b, "  %s%s╔══════════════════════════════════════════╗%s\n", bld, cyn, rst)
+	fmt.Fprintf(&b, "  %s║%s   %s⚡ CRYPTALAS%s  %s// COMPUTE NODE%s             %s║%s\n", cyn, rst, bld, rst, dim, rst, cyn, rst)
+	fmt.Fprintf(&b, "  %s║%s   %s%s%s%s  %s·%s  %s%s%s  %s·%s  %s%s%s            %s║%s\n",
+		cyn, rst, dim, grn, a.gitSHA, rst, dim, rst, deviceColor(a.device), a.device, rst, dim, rst, ylw, a.rt.ip, rst, cyn, rst)
+	fmt.Fprintf(&b, "  %s%s╚══════════════════════════════════════════════╝%s\n", bld, cyn, rst)
+
+	// ── resource gauges ──────────────────────────────────────────────
+	fmt.Fprintf(&b, "  %sCPU%s  %s  %s%d cores%s\n", dim, rst, gauge(cpu, 22), bld, runtime.NumCPU(), rst)
+	fmt.Fprintf(&b, "  %sMEM%s  %s  %s%s%s\n", dim, rst, gauge(100*float64(probeMemUsed())/float64(max(memTotal, 1)), 22), bld, formatBytes(probeMemUsed()), rst)
+	if gs.Count > 0 {
+		fmt.Fprintf(&b, "  %sGPU%s  %s  %s%d× %s %s%s\n", dim, rst, gauge(gs.Util, 22), bld, gs.Count, gs.Name, gs.VRAM, rst)
 	}
-	fmt.Fprintf(&b, "  %sgo%s        %s\n", dim, rst, runtime.Version())
+	fmt.Fprintf(&b, "  %sNET%s  %s  ↓ %s  ↑ %s  %s%s%s\n", dim, rst, gauge(netSpeedPct(rxBps), 22), formatRate(rxBps), formatRate(txBps), cyn, spin, rst)
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sresources%s cpu %s%d%s   mem %s   gpu %s\n", dim, rst, bld, runtime.NumCPU(), rst, formatBytes(memTotal), formatGPU(gs.Name, gs.VRAM, gs.Count))
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sbeacon%s    multicast 239.255.42.99:%d\n", dim, rst, beaconPort)
-	fmt.Fprintf(&b, "           every %s   %slast sent%s %s\n", beaconInterval, dim, rst, beaconAgo)
-	if platform != "" {
-		fmt.Fprintf(&b, "           platform %s\n", platform)
+
+	// ── tasks ────────────────────────────────────────────────────────
+	fmt.Fprintf(&b, "  %sTASKS%s  %squeued %d%s  %srunning %d%s  %sdone %d%s  %sfailed %d%s\n",
+		bld, rst, dim, queued, rst, ylw, running, rst, grn, done, rst, red, failed, rst)
+	for _, j := range jobs {
+		if j.Status == "running" {
+			fmt.Fprintf(&b, "    %s%s%s  %-9s %-16s %sRUNNING%s  %s\n", cyn, spin, rst, j.Type, j.Model, ylw, rst, fmtDuration(time.Since(time.UnixMilli(j.Created))))
+		} else if j.Status == "done" {
+			fmt.Fprintf(&b, "    %s✓%s  %-9s %-16s %sdone%s\n", grn, rst, j.Type, j.Model, dim, rst)
+		} else if j.Status == "failed" {
+			fmt.Fprintf(&b, "    %s✗%s  %-9s %-16s %sfailed%s\n", red, rst, j.Type, j.Model, red, rst)
+		}
 	}
-	if manifest != "" {
-		fmt.Fprintf(&b, "  %supdate%s    manifest %s\n", dim, rst, manifest)
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+
+	// ── beacon + health ─────────────────────────────────────────────
+	lastAgo := "—"
+	if lb := a.lastBeacon.Load(); lb > 0 {
+		lastAgo = fmt.Sprintf("%ds ago", (time.Now().UnixMilli()-lb)/1000)
 	}
+	fmt.Fprintf(&b, "  %sbeacon%s  multicast 239.255.42.99:%d  every %s  %slast sent %s%s\n",
+		dim, rst, beaconPort, beaconInterval, dim, lastAgo, rst)
+	fmt.Fprintf(&b, "  %shealth%s  %d probes  %d failures\n", dim, rst, a.healthProbes.Load(), a.healthFails.Load())
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sjobs%s      queued %d  running %d  %sdone %d%s  %sfailed %d%s\n", dim, rst, queued, running, grn, done, rst, red, failed, rst)
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %shealth%s    %d probes  %d failures\n", dim, rst, a.healthProbes.Load(), a.healthFails.Load())
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %smessages%s\n", dim, rst)
+
+	// ── messages (persistent) ────────────────────────────────────────
 	for _, m := range msgBuffer.recent() {
 		fmt.Fprintf(&b, "  %s%s%s\n", dim, strings.TrimSpace(m), rst)
 	}
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Print(b.String())
+}
+
+func gauge(pct float64, width int) string {
+	if width < 4 {
+		width = 10
+	}
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	filled := int(float64(width) * pct / 100)
+	return fmt.Sprintf("[%s%s] %3.0f%%", strings.Repeat("█", filled), strings.Repeat("░", width-filled), pct)
+}
+
+func formatRate(bps float64) string {
+	if bps < 1024 {
+		return fmt.Sprintf("%.0f B/s", bps)
+	}
+	if bps < 1024*1024 {
+		return fmt.Sprintf("%.1f KB/s", bps/1024)
+	}
+	return fmt.Sprintf("%.1f MB/s", bps/1024/1024)
+}
+
+func netSpeedPct(bps float64) float64 {
+	return math.Min(100, bps/1024/1024*10) // 10 MB/s = full bar
+}
+
+func fmtDuration(d time.Duration) string {
+	return d.Round(time.Second).String()
+}
+
+func max(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // deviceColor colours the device badge by capability.
@@ -1453,6 +1518,64 @@ func sharpe(rets []float64) float64 {
 		return 0
 	}
 	return mean / sd
+}
+
+// probeDisk reports total and free space (bytes) on the working directory's
+// volume, best-effort via df (Unix) or wmic (Windows).
+func probeDisk() (total, free uint64) {
+	if out, err := exec.Command("df", "-k", ".").Output(); err == nil {
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		if len(lines) >= 2 {
+			f := strings.Fields(lines[1])
+			if len(f) >= 4 {
+				if t, err := strconv.ParseUint(f[1], 10, 64); err == nil {
+					total = t * 1024
+				}
+				if a, err := strconv.ParseUint(f[3], 10, 64); err == nil {
+					free = a * 1024
+				}
+			}
+		}
+		return total, free
+	}
+	if out, err := exec.Command("wmic", "logicaldisk", "get", "Size,FreeSpace", "/value").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			switch {
+			case strings.HasPrefix(line, "Size="):
+				total, _ = strconv.ParseUint(strings.TrimPrefix(line, "Size="), 10, 64)
+			case strings.HasPrefix(line, "FreeSpace="):
+				free, _ = strconv.ParseUint(strings.TrimPrefix(line, "FreeSpace="), 10, 64)
+			}
+		}
+	}
+	return total, free
+}
+
+// ollamaModels returns the models the local Ollama serves, or nil when absent.
+func (a *Agent) ollamaModels() []string {
+	if a.ollama == "" {
+		return nil
+	}
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(a.ollama + "/api/tags")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	var body struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil
+	}
+	out := make([]string, len(body.Models))
+	for i, m := range body.Models {
+		out[i] = m.Name
+	}
+	return out
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

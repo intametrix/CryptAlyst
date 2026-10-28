@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"net/http"
@@ -44,6 +45,9 @@ type AgentInfo struct {
 	Privileges   []string   `json:"privileges"`
 	NetRxBps     float64    `json:"net_rx_bps"`
 	NetTxBps     float64    `json:"net_tx_bps"`
+	DiskTotal    uint64     `json:"disk_total"`
+	DiskFree     uint64     `json:"disk_free"`
+	OllamaModels []string   `json:"ollama_models"`
 	JobsQueued   int        `json:"jobs_queued"`
 	JobsRunning  int        `json:"jobs_running"`
 	JobsDone     int        `json:"jobs_done"`
@@ -175,4 +179,72 @@ func remoteIP(r *http.Request) string {
 		return r.RemoteAddr
 	}
 	return host
+}
+
+// PickLeastLoaded returns the enrolled agent with the fewest queued+running
+// jobs, preferring GPU-capable agents, or ok=false when none are enrolled.
+func (r *AgentRegistry) PickLeastLoaded() (AgentInfo, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var best *AgentInfo
+	bestScore := int(^uint(0) >> 1)
+	for _, a := range r.agents {
+		score := a.JobsQueued + a.JobsRunning
+		if !a.GPUPresent {
+			score += 1000 // strongly prefer GPU agents
+		}
+		if score < bestScore {
+			bestScore = score
+			best = a
+		}
+	}
+	if best == nil {
+		return AgentInfo{}, false
+	}
+	return *best, true
+}
+
+// handleCompute routes a compute job to a specific agent, or to the
+// least-loaded enrolled agent when none is named.
+func (s *Server) handleCompute(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Agent   string         `json:"agent"`
+		Type    string         `json:"type"`
+		Model   string         `json:"model"`
+		Payload map[string]any `json:"payload"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if body.Type == "" {
+		http.Error(w, "type is required", http.StatusBadRequest)
+		return
+	}
+	var target string
+	if body.Agent != "" {
+		target = body.Agent
+	} else if s.deps.Agents != nil {
+		if a, ok := s.deps.Agents.PickLeastLoaded(); ok {
+			target = a.Host
+		}
+	}
+	if target == "" {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "no agents enrolled"})
+		return
+	}
+	jobBody, _ := json.Marshal(map[string]any{"model": body.Model, "type": body.Type, "payload": body.Payload})
+	resp, err := http.Post(target+"/jobs", "application/json", bytes.NewReader(jobBody))
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]any{"error": err.Error(), "agent": target})
+		return
+	}
+	defer resp.Body.Close()
+	var out map[string]any
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	if out == nil {
+		out = map[string]any{}
+	}
+	out["agent"] = target
+	writeJSON(w, resp.StatusCode, out)
 }
