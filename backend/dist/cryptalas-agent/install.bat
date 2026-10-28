@@ -29,6 +29,10 @@ echo timeout /t 2 /nobreak ^>nul
 echo goto loop
 ) > "%IP%\supervise.bat"
 
+REM Open the Windows Firewall so the beacon + HTTP server are reachable.
+netsh advfirewall firewall add rule name="CryptALAS Agent" dir=in action=allow program="%IP%\cryptalas.exe" enable=yes >nul 2>&1
+netsh advfirewall firewall add rule name="CryptALAS Agent" dir=out action=allow program="%IP%\cryptalas.exe" enable=yes >nul 2>&1
+
 schtasks /Create /TN "CryptALAS Agent" /TR "\"%IP%\supervise.bat\"" /SC ONLOGON /RL LIMITED /F >nul
 schtasks /Run /TN "CryptALAS Agent" >nul
 
