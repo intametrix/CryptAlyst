@@ -458,18 +458,23 @@ func runTTY(ag *Agent) {
 	}
 }
 
-// printHelp lists the shell commands.
+// hexc returns a 24-bit colored string for the help screen.
+func hexc(r, g, b int, s string) string {
+	return fmt.Sprintf("\033[38;2;%d;%d;%dm%s%s", r, g, b, s, rst)
+}
+
+// printHelp lists the shell commands with full colour.
 func printHelp() {
-	fmt.Println("  " + bld + "status" + rst + "      full live status")
-	fmt.Println("  " + bld + "conn" + rst + "        connection: server, register, beacon")
-	fmt.Println("  " + bld + "version" + rst + "     build version + go")
-	fmt.Println("  " + bld + "gpu" + rst + "         device + GPU report")
-	fmt.Println("  " + bld + "jobs" + rst + "        job list")
-	fmt.Println("  " + bld + "job <id>" + rst + "    inspect one job")
-	fmt.Println("  " + bld + "submit <m>" + rst + "  queue a train job")
-	fmt.Println("  " + bld + "watch" + rst + "       live status for 30s")
-	fmt.Println("  " + bld + "clear" + rst + "       redraw")
-	fmt.Println("  " + bld + "quit" + rst + "        exit")
+	fmt.Println("  " + hexc(0, 220, 255, bld+"status") + hexc(120, 140, 165, "       full live status"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"conn") + hexc(120, 140, 165, "         connection: server, register, beacon"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"version") + hexc(120, 140, 165, "      build version + go"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"gpu") + hexc(120, 140, 165, "          device + GPU report"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"jobs") + hexc(120, 140, 165, "         job list"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"job <id>") + hexc(120, 140, 165, "     inspect one job"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"submit <m>") + hexc(120, 140, 165, "   queue a train job"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"watch") + hexc(120, 140, 165, "        live status for 30s"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"clear") + hexc(120, 140, 165, "        redraw"))
+	fmt.Println("  " + hexc(0, 220, 255, bld+"quit") + hexc(120, 140, 165, "         exit"))
 }
 
 // printJobs lists the agent's jobs.
@@ -975,6 +980,8 @@ func (a *Agent) renderStatus() {
 
 	gs := probeGPUStats()
 	memTotal := probeMemBytes()
+	memUsed := probeMemUsed()
+	cpuUtil := probeCPUUtil()
 	last := a.lastBeacon.Load()
 	beaconAgo := "—"
 	if last > 0 {
@@ -995,72 +1002,112 @@ func (a *Agent) renderStatus() {
 			failed++
 		}
 	}
-	a.mu.Unlock()
-
-	var b strings.Builder
-	line := strings.Repeat("─", 44)
-	b.WriteString("\033[2J\033[H")
-	fmt.Fprintf(&b, "  %s%sCryptALAS agent%s  %s%s%s\n", bld, cyn, rst, dim, a.gitSHA, rst)
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sname%s      %s%s%s\n", dim, rst, bld, a.name, rst)
-	fmt.Fprintf(&b, "  %shost%s      %s\n", dim, rst, host)
-	fmt.Fprintf(&b, "  %sdevice%s    %s%s%s   %sarch%s %s\n", dim, rst, deviceColor(a.device), a.device, rst, dim, rst, runtime.GOARCH)
-	fmt.Fprintf(&b, "  %sversion%s   %s\n", dim, rst, a.gitSHA)
-	if buildTime != "" {
-		fmt.Fprintf(&b, "  %sbuilt%s     %s\n", dim, rst, buildTime)
-	}
-	fmt.Fprintf(&b, "  %sgo%s        %s\n", dim, rst, runtime.Version())
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sresources%s cpu %s%d%s   mem %s   gpu %s\n", dim, rst, bld, runtime.NumCPU(), rst, formatBytes(memTotal), formatGPU(gs.Name, gs.VRAM, gs.Count))
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sconnection%s  %sserver%s  %s\n", dim, rst, dim, rst, a.rt.platform)
-	if a.rt.platform != "" {
-		if lr := a.lastRegister.Load(); lr > 0 {
-			fmt.Fprintf(&b, "           %sregistered ✓%s  %ds ago\n", grn, rst, (time.Now().UnixMilli()-lr)/1000)
-		} else {
-			fmt.Fprintf(&b, "           %sregistered ✗  (no reply yet)%s\n", red, rst)
-		}
-	} else {
-		fmt.Fprintf(&b, "           %smulticast only (no server register)%s\n", ylw, rst)
-	}
-	fmt.Fprintf(&b, "           beacon multicast 239.255.42.99:%d  every %s  last %s\n", beaconPort, beaconInterval, beaconAgo)
-	if manifest != "" {
-		fmt.Fprintf(&b, "  %supdate%s    manifest %s\n", dim, rst, manifest)
-	}
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sjobs%s      queued %d  running %d  %sdone %d%s  %sfailed %d%s\n", dim, rst, queued, running, grn, done, rst, red, failed, rst)
-	a.mu.Lock()
 	order := make([]*Job, len(a.order))
 	for i, id := range a.order {
 		order[i] = a.jobs[id]
 	}
 	a.mu.Unlock()
+
+	// rgb is the 24-bit true-colour escape for a string.
+	rgb := func(r, g, b int, s string) string {
+		return fmt.Sprintf("\033[38;2;%d;%d;%dm%s\033[0m", r, g, b, s)
+	}
+	// hdr is a coloured section header.
+	hdr := func(title string) string {
+		n := 36 - len(title)
+		if n < 0 {
+			n = 0
+		}
+		return rgb(255, 170, 60, bld+"— "+title+" "+strings.Repeat("─", n)+rst)
+	}
+
+	var b strings.Builder
+	line := rgb(90, 120, 150, strings.Repeat("─", 52))
+	b.WriteString("\033[2J\033[H")
+
+	// Banner
+	fmt.Fprintf(&b, "  %s  %s\n", rgb(0, 220, 255, bld+"⚡ CRYPTALAS AGENT"+rst), rgb(100, 120, 140, "// compute node "+a.gitSHA))
+	fmt.Fprintf(&b, "  %s\n", line)
+
+	// identity
+	fmt.Fprintf(&b, "  %s\n", hdr("IDENTITY"))
+	fmt.Fprintf(&b, "    name      %s\n", rgb(255, 255, 180, bld+a.name))
+	fmt.Fprintf(&b, "    host      %s\n", rgb(80, 220, 255, host))
+	fmt.Fprintf(&b, "    device    %s   arch %s\n", rgb(100, 255, 150, bld+a.device), rgb(160, 190, 210, runtime.GOARCH))
+	fmt.Fprintf(&b, "    version   %s   go %s\n", rgb(90, 255, 150, a.gitSHA), rgb(160, 190, 210, runtime.Version()))
+	if buildTime != "" {
+		fmt.Fprintf(&b, "    built     %s\n", rgb(160, 190, 210, buildTime))
+	}
+	fmt.Fprintf(&b, "  %s\n", line)
+
+	// resources
+	fmt.Fprintf(&b, "  %s\n", hdr("RESOURCES"))
+	fmt.Fprintf(&b, "    CPU  %s   %s cores\n", gauge(cpuUtil, 26), rgb(255, 255, 180, fmt.Sprintf("%d", runtime.NumCPU())))
+	memPct := 0.0
+	if memTotal > 0 {
+		memPct = 100 * float64(memUsed) / float64(memTotal)
+	}
+	fmt.Fprintf(&b, "    MEM  %s   %s / %s\n", gauge(memPct, 26), rgb(150, 255, 170, formatBytes(memUsed)), rgb(150, 220, 255, formatBytes(memTotal)))
+	if gs.Count > 0 {
+		fmt.Fprintf(&b, "    GPU  %s   %sx %s %s\n", gauge(gs.Util, 26), rgb(255, 255, 180, fmt.Sprintf("%d", gs.Count)), rgb(150, 220, 255, gs.Name), rgb(150, 220, 255, gs.VRAM))
+	} else {
+		fmt.Fprintf(&b, "    GPU  %s\n", rgb(110, 130, 150, "— none detected"))
+	}
+	fmt.Fprintf(&b, "  %s\n", line)
+
+	// connection
+	fmt.Fprintf(&b, "  %s\n", hdr("CONNECTION"))
+	if a.rt.platform != "" {
+		fmt.Fprintf(&b, "    server      %s\n", rgb(80, 220, 255, a.rt.platform))
+		if lr := a.lastRegister.Load(); lr > 0 {
+			fmt.Fprintf(&b, "    register    %s  %s ago\n", rgb(100, 255, 150, bld+"✓ REGISTERED"+rst), rgb(140, 255, 170, fmt.Sprintf("%ds", (time.Now().UnixMilli()-lr)/1000)))
+		} else {
+			fmt.Fprintf(&b, "    register    %s\n", rgb(255, 120, 120, bld+"✗ awaiting reply"+rst))
+		}
+	} else {
+		fmt.Fprintf(&b, "    server      %s\n", rgb(255, 200, 80, "multicast discovery (auto)"))
+	}
+	fmt.Fprintf(&b, "    beacon      %s:%d  every %s  last %s\n", rgb(0, 220, 255, "multicast 239.255.42.99"), beaconPort, rgb(255, 255, 180, beaconInterval.String()), rgb(150, 255, 170, beaconAgo))
+	if manifest != "" {
+		fmt.Fprintf(&b, "    update      %s\n", rgb(150, 255, 170, manifest))
+	}
+	fmt.Fprintf(&b, "  %s\n", line)
+
+	// jobs
+	fmt.Fprintf(&b, "  %s   %squeue %d%s  %srun %d%s  %sdone %d%s  %sfail %d%s\n",
+		hdr("JOBS"), rgb(120, 140, 165, ""), queued, rst, rgb(255, 200, 80, ""), running, rst, rgb(100, 255, 150, ""), done, rst, rgb(255, 120, 120, ""), failed, rst)
 	if len(order) > 0 {
 		show := order
-		if len(show) > 5 {
-			show = show[len(show)-5:]
+		if len(show) > 6 {
+			show = show[len(show)-6:]
 		}
 		for _, j := range show {
-			sc := dim
+			mark, sc := "  ", rgb(120, 140, 165, "")
 			switch j.Status {
 			case "running":
-				sc = ylw
+				mark, sc = "►", rgb(255, 200, 80, "")
 			case "done":
-				sc = grn
+				mark, sc = "✓", rgb(100, 255, 150, "")
 			case "failed":
-				sc = red
+				mark, sc = "✗", rgb(255, 120, 120, "")
 			}
-			fmt.Fprintf(&b, "    %s%-18s %-9s %-16s %s%s\n", sc, j.ID, j.Type, j.Model, j.Status, rst)
+			fmt.Fprintf(&b, "    %s %s  %-9s %-16s %s\n", sc+mark, rst, j.Type, j.Model, j.Status)
 		}
+	} else {
+		fmt.Fprintf(&b, "    %s\n", rgb(110, 130, 150, "(no jobs yet)"))
 	}
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %shealth%s    %d probes  %d failures\n", dim, rst, a.healthProbes.Load(), a.healthFails.Load())
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %smessages%s\n", dim, rst)
+	fmt.Fprintf(&b, "  %s\n", line)
+
+	// health
+	fmt.Fprintf(&b, "  %s   %sprobes %d%s  %sfailures %d%s\n", hdr("HEALTH"), rgb(100, 255, 150, ""), a.healthProbes.Load(), rst, rgb(255, 120, 120, ""), a.healthFails.Load(), rst)
+	fmt.Fprintf(&b, "  %s\n", line)
+
+	// messages
+	fmt.Fprintf(&b, "  %s   %s\n", hdr("MESSAGES"), rgb(100, 120, 140, "(type help)"))
 	for _, m := range msgBuffer.recent() {
 		fmt.Fprintf(&b, "  %s\n", colorizeMsg(strings.TrimSpace(m)))
 	}
-	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %s\n", line)
 	fmt.Print(b.String())
 }
 
