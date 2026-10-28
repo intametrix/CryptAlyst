@@ -478,7 +478,7 @@ func printJSON(v any) {
 }
 
 func main() {
-	addr := flag.String("addr", "127.0.0.1:8810", "listen address")
+	addr := flag.String("addr", "0.0.0.0:8810", "listen address (0.0.0.0 = all interfaces so platforms can reach it)")
 	stateDir := flag.String("state", "cryptalas_state", "job state directory")
 	device := flag.String("device", "auto", "training device: auto | cpu | gpu | cuda | metal")
 	tty := flag.Bool("tty", false, "interactive terminal instead of the HTTP server")
