@@ -987,10 +987,12 @@ func (a *Agent) selfUpdate(manifestURL string) error {
 	header := exe + ".update.cmd"
 	lines := []string{
 		"@echo off",
-		":w",
-		"taskkill /IM " + strconv.Quote(filepath.Base(exe)) + " /F >nul 2>&1",
-		"timeout /t 1 /nobreak >nul",
-		"if exist " + strconv.Quote(newPath) + " goto w",
+		"setlocal",
+		// Wait for the process to fully die so the exe is no longer locked,
+		// then swap the staged file in and restart it.
+		":wait",
+		"tasklist /FI \"IMAGENAME eq " + filepath.Base(exe) + "\" 2>nul | find /I \"" + filepath.Base(exe) + "\" >nul",
+		"if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)",
 		"move /Y " + strconv.Quote(newPath) + " " + strconv.Quote(exe) + " >nul",
 		"start \"\" " + strconv.Quote(exe) + " " + strings.Join(os.Args[1:], " "),
 	}
