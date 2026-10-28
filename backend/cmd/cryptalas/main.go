@@ -576,6 +576,17 @@ func main() {
 		}
 		writeJSON(w, 200, j)
 	})
+	// Emergency update push: POST {"emergency":true} (or any body) wakes the
+	// update loop immediately so a critical build is applied without waiting
+	// for the next poll. This is the platform's push path.
+	mux.HandleFunc("/api/agent/update", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeJSON(w, 405, map[string]any{"error": "POST only"})
+			return
+		}
+		signalEmergencyUpdate()
+		writeJSON(w, 200, map[string]any{"ok": true, "emergency": true})
+	})
 
 	if *updateManifest != "" {
 		go ag.selfUpdateLoop(*updateManifest, *updateInterval)
@@ -759,9 +770,10 @@ func autoHost(addr string) string {
 
 // updateManifest is the self-update manifest served by -update-manifest.
 type updateManifest struct {
-	Version string `json:"version"`
-	Binary  string `json:"binary"`
-	SHA256  string `json:"sha256"`
+	Version  string `json:"version"`
+	Binary   string `json:"binary"`
+	SHA256   string `json:"sha256"`
+	Priority string `json:"priority"` // "emergency" or "" (normal)
 }
 
 // needsUpdate reports whether a manifest version is newer than the running one.
@@ -769,18 +781,51 @@ func needsUpdate(current, latest string) bool {
 	return latest != "" && latest != current
 }
 
+// selfUpdateLock serialises update attempts so a slow download cannot overlap
+// the next poll.
+var selfUpdateLock sync.Mutex
+
+// emergencyCh wakes the update loop immediately when an emergency update is
+// signalled (no waiting for the next poll tick).
+var emergencyCh = make(chan struct{}, 1)
+
+// signalEmergencyUpdate marks an emergency update as pending. The update loop
+// wakes at once and applies it. This is the push path: the platform (or a
+// process on the agent box) calls this to force an immediate update.
+func signalEmergencyUpdate() {
+	select {
+	case emergencyCh <- struct{}{}:
+	default:
+	}
+}
+
+// EmergencyUpdate requests an emergency update now: post {"emergency":true} to
+// /api/agent/update on the platform, or the platform pushes it. For a local
+// trigger, the manifest's priority:"emergency" is applied on the next poll and
+// also wakes the loop instantly.
+//
+
 // selfUpdateLoop polls the manifest on an interval and swaps in a newer build.
+// A manifest carrying priority:"emergency" is applied immediately.
 func (a *Agent) selfUpdateLoop(manifestURL string, interval time.Duration) {
 	run := func() {
+		selfUpdateLock.Lock()
 		if err := a.selfUpdate(manifestURL); err != nil {
 			log.Printf("self-update: %v", err)
 		}
+		selfUpdateLock.Unlock()
 	}
 	run()
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
-	for range tick.C {
-		run()
+	for {
+		select {
+		case <-tick.C:
+			run()
+		case <-emergencyCh:
+			log.Printf("self-update: emergency update triggered — applying now")
+			run()
+		}
 	}
 }
 
