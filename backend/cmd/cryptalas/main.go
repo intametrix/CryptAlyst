@@ -129,6 +129,7 @@ type Agent struct {
 	healthFails  atomic.Int64 // self-heal probes that failed
 	rt           agentRuntime // runtime config for the TUI
 	netSpeed     netSpeedTracker
+	lastRegister atomic.Int64 // UnixMilli of the last successful platform register
 }
 
 // NetIface is one network interface.
@@ -409,12 +410,15 @@ func runTTY(ag *Agent) {
 		case line == "clear", line == "status":
 		case line == "version":
 			fmt.Printf("  version %s   built %s   go %s   %s/%s\n", ag.gitSHA, buildTime, runtime.Version(), runtime.GOOS, runtime.GOARCH)
-		case line == "beacon":
-			fmt.Printf("  multicast 239.255.42.99:%d   every %s\n", ag.rt.beaconPort, ag.rt.beaconInterval)
-			fmt.Printf("  host %s   ip %s\n", ag.rt.host, ag.rt.ip)
-			if ag.rt.platform != "" {
-				fmt.Printf("  platform %s\n", ag.rt.platform)
+		case line == "beacon", line == "connection", line == "conn":
+			fmt.Printf("  server   %s\n", ag.rt.platform)
+			if lr := ag.lastRegister.Load(); lr > 0 {
+				fmt.Printf("  register "+grn+"✓"+rst+"  %ds ago\n", (time.Now().UnixMilli()-lr)/1000)
+			} else {
+				fmt.Printf("  register " + red + "✗ (no reply yet)" + rst + "\n")
 			}
+			fmt.Printf("  beacon   multicast 239.255.42.99:%d   every %s\n", ag.rt.beaconPort, ag.rt.beaconInterval)
+			fmt.Printf("  host     %s   ip %s\n", ag.rt.host, ag.rt.ip)
 		case line == "gpu":
 			printJSON(ag.gpuReport())
 		case line == "ollama":
@@ -457,7 +461,7 @@ func runTTY(ag *Agent) {
 // printHelp lists the shell commands.
 func printHelp() {
 	fmt.Println("  " + bld + "status" + rst + "      full live status")
-	fmt.Println("  " + bld + "beacon" + rst + "      beacon + platform config")
+	fmt.Println("  " + bld + "conn" + rst + "        connection: server, register, beacon")
 	fmt.Println("  " + bld + "version" + rst + "     build version + go")
 	fmt.Println("  " + bld + "gpu" + rst + "         device + GPU report")
 	fmt.Println("  " + bld + "jobs" + rst + "        job list")
@@ -654,6 +658,7 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 			log.Printf("beacon %s: %v", platform, err)
 		} else {
 			resp.Body.Close()
+			a.lastRegister.Store(time.Now().UnixMilli())
 		}
 	}
 	emit := func() {
@@ -974,11 +979,17 @@ func (a *Agent) renderStatus() {
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Fprintf(&b, "  %sresources%s cpu %s%d%s   mem %s   gpu %s\n", dim, rst, bld, runtime.NumCPU(), rst, formatBytes(memTotal), formatGPU(gs.Name, gs.VRAM, gs.Count))
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
-	fmt.Fprintf(&b, "  %sbeacon%s    multicast 239.255.42.99:%d\n", dim, rst, beaconPort)
-	fmt.Fprintf(&b, "           every %s   %slast sent%s %s\n", beaconInterval, dim, rst, beaconAgo)
+	fmt.Fprintf(&b, "  %sconnection%s  %sserver%s  %s\n", dim, rst, dim, rst, a.rt.platform)
 	if a.rt.platform != "" {
-		fmt.Fprintf(&b, "           platform %s\n", a.rt.platform)
+		if lr := a.lastRegister.Load(); lr > 0 {
+			fmt.Fprintf(&b, "           %sregistered ✓%s  %ds ago\n", grn, rst, (time.Now().UnixMilli()-lr)/1000)
+		} else {
+			fmt.Fprintf(&b, "           %sregistered ✗  (no reply yet)%s\n", red, rst)
+		}
+	} else {
+		fmt.Fprintf(&b, "           %smulticast only (no server register)%s\n", ylw, rst)
 	}
+	fmt.Fprintf(&b, "           beacon multicast 239.255.42.99:%d  every %s  last %s\n", beaconPort, beaconInterval, beaconAgo)
 	if manifest != "" {
 		fmt.Fprintf(&b, "  %supdate%s    manifest %s\n", dim, rst, manifest)
 	}
