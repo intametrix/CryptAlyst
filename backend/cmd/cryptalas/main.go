@@ -499,8 +499,8 @@ func main() {
 	addr := flag.String("addr", "0.0.0.0:8810", "listen address (0.0.0.0 = all interfaces so platforms can reach it)")
 	stateDir := flag.String("state", "cryptalas_state", "job state directory")
 	device := flag.String("device", "auto", "training device: auto | cpu | gpu | cuda | metal")
-	tty := flag.Bool("tty", false, "interactive terminal instead of the HTTP server")
-	ui := flag.Bool("ui", false, "render the live status screen in the terminal")
+	tty := flag.Bool("tty", isInteractive(), "force interactive TTY shell (default: auto when stdin is a terminal)")
+	ui := flag.Bool("ui", isInteractive(), "render the live status screen (default: auto when stdin is a terminal)")
 	gitSHA := flag.String("git-sha", version, "git commit this agent runs (defaults to the embedded build version)")
 	ollama := flag.String("ollama", "http://localhost:11434", "Ollama base URL on the GPU box")
 	cudaRunner := flag.String("cuda-runner", "gpu/cuda_train.py", "path to the CUDA/GPU python trainer")
@@ -526,9 +526,16 @@ func main() {
 		host = autoHost(*addr)
 	}
 	ag.rt = agentRuntime{host: host, ip: localIP(), platform: *register, beaconPort: *beaconPort, beaconInterval: *beaconInterval, manifest: *updateManifest, addr: *addr}
-	if *tty {
-		runTTY(ag)
-		return
+	// When a real terminal is attached, show the live coloured panel + prompt
+	// while the HTTP server keeps running. No flag needed.
+	if *tty || *ui || isInteractive() {
+		go func() {
+			if *tty {
+				runTTY(ag)
+			} else {
+				ag.statusLoop()
+			}
+		}()
 	}
 
 	mux := http.NewServeMux()
@@ -573,9 +580,6 @@ func main() {
 	}
 	go beaconLoop(ag, *register, host, dev, *beaconInterval, *beaconPort)
 	go ag.healLoop(*addr, *healInterval)
-	if *ui {
-		go ag.statusLoop()
-	}
 	log.Printf("CryptALAS agent on %s (device=%s)", *addr, *device)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
 		log.Fatal(err)
@@ -961,6 +965,17 @@ func (a *Agent) healLoop(addr string, interval time.Duration) {
 			os.Exit(1)
 		}
 	}
+}
+
+// isInteractive reports whether stdin is a terminal, so the TTY can start
+// automatically when run in a real terminal (and stay out of the way when run
+// under a service manager that gives no TTY).
+func isInteractive() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 // statusLoop renders the live status panel once a second.
