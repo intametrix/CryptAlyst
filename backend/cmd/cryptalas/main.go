@@ -49,6 +49,42 @@ var (
 	buildTime = ""
 )
 
+// msgLog is a ring buffer of recent log lines, shown persistently in the
+// terminal UI so messages don't flash and vanish when the screen redraws.
+type msgLog struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func (m *msgLog) Write(p []byte) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, line := range strings.Split(strings.TrimRight(string(p), "\n"), "\n") {
+		if strings.TrimSpace(line) != "" {
+			m.lines = append(m.lines, line)
+		}
+	}
+	if len(m.lines) > 40 {
+		m.lines = m.lines[len(m.lines)-40:]
+	}
+	return len(p), nil
+}
+
+func (m *msgLog) recent() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]string, len(m.lines))
+	copy(out, m.lines)
+	return out
+}
+
+// msgBuffer captures every log line; init() tees the logger into it.
+var msgBuffer = &msgLog{}
+
+func init() {
+	log.SetOutput(io.MultiWriter(os.Stderr, msgBuffer))
+}
+
 // Job is one training job.
 type Job struct {
 	ID         string            `json:"id"`
@@ -80,6 +116,27 @@ type Agent struct {
 	lastBeacon   atomic.Int64 // UnixMilli of the last beacon sent
 	healthProbes atomic.Int64 // self-heal probes issued
 	healthFails  atomic.Int64 // self-heal probes that failed
+	rt           agentRuntime // runtime config for the TUI
+	netSpeed     netSpeedTracker
+}
+
+// NetIface is one network interface.
+type NetIface struct {
+	Name string `json:"name"`
+	IP   string `json:"ip"`
+	MAC  string `json:"mac"`
+	Up   bool   `json:"up"`
+}
+
+// agentRuntime is the config the terminal UI and beacon share.
+type agentRuntime struct {
+	host           string
+	ip             string
+	platform       string
+	beaconPort     int
+	beaconInterval time.Duration
+	manifest       string
+	addr           string
 }
 
 func newAgent(stateDir, device, gitSHA, ollama, cudaRunner string) *Agent {
@@ -311,84 +368,96 @@ func banner(ag *Agent) {
 	fmt.Println("╚══════════════════════════════════════════════════════════════╝")
 }
 
-// runTTY is the ATLAS-style interactive shell.
+// runTTY is the interactive shell: a full status screen with a command line
+// at the bottom. Type help for commands.
 func runTTY(ag *Agent) {
-	banner(ag)
 	sc := bufio.NewScanner(os.Stdin)
-	fmt.Println("type 'help' for commands")
-	for {
-		fmt.Print("cryptalas> ")
-		if !sc.Scan() {
-			return
-		}
+	render := func() {
+		ag.renderStatus()
+		fmt.Print(cyn + "cryptalas> " + rst)
+	}
+	render()
+	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
 		switch {
 		case line == "":
 		case line == "help":
-			fmt.Println("  ACCEPT   submit <model> [train|ollama]   queue a training job")
-			fmt.Println("  STORE    jobs                            list jobs")
-			fmt.Println("           job <id>                        inspect one job")
-			fmt.Println("  TRAIN    watch                           live progress")
-			fmt.Println("  SERVE    gpu                             device + GPU report")
-			fmt.Println("           ollama                          Ollama model list")
-			fmt.Println("           status                          one-page summary")
-			fmt.Println("  SHELL    clear / help / quit")
+			printHelp()
+		case line == "quit" || line == "exit":
+			fmt.Println()
+			return
+		case line == "clear", line == "status":
+		case line == "version":
+			fmt.Printf("  version %s   built %s   go %s   %s/%s\n", ag.gitSHA, buildTime, runtime.Version(), runtime.GOOS, runtime.GOARCH)
+		case line == "beacon":
+			fmt.Printf("  multicast 239.255.42.99:%d   every %s\n", ag.rt.beaconPort, ag.rt.beaconInterval)
+			fmt.Printf("  host %s   ip %s\n", ag.rt.host, ag.rt.ip)
+			if ag.rt.platform != "" {
+				fmt.Printf("  platform %s\n", ag.rt.platform)
+			}
 		case line == "gpu":
 			printJSON(ag.gpuReport())
 		case line == "ollama":
 			printJSON(ag.gpuReport()["ollama"])
-		case line == "status":
-			banner(ag)
-			g := ag.gpuReport()
-			fmt.Printf("  device      : %v\n", g["device"])
-			fmt.Printf("  gpu_present : %v\n", g["gpu_present"])
-			fmt.Printf("  num_cpu     : %v\n", g["num_cpu"])
-			fmt.Printf("  ollama      : %s\n", ollamaState(g))
-			fmt.Println("  jobs:")
-			for _, j := range ag.list() {
-				fmt.Printf("    %s  %-6s %-16s %s\n", j.ID, j.Type, j.Model, j.Status)
-			}
 		case line == "jobs":
-			fmt.Printf("  %-18s %-7s %-18s %s\n", "id", "type", "model", "status")
-			for _, j := range ag.list() {
-				fmt.Printf("  %-18s %-7s %-18s %s\n", j.ID, j.Type, j.Model, j.Status)
-			}
+			printJobs(ag)
 		case strings.HasPrefix(line, "job "):
 			id := strings.TrimSpace(strings.TrimPrefix(line, "job "))
 			j, ok := ag.get(id)
 			if !ok {
 				fmt.Println("  not found")
-				continue
+			} else {
+				printJSON(j)
 			}
-			printJSON(j)
 		case strings.HasPrefix(line, "submit "):
 			parts := strings.Fields(line)
 			if len(parts) < 2 {
 				fmt.Println("  usage: submit <model> [train|ollama]")
-				continue
-			}
-			typ := "train"
-			if len(parts) > 2 {
-				typ = parts[2]
-			}
-			j := ag.submit(parts[1], map[string]any{}, "", "", typ)
-			fmt.Printf("  queued %s (%s, %s)\n", j.ID, typ, j.Model)
-		case line == "watch":
-			for {
-				fmt.Print("\033[2J\033[H")
-				banner(ag)
-				for _, j := range ag.list() {
-					fmt.Printf("  %s  %-6s %-16s %s\n", j.ID, j.Type, j.Model, j.Status)
+			} else {
+				typ := "train"
+				if len(parts) > 2 {
+					typ = parts[2]
 				}
-				time.Sleep(2 * time.Second)
+				j := ag.submit(parts[1], map[string]any{}, "", "", typ)
+				fmt.Printf("  queued %s (%s, %s)\n", j.ID, typ, j.Model)
 			}
-		case line == "clear":
-			fmt.Print("\033[2J\033[H")
-		case line == "quit" || line == "exit":
-			return
+		case line == "watch":
+			for i := 0; i < 30; i++ {
+				ag.renderStatus()
+				fmt.Println(cyn + "  (watch — Ctrl-C to stop)" + rst)
+				time.Sleep(time.Second)
+			}
 		default:
-			fmt.Println("  unknown command — type 'help'")
+			fmt.Println("  unknown — type help")
 		}
+		render()
+	}
+}
+
+// printHelp lists the shell commands.
+func printHelp() {
+	fmt.Println("  " + bld + "status" + rst + "      full live status")
+	fmt.Println("  " + bld + "beacon" + rst + "      beacon + platform config")
+	fmt.Println("  " + bld + "version" + rst + "     build version + go")
+	fmt.Println("  " + bld + "gpu" + rst + "         device + GPU report")
+	fmt.Println("  " + bld + "jobs" + rst + "        job list")
+	fmt.Println("  " + bld + "job <id>" + rst + "    inspect one job")
+	fmt.Println("  " + bld + "submit <m>" + rst + "  queue a train job")
+	fmt.Println("  " + bld + "watch" + rst + "       live status for 30s")
+	fmt.Println("  " + bld + "clear" + rst + "       redraw")
+	fmt.Println("  " + bld + "quit" + rst + "        exit")
+}
+
+// printJobs lists the agent's jobs.
+func printJobs(ag *Agent) {
+	jobs := ag.list()
+	if len(jobs) == 0 {
+		fmt.Println("  no jobs")
+		return
+	}
+	fmt.Printf("  %-18s %-7s %-18s %s\n", "id", "type", "model", "status")
+	for _, j := range jobs {
+		fmt.Printf("  %-18s %-7s %-18s %s\n", j.ID, j.Type, j.Model, j.Status)
 	}
 }
 
@@ -423,6 +492,11 @@ func main() {
 	}
 	ag := newAgent(*stateDir, dev, *gitSHA, *ollama, *cudaRunner)
 	ag.name = *name
+	host := *advertise
+	if host == "" {
+		host = autoHost(*addr)
+	}
+	ag.rt = agentRuntime{host: host, ip: localIP(), platform: *register, beaconPort: *beaconPort, beaconInterval: *beaconInterval, manifest: *updateManifest, addr: *addr}
 	if *tty {
 		runTTY(ag)
 		return
@@ -468,14 +542,10 @@ func main() {
 	if *updateManifest != "" {
 		go ag.selfUpdateLoop(*updateManifest, *updateInterval)
 	}
-	host := *advertise
-	if host == "" {
-		host = autoHost(*addr)
-	}
 	go beaconLoop(ag, *register, host, dev, *beaconInterval, *beaconPort)
 	go ag.healLoop(*addr, *healInterval)
 	if *ui {
-		go ag.statusLoop(host, *register, *beaconPort, *beaconInterval, *updateManifest)
+		go ag.statusLoop()
 	}
 	log.Printf("CryptALAS agent on %s (device=%s)", *addr, *device)
 	if err := http.ListenAndServe(*addr, mux); err != nil {
@@ -499,6 +569,8 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		host = "http://" + ip
 	}
 	payload := func() []byte {
+		a.netSpeed.sample()
+		rxBps, txBps := a.netSpeed.current()
 		gs := probeGPUStats()
 		memTotal := probeMemBytes()
 		q, r, d, f := a.jobSummary()
@@ -522,6 +594,10 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 			"gpu_util":     gs.Util,
 			"gpu_mem_used": gs.MemUsed,
 			"capabilities": a.capabilities(),
+			"interfaces":   probeNetInterfaces(),
+			"privileges":   a.privileges(),
+			"net_rx_bps":   rxBps,
+			"net_tx_bps":   txBps,
 			"jobs_queued":  q,
 			"jobs_running": r,
 			"jobs_done":    d,
@@ -809,16 +885,19 @@ func (a *Agent) healLoop(addr string, interval time.Duration) {
 }
 
 // statusLoop renders the live status panel once a second.
-func (a *Agent) statusLoop(host, platform string, beaconPort int, beaconInterval time.Duration, manifest string) {
+func (a *Agent) statusLoop() {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	for range tick.C {
-		a.renderStatus(host, platform, beaconPort, beaconInterval, manifest)
+		a.renderStatus()
 	}
 }
 
 // renderStatus clears and redraws the full debug panel.
-func (a *Agent) renderStatus(host, platform string, beaconPort int, beaconInterval time.Duration, manifest string) {
+func (a *Agent) renderStatus() {
+	host, platform := a.rt.host, a.rt.platform
+	beaconPort, beaconInterval := a.rt.beaconPort, a.rt.beaconInterval
+	manifest := a.rt.manifest
 	var queued, running, done, failed int
 	a.mu.Lock()
 	for _, j := range a.jobs {
@@ -871,6 +950,11 @@ func (a *Agent) renderStatus(host, platform string, beaconPort int, beaconInterv
 	fmt.Fprintf(&b, "  %sjobs%s      queued %d  running %d  %sdone %d%s  %sfailed %d%s\n", dim, rst, queued, running, grn, done, rst, red, failed, rst)
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Fprintf(&b, "  %shealth%s    %d probes  %d failures\n", dim, rst, a.healthProbes.Load(), a.healthFails.Load())
+	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
+	fmt.Fprintf(&b, "  %smessages%s\n", dim, rst)
+	for _, m := range msgBuffer.recent() {
+		fmt.Fprintf(&b, "  %s%s%s\n", dim, strings.TrimSpace(m), rst)
+	}
 	fmt.Fprintf(&b, "  %s%s%s\n", dim, line, rst)
 	fmt.Print(b.String())
 }
@@ -1062,6 +1146,122 @@ func (a *Agent) jobSummary() (queued, running, done, failed int) {
 		}
 	}
 	return
+}
+
+// probeNetInterfaces lists the host's interfaces with IP, MAC and up flag.
+func probeNetInterfaces() []NetIface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	var out []NetIface
+	for _, iface := range ifaces {
+		ip := ""
+		if addrs, err := iface.Addrs(); err == nil {
+			for _, a := range addrs {
+				if ipn, ok := a.(*net.IPNet); ok && ipn.IP.To4() != nil && !ipn.IP.IsLoopback() {
+					ip = ipn.IP.String()
+					break
+				}
+			}
+		}
+		up := iface.Flags&net.FlagUp != 0
+		if !up && ip == "" {
+			continue
+		}
+		out = append(out, NetIface{Name: iface.Name, IP: ip, MAC: iface.HardwareAddr.String(), Up: up})
+	}
+	return out
+}
+
+// privileges reports what this agent can access/do.
+func (a *Agent) privileges() []string {
+	var privs []string
+	if os.Geteuid() == 0 {
+		privs = append(privs, "root")
+	}
+	switch a.device {
+	case "cuda", "gpu":
+		privs = append(privs, "cuda")
+	case "metal":
+		privs = append(privs, "metal")
+	}
+	if a.ollama != "" {
+		privs = append(privs, "ollama")
+	}
+	if f, err := os.CreateTemp(a.state, "probe.*"); err == nil {
+		f.Close()
+		os.Remove(f.Name())
+		privs = append(privs, "state-writable")
+	}
+	privs = append(privs, "multicast")
+	return privs
+}
+
+// probeNetCounters returns the total rx/tx bytes across interfaces, best-effort
+// via Linux /proc/net/dev or macOS netstat -ib.
+func probeNetCounters() (rx, tx uint64) {
+	if b, err := os.ReadFile("/proc/net/dev"); err == nil {
+		for _, line := range strings.Split(string(b), "\n") {
+			if !strings.Contains(line, ":") {
+				continue
+			}
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			f := strings.Fields(parts[1])
+			if len(f) >= 9 {
+				r, _ := strconv.ParseUint(f[0], 10, 64)
+				t, _ := strconv.ParseUint(f[8], 10, 64)
+				rx += r
+				tx += t
+			}
+		}
+		return rx, tx
+	}
+	if out, err := exec.Command("netstat", "-ib").Output(); err == nil {
+		for _, line := range strings.Split(string(out), "\n") {
+			f := strings.Fields(line)
+			if len(f) >= 10 {
+				r, _ := strconv.ParseUint(f[6], 10, 64)
+				t, _ := strconv.ParseUint(f[9], 10, 64)
+				rx += r
+				tx += t
+			}
+		}
+	}
+	return rx, tx
+}
+
+// netSpeedTracker samples total rx/tx bytes and computes bytes/sec.
+type netSpeedTracker struct {
+	mu       sync.Mutex
+	lastRx   uint64
+	lastTx   uint64
+	lastTime time.Time
+	rxBps    float64
+	txBps    float64
+}
+
+func (t *netSpeedTracker) sample() {
+	rx, tx := probeNetCounters()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	now := time.Now()
+	if !t.lastTime.IsZero() {
+		if dt := now.Sub(t.lastTime).Seconds(); dt > 0 {
+			t.rxBps = float64(rx-t.lastRx) / dt
+			t.txBps = float64(tx-t.lastTx) / dt
+		}
+	}
+	t.lastRx, t.lastTx, t.lastTime = rx, tx, now
+}
+
+func (t *netSpeedTracker) current() (rxBps, txBps float64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.rxBps, t.txBps
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {

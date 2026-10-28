@@ -23,6 +23,10 @@ interface AgentInfo {
   gpu_util: number;
   gpu_mem_used: number;
   capabilities: string[];
+  interfaces: { name: string; ip: string; mac: string; up: boolean }[];
+  privileges: string[];
+  net_rx_bps: number;
+  net_tx_bps: number;
   jobs_queued: number;
   jobs_running: number;
   jobs_done: number;
@@ -39,6 +43,13 @@ function gib(v: unknown): string {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return '—';
   return `${(n / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function bps(v: unknown): string {
+  const n = Number(v) || 0;
+  if (n < 1024) return `${n.toFixed(0)} B/s`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB/s`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB/s`;
 }
 
 function pct1(v: unknown): string {
@@ -74,6 +85,7 @@ export const AgentsPanel = memo(function AgentsPanel() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [live, setLive] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [rawFor, setRawFor] = useState<string | null>(null);
 
   useEffect(() => {
     let dead = false;
@@ -114,8 +126,11 @@ export const AgentsPanel = memo(function AgentsPanel() {
             <p className="empty">no agents enrolled — run <code>cryptalas</code> on a box; it multicasts its beacon</p>
           ) : (
             <div className="ag-cards">
-              {sorted.map((a) => (
-                <article key={a.id || a.host} className="ag-card">
+              {sorted.map((a) => {
+                const key = a.id || a.host;
+                const open = rawFor === key;
+                return (
+                <article key={key} className={`ag-card${open ? ' open' : ''}`} onClick={() => setRawFor(open ? null : key)}>
                   <header className="ag-card-head">
                     <div className="ag-title">
                       <span className="ag-name">{text(a.name) || text(a.host)}</span>
@@ -158,12 +173,23 @@ export const AgentsPanel = memo(function AgentsPanel() {
                         <Bar value={a.gpu_util} />
                       </div>
                     )}
+                    <div className="ag-row">
+                      <span className="ag-label">NET</span>
+                      <span className="num">↓ {bps(a.net_rx_bps)} · ↑ {bps(a.net_tx_bps)}</span>
+                    </div>
                   </div>
 
                   {Array.isArray(a.capabilities) && a.capabilities.length > 0 && (
                     <div className="ag-caps">
                       {a.capabilities.map((c) => (
                         <span key={c} className="ag-cap">{text(c)}</span>
+                      ))}
+                    </div>
+                  )}
+                  {Array.isArray(a.privileges) && a.privileges.length > 0 && (
+                    <div className="ag-caps ag-privs">
+                      {a.privileges.map((p) => (
+                        <span key={p} className="ag-cap ag-priv">{text(p)}</span>
                       ))}
                     </div>
                   )}
@@ -175,8 +201,30 @@ export const AgentsPanel = memo(function AgentsPanel() {
                     <span className="num ag-done">done {int(a.jobs_done)}</span>
                     <span className="num ag-fail">failed {int(a.jobs_failed)}</span>
                   </footer>
+
+                  {open && (
+                    <div className="ag-detail" onClick={(e) => e.stopPropagation()}>
+                      {Array.isArray(a.interfaces) && a.interfaces.length > 0 && (
+                        <div className="ag-ifaces">
+                          {a.interfaces.map((n) => (
+                            <span key={n.name} className="ag-iface" title={n.mac}>
+                              {text(n.name)} <span className="num">{text(n.ip) || '—'}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="ag-detail-head">
+                        <span className="ag-label">raw beacon JSON</span>
+                        <button type="button" className="ag-copy" onClick={() => void navigator.clipboard?.writeText(JSON.stringify(a, null, 2))}>
+                          copy
+                        </button>
+                      </div>
+                      <pre className="ag-raw">{JSON.stringify(a, null, 2)}</pre>
+                    </div>
+                  )}
                 </article>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

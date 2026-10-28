@@ -9,6 +9,15 @@ import (
 )
 
 // AgentInfo is one enrolled CryptALAS agent as reported by its /gpu endpoint.
+// NetIface is one network interface reported by the agent.
+type NetIface struct {
+	Name string `json:"name"`
+	IP   string `json:"ip"`
+	MAC  string `json:"mac"`
+	Up   bool   `json:"up"`
+}
+
+// AgentInfo is one enrolled CryptALAS agent as reported by its /gpu endpoint.
 type AgentInfo struct {
 	ID         string `json:"id"`          // stable id; defaults to Host when unset
 	Host       string `json:"host"`        // base URL the platform reaches the agent on
@@ -26,17 +35,21 @@ type AgentInfo struct {
 	GPUVRAM  string `json:"gpu_vram"`  // first GPU memory ("" = none)
 	GPUCount int    `json:"gpu_count"` // number of GPUs
 	// Live utilisation, capabilities, and running tasks.
-	MemUsed      uint64   `json:"mem_used"`
-	CPUUtil      float64  `json:"cpu_util"`
-	GPUUtil      float64  `json:"gpu_util"`
-	GPUMemUsed   uint64   `json:"gpu_mem_used"`
-	Capabilities []string `json:"capabilities"`
-	JobsQueued   int      `json:"jobs_queued"`
-	JobsRunning  int      `json:"jobs_running"`
-	JobsDone     int      `json:"jobs_done"`
-	JobsFailed   int      `json:"jobs_failed"`
-	FirstSeen    int64    `json:"first_seen_ms"`
-	LastSeen     int64    `json:"last_seen_ms"`
+	MemUsed      uint64     `json:"mem_used"`
+	CPUUtil      float64    `json:"cpu_util"`
+	GPUUtil      float64    `json:"gpu_util"`
+	GPUMemUsed   uint64     `json:"gpu_mem_used"`
+	Capabilities []string   `json:"capabilities"`
+	Interfaces   []NetIface `json:"interfaces"`
+	Privileges   []string   `json:"privileges"`
+	NetRxBps     float64    `json:"net_rx_bps"`
+	NetTxBps     float64    `json:"net_tx_bps"`
+	JobsQueued   int        `json:"jobs_queued"`
+	JobsRunning  int        `json:"jobs_running"`
+	JobsDone     int        `json:"jobs_done"`
+	JobsFailed   int        `json:"jobs_failed"`
+	FirstSeen    int64      `json:"first_seen_ms"`
+	LastSeen     int64      `json:"last_seen_ms"`
 }
 
 // AgentRegistry is the in-memory directory of enrolled agents. It is keyed by
