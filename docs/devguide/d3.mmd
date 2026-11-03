@@ -1,0 +1,19 @@
+flowchart LR
+  WS["Binance websocket<br/>ticker · depth"]:::c_market
+  WS --> MD["marketdata :8796<br/>1s bars · top 400"]:::c_store
+  MD --> ST["bar store<br/>data/history/SYMBOL-INTERVAL.jsonl<br/>5s and 30s aggregated"]:::c_store
+  MD --> RMQ["RabbitMQ<br/>market exchanges"]:::c_neutral
+  RMQ --> REC["recorder :8801"]:::c_store
+  REC --> LAKE["lake state/lake3<br/>bronze / silver / gold"]:::c_store
+  REC --> JN["envelope journal<br/>data/envelope-journal.jsonl"]:::c_store
+  ST --> API["/api/forecast/*<br/>chart · backtest · lab"]:::c_control
+  JN --> RP["/api/replay<br/>/api/decision"]:::c_model
+  LAKE -.-> RP
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

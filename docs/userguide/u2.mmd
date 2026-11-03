@@ -1,0 +1,20 @@
+flowchart LR
+  subgraph ROW["one leaderboard row"]
+    direction TB
+    s1["<b>symbol</b><br/>and a diamond badge<br/>spot or perp"]:::c_market
+    s2["<b>type</b><br/>SPOT / PERP"]:::c_market
+    s3["<b>burst</b><br/>bar and multiple<br/>26.4x = 26x normal"]:::c_intel
+    s4["<b>10s %</b><br/>the move<br/>green up, red down"]:::c_intel
+  end
+  ROW --> A["click once<br/>selects and drills"]:::c_control
+  ROW --> B["arrow keys<br/>move the cursor"]:::c_control
+  ROW --> C["hover<br/>freezes the order"]:::c_control
+  ROW --> D["diamond glyph<br/>opens the ATLAS chart"]:::c_control
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

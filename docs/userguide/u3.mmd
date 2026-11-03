@@ -1,0 +1,18 @@
+flowchart LR
+  a["<b>1</b><br/>pick the pair<br/>ticker box"]:::c_market
+  b["<b>2</b><br/>set the frame<br/>1m … 1d"]:::c_control
+  c["<b>3</b><br/>set how far ahead<br/>1 hour … 1 month"]:::c_control
+  d["<b>4</b><br/>choose a model<br/>or <i>best</i>"]:::c_model
+  e["<b>5</b><br/>train + forecast"]:::c_model
+  f["<b>6</b><br/>read the chart:<br/>actual, forecast, cone"]:::c_intel
+  g["<b>7</b><br/>compare and grade<br/>error, MAPE, coverage"]:::c_intel
+  h["<b>8</b><br/>backtest the frame"]:::c_intel
+  a --> b --> c --> d --> e --> f --> g --> h
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

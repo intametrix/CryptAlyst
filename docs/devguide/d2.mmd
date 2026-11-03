@@ -1,0 +1,25 @@
+flowchart LR
+  R["HTTP request"] --> M["mux<br/>89 routes"]
+  M --> Q["readQuery<br/>paramSymbol · paramInterval · paramInt"]
+  Q --> P["pipeline.go<br/>interval policy · barsForRequest"]
+  P --> S["bar store<br/>data/history/*.jsonl"]
+  S -->|short| B["binance REST<br/>KlinesSource port"]
+  P --> MD["model registry<br/>modelPath(method)"]
+  MD --> E["envelope.Run<br/>authority · keying · correlation · freshness"]
+  E --> OK["ok(w, payload)"]
+  E --> RF["fail(w, msg)"]
+  E --> J["journal + RabbitMQ"]
+  class R,M,Q c_control;
+  class P,MD c_model;
+  class S,B c_market;
+  class E,J c_store;
+  class OK c_intel;
+  class RF c_risk;
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
