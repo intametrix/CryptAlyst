@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ForecastChart } from './ForecastChart';
 import { LiveForecastChart } from './LiveForecastChart';
 import { ChartPanel } from './ChartPanel';
+import { TickerPicker } from './TickerPicker';
 
 interface Row {
   method: string; lookback: number; r2: number; mape_pct: number;
@@ -123,28 +124,20 @@ export function LiveEnginePanel() {
           </span>
         )}
         <span className="le-add">
-          <input
+          {/* The same picker the rest of CryptAlyst uses: searchable, with the
+              instrument's full name and type, rather than a bare text box. */}
+          <TickerPicker
             value={draft}
-            onChange={(e) => setDraft(e.target.value.toUpperCase())}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && draft.trim() !== '') {
-                void fetch(`/api/forecast/live-symbols?symbols=${encodeURIComponent(draft.trim())}`)
-                  .then(() => setDraft(''));
-              }
+            ariaLabel="add a symbol to the live engine"
+            onPick={(sym) => {
+              setDraft(sym);
+              if (sym.trim() === '') return;
+              void fetch(`/api/forecast/live-symbols?symbols=${encodeURIComponent(sym.trim())}`).then(() => {
+                setDraft('');
+                setSaved(null);
+              });
             }}
-            placeholder="add symbol"
-            aria-label="add a symbol to the live engine"
           />
-          <button
-            type="button"
-            onClick={() => {
-              if (draft.trim() === '') return;
-              void fetch(`/api/forecast/live-symbols?symbols=${encodeURIComponent(draft.trim())}`)
-                .then(() => setDraft(''));
-            }}
-          >
-            add
-          </button>
         </span>
         <button
           type="button"

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TickerPicker } from './TickerPicker';
 
 interface Dataset {
   symbol: string; interval: string; bars: number;
@@ -79,7 +80,7 @@ export function DataPanel({ symbol }: { symbol: string }) {
       </div>
 
       <div className="dp-load">
-        <input value={draft} onChange={(e) => setDraft(e.target.value.toUpperCase())} placeholder="symbol" aria-label="symbol to load" />
+        <TickerPicker value={draft} ariaLabel="symbol to load" onPick={(sym) => setDraft(sym)} />
         <select value={interval} onChange={(e) => setInterval(e.target.value)} aria-label="interval to load">
           {INTERVALS.map((i) => <option key={i} value={i}>{i}</option>)}
         </select>

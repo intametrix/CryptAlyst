@@ -76,15 +76,15 @@ export interface FlowColumn {
  * revealed as the box widens.
  */
 export const FLOW_COLUMNS: readonly FlowColumn[] = [
-  { key: 'symbol', label: 'symbol', toolKeys: ['symbol'], minWidth: 0, fr: 1.1 },
-  { key: 'type', label: 'type', toolKeys: ['symbol'], minWidth: 0, fr: 0.55 },
-  { key: 'burst', label: 'burst', toolKeys: ['burst_multiple'], minWidth: 0, fr: 1.2 },
-  { key: 'flow', label: 'flow', toolKeys: ['flow_quote'], minWidth: 300, fr: 0.9 },
+  { key: 'symbol', label: 'Symbol', toolKeys: ['symbol'], minWidth: 0, fr: 1.1 },
+  { key: 'type', label: 'Type', toolKeys: ['symbol'], minWidth: 0, fr: 0.55 },
+  { key: 'burst', label: 'Burst', toolKeys: ['burst_multiple'], minWidth: 0, fr: 1.2 },
+  { key: 'flow', label: 'Flow', toolKeys: ['flow_quote'], minWidth: 300, fr: 0.9 },
   { key: 'change', label: '10s %', toolKeys: ['change_10s'], minWidth: 0, fr: 0.85 },
-  { key: 'price', label: 'price', toolKeys: ['price'], minWidth: 460, fr: 0.9 },
-  { key: 'z', label: 'z', toolKeys: ['burst_z'], minWidth: 540, fr: 0.6 },
-  { key: 'taker', label: 'taker', toolKeys: ['taker_buy_ratio'], minWidth: 620, fr: 0.7 },
-  { key: 'vol24', label: '24h vol', toolKeys: ['quote_volume_24h'], minWidth: 700, fr: 0.9 },
+  { key: 'price', label: 'Price', toolKeys: ['price'], minWidth: 460, fr: 0.9 },
+  { key: 'z', label: 'Z', toolKeys: ['burst_z'], minWidth: 540, fr: 0.6 },
+  { key: 'taker', label: 'Taker', toolKeys: ['taker_buy_ratio'], minWidth: 620, fr: 0.7 },
+  { key: 'vol24', label: '24h Vol', toolKeys: ['quote_volume_24h'], minWidth: 700, fr: 0.9 },
 ];
 
 /** Screen columns that fit in `width` pixels. `0` means "not measured yet". */

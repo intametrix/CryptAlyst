@@ -78,8 +78,20 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
     if (!settledRef.current) return;
     if (selection.symbol === prevSymbol.current) return;
     prevSymbol.current = selection.symbol;
-    setShowChart(selection.symbol !== null);
+    // Selecting a symbol highlights it. Opening a chart is a separate, explicit
+    // act: a list click that pops a chart over the dashboard was unwanted.
+    if (selection.symbol === null) setShowChart(false);
   }, [selection.symbol]);
+
+  // An explicit open request from any list: the only thing that shows the popup.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const sym = (e as CustomEvent<string>).detail;
+      if (typeof sym === 'string' && sym !== '') setShowChart(true);
+    };
+    window.addEventListener('cryptalas:open-chart', onOpen as EventListener);
+    return () => window.removeEventListener('cryptalas:open-chart', onOpen as EventListener);
+  }, []);
 
   const [activeHeat, setActiveHeat] = useState(0);
   // Top-level surface switch: the full overview, or the dedicated pump/dump

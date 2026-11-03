@@ -177,6 +177,23 @@ export function ChartPopup({
   }, [flow.bins, interval]);
 
   /* -- chip state: VOL / FLOW / DON / EMA / SMA + the add-indicator menu ----- */
+  // The richest chart in the app could not take over the window; it can now.
+  const [full, setFull] = useState(false);
+  const [controls, setControls] = useState<ChartZoomControls | null>(null);
+  useEffect(() => {
+    if (!full) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // Escape leaves full screen first; the popup's own close handler must not
+      // fire on the same press, or the chart vanishes instead of shrinking.
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      setFull(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [full]);
+
   const [showVol, setShowVol] = useState(true);
   const [showDon, setShowDon] = useState(true);
   const [showEma, setShowEma] = useState(true);
@@ -232,11 +249,30 @@ export function ChartPopup({
   const eventCount = chartEvents.length;
 
   return (
-    <div className="chart-popup">
+    <div className={`chart-popup${full ? ' is-full' : ''}`}>
       {/* ---------------------------------------------------------- header -- */}
       <div className="cp-header">
         <span className="cp-title num" title={`${symbol} · ${interval}`}>
           {symbol} · {interval}
+        </span>
+        <span className="cp-view">
+          <button
+            type="button"
+            className="cp-btn"
+            onClick={() => controls?.reset()}
+            disabled={controls === null}
+            title="reset the zoom to the whole loaded series"
+          >
+            reset
+          </button>
+          <button
+            type="button"
+            className="cp-btn"
+            onClick={() => setFull((v) => !v)}
+            title={full ? 'back to the panel (Esc)' : 'fill the window with this chart'}
+          >
+            {full ? 'exit full' : 'full'}
+          </button>
         </span>
 
         <Tooltip
@@ -534,7 +570,10 @@ export function ChartPopup({
           showRsi={forecastOn ? false : showRsi}
           selectedEvent={selectedEvent}
           onSelectEvent={setSelectedEvent}
-          onZoomControls={onZoomControls}
+          onZoomControls={(c) => {
+            setControls(c);
+            onZoomControls?.(c);
+          }}
         />
         <ChartLegend
           showForecast={forecastOn}

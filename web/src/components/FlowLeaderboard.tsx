@@ -195,21 +195,28 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
                               className={`sym-btn${selected ? ' selected' : ''}`}
                               aria-pressed={selected}
                               disabled={symbol === ''}
-                              onClick={() => {
-                                // The symbol click opens the CHART and nothing
-                                // else (human ruling, 2026-10-16): the drill-down
-                                // is reachable from an icon inside the chart
-                                // popup, not fired alongside it.
-                                selection.selectSymbol(symbol);
-                              }}
-                              title={`${label} — click to chart`}
+                              onClick={() => selection.selectSymbol(symbol)}
+                              title={`${label} — click to select`}
                             >
-                              <ChartIcon />{' '}
                               {symbol !== '' ? symbol : '—'}
                             </button>
                           );
                         case 'type':
-                          return <InstrumentChip key={c.key} symbol={symbol} />;
+                          return (
+                            <span key={c.key} className="flow-type">
+                              <InstrumentChip symbol={symbol} />
+                              <button
+                                type="button"
+                                className="chart-open"
+                                onClick={() => selection.openChart(symbol)}
+                                disabled={symbol === ''}
+                                title={`open the chart for ${label}`}
+                                aria-label={`open chart for ${label}`}
+                              >
+                                <ChartIcon />
+                              </button>
+                            </span>
+                          );
                         case 'burst':
                           return (
                             <span key={c.key} className="flow-bar" title={`${multiple(r.burst_multiple)} baseline`}>

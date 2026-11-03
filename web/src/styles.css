@@ -781,11 +781,14 @@ table {
 }
 
 .flow-head {
-  font-size: 9.5px;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--muted-2);
+  /* Readable rather than decorative: these are the only labels on the list. */
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #b9cadb;
   cursor: default;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #1b2a38;
 }
 
 .flow-head span:nth-child(n + 2) {
@@ -5381,3 +5384,18 @@ table {
 .inst-chip { display: inline-block; margin-left: 0; padding: 0 4px; border-radius: 4px; font-size: 8px; letter-spacing: .06em; line-height: 13px; vertical-align: middle; }
 .inst-chip.is-perp { color: #9fd8f5; background: rgba(111, 208, 255, .12); border: 1px solid rgba(111, 208, 255, .30); }
 .inst-chip.is-spot { color: #c8b6ff; background: rgba(160, 130, 255, .12); border: 1px solid rgba(160, 130, 255, .30); }
+
+/* the ATLAS chart popup can now take the whole window */
+.cp-view { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; min-height: 0; }
+.chart-popup.is-full { position: fixed; inset: 0; z-index: 80; width: auto; height: auto; max-width: none; max-height: none; margin: 0; border-radius: 0; }
+.chart-popup.is-full .cp-chart-region { height: calc(100vh - 120px); }
+
+/* selecting a row and opening its chart are separate actions */
+.flow-type { display: inline-flex; align-items: center; gap: 5px; min-width: 0; min-height: 0; }
+.chart-open { display: inline-flex; align-items: center; min-width: 0; min-height: 0; padding: 1px 3px; background: none; border: 1px solid transparent; border-radius: 4px; color: #6b7f93; cursor: pointer; }
+.chart-open:hover:not(:disabled) { color: #6fd0ff; border-color: #294054; }
+.chart-open:disabled { opacity: .3; cursor: default; }
+
+/* the sort arrow follows the larger heading */
+.flow-head .col-sort { font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em; text-transform: none; }
+.flow-head .col-sort-mark { font-size: 9px; opacity: .9; }

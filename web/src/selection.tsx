@@ -76,6 +76,8 @@ export interface Selection {
   /** Case/whitespace-insensitive comparison against the current selection. */
   isSelected: (symbol: string | null | undefined) => boolean;
   /** Drop the selection entirely. */
+  /** Open the chart for a symbol (an explicit action, not a side effect). */
+  openChart: (symbol: string) => void;
   clearSymbol: () => void;
 }
 
@@ -85,6 +87,7 @@ const FALLBACK: Selection = {
   selectSymbol: () => undefined,
   selectInterval: () => undefined,
   isSelected: () => false,
+  openChart: () => undefined,
   clearSymbol: () => undefined,
 };
 
@@ -149,6 +152,17 @@ export function SelectionProvider({
 
   const clearSymbol = useCallback(() => setSymbol(null), []);
 
+  /**
+   * Opening a chart is explicit. Selecting a row highlights it; nothing pops up
+   * over the dashboard unless a chart control was actually pressed.
+   */
+  const openChart = useCallback((next: string) => {
+    const clean = normSymbol(next);
+    if (clean === '') return;
+    setSymbol(clean);
+    window.dispatchEvent(new CustomEvent('cryptalas:open-chart', { detail: clean }));
+  }, []);
+
   const selectInterval = useCallback((next: Interval) => {
     if (!INTERVALS.includes(next)) return;
     setIntervalState(next);
@@ -165,8 +179,8 @@ export function SelectionProvider({
   }, [symbol]);
 
   const value = useMemo<Selection>(
-    () => ({ symbol, interval, selectSymbol, selectInterval, isSelected, clearSymbol }),
-    [symbol, interval, selectSymbol, selectInterval, isSelected, clearSymbol],
+    () => ({ symbol, interval, selectSymbol, selectInterval, isSelected, openChart, clearSymbol }),
+    [symbol, interval, selectSymbol, selectInterval, isSelected, openChart, clearSymbol],
   );
 
   return <SelectionContext.Provider value={value}>{children}</SelectionContext.Provider>;
