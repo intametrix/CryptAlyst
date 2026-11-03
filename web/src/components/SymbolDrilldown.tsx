@@ -1,8 +1,9 @@
 import { memo, useMemo, type ReactNode } from 'react';
+import { useTools } from '../glossaryContext';
 import { clock, flag, int, isoUtc, joinList, multiple, num, pct, px, share, text, toNum, tone, usd } from '../format';
 import { useSymbolDetail } from '../hooks/useKlines';
 import { detectorLabel, prettifyEnum } from '../types';
-import type { AlertMsg, SymbolDetailMsg, ToolsMsg } from '../types';
+import type { AlertMsg, SymbolDetailMsg } from '../types';
 import { KindBadge, SeverityBadge } from './Badges';
 import { HeatBorder } from './HeatBorder';
 import { Tooltip } from './Tooltip';
@@ -11,16 +12,15 @@ import { Tooltip } from './Tooltip';
 function Field({
   label,
   value,
-  tools,
   toolKeys,
   big = false,
 }: {
   label: string;
   value: string;
-  tools: ToolsMsg | null;
   toolKeys: string[];
   big?: boolean;
 }) {
+  const tools = useTools();
   return (
     <Tooltip keys={toolKeys} tools={tools} fallbackTitle={label} value={value} tone="stat">
       <div className={`dd-field${big ? ' dd-field-big' : ''}`} tabIndex={0}>
@@ -64,13 +64,12 @@ function Section({
  */
 function TradeCard({
   detail,
-  tools,
   onBack,
 }: {
   detail: SymbolDetailMsg;
-  tools: ToolsMsg | null;
   onBack?: () => void;
 }) {
+  const tools = useTools();
   const trade = detail.trade ?? null;
   const why = typeof detail.why_no_trade === 'string' ? detail.why_no_trade.trim() : '';
 
@@ -103,15 +102,15 @@ function TradeCard({
   return (
     <Section title="trade" note={`entry ${px(trade.entry)}`} tone="trade">
       <div className="dd-trade-grid">
-        <Field label="entry" value={px(trade.entry)} tools={tools} toolKeys={['entry']} big />
-        <Field label="stop" value={px(trade.stop)} tools={tools} toolKeys={['stop']} big />
-        <Field label="exit level" value={px(trade.exit_level)} tools={tools} toolKeys={['exit_level']} big />
-        <Field label="unit size" value={num(trade.unit_size, 4)} tools={tools} toolKeys={['unit_size']} />
-        <Field label="unit notional" value={usd(trade.unit_notional)} tools={tools} toolKeys={['unit_notional']} />
-        <Field label="total notional" value={usd(trade.total_notional)} tools={tools} toolKeys={['total_notional']} />
-        <Field label="total risk" value={usd(trade.total_risk)} tools={tools} toolKeys={['total_risk']} big />
-        <Field label="units" value={int(trade.units)} tools={tools} toolKeys={['units']} />
-        <Field label="capped" value={flag(trade.notional_capped)} tools={tools} toolKeys={['notional_capped']} />
+        <Field label="entry" value={px(trade.entry)} toolKeys={['entry']} big />
+        <Field label="stop" value={px(trade.stop)} toolKeys={['stop']} big />
+        <Field label="exit level" value={px(trade.exit_level)} toolKeys={['exit_level']} big />
+        <Field label="unit size" value={num(trade.unit_size, 4)} toolKeys={['unit_size']} />
+        <Field label="unit notional" value={usd(trade.unit_notional)} toolKeys={['unit_notional']} />
+        <Field label="total notional" value={usd(trade.total_notional)} toolKeys={['total_notional']} />
+        <Field label="total risk" value={usd(trade.total_risk)} toolKeys={['total_risk']} big />
+        <Field label="units" value={int(trade.units)} toolKeys={['units']} />
+        <Field label="capped" value={flag(trade.notional_capped)} toolKeys={['notional_capped']} />
       </div>
       <div className="dd-pyramid">
         <Tooltip
@@ -143,7 +142,6 @@ function TradeCard({
 
 export interface SymbolDrilldownProps {
   symbol: string;
-  tools: ToolsMsg | null;
   /** Breadcrumb trail, most general first (e.g. ['alerts', 'ENAUSDT']). */
   trail: readonly string[];
   /** Called when the user clicks a breadcrumb step. */
@@ -167,12 +165,12 @@ export interface SymbolDrilldownProps {
  */
 export const SymbolDrilldown = memo(function SymbolDrilldown({
   symbol,
-  tools,
   trail,
   onTrailStep,
   onInspect,
   initialDetail = null,
 }: SymbolDrilldownProps) {
+  const tools = useTools();
   const live = useSymbolDetail(symbol);
   const detail = live.detail ?? (initialDetail !== null && initialDetail.symbol === symbol ? initialDetail : null);
   const { loading, error, atMs, refresh } = live;
@@ -233,7 +231,7 @@ export const SymbolDrilldown = memo(function SymbolDrilldown({
           <p className="empty">{loading ? `loading ${symbol}…` : `no data for ${symbol}`}</p>
         </Section>
       ) : (
-        <TradeCard detail={detail} tools={tools} />
+        <TradeCard detail={detail} />
       )}
 
       {/* 2. Heat */}
@@ -272,12 +270,12 @@ export const SymbolDrilldown = memo(function SymbolDrilldown({
           <>
             {flowRow !== null && (
               <div className="dd-grid">
-                <Field label="last price" value={px(flowRow.last_price)} tools={tools} toolKeys={['price']} />
-                <Field label="10s flow" value={usd(flowRow.flow_quote)} tools={tools} toolKeys={['flow_quote']} />
-                <Field label="vs baseline" value={multiple(flowRow.burst_multiple)} tools={tools} toolKeys={['burst_multiple']} />
-                <Field label="z-score" value={num(flowRow.burst_z, 1)} tools={tools} toolKeys={['burst_z']} />
-                <Field label="10s move" value={pct(flowRow.change_10s)} tools={tools} toolKeys={['change_10s']} />
-                <Field label="taker buy" value={share(flowRow.taker_buy_ratio, 1)} tools={tools} toolKeys={['taker_buy_ratio']} />
+                <Field label="last price" value={px(flowRow.last_price)} toolKeys={['price']} />
+                <Field label="10s flow" value={usd(flowRow.flow_quote)} toolKeys={['flow_quote']} />
+                <Field label="vs baseline" value={multiple(flowRow.burst_multiple)} toolKeys={['burst_multiple']} />
+                <Field label="z-score" value={num(flowRow.burst_z, 1)} toolKeys={['burst_z']} />
+                <Field label="10s move" value={pct(flowRow.change_10s)} toolKeys={['change_10s']} />
+                <Field label="taker buy" value={share(flowRow.taker_buy_ratio, 1)} toolKeys={['taker_buy_ratio']} />
               </div>
             )}
             {metrics.length > 0 && (
@@ -321,14 +319,14 @@ export const SymbolDrilldown = memo(function SymbolDrilldown({
         ) : (
           <>
             <div className="dd-grid">
-              <Field label="direction" value={setup.direction === 1 ? 'long' : setup.direction === -1 ? 'short' : 'undirected'} tools={tools} toolKeys={['direction']} />
-              <Field label="score" value={int(setup.score)} tools={tools} toolKeys={['score']} />
-              <Field label="ATR" value={num(setup.atr, 4)} tools={tools} toolKeys={['atr']} />
-              <Field label="ATR %" value={share(setup.atr_pct, 2)} tools={tools} toolKeys={['atr_pct']} />
-              <Field label="ADX" value={num(setup.adx, 1)} tools={tools} toolKeys={['adx14', 'adx']} />
-              <Field label="RSI" value={num(setup.rsi, 1)} tools={tools} toolKeys={['rsi14', 'rsi']} />
-              <Field label="extension" value={num(setup.extension_up_atr, 2)} tools={tools} toolKeys={['extension_up_atr']} />
-              <Field label="group" value={text(setup.group)} tools={tools} toolKeys={['group']} />
+              <Field label="direction" value={setup.direction === 1 ? 'long' : setup.direction === -1 ? 'short' : 'undirected'} toolKeys={['direction']} />
+              <Field label="score" value={int(setup.score)} toolKeys={['score']} />
+              <Field label="ATR" value={num(setup.atr, 4)} toolKeys={['atr']} />
+              <Field label="ATR %" value={share(setup.atr_pct, 2)} toolKeys={['atr_pct']} />
+              <Field label="ADX" value={num(setup.adx, 1)} toolKeys={['adx14', 'adx']} />
+              <Field label="RSI" value={num(setup.rsi, 1)} toolKeys={['rsi14', 'rsi']} />
+              <Field label="extension" value={num(setup.extension_up_atr, 2)} toolKeys={['extension_up_atr']} />
+              <Field label="group" value={text(setup.group)} toolKeys={['group']} />
             </div>
             {setup.accepted === false && (
               <p className="dd-reject">
@@ -345,14 +343,14 @@ export const SymbolDrilldown = memo(function SymbolDrilldown({
           <p className="dd-muted">this symbol did not clear the market-wide screen</p>
         ) : (
           <div className="dd-grid">
-            <Field label="kind" value={prettifyEnum(screenRow.kind)} tools={tools} toolKeys={['kind']} />
-            <Field label="5m" value={pct(screenRow.ret_5m)} tools={tools} toolKeys={['ret_5m']} />
-            <Field label="15m" value={pct(screenRow.ret_15m)} tools={tools} toolKeys={['ret_15m']} />
-            <Field label="1h" value={pct(screenRow.ret_60m)} tools={tools} toolKeys={['ret_60m']} />
-            <Field label="vol ratio" value={multiple(screenRow.vol_ratio)} tools={tools} toolKeys={['vol_ratio']} />
-            <Field label="close pos" value={share(screenRow.close_position, 0)} tools={tools} toolKeys={['close_position']} />
-            <Field label="5m vol" value={usd(screenRow.recent_quote_volume)} tools={tools} toolKeys={['recent_quote_volume']} />
-            <Field label="24h vol" value={usd(screenRow.quote_volume_24h)} tools={tools} toolKeys={['quote_volume_24h']} />
+            <Field label="kind" value={prettifyEnum(screenRow.kind)} toolKeys={['kind']} />
+            <Field label="5m" value={pct(screenRow.ret_5m)} toolKeys={['ret_5m']} />
+            <Field label="15m" value={pct(screenRow.ret_15m)} toolKeys={['ret_15m']} />
+            <Field label="1h" value={pct(screenRow.ret_60m)} toolKeys={['ret_60m']} />
+            <Field label="vol ratio" value={multiple(screenRow.vol_ratio)} toolKeys={['vol_ratio']} />
+            <Field label="close pos" value={share(screenRow.close_position, 0)} toolKeys={['close_position']} />
+            <Field label="5m vol" value={usd(screenRow.recent_quote_volume)} toolKeys={['recent_quote_volume']} />
+            <Field label="24h vol" value={usd(screenRow.quote_volume_24h)} toolKeys={['quote_volume_24h']} />
           </div>
         )}
       </Section>
@@ -380,11 +378,11 @@ export const SymbolDrilldown = memo(function SymbolDrilldown({
       {context !== null && (
         <Section title="context" note="24h">
           <div className="dd-grid">
-            <Field label="last price" value={px(context.last_price)} tools={tools} toolKeys={['price']} />
-            <Field label="24h change" value={pct(context.change_24h_pct)} tools={tools} toolKeys={['ret_24h']} />
-            <Field label="24h high" value={px(context.high_price)} tools={tools} toolKeys={['price']} />
-            <Field label="24h low" value={px(context.low_price)} tools={tools} toolKeys={['price']} />
-            <Field label="24h volume" value={usd(context.quote_volume_24h)} tools={tools} toolKeys={['quote_volume_24h']} />
+            <Field label="last price" value={px(context.last_price)} toolKeys={['price']} />
+            <Field label="24h change" value={pct(context.change_24h_pct)} toolKeys={['ret_24h']} />
+            <Field label="24h high" value={px(context.high_price)} toolKeys={['price']} />
+            <Field label="24h low" value={px(context.low_price)} toolKeys={['price']} />
+            <Field label="24h volume" value={usd(context.quote_volume_24h)} toolKeys={['quote_volume_24h']} />
           </div>
         </Section>
       )}

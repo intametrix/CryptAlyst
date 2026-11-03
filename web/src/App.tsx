@@ -714,7 +714,6 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           >
             <SymbolDrilldown
               symbol={drillSymbol}
-              tools={tools}
               trail={['alerts', drillSymbol, drillView]}
               onTrailStep={(step) => {
                 if (step === 'alerts') setDrillSymbol(null);
