@@ -3,6 +3,7 @@ import { MAX_ALERTS, useEventStream } from './api';
 import { AlertFeed } from './components/AlertFeed';
 import { ChartPopup } from './components/chart/ChartPopup';
 import { ClientErrorBadge } from './components/ClientErrorBadge';
+import { DelayedTitles } from './components/DelayedTitles';
 import type { ChartZoomControls } from './components/chart/ChartPopup';
 import { ChartOverlay } from './components/ChartOverlay';
 import { SplitPane } from './components/Panel';
@@ -472,6 +473,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
     <div className="app" data-layout-nonce={layoutNonce}>
       <TooltipViewer>
         <ClientErrorBadge />
+        <DelayedTitles />
         <Header
           connection={connection}
           status={status}

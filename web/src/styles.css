@@ -5447,3 +5447,6 @@ table {
 .alert-card.is-dense .alert-model-line { display: none; }
 .alert-card.is-dense { padding: 5px 10px; }
 .alert-card.is-dense .alert-figures { gap: 4px 14px; margin-top: 4px; }
+
+/* the delayed title bubble, used by every control with a title attribute */
+.dtip { position: fixed; z-index: 95; max-width: 320px; padding: 5px 9px; font-size: 11px; line-height: 1.35; color: #dff2ff; background: #10161d; border: 1px solid #2b4459; border-radius: 7px; transform: translateX(-50%); pointer-events: none; box-shadow: 0 6px 20px rgba(0, 0, 0, .45); }
