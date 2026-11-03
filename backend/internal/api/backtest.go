@@ -28,20 +28,10 @@ type backtestPoint struct {
 }
 
 // pathFor computes a model's forecast path from bars up to the end.
+// pathForLookback is kept as a thin alias so callers read naturally; the model
+// itself is defined once, in the registry.
 func pathForLookback(method string, bars []binance.Kline, horizon, lookback int) ([]float64, bool) {
-	switch method {
-	case "super":
-		return superForecast(bars, horizon)
-	case "hybrid":
-		return hybridForecast(bars, horizon)
-	case "vwap":
-		return vwapForecast(bars, horizon, lookback)
-	case "vwtrend":
-		return vwTrend(bars, horizon, lookback)
-	case "vwdrift":
-		return vwapDrift(bars, horizon, lookback)
-	}
-	return pathFor(method, bars, horizon)
+	return modelPath(method, bars, horizon, lookback)
 }
 
 func pathFor(method string, bars []binance.Kline, horizon int) ([]float64, bool) {

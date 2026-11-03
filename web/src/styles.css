@@ -4847,7 +4847,7 @@ table {
 .fl-param-label { flex: 0 0 auto; padding-top: 5px; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: #4fc3f7; }
 
 /* forecast vs actual: a measured, labelled chart with its own legend */
-.fchart { display: flex; flex-direction: column; gap: 4px; width: 100%; height: 340px; min-height: 0; min-width: 0; }
+.fchart { display: flex; flex-direction: column; gap: 4px; width: 100%; height: clamp(220px, 32vh, 460px); min-height: 0; min-width: 0; }
 .fchart-plot { flex: 1 1 auto; min-width: 0; min-height: 0; }
 .fchart-svg { display: block; width: 100%; height: 100%; background: var(--panel, #0d1622); border: 1px solid var(--border, #223046); border-radius: 8px; }
 .fchart-grid { stroke: #1b2634; stroke-width: 1; }
@@ -5336,3 +5336,8 @@ table {
 .dp-head { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6b7f93; }
 .dp-sym { font-weight: 700; color: #dff2ff; }
 .dp-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* the forecast chart gets its own panel and follows the window */
+.fl-chart-wrap { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; min-height: 0; }
+.fl-chart-wrap .fchart { height: clamp(240px, 38vh, 560px); }
+.sec-body .fchart-plot { min-height: 0; }

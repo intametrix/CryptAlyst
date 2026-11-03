@@ -15,6 +15,7 @@ import (
 	"math"
 	"pumpdump/backend/internal/arima"
 	"sort"
+	"strings"
 )
 
 // Point is one close at a timestamp.
@@ -776,4 +777,40 @@ func arimaForecast() func([]float64, int) []float64 {
 		}
 		return out
 	}
+}
+
+// Names lists every model in the lab, so callers can build a registry from the
+// same source the lab itself uses rather than repeating the list.
+func Names() []string {
+	all := Models()
+	out := make([]string, 0, len(all))
+	for _, m := range all {
+		out = append(out, m.Name)
+	}
+	return out
+}
+
+// Family groups a model by its construction, for reporting.
+func Family(name string) string {
+	switch {
+	case name == "naive" || name == "mean":
+		return "benchmark"
+	case strings.HasPrefix(name, "sma"):
+		return "moving average"
+	case strings.HasPrefix(name, "ema"):
+		return "exponential"
+	case strings.HasPrefix(name, "trend"):
+		return "trend"
+	case strings.HasPrefix(name, "damped"):
+		return "damped trend"
+	case strings.HasPrefix(name, "analog"):
+		return "analogue"
+	case strings.HasPrefix(name, "ens_"):
+		return "ensemble"
+	case name == "arima":
+		return "arima"
+	case name == "mlr":
+		return "regression"
+	}
+	return "other"
 }

@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"pumpdump/backend/internal/binance"
-	"pumpdump/backend/internal/forecastlab"
 )
 
 // The composite model.
@@ -28,14 +27,11 @@ type superComponent struct {
 
 // superComponents is the candidate pool.
 func superComponents() []superComponent {
-	lab := func(method string) func([]binance.Kline, int) ([]float64, bool) {
+	// Every component routes through the registry, so a model cannot mean one
+	// thing here and another in the backtest.
+	viaRegistry := func(method string, lookback int) func([]binance.Kline, int) ([]float64, bool) {
 		return func(bars []binance.Kline, horizon int) ([]float64, bool) {
-			closes := make([]float64, len(bars))
-			for i, b := range bars {
-				closes[i] = b.Close
-			}
-			pts, ok := forecastlab.Forecast(method, closes, horizon)
-			return pts, ok && len(pts) == horizon
+			return modelPath(method, bars, horizon, lookback)
 		}
 	}
 	vol := func(kind string, lookback int) func([]binance.Kline, int) ([]float64, bool) {
@@ -74,16 +70,14 @@ func superComponents() []superComponent {
 		{name: "vwt50", make: vol("vwtrend", 50), lookback: 50},
 		{name: "vwd12", make: vol("vwdrift", 12), lookback: 12},
 		{name: "vwd24", make: vol("vwdrift", 24), lookback: 24},
-		{name: "analog10", make: lab("analog10")},
-		{name: "analog20", make: lab("analog20")},
-		{name: "damped90", make: lab("damped90")},
-		{name: "trend50", make: lab("trend50")},
-		{name: "sma3", make: lab("sma3")},
-		{name: "ema30", make: lab("ema30")},
-		{name: "arima", make: lab("arima")},
-		{name: "mlr", make: func(b []binance.Kline, h int) ([]float64, bool) {
-			return mlrForecast(b, h)
-		}},
+		{name: "analog10", make: viaRegistry("analog10", 0)},
+		{name: "analog20", make: viaRegistry("analog20", 0)},
+		{name: "damped90", make: viaRegistry("damped90", 0)},
+		{name: "trend50", make: viaRegistry("trend50", 0)},
+		{name: "sma3", make: viaRegistry("sma3", 0)},
+		{name: "ema30", make: viaRegistry("ema30", 0)},
+		{name: "arima", make: viaRegistry("arima", 0)},
+		{name: "mlr", make: viaRegistry("mlr", 0)},
 	}
 }
 

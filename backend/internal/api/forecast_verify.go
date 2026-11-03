@@ -201,23 +201,9 @@ func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
 		if vb, verr := s.barsFor(ctx, symbol, interval, 500); verr == nil && len(vb) > 120+horizon {
 			var pts []float64
 			var ok bool
-			// A saved configuration pins the lookback; otherwise use the defaults.
-			vwapLB, trendLB, driftLB := 24, 50, 24
-			if savedLookback > 0 {
-				vwapLB, trendLB, driftLB = savedLookback, savedLookback, savedLookback
-			}
-			switch method {
-			case "super":
-				pts, ok = superForecast(vb, horizon)
-			case "hybrid":
-				pts, ok = hybridForecast(vb, horizon)
-			case "vwap":
-				pts, ok = vwapForecast(vb, horizon, vwapLB)
-			case "vwtrend":
-				pts, ok = vwTrend(vb, horizon, trendLB)
-			case "vwdrift":
-				pts, ok = vwapDrift(vb, horizon, driftLB)
-			}
+			// One dispatch, shared with the backtest and the composite. A saved
+			// configuration pins the lookback; 0 lets the registry default it.
+			pts, ok = modelPath(method, vb, horizon, savedLookback)
 			if ok && len(pts) == horizon {
 				forecastPts = pts
 				source, device, compute = "platform", "cpu", "go+volume"
