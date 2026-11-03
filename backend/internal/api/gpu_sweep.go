@@ -157,7 +157,7 @@ func (s *Server) sweepPayloadFor(ctx context.Context, symbol, interval string, h
 	}
 	barsMu.Unlock()
 
-	kb, err := s.deps.Market.Klines(ctx, symbol, interval, 1000)
+	kb, err := s.barsFor(ctx, symbol, interval, 1000)
 	if err != nil {
 		return nil, err
 	}

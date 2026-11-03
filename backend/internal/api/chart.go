@@ -184,7 +184,7 @@ func (s *Server) handleKlines(w http.ResponseWriter, r *http.Request) {
 	if s.deps.KlinesCache != nil {
 		klineRows, err = s.deps.KlinesCache.Get(ctx, s.deps.Market, klinesKey{symbol, interval, limit})
 	} else {
-		klineRows, err = s.deps.Market.Klines(ctx, symbol, interval, limit)
+		klineRows, err = s.barsFor(ctx, symbol, interval, limit)
 	}
 	if err != nil {
 		http.Error(w, "klines unavailable: "+err.Error(), http.StatusBadGateway)

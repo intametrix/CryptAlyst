@@ -345,7 +345,7 @@ func (s *Server) handleOptimizeBacktest(w http.ResponseWriter, r *http.Request) 
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
 		return
 	}
-	bars, err := s.deps.Market.Klines(ctx, symbol, interval, barsWanted+horizon+60)
+	bars, err := s.barsFor(ctx, symbol, interval, barsWanted+horizon+60)
 	if err != nil || len(bars) < 140+horizon {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars to optimise"})
 		return

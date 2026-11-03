@@ -107,7 +107,7 @@ func (s *Server) handleAutoConfig(w http.ResponseWriter, r *http.Request) {
 		if sym == "" {
 			continue
 		}
-		bars, err := s.deps.Market.Klines(ctx, sym, interval, 320)
+		bars, err := s.barsFor(ctx, sym, interval, 320)
 		if err != nil || len(bars) < 140+horizon {
 			continue
 		}

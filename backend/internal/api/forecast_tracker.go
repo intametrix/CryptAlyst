@@ -164,7 +164,7 @@ func (s *Server) fetchKlines(ctx context.Context, symbol, interval string, limit
 	if s.deps.KlinesCache != nil {
 		return s.deps.KlinesCache.Get(ctx, s.deps.Market, klinesKey{symbol, interval, limit})
 	}
-	return s.deps.Market.Klines(ctx, symbol, interval, limit)
+	return s.barsFor(ctx, symbol, interval, limit)
 }
 
 // labSeries returns the bars for a search, reusing a cached window until the

@@ -63,7 +63,7 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
 		return
 	}
-	bars, err := s.deps.Market.Klines(ctx, symbol, interval, 700)
+	bars, err := s.barsFor(ctx, symbol, interval, 700)
 	if err != nil || len(bars) < 120 {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars"})
 		return

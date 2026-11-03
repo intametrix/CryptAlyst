@@ -186,7 +186,7 @@ func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
 	// the closes the agent receives), so they are computed here.
 	// `auto` asks for whatever this symbol's own backtest chose.
 	if s.deps.Market != nil && method == "auto" {
-		if vb, verr := s.deps.Market.Klines(ctx, symbol, interval, 400); verr == nil && len(vb) > 140+horizon {
+		if vb, verr := s.barsFor(ctx, symbol, interval, 400); verr == nil && len(vb) > 140+horizon {
 			if am, alb, ok := s.autoConfig(symbol, interval, vb, horizon); ok {
 				if pts, pok := pathForLookback(am, vb, horizon, alb); pok && len(pts) == horizon {
 					forecastPts = pts
@@ -198,7 +198,7 @@ func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if s.deps.Market != nil && (method == "super" || method == "hybrid" || method == "vwap" || method == "vwtrend" || method == "vwdrift") {
-		if vb, verr := s.deps.Market.Klines(ctx, symbol, interval, 500); verr == nil && len(vb) > 120+horizon {
+		if vb, verr := s.barsFor(ctx, symbol, interval, 500); verr == nil && len(vb) > 120+horizon {
 			var pts []float64
 			var ok bool
 			// A saved configuration pins the lookback; otherwise use the defaults.
@@ -228,7 +228,7 @@ func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
 	// The price+volume+time model needs the full OHLCV bars, which only this
 	// handler holds, so it is fitted here rather than shipped to the agent.
 	if method == "mlr" && forecastPts == nil && s.deps.Market != nil {
-		if mlrBars, mlrErr := s.deps.Market.Klines(ctx, symbol, interval, 500); mlrErr == nil && len(mlrBars) > 120+horizon {
+		if mlrBars, mlrErr := s.barsFor(ctx, symbol, interval, 500); mlrErr == nil && len(mlrBars) > 120+horizon {
 			if pts, ok := mlrForecast(mlrBars, horizon); ok {
 				forecastPts = pts
 				source, device, compute = "platform", "cpu", "go+volume+time"

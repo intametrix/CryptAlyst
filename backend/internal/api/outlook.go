@@ -46,7 +46,7 @@ func (s *Server) handleOutlook(w http.ResponseWriter, r *http.Request) {
 	if s.deps.KlinesCache != nil {
 		klines, err = s.deps.KlinesCache.Get(ctx, s.deps.Market, klinesKey{symbol, interval, 300})
 	} else {
-		klines, err = s.deps.Market.Klines(ctx, symbol, interval, 300)
+		klines, err = s.barsFor(ctx, symbol, interval, 300)
 	}
 	if err != nil {
 		http.Error(w, "klines unavailable: "+err.Error(), http.StatusBadGateway)

@@ -121,7 +121,7 @@ func (s *Server) handleHistoryDownload(w http.ResponseWriter, r *http.Request) {
 
 	// Bypass the search cache: this is an explicit request for more data, so it
 	// must actually go and get it.
-	rows, err := s.deps.Market.Klines(ctx, symbol, interval, bars)
+	rows, err := s.barsFor(ctx, symbol, interval, bars)
 	if err != nil {
 		http.Error(w, "download failed: "+err.Error(), http.StatusBadGateway)
 		return
