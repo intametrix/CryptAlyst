@@ -9,6 +9,7 @@ import { priceLabel } from './ForecastChart';
 import { ModelRanking, type ModelScore } from './ModelRanking';
 import { ForecastCompare } from './ForecastCompare';
 import { ForecastChartSection } from './ForecastChartSection';
+import { HistorySection } from './HistorySection';
 import { BacktestPanel } from './BacktestPanel';
 import { LiveEnginePanel } from './LiveEnginePanel';
 import { DataPanel } from './DataPanel';
@@ -208,20 +209,8 @@ function barsPerDay(interval: Interval): number {
 }
 
 /** Date and time, because a date alone hides whether the last bar is fresh. */
-function stamp(ms: number): string {
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 /** Age of the newest bar, in the unit a reader thinks in. */
-function age(ms: number): string {
-  const mins = Math.max(0, Math.round((Date.now() - ms) / 60_000));
-  if (mins < 60) return `${mins} min`;
-  const hours = Math.round(mins / 60);
-  if (hours < 48) return `${hours} h`;
-  return `${Math.round(hours / 24)} d`;
-}
 
 /** What a model actually produces, in one line. */
 function describeModel(name: string): string {
@@ -632,66 +621,18 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
       </Section>
 
       <Section id="fl.history" title="History" meta={<span>{coverage ? `${coverage.bars} bars` : '—'}</span>}>
-        {coverage ? (
-          <>
-            <div className="fl-stats">
-              <div className="fl-stat">
-                <span className="fl-stat-label">frequency</span>
-                <span className="fl-stat-value num">{coverage.interval}</span>
-                <span className="fl-stat-sub">{barsPerDay(interval)} bars / day</span>
-              </div>
-              <div className="fl-stat">
-                <span className="fl-stat-label">bars held</span>
-                <span className="fl-stat-value num">{coverage.bars.toLocaleString()}</span>
-                <span className="fl-stat-sub">of {coverage.max_fetch.toLocaleString()} fetchable</span>
-              </div>
-              <div className="fl-stat">
-                <span className="fl-stat-label">span</span>
-                <span className="fl-stat-value num">{coverage.span_days.toFixed(1)} days</span>
-                <span className="fl-stat-sub">{coverage.span_hours.toFixed(0)} hours</span>
-              </div>
-              <div className="fl-stat">
-                <span className="fl-stat-label">from</span>
-                <span className="fl-stat-value num">{stamp(coverage.from_ms)}</span>
-                <span className="fl-stat-sub">first bar</span>
-              </div>
-              <div className="fl-stat">
-                <span className="fl-stat-label">to</span>
-                <span className="fl-stat-value num">{stamp(coverage.to_ms)}</span>
-                <span className="fl-stat-sub">newest bar</span>
-              </div>
-              <div className="fl-stat">
-                <span className="fl-stat-label">freshness</span>
-                <span className="fl-stat-value num">{age(coverage.to_ms)}</span>
-                <span className="fl-stat-sub">since last bar</span>
-              </div>
-              <div className="fl-stat">
-                <span className="fl-stat-label">bars required</span>
-                <span className={`fl-stat-value num${shortOnHistory ? ' is-short' : ''}`}>{needed}</span>
-                <span className="fl-stat-sub">train {lookback || 'all'} + hold back {horizon}</span>
-              </div>
-            </div>
-            <div className="fl-history-foot">
-              {shortOnHistory ? (
-                <>
-                  <span className="fl-cov-warn">
-                    not enough history to hold back {horizon} bars for grading
-                  </span>
-                  <button type="button" className="btn fl-dl" disabled={downloading} onClick={() => void downloadMore()}>
-                    {downloading ? 'downloading…' : 'download more'}
-                  </button>
-                </>
-              ) : (
-                <span className="fl-cov-ok">
-                  enough history to forecast {horizonLabel(hours, interval).split(' · ')[0]} ahead
-                  ({horizon} bars)
-                </span>
-              )}
-            </div>
-          </>
-        ) : (
-          <span className="fl-history-value num">{historyLine}</span>
-        )}
+        <HistorySection
+          coverage={coverage}
+          barsPerDay={(iv: string) => barsPerDay(iv as Interval)}
+          needed={needed}
+          lookback={lookback}
+          horizon={horizon}
+          shortOnHistory={shortOnHistory}
+          downloading={downloading}
+          horizonText={horizonLabel(hours, interval).split(' · ')[0] ?? ''}
+          fallbackLine={historyLine}
+          onDownload={() => void downloadMore()}
+        />
       </Section>
 
       <Section
