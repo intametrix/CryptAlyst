@@ -282,6 +282,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/alerts/scored", s.handleAlertsScored)
 	mux.HandleFunc("/api/agent/install", s.handleAgentInstall)
 	mux.HandleFunc("/api/client-error", s.handleClientError)
+	mux.HandleFunc("/api/client-errors", s.handleClientErrors)
+	mux.HandleFunc("/api/client-errors/clear", s.handleClientErrorsClear)
 	mux.HandleFunc("/api/history/coverage", s.handleHistoryCoverage)
 	mux.HandleFunc("/api/history/download", s.handleHistoryDownload)
 	mux.HandleFunc("/api/universe", s.handleUniverse)

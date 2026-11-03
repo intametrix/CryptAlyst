@@ -4,7 +4,7 @@ import { clock, int, isoUtc, multiple, num, pct, px, share, toNum, tone, usd } f
 import { visibleFlowColumns } from '../columns';
 import { useElementSize } from '../hooks/useElementSize';
 import { useSelection } from '../selection';
-import type { FlowMsg, ToolsMsg } from '../types';
+import type { FlowMsg, FlowRow, ToolsMsg } from '../types';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
 import { typeLabel, useInstrumentType } from '../hooks/useInstrumentTypes';
@@ -89,7 +89,12 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
         : { key, dir: key === 'symbol' ? 1 : -1 },
     );
 
-  const rows = useMemo(() => {
+  // The list reorders once a second. While the pointer is over it, the last
+  // snapshot is held: a row that moves under the cursor is a mis-click waiting to
+  // happen.
+  const [frozen, setFrozen] = useState<FlowRow[] | null>(null);
+
+  const live = useMemo(() => {
     const value = (r: Record<string, unknown>): number | string => {
       switch (sort.key) {
         case 'symbol':
@@ -124,6 +129,8 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
     return copy;
   }, [raw, sort]);
 
+  const rows = frozen ?? live;
+
   // Bars are scaled against the strongest multiple in this snapshot.
   let peak = 1;
   for (const r of rows) {
@@ -148,7 +155,12 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
           {rows.length === 0 ? (
             <p className="empty">no flow snapshot yet — it pushes every second once the stream is live</p>
           ) : (
-            <div className="flow-rows" ref={ref}>
+            <div
+              className={`flow-rows${frozen !== null ? ' is-frozen' : ''}`}
+              ref={ref}
+              onPointerEnter={() => setFrozen(live)}
+              onPointerLeave={() => setFrozen(null)}
+            >
               <div className="flow-row flow-head" style={{ gridTemplateColumns: template }} role="row">
                 {columns.map((c) => (
                   <Tooltip

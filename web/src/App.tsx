@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_ALERTS, useEventStream } from './api';
 import { AlertFeed } from './components/AlertFeed';
 import { ChartPopup } from './components/chart/ChartPopup';
+import { ClientErrorBadge } from './components/ClientErrorBadge';
 import type { ChartZoomControls } from './components/chart/ChartPopup';
 import { ChartOverlay } from './components/ChartOverlay';
 import { SplitPane } from './components/Panel';
@@ -470,6 +471,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   return (
     <div className="app" data-layout-nonce={layoutNonce}>
       <TooltipViewer>
+        <ClientErrorBadge />
         <Header
           connection={connection}
           status={status}

@@ -5245,7 +5245,11 @@ table {
 .bt-params input, .bt-params select { min-width: 0; min-height: 0; padding: 3px 6px; font-size: 11.5px; color: #cfe8f7; background: #101c28; border: 1px solid #294054; border-radius: 6px; }
 
 /* full-screen view of the live engine */
-.le.is-full { position: fixed; inset: 0; z-index: 60; background: #0a1118; padding: 14px 18px; overflow: auto; }
+.le.is-full { position: fixed; inset: 0; z-index: 60; background: #0a1118; padding: 14px 18px; overflow: auto; display: flex; flex-direction: column; gap: 10px; }
+/* In full screen each child takes its natural height in order: without this the
+   chart and the ranking overlapped instead of stacking. */
+.le.is-full > * { flex: 0 0 auto; min-height: 0; }
+.le.is-full .le-board { flex: 1 1 auto; min-height: 80px; overflow-y: auto; }
 .le.is-full .le-board { max-height: 32vh; overflow-y: auto; }
 .le.is-full .fchart { min-height: 46vh; }
 .le-full { min-width: 0; min-height: 0; padding: 4px 10px; font-size: 11px; color: #cfe8f7; background: #16283a; border: 1px solid #35506a; border-radius: 6px; cursor: pointer; }
@@ -5399,3 +5403,18 @@ table {
 /* the sort arrow follows the larger heading */
 .flow-head .col-sort { font-size: 12.5px; font-weight: 600; letter-spacing: 0.01em; text-transform: none; }
 .flow-head .col-sort-mark { font-size: 9px; opacity: .9; }
+
+/* the list holds its order while the pointer is over it */
+.flow-rows.is-frozen { outline: 1px solid rgba(111, 208, 255, .18); border-radius: 6px; }
+
+/* an armed destructive control says so, and disarms itself */
+.btn.is-armed { color: #ffc9d0; border-color: #7d2f3a; background: #2a1216; }
+
+/* render failures, visible rather than only in the log */
+.ceb { position: fixed; top: 6px; left: 50%; transform: translateX(-50%); z-index: 90; min-width: 0; min-height: 0; }
+.ceb-btn { min-width: 0; min-height: 0; padding: 3px 10px; font-size: 11px; color: #ffc9d0; background: #2a1216; border: 1px solid #7d2f3a; border-radius: 999px; cursor: pointer; }
+.ceb-list { position: absolute; top: 26px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 4px; width: min(560px, 80vw); padding: 8px; background: #10161d; border: 1px solid #7d2f3a; border-radius: 8px; }
+.ceb-row { display: flex; flex-direction: column; gap: 1px; min-width: 0; min-height: 0; }
+.ceb-where { font-size: 10.5px; color: #ff9aa6; font-weight: 600; }
+.ceb-msg { font-size: 11px; color: #c3d2e0; overflow-wrap: anywhere; }
+.ceb-clear { align-self: flex-end; min-width: 0; min-height: 0; padding: 2px 8px; font-size: 10.5px; color: #9fb4c8; background: #16283a; border: 1px solid #294054; border-radius: 6px; cursor: pointer; }

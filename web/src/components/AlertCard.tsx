@@ -18,6 +18,7 @@ import {
 } from '../format';
 import { useElementSize } from '../hooks/useElementSize';
 import { useContinuationValue } from '../hooks/useContinuation';
+import { typeLabel, useInstrumentType } from '../hooks/useInstrumentTypes';
 import { useSelection } from '../selection';
 import { detectorLabel, prettifyEnum } from '../types';
 import type { AlertMsg, AlertMetrics, ToolsMsg } from '../types';
@@ -167,6 +168,21 @@ function Figure({
  * - every metric label carries a glossary tooltip
  * - narrow containers stack the figures instead of clipping them
  */
+/** PERP / SPOT beside the symbol, matching the flow leaderboard. */
+const InstrumentChip = memo(function InstrumentChip({ symbol }: { symbol: string }) {
+  const inst = useInstrumentType(symbol);
+  const label = typeLabel(inst?.cls);
+  if (label === '') return null;
+  return (
+    <span
+      className={`inst-chip${label === 'PERP' ? ' is-perp' : ' is-spot'}`}
+      title={inst?.name !== '' ? inst?.name : `${symbol} ${label.toLowerCase()}`}
+    >
+      {label}
+    </span>
+  );
+});
+
 export const AlertCard = memo(function AlertCard({
   alert,
   flash,
@@ -217,6 +233,7 @@ export const AlertCard = memo(function AlertCard({
             {clock(alert.ts_ms)}
           </span>
           <span className="alert-symbol">{symbol}</span>
+          <InstrumentChip symbol={symbol} />
         </button>
 
         <button

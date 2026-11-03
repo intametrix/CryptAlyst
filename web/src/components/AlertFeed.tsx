@@ -48,6 +48,7 @@ export const AlertFeed = memo(function AlertFeed({
   const selection = useSelection();
   useContinuationPoller();
   const [onlySelected, setOnlySelected] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   // One clock for the whole feed: cards are memoised on it, so a tick re-renders
   // the feed's cards but not the surrounding panels, and unmounted cost is zero.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -95,11 +96,25 @@ export const AlertFeed = memo(function AlertFeed({
               </button>
               <button
                 type="button"
-                className="btn"
-                onClick={onClear}
-                title="DELETE /api/alerts — clears the backend buffer and this feed"
+                className={`btn${confirming ? ' is-armed' : ''}`}
+                onClick={() => {
+                  // Clearing is one click away from destroying the feed, and the
+                  // backend buffer with it. The second click is the confirmation.
+                  if (!confirming) {
+                    setConfirming(true);
+                    window.setTimeout(() => setConfirming(false), 4000);
+                    return;
+                  }
+                  setConfirming(false);
+                  onClear();
+                }}
+                title={
+                  confirming
+                    ? 'click again to clear the feed and the backend buffer'
+                    : 'DELETE /api/alerts — clears the backend buffer and this feed'
+                }
               >
-                clear
+                {confirming ? 'clear? click again' : 'clear'}
               </button>
               <button
                 type="button"

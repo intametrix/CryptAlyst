@@ -69,6 +69,7 @@ export function LiveEnginePanel() {
   const [full, setFull] = useState(false);
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState<string | null>(null);
+  const [stopArmed, setStopArmed] = useState(false);
 
   // Keep the configuration the optimiser settled on, so forecasting can reuse it
   // instead of deciding again.
@@ -143,11 +144,19 @@ export function LiveEnginePanel() {
           type="button"
           className={`le-train${data?.training === false ? ' is-off' : ''}`}
           onClick={() => {
+            // Stopping leaves four GPU workers idle and needs a second click to
+            // confirm; resuming does not, because resuming is safe.
+            if (data?.training !== false && !stopArmed) {
+              setStopArmed(true);
+              window.setTimeout(() => setStopArmed(false), 4000);
+              return;
+            }
+            setStopArmed(false);
             const next = data?.training === false ? 'on' : 'off';
             void fetch(`/api/forecast/engine-control?training=${next}`).then(() => setAge(0));
           }}
         >
-          {data?.training === false ? 'resume training' : 'stop training'}
+          {data?.training === false ? 'resume training' : stopArmed ? 'stop? click again' : 'stop training'}
         </button>
         <button
           type="button"

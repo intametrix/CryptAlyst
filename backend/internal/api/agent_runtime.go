@@ -223,5 +223,11 @@ func (s *Server) handleClientError(w http.ResponseWriter, r *http.Request) {
 		body.Where, body.Message, body.Href,
 		strings.ReplaceAll(body.Stack, "\n", "\n    "),
 		strings.ReplaceAll(body.Component, "\n", "\n    "))
+	// Also keep it in memory, because a log entry is not visible to whoever is
+	// staring at the broken panel.
+	recordClientError(clientError{
+		Where: body.Where, Message: body.Message, Href: body.Href,
+		Component: strings.TrimSpace(strings.Split(body.Component, "\n")[0]),
+	})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
