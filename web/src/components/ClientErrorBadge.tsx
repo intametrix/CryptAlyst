@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { usePoll } from '../hooks/usePoll';
+import { useState } from 'react';
 
 interface Report {
   where: string;
@@ -18,21 +19,18 @@ export function ClientErrorBadge() {
   const [reports, setReports] = useState<Report[]>([]);
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const r = await fetch('/api/client-errors', { headers: { accept: 'application/json' } });
-        if (!r.ok) return;
-        const body = (await r.json()) as { errors?: Report[] };
-        setReports(body.errors ?? []);
-      } catch {
-        /* the badge simply stays as it was */
-      }
-    };
-    void poll();
-    const id = window.setInterval(() => void poll(), 10000);
-    return () => window.clearInterval(id);
-  }, []);
+  const poll = async () => {
+    try {
+      const r = await fetch('/api/client-errors', { headers: { accept: 'application/json' } });
+      if (!r.ok) return;
+      const body = (await r.json()) as { errors?: Report[] };
+      setReports(body.errors ?? []);
+    } catch {
+      /* the badge simply stays as it was */
+    }
+  };
+
+  usePoll(poll, 10000, { immediate: true });
 
   if (reports.length === 0) return null;
 

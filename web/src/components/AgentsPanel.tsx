@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react';
+import { useNow } from '../hooks/useNow';
 import { age, int, text } from '../format';
 import { isAgentActive } from '../agentStatus';
 import { useSelection } from '../selection';
@@ -161,7 +162,7 @@ export const AgentsPanel = memo(function AgentsPanel({ onOpenForecast }: { onOpe
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [live, setLive] = useState(false);
   const selection = useSelection();
-  const [now, setNow] = useState(() => Date.now());
+  const now = useNow();
   const [selected, setSelected] = useState<AgentInfo | null>(null);
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [jobResult, setJobResult] = useState('');
@@ -181,8 +182,7 @@ export const AgentsPanel = memo(function AgentsPanel({ onOpenForecast }: { onOpe
     };
     void tick();
     const poll = window.setInterval(() => void tick(), 5000);
-    const clock = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => { dead = true; window.clearInterval(poll); window.clearInterval(clock); };
+    return () => { dead = true; window.clearInterval(poll); };
   }, []);
 
   // Only agents still beaconing are listed; a dead agent is not shown at all.
