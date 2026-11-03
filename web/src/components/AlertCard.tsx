@@ -1,4 +1,5 @@
 import { memo, useState } from 'react';
+import { useTools } from '../glossaryContext';
 import {
   DASH,
   age,
@@ -33,7 +34,6 @@ interface Props {
   flash: boolean;
   /** Compact layout: fewer rows per card, so twice as many fit on screen. */
   dense?: boolean;
-  tools: ToolsMsg | null;
   /**
    * Shared clock (seconds precision) so "snapshot 42s ago" ticks without each
    * card owning a timer. It changes once a second, and the card is memoised, so
@@ -189,12 +189,12 @@ export const AlertCard = memo(function AlertCard({
   alert,
   flash,
   dense = false,
-  tools,
   nowMs,
   onFilterToggle,
   onDrill,
   canon = null,
 }: Props) {
+  const tools = useTools();
   const [open, setOpen] = useState(false);
   const continuation = useContinuationValue(alert.symbol);
   const { ref, size } = useElementSize<HTMLElement>();
@@ -430,7 +430,6 @@ export const AlertCard = memo(function AlertCard({
         alert={alert}
         open={open}
         onCollapse={() => setOpen(false)}
-        tools={tools}
         onDrill={onDrill}
       />
 
@@ -461,16 +460,15 @@ export function AlertDetails({
   alert,
   open,
   onCollapse,
-  tools,
   onDrill,
 }: {
   alert: AlertMsg;
   open: boolean;
   onCollapse?: () => void;
-  tools: ToolsMsg | null;
   /** Metric rows become drill-down links when this is provided. */
   onDrill?: (symbol: string, seed?: { alerts: AlertMsg[] }) => void;
 }) {
+  const tools = useTools();
   const symbol = typeof alert.symbol === 'string' ? alert.symbol : '';
   const drill = symbol !== '' && onDrill !== undefined ? () => onDrill(symbol) : undefined;
   const metrics = (alert.metrics ?? null) as (AlertMetrics & Record<string, unknown>) | null;

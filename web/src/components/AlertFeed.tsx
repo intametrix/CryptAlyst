@@ -4,7 +4,7 @@ import type { ColorCanon } from '../colors';
 import { activeFilters, clearFilter, hasFilters, matchesFilter, type FeedFilter, type FilterKey } from '../filters';
 import { int } from '../format';
 import { useSelection } from '../selection';
-import type { AlertMsg, ToolsMsg } from '../types';
+import type { AlertMsg } from '../types';
 import { alertKey, prettifyEnum } from '../types';
 import { AlertCard } from './AlertCard';
 import { useContinuationPoller } from '../hooks/useContinuation';
@@ -20,7 +20,6 @@ interface Props {
   onTogglePause: () => void;
   onClear: () => void;
   maxAlerts: number;
-  tools: ToolsMsg | null;
   /** The shared filter, driven by clicking badges anywhere in the app. */
   filter: FeedFilter;
   onFilterChange: (next: FeedFilter) => void;
@@ -40,7 +39,6 @@ export const AlertFeed = memo(function AlertFeed({
   onTogglePause,
   onClear,
   maxAlerts,
-  tools,
   filter,
   onFilterChange,
   onFilterToggle,
@@ -183,7 +181,6 @@ export const AlertFeed = memo(function AlertFeed({
                     dense={dense}
                     alert={a}
                     flash={flashIds.has(key)}
-                    tools={tools}
                     nowMs={nowMs}
                     onFilterToggle={onFilterToggle}
                     onDrill={onDrill}

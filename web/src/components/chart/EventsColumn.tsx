@@ -181,7 +181,6 @@ export const EventsColumn = memo(function EventsColumn({
                     <AlertCard
                       alert={markerToAlert(mark, symbol)}
                       flash={false}
-                      tools={tools}
                       nowMs={nowMs}
                       canon={canon}
                     />
