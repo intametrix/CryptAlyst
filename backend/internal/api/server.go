@@ -257,6 +257,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/forecast/lab", s.handleForecastLab)
 	mux.HandleFunc("/api/forecast/verify", s.handleForecastVerify)
 	mux.HandleFunc("/api/forecast/optimize", s.handleForecastOptimize)
+	mux.HandleFunc("/api/forecast/models", s.handleForecastModels)
 	mux.HandleFunc("/api/agent/python", s.handleAgentPython)
 	mux.HandleFunc("/api/instruments", s.handleInstruments)
 	mux.HandleFunc("/api/features", s.handleFeatures)

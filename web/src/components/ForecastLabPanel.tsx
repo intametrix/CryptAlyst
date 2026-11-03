@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import { num, text } from '../format';
 import { useSelection } from '../selection';
+import { useResource } from '../hooks/useResource';
 import { useForecastOverlay } from '../hooks/useForecastOverlay';
 import { TickerPicker } from './TickerPicker';
 import { ForecastChart, priceLabel } from './ForecastChart';
@@ -244,7 +245,13 @@ function describeModel(name: string): string {
 const POLL_MS = 5000;
 
 /** Every model the lab can rank, plus "best" to let it choose. */
-const MODELS = [
+/**
+ * The list the platform actually has, from /api/forecast/models. The array below
+ * is the fallback for the first paint and for an offline server; it is no longer
+ * the source of truth, because a hand-maintained list drifts — it offered models
+ * the engine lacked and missed any new one.
+ */
+const MODELS_FALLBACK = [
   'best', 'naive', 'mean', 'arima', 'mlr', 'timestral',
   'super', 'vwap', 'vwtrend', 'vwdrift',
   'sma3', 'sma5', 'sma8', 'sma10', 'sma15', 'sma20', 'sma30', 'sma50', 'sma80', 'sma100', 'sma150',
@@ -407,6 +414,14 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
 
   /** The model list runs to ninety entries: it needs a filter, not a scroll. */
   const [modelQuery, setModelQuery] = useState('');
+  const catalogResource = useResource<{ models?: { name: string; platform: boolean; agent_only: boolean }[] }>('/api/forecast/models');
+  const MODELS = useMemo(() => {
+    const listed = catalogResource.data?.models;
+    if (listed === undefined || listed.length === 0) return MODELS_FALLBACK;
+    const names = listed.map((m) => m.name);
+    // 'best' is a selection pseudo-model, not a model; it stays first.
+    return ['best', ...names.filter((n) => n !== 'best')];
+  }, [catalogResource.data]);
 
   const filteredModels = useMemo(() => {
     const q = modelQuery.trim().toLowerCase();
