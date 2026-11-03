@@ -31,7 +31,7 @@ h3 {{ font-size: 10.5pt; font-weight: bold; color: {MUTED}; margin: 10pt 0 3pt;
 .meta {{ font-size: 8.5pt; color: {MUTED}; border-top: 0.5pt solid #d8e0e8;
          border-bottom: 0.5pt solid #d8e0e8; padding: 5pt 0; margin: 8pt 0 12pt; }}
 figure {{ margin: 8pt 0; page-break-inside: avoid; text-align: center; }}
-figure img {{ max-width: 100%; max-height: 7.0in; width: auto; height: auto; }}
+figure img {{ max-width: 100%; max-height: 5.4in; width: auto; height: auto; }}
 figcaption {{ font-size: 8pt; font-style: italic; color: {MUTED}; margin-top: 3pt;
               text-align: center; }}
 table {{ width: 100%; border-collapse: collapse; margin: 5pt 0 9pt; }}
