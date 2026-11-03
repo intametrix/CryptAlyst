@@ -106,7 +106,7 @@ export const Header = memo(function Header({
         </div>
         <p className="brand-sub">{configSummary(config)}</p>
         <div className="brand-tools">
-          <HeatLegend activeCount={heatCount} tools={tools} />
+          <HeatLegend activeCount={heatCount} />
           <Tooltip
             keys={['heat']}
             tools={tools}

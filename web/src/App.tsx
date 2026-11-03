@@ -639,7 +639,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
 
         <ModelsPanel />
 
-        <TurtlePanel tools={tools} />
+        <TurtlePanel />
         </>
         )}
 

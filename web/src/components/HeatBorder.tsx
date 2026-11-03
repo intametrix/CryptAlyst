@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTools } from '../glossaryContext';
 import { useHeat } from '../heatContext';
 import { heatStyle } from '../heatContext';
 import { num } from '../format';
@@ -37,7 +38,8 @@ export interface HeatBorderProps {
  * - hovering or focusing it explains the glow: heat value, the reason strings,
  *   and the component breakdown, each falling back to `/api/tools` copy
  */
-export function HeatBorder({ symbol, tools = null, className, as = 'span', children }: HeatBorderProps) {
+export function HeatBorder({ symbol, tools: toolsProp, className, as = 'span', children }: HeatBorderProps) {
+  const tools = toolsProp ?? useTools();
   const entry = useHeat(symbol);
   const style = useMemo(() => heatStyle(entry?.heat), [entry?.heat]);
   const Tag = as;
@@ -68,7 +70,8 @@ export function HeatBorder({ symbol, tools = null, className, as = 'span', child
  * A small always-visible explanation of what the glow means. Rendered once in
  * the header so the affordance exists without any heat data.
  */
-export function HeatLegend({ activeCount, tools }: { activeCount: number; tools: ToolsMsg | null }) {
+export function HeatLegend({ activeCount }: { activeCount: number }) {
+  const tools = useTools();
   return (
     <Tooltip
       keys={['heat']}

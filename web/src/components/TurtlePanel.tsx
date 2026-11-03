@@ -4,7 +4,7 @@ import { memo, useCallback, useState } from 'react';
 import { clock, int, num, px, usd } from '../format';
 import { useSelection } from '../selection';
 import { ChartIcon } from './ChartIcon';
-import type { ToolsMsg } from '../types';
+import { useTools } from '../glossaryContext';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
 
@@ -132,7 +132,8 @@ async function fetchJson(url: string): Promise<unknown> {
   return res.json();
 }
 
-export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMsg | null }) {
+export const TurtlePanel = memo(function TurtlePanel() {
+  const tools = useTools();
   const [session, setSession] = useState<TurtleState | null>(null);
   const [openTrades, setOpenTrades] = useState<OpenTrade[]>([]);
   const [settled, setSettled] = useState<SettledTrade[]>([]);
