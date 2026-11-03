@@ -20,16 +20,18 @@ import (
 
 // liveState is one symbol's latest optimisation.
 type liveState struct {
-	Symbol    string           `json:"symbol"`
-	Best      map[string]any   `json:"best"`
-	Rows      []map[string]any `json:"rows"`
-	Series    []map[string]any `json:"series"`
-	Future    map[string]any   `json:"future"`
-	Tests     int              `json:"tests"`
-	Cycles    int              `json:"cycles"`
-	UpdatedMS int64            `json:"updated_ms"`
-	Seconds   float64          `json:"seconds"`
-	History   []float64        `json:"history"`
+	Symbol string `json:"symbol"`
+	// Typed at the boundary: the agent sends untyped JSON, this is where it becomes
+	// something the compiler checks.
+	Best      *sweepRow      `json:"best"`
+	Rows      []sweepRow     `json:"rows"`
+	Series    []sweepSeries  `json:"series"`
+	Future    map[string]any `json:"future"`
+	Tests     int            `json:"tests"`
+	Cycles    int            `json:"cycles"`
+	UpdatedMS int64          `json:"updated_ms"`
+	Seconds   float64        `json:"seconds"`
+	History   []float64      `json:"history"`
 	// Phase is the model being optimised right now.
 	Phase      string             `json:"phase"`
 	PhaseIndex int                `json:"phase_index"`
@@ -104,26 +106,14 @@ func (e *liveEngine) snapshot(srv *Server) map[string]any {
 }
 
 func (e *liveEngine) record(symbol, interval string, res map[string]any, secs float64) {
-	rowsRaw, _ := res["results"].([]any)
-	rows := make([]map[string]any, 0, 40)
-	for i, r := range rowsRaw {
-		if i >= 40 {
-			break
-		}
-		if m, ok := r.(map[string]any); ok {
-			rows = append(rows, m)
-		}
+	rows := decodeRows(res["results"])
+	if len(rows) > 40 {
+		rows = rows[:40]
 	}
-	seriesRaw, _ := res["series"].([]any)
-	series := make([]map[string]any, 0, 4)
-	for _, s := range seriesRaw {
-		if m, ok := s.(map[string]any); ok {
-			series = append(series, m)
-		}
-	}
-	var best map[string]any
+	series := decodeSeries(res["series"])
+	var best *sweepRow
 	if len(rows) > 0 {
-		best = rows[0]
+		best = &rows[0]
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -139,36 +129,34 @@ func (e *liveEngine) record(symbol, interval string, res map[string]any, secs fl
 	// Merge instead of replace: the GPU sweeps the volume family and the platform
 	// scores the rest, so replacing the board each cycle would erase one source
 	// with the other. Rows for the incoming methods are refreshed, the others stay.
-	merged := make([]map[string]any, 0, len(rows)+len(st.Rows))
+	merged := make([]sweepRow, 0, len(rows)+len(st.Rows))
 	seen := map[string]bool{}
 	for _, r := range rows {
-		if m, ok := r["method"].(string); ok {
-			seen[m] = true
-		}
+		seen[r.Method] = true
 		merged = append(merged, r)
 	}
 	for _, r := range st.Rows {
-		if m, ok := r["method"].(string); ok && seen[m] {
+		if seen[r.Method] {
 			continue
 		}
 		merged = append(merged, r)
 	}
+
 	// Keep the board diverse: the top forty rows of one model would hide the other
 	// fifteen, which defeats the point of scoring them.
-	byMethod := map[string][]map[string]any{}
+	byMethod := map[string][]sweepRow{}
 	order := []string{}
 	for _, r := range merged {
-		m, _ := r["method"].(string)
-		if _, ok := byMethod[m]; !ok {
-			order = append(order, m)
+		if _, ok := byMethod[r.Method]; !ok {
+			order = append(order, r.Method)
 		}
-		byMethod[m] = append(byMethod[m], r)
+		byMethod[r.Method] = append(byMethod[r.Method], r)
 	}
 	perMethod := 40 / max(len(order), 1)
 	if perMethod < 2 {
 		perMethod = 2
 	}
-	trimmed := make([]map[string]any, 0, 40)
+	trimmed := make([]sweepRow, 0, 40)
 	for _, m := range order {
 		rowsFor := byMethod[m]
 		if len(rowsFor) > perMethod {
@@ -176,11 +164,7 @@ func (e *liveEngine) record(symbol, interval string, res map[string]any, secs fl
 		}
 		trimmed = append(trimmed, rowsFor...)
 	}
-	sort.SliceStable(trimmed, func(i, j int) bool {
-		a, _ := trimmed[i]["r2"].(float64)
-		b, _ := trimmed[j]["r2"].(float64)
-		return a > b
-	})
+	sort.SliceStable(trimmed, func(i, j int) bool { return trimmed[i].R2 > trimmed[j].R2 })
 	if len(trimmed) > 40 {
 		trimmed = trimmed[:40]
 	}
@@ -188,16 +172,8 @@ func (e *liveEngine) record(symbol, interval string, res map[string]any, secs fl
 	st.Series = series
 	st.UpdatedMS = time.Now().UnixMilli()
 	st.Seconds = secs
-	if best != nil {
-		if r2, ok := best["r2"].(float64); ok {
-			prev := 0.0
-			if st.Best != nil {
-				prev, _ = st.Best["r2"].(float64)
-			}
-			if st.Best == nil || r2 > prev {
-				st.Best = best
-			}
-		}
+	if best != nil && (st.Best == nil || best.R2 > st.Best.R2) {
+		st.Best = best
 	}
 	st.Cycles++
 	st.PhaseTests = len(rows)
@@ -207,14 +183,13 @@ func (e *liveEngine) record(symbol, interval string, res map[string]any, secs fl
 	if st.PerModel == nil {
 		st.PerModel = map[string]float64{}
 	}
-	if method, ok := best["method"].(string); ok {
-		if r2, ok2 := best["r2"].(float64); ok2 {
-			if cur, seen := st.PerModel[method]; !seen || r2 > cur {
-				st.PerModel[method] = r2
-			}
+	if best != nil {
+		if cur, seen := st.PerModel[best.Method]; !seen || best.R2 > cur {
+			st.PerModel[best.Method] = best.R2
 		}
 	}
-	if r2, ok := best["r2"].(float64); ok {
+	if best != nil {
+		r2 := best.R2
 		st.PhaseBest = r2
 		st.History = append(st.History, r2)
 		if len(st.History) > 120 {
@@ -467,10 +442,10 @@ func (e *liveEngine) normalise() {
 			st.PerModel = map[string]float64{}
 		}
 		if st.Rows == nil {
-			st.Rows = []map[string]any{}
+			st.Rows = []sweepRow{}
 		}
 		if st.Series == nil {
-			st.Series = []map[string]any{}
+			st.Series = []sweepSeries{}
 		}
 	}
 }
