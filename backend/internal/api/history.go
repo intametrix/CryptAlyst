@@ -31,7 +31,7 @@ type historyCoverage struct {
 
 // handleHistoryCoverage reports the depth of history available for a symbol.
 func (s *Server) handleHistoryCoverage(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	interval := strings.TrimSpace(r.URL.Query().Get("interval"))
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
@@ -75,8 +75,7 @@ func (s *Server) handleHistoryCoverage(w http.ResponseWriter, r *http.Request) {
 // handleHistoryDownload fetches a deeper window on request and reports the new
 // coverage, so the user can explicitly pull more before forecasting.
 func (s *Server) handleHistoryDownload(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var body struct {

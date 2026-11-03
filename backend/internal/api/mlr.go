@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"net/http"
-	"strings"
 	"time"
 
 	"pumpdump/backend/internal/binance"
@@ -200,15 +199,12 @@ func mlrForecast(bars []binance.Kline, horizon int) ([]float64, bool) {
 // handleMLR exposes the price+volume+time model with the coefficients it learned,
 // so the fit is inspectable rather than a black box.
 func (s *Server) handleMLR(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "1h"
-	}
+	interval := paramInterval(r, "1h")
 	horizon := queryInt(r, "horizon", 24)
 	if horizon < 1 || horizon > 720 {
 		horizon = 24
@@ -216,17 +212,17 @@ func (s *Server) handleMLR(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	if s.deps.Market == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
+		fail(w, "market client unavailable")
 		return
 	}
 	bars, err := s.barsFor(ctx, symbol, interval, 500)
 	if err != nil || len(bars) < 120+horizon {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars with volume"})
+		fail(w, "not enough bars with volume")
 		return
 	}
 	path, ok := mlrForecast(bars, horizon)
 	if !ok {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "fit failed"})
+		fail(w, "fit failed")
 		return
 	}
 	cut := len(bars) - horizon

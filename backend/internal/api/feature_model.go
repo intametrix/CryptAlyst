@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"net/http"
-	"strings"
 	"time"
 
 	"pumpdump/backend/internal/forecastlab"
@@ -97,15 +96,12 @@ func zscoreSafe(v []float64) []float64 {
 // handleFeatureForecast grades the feature models against the price-only ones on
 // the same window, so the comparison cannot be argued about.
 func (s *Server) handleFeatureForecast(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "1h"
-	}
+	interval := paramInterval(r, "1h")
 	horizon := queryInt(r, "horizon", 24)
 	if horizon < 1 || horizon > 720 {
 		horizon = 24

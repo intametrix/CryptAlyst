@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -33,7 +32,7 @@ type symbolDetail struct {
 }
 
 func (s *Server) handleSymbol(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" || len(symbol) > 24 {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return

@@ -66,18 +66,18 @@ func (s *Server) handleConfigs(w http.ResponseWriter, r *http.Request) {
 		for _, c := range all {
 			list = append(list, c)
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "configs": list})
+		ok(w, map[string]any{"configs": list})
 		return
 	case http.MethodDelete:
-		sym := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+		sym := paramSymbol(r)
 		delete(all, sym)
 		_ = persistConfigs(all)
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted": sym})
+		ok(w, map[string]any{"deleted": sym})
 		return
 	case http.MethodPost:
-		sym := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+		sym := paramSymbol(r)
 		if sym == "" {
-			writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "symbol required"})
+			fail(w, "symbol required")
 			return
 		}
 		cfg := savedConfig{
@@ -92,15 +92,15 @@ func (s *Server) handleConfigs(w http.ResponseWriter, r *http.Request) {
 			cfg.Interval = "4h"
 		}
 		if cfg.Method == "" {
-			writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "method required"})
+			fail(w, "method required")
 			return
 		}
 		all[sym] = cfg
 		if err := persistConfigs(all); err != nil {
-			writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+			fail(w, err.Error())
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "config": cfg})
+		ok(w, map[string]any{"config": cfg})
 		return
 	}
 	http.Error(w, "unsupported method", http.StatusMethodNotAllowed)

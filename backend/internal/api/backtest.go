@@ -55,15 +55,12 @@ func pathFor(method string, bars []binance.Kline, horizon int) ([]float64, bool)
 
 // handleBacktest walks a window and returns every forecast against its outcome.
 func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "1h"
-	}
+	interval := paramInterval(r, "1h")
 	horizon := queryInt(r, "horizon", 24)
 	if horizon < 1 || horizon > 720 {
 		horizon = 24
@@ -91,7 +88,7 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 	if s.deps.Market == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
+		fail(w, "market client unavailable")
 		return
 	}
 	bars, err := s.barsFor(ctx, symbol, interval, barsWanted+horizon+60)
@@ -105,7 +102,7 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 		minBars = 18 + horizon
 	}
 	if err != nil || len(bars) < minBars {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars for a backtest"})
+		fail(w, "not enough bars for a backtest")
 		return
 	}
 
@@ -135,7 +132,7 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 	}
 	last := len(bars) - horizon
 	if last <= start {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "window too short"})
+		fail(w, "window too short")
 		return
 	}
 
@@ -187,7 +184,7 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 		minPoints = 6
 	}
 	if n < minPoints {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "backtest produced too few points"})
+		fail(w, "backtest produced too few points")
 		return
 	}
 	mean /= float64(n)
@@ -311,15 +308,12 @@ func walkBacktest(bars []binance.Kline, method string, horizon, lookback int) (p
 // handleOptimizeBacktest ranks candidate models and parameters by backtest, so
 // the choice of model is evidence rather than preference.
 func (s *Server) handleOptimizeBacktest(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "1h"
-	}
+	interval := paramInterval(r, "1h")
 	horizon := queryInt(r, "horizon", 24)
 	barsWanted := queryInt(r, "bars", 240)
 	if barsWanted < 100 {
@@ -332,12 +326,12 @@ func (s *Server) handleOptimizeBacktest(w http.ResponseWriter, r *http.Request) 
 	ctx, cancel := context.WithTimeout(r.Context(), 180*time.Second)
 	defer cancel()
 	if s.deps.Market == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
+		fail(w, "market client unavailable")
 		return
 	}
 	bars, err := s.barsFor(ctx, symbol, interval, barsWanted+horizon+60)
 	if err != nil || len(bars) < 140+horizon {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars to optimise"})
+		fail(w, "not enough bars to optimise")
 		return
 	}
 

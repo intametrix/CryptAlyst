@@ -38,15 +38,12 @@ func intervalMS(interval string) int64 {
 }
 
 func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "4h"
-	}
+	interval := paramInterval(r, "4h")
 	method := strings.TrimSpace(r.URL.Query().Get("method"))
 	if method == "" {
 		method = "vwap"
@@ -60,18 +57,18 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 	if s.deps.Market == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
+		fail(w, "market client unavailable")
 		return
 	}
 	bars, err := s.barsFor(ctx, symbol, interval, 700)
 	if err != nil || len(bars) < 120 {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars"})
+		fail(w, "not enough bars")
 		return
 	}
 
 	path, ok := pathForLookback(method, bars[:], horizon, lookback)
 	if !ok || len(path) != horizon {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "model could not produce a forward path"})
+		fail(w, "model could not produce a forward path")
 		return
 	}
 

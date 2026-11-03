@@ -188,7 +188,7 @@ func parseFloat(s string) float64 {
 
 // handleFeatures exposes the raw series, so the UI can show what the model sees.
 func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
@@ -199,7 +199,7 @@ func (s *Server) handleFeatures(w http.ResponseWriter, r *http.Request) {
 
 	pts, err := s.fetchFeatures(ctx, symbol, interval)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error(), "points": []FeaturePoint{}})
+		failStatus(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	limit := queryInt(r, "limit", 200)

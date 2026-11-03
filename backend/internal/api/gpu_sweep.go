@@ -29,15 +29,12 @@ var (
 // the UI starts the work and polls a cheap status endpoint instead of waiting on
 // one long request. In async mode nothing is fetched before the id is returned.
 func (s *Server) handleGPUSweep(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "1h"
-	}
+	interval := paramInterval(r, "1h")
 	horizon := queryInt(r, "horizon", 12)
 	bars := queryInt(r, "bars", 900)
 	lookbacks := parseLookbacks(r)
@@ -71,7 +68,7 @@ func (s *Server) handleGPUSweep(w http.ResponseWriter, r *http.Request) {
 			sweepJobs[id] = out
 			sweepMu.Unlock()
 		}()
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "id": id})
+		ok(w, map[string]any{"id": id})
 		return
 	}
 
@@ -79,12 +76,12 @@ func (s *Server) handleGPUSweep(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	payload, err := s.sweepPayload(ctx, symbol, interval, horizon, bars, lookbacks, gridMode(r))
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		fail(w, err.Error())
 		return
 	}
 	res, err := s.sweepOnAgent(ctx, payload)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		fail(w, err.Error())
 		return
 	}
 	res["symbol"] = symbol
@@ -258,7 +255,7 @@ func (s *Server) handleGPUSweepStatus(w http.ResponseWriter, r *http.Request) {
 	res, ok := sweepJobs[id]
 	sweepMu.Unlock()
 	if !ok {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "unknown sweep id"})
+		fail(w, "unknown sweep id")
 		return
 	}
 	writeJSON(w, http.StatusOK, res)

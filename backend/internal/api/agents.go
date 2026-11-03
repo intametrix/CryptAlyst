@@ -181,7 +181,7 @@ func (s *Server) handleAgentsHeartbeat(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "unknown agent"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	ok(w, nil)
 }
 
 // remoteIP extracts the source IP from a request's RemoteAddr ("IP:port").

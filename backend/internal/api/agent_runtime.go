@@ -27,8 +27,7 @@ import (
 
 // handleAgentPython reports the interpreter/runtime situation on an agent.
 func (s *Server) handleAgentPython(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodGet) {
 		return
 	}
 	target := strings.TrimRight(r.URL.Query().Get("agent"), "/")
@@ -38,7 +37,7 @@ func (s *Server) handleAgentPython(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if target == "" {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "no live agents"})
+		failStatus(w, http.StatusServiceUnavailable, "no live agents")
 		return
 	}
 
@@ -54,7 +53,7 @@ func (s *Server) handleAgentPython(w http.ResponseWriter, r *http.Request) {
 	raw, _ := json.Marshal(body)
 	resp, err := http.Post(target+"/jobs", "application/json", bytes.NewReader(raw))
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})
+		failStatus(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	var created map[string]any
@@ -85,13 +84,12 @@ func (s *Server) handleAgentPython(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, result)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "probe did not finish in time", "agent": target})
+	failAgent(w, "probe did not finish in time", target)
 }
 
 // handleAgentInstall installs python packages on an agent.
 func (s *Server) handleAgentInstall(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var body struct {
@@ -128,7 +126,7 @@ func (s *Server) handleAgentInstall(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if target == "" {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "no live agents"})
+		failStatus(w, http.StatusServiceUnavailable, "no live agents")
 		return
 	}
 
@@ -158,7 +156,7 @@ func (s *Server) handleAgentInstall(w http.ResponseWriter, r *http.Request) {
 	raw, _ := json.Marshal(job)
 	resp, err := http.Post(target+"/jobs", "application/json", bytes.NewReader(raw))
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "error": err.Error()})
+		failStatus(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	var created map[string]any
@@ -166,7 +164,7 @@ func (s *Server) handleAgentInstall(w http.ResponseWriter, r *http.Request) {
 	resp.Body.Close()
 	jobID, _ := created["id"].(string)
 	if jobID == "" {
-		writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "error": "agent rejected the job", "agent": target})
+		failAgentStatus(w, http.StatusBadGateway, "agent rejected the job", target)
 		return
 	}
 
@@ -204,8 +202,7 @@ func (s *Server) handleAgentInstall(w http.ResponseWriter, r *http.Request) {
 // a blank page becomes a readable stack trace in the server log instead of a
 // mystery.
 func (s *Server) handleClientError(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var body struct {
@@ -229,5 +226,5 @@ func (s *Server) handleClientError(w http.ResponseWriter, r *http.Request) {
 		Where: body.Where, Message: body.Message, Href: body.Href,
 		Component: strings.TrimSpace(strings.Split(body.Component, "\n")[0]),
 	})
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	ok(w, nil)
 }

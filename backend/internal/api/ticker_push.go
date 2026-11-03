@@ -152,7 +152,7 @@ func (p *TickerPump) Stats() (flushes, ticks int64) {
 }
 
 func (p *Server) handleTicker(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" || p.deps.TickerPump == nil {
 		writeJSON(w, http.StatusOK, map[string]any{"type": "ticker", "rows": []any{}})
 		return

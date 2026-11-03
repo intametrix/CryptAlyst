@@ -11,7 +11,6 @@ package api
 
 import (
 	"net/http"
-	"strings"
 	"time"
 
 	"pumpdump/backend/internal/flow"
@@ -32,7 +31,7 @@ func (s *Server) handleFlowHistory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "flow engine unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" || len(symbol) > 24 {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return

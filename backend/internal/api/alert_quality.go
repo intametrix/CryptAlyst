@@ -260,7 +260,7 @@ func (s *Server) handleAlertQuality(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(allPreds) == 0 {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "cross-validation produced no folds"})
+		fail(w, "cross-validation produced no folds")
 		return
 	}
 

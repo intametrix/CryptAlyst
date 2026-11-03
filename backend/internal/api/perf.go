@@ -3,7 +3,6 @@ package api
 import (
 	"net/http"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -19,7 +18,7 @@ func (s *Server) handlePerf(w http.ResponseWriter, r *http.Request) {
 	}
 	s.deps.Perf.Refresh(time.Now().UnixMilli())
 
-	if symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol"))); symbol != "" {
+	if symbol := paramSymbol(r); symbol != "" {
 		stats, ok := s.deps.Perf.Symbol(symbol)
 		adjustment := s.deps.Perf.Adjust(symbol)
 		writeJSON(w, http.StatusOK, map[string]any{

@@ -86,18 +86,15 @@ func (s *Server) handleAutoConfig(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 240*time.Second)
 	defer cancel()
 	if s.deps.Market == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
+		fail(w, "market client unavailable")
 		return
 	}
 	raw := strings.TrimSpace(r.URL.Query().Get("symbols"))
 	if raw == "" {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "symbols required"})
+		fail(w, "symbols required")
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "1h"
-	}
+	interval := paramInterval(r, "1h")
 	horizon := queryInt(r, "horizon", 24)
 
 	symbols := strings.Split(raw, ",")
@@ -124,5 +121,5 @@ func (s *Server) handleAutoConfig(w http.ResponseWriter, r *http.Request) {
 			"r2": p.r2, "mape_pct": p.mape,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "interval": interval, "picks": out})
+	ok(w, map[string]any{"interval": interval, "picks": out})
 }

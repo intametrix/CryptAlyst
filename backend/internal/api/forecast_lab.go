@@ -20,7 +20,7 @@ func (s *Server) handleForecastLab(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "market client unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" || len(symbol) > 24 {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return

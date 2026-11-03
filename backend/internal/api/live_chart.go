@@ -16,15 +16,12 @@ import (
 // the last one, and the uncertainty cone around it are served together, small
 // enough to poll every few seconds.
 func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "1h"
-	}
+	interval := paramInterval(r, "1h")
 	method := strings.TrimSpace(r.URL.Query().Get("method"))
 	if method == "" {
 		if cfg, ok := savedFor(symbol); ok {
@@ -46,7 +43,7 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	if s.deps.Market == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
+		fail(w, "market client unavailable")
 		return
 	}
 	// The store answers first; five and thirty second frames are aggregated there.
@@ -58,7 +55,7 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 		minBars = 25
 	}
 	if err != nil || len(bars) < minBars {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars"})
+		fail(w, "not enough bars")
 		return
 	}
 
@@ -70,7 +67,7 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 	// The forecast past the newest candle.
 	path, ok := pathForLookback(method, bars, horizon, lookback)
 	if !ok || len(path) != horizon {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "model produced no path"})
+		fail(w, "model produced no path")
 		return
 	}
 

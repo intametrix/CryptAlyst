@@ -4,7 +4,6 @@ import (
 	"context"
 	"math"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -156,15 +155,12 @@ func fitLogistic(rows [][]float64, labels []float64, iters int, lr, l2 float64) 
 // handleContinuation exposes the probability, its calibration, and the honest
 // out-of-sample score next to the base rate it has to beat.
 func (s *Server) handleContinuation(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	if symbol == "" {
 		http.Error(w, "symbol required", http.StatusBadRequest)
 		return
 	}
-	interval := r.URL.Query().Get("interval")
-	if interval == "" {
-		interval = "1h"
-	}
+	interval := paramInterval(r, "1h")
 	horizon := queryInt(r, "horizon", 24)
 	if horizon < 1 || horizon > 720 {
 		horizon = 24
@@ -203,7 +199,7 @@ func (s *Server) handleContinuation(w http.ResponseWriter, r *http.Request) {
 
 	rows, labels := buildContinuationRows(closes, times, feats, horizon, threshold)
 	if len(rows) < 100 {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough labelled bars to fit"})
+		fail(w, "not enough labelled bars to fit")
 		return
 	}
 
@@ -215,7 +211,7 @@ func (s *Server) handleContinuation(w http.ResponseWriter, r *http.Request) {
 	}
 	model := fitLogistic(x[:split], labels[:split], 600, 0.35, 0.001)
 	if model == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "fit failed"})
+		fail(w, "fit failed")
 		return
 	}
 

@@ -153,7 +153,7 @@ func (s *Server) handleKlines(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "market client unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	interval := strings.TrimSpace(r.URL.Query().Get("interval"))
 	if interval == "" {
 		interval = "1h"

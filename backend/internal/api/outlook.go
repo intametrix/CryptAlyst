@@ -24,7 +24,7 @@ func (s *Server) handleOutlook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "outlook unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	interval := strings.TrimSpace(r.URL.Query().Get("interval"))
 	if interval == "" {
 		interval = "1m"

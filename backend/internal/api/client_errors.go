@@ -44,7 +44,7 @@ func (s *Server) handleClientErrors(w http.ResponseWriter, r *http.Request) {
 	clientErrMu.Lock()
 	list := append([]clientError(nil), clientErrs...)
 	clientErrMu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "errors": list, "count": len(list)})
+	ok(w, map[string]any{"errors": list, "count": len(list)})
 }
 
 // handleClientErrorsClear empties the list once the reader has seen it.
@@ -52,5 +52,5 @@ func (s *Server) handleClientErrorsClear(w http.ResponseWriter, r *http.Request)
 	clientErrMu.Lock()
 	clientErrs = nil
 	clientErrMu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	ok(w, nil)
 }

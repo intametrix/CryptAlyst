@@ -184,15 +184,15 @@ func toKlines(in []storedBar) []binance.Kline {
 
 // handleDataLoad ingests bars for a symbol and interval.
 func (s *Server) handleDataLoad(w http.ResponseWriter, r *http.Request) {
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	interval := strings.TrimSpace(r.URL.Query().Get("interval"))
 	bars := queryInt(r, "bars", 1000)
 	if symbol == "" || interval == "" {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "symbol and interval required"})
+		fail(w, "symbol and interval required")
 		return
 	}
 	if s.deps.Market == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
+		fail(w, "market client unavailable")
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*1e9)
@@ -215,7 +215,7 @@ func (s *Server) handleDataLoad(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDataInventory(w http.ResponseWriter, r *http.Request) {
 	entries, err := os.ReadDir(storeRoot)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "datasets": []any{}, "root": storeRoot})
+		ok(w, map[string]any{"datasets": []any{}, "root": storeRoot})
 		return
 	}
 	type ds struct {
@@ -255,7 +255,7 @@ func (s *Server) handleDataInventory(w http.ResponseWriter, r *http.Request) {
 		}
 		return out[i].Interval < out[j].Interval
 	})
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "root": storeRoot, "datasets": out})
+	ok(w, map[string]any{"root": storeRoot, "datasets": out})
 }
 
 // handleDataPrune removes a dataset from the store.
@@ -263,24 +263,23 @@ func (s *Server) handleDataInventory(w http.ResponseWriter, r *http.Request) {
 // The inventory is a list of things that cost disk and time to fetch; a list you
 // cannot shorten is a hoard. Deleting is explicit and per dataset.
 func (s *Server) handleDataPrune(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		http.Error(w, "POST or DELETE only", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost, http.MethodDelete) {
 		return
 	}
-	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	symbol := paramSymbol(r)
 	interval := strings.TrimSpace(r.URL.Query().Get("interval"))
 	if symbol == "" || interval == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "symbol and interval required"})
+		failStatus(w, http.StatusBadRequest, "symbol and interval required")
 		return
 	}
 	path := storePath(symbol, interval)
 	if err := os.Remove(path); err != nil {
 		if os.IsNotExist(err) {
-			writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not stored"})
+			fail(w, "not stored")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		fail(w, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "symbol": symbol, "interval": interval})
+	ok(w, map[string]any{"symbol": symbol, "interval": interval})
 }

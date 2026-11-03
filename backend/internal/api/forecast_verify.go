@@ -21,8 +21,7 @@ import (
 // forecast from the split point, and the reply carries the forecast, the real
 // closes and the error for each step.
 func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var body struct {
@@ -227,7 +226,7 @@ func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
 			ctx, candidates, method, series, trainCloses, horizon)
 	}
 	if ferr != "" {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": ferr})
+		fail(w, ferr)
 		return
 	}
 	forecast := forecastPts
@@ -287,7 +286,7 @@ func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
 	}
 	n := float64(len(perPoint))
 	if n == 0 {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "nothing to grade", "agent": target})
+		failAgent(w, "nothing to grade", target)
 		return
 	}
 
@@ -525,8 +524,7 @@ func toPoints(rows []binance.Kline) []forecastlab.Point {
 // winning parameters. The search itself lives on the agent because it is dense
 // array work and the accelerator is there, not here.
 func (s *Server) handleForecastOptimize(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	var body struct {
@@ -585,7 +583,7 @@ func (s *Server) handleForecastOptimize(w http.ResponseWriter, r *http.Request) 
 		candidates = append([]string{strings.TrimRight(body.Agent, "/")}, candidates...)
 	}
 	if len(candidates) == 0 {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"ok": false, "error": "no live agents"})
+		failStatus(w, http.StatusServiceUnavailable, "no live agents")
 		return
 	}
 
@@ -650,7 +648,7 @@ func (s *Server) handleForecastOptimize(w http.ResponseWriter, r *http.Request) 
 			status, _ := st["status"].(string)
 			if status == "failed" {
 				msg, _ := st["error"].(string)
-				writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": msg, "agent": cand})
+				failAgent(w, msg, cand)
 				return
 			}
 			if status != "done" {
@@ -666,7 +664,7 @@ func (s *Server) handleForecastOptimize(w http.ResponseWriter, r *http.Request) 
 		}
 		lastErr = "agent did not finish the optimisation in time"
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": lastErr})
+	fail(w, lastErr)
 }
 
 // fanPayload packages the bootstrap fan, or nil when there is too little history

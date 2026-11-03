@@ -738,8 +738,7 @@ func (s *Server) handleRegime(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleScreenRefresh(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	go func() {
@@ -767,8 +766,7 @@ func (s *Server) handleSurvey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSurveyRefresh(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+	if !requireMethod(w, r, http.MethodPost) {
 		return
 	}
 	if s.deps.Survey == nil {
