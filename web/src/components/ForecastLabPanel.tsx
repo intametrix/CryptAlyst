@@ -4,13 +4,13 @@ import { num, text } from '../format';
 import { useSelection } from '../selection';
 import { useResource } from '../hooks/useResource';
 import { useForecastOverlay } from '../hooks/useForecastOverlay';
-import { TickerPicker } from './TickerPicker';
 import { priceLabel } from './ForecastChart';
 import { ModelRanking, type ModelScore } from './ModelRanking';
 import { ForecastCompare } from './ForecastCompare';
 import { ForecastChartSection } from './ForecastChartSection';
 import { HistorySection } from './HistorySection';
 import { ModelPicker, type PickableModel, type PickedScore } from './ModelPicker';
+import { ParameterBar } from './ParameterBar';
 import { BacktestPanel } from './BacktestPanel';
 import { LiveEnginePanel } from './LiveEnginePanel';
 import { DataPanel } from './DataPanel';
@@ -520,86 +520,30 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
         title="Parameters"
         meta={<span>{trainLabel(trainHours, interval)} → {horizonLabel(hours, interval)}</span>}
       >
-        <div className="fl-controls">
-          <span className="fl-ctl fl-ctl-ticker">
-            ticker
-            <TickerPicker value={sym} onPick={commit} />
-          </span>
-          <button
-            type="button"
-            className="btn fl-run-btn"
-            onClick={() =>
-              setRequest({ symbol: sym, interval, horizon, lookback, method, token: Date.now() })
-            }
-          >
-            ▶ train + forecast
-          </button>
-          <button
-            type="button"
-            className="btn fl-opt-btn"
-            disabled={optimizing}
-            onClick={() => void runOptimizer()}
-          >
-            {optimizing ? 'optimising…' : '⚙ optimise on GPU'}
-          </button>
-          <label className="fl-ctl">
-            interval
-            <select value={interval} onChange={(e) => selectInterval(e.target.value as Interval)}>
-              {(['1m', '5m', '15m', '1h', '4h', '1d'] as Interval[]).map((iv) => (
-                <option key={iv} value={iv}>{iv}</option>
-              ))}
-            </select>
-          </label>
-          <label className="fl-ctl">
-            forecast ahead
-            <select value={hours} onChange={(e) => setHours(Number(e.target.value))}>
-              {HORIZON_CHOICES.map((c) => (
-                <option key={c.hours} value={c.hours}>{c.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="fl-ctl">
-            train over
-            <select value={trainHours} onChange={(e) => setTrainHours(Number(e.target.value))}>
-              {TRAIN_CHOICES.map((c) => (
-                <option key={c.hours} value={c.hours}>{c.label}</option>
-              ))}
-            </select>
-          </label>
-          <label className="fl-ctl">
-            windows
-            <input
-              type="number"
-              min={2}
-              max={30}
-              value={windows}
-              onChange={(e) => setWindows(Math.max(2, Math.min(30, Number(e.target.value) || 2)))}
-            />
-          </label>
-          <label className="fl-ctl">
-            iterations
-            <input
-              type="number"
-              min={1}
-              max={500}
-              step={10}
-              value={iterations}
-              onChange={(e) => setIterations(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
-            />
-          </label>
-          {graded.result && (
-            <button
-              type="button"
-              className="fl-jump"
-              onClick={() => chartRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
-            >
-              ✓ forecast ready — show chart
-            </button>
-          )}
-          <span className={`fl-live${live ? ' is-live' : ''}`}>
-            {request === null ? 'idle' : live ? 'live · 5s' : 'offline'}
-          </span>
-        </div>
+        <ParameterBar
+          symbol={sym}
+          onPickSymbol={commit}
+          interval={interval}
+          onPickInterval={selectInterval}
+          hours={hours}
+          horizonChoices={HORIZON_CHOICES}
+          onPickHorizon={setHours}
+          trainHours={trainHours}
+          trainChoices={TRAIN_CHOICES}
+          onPickTrain={setTrainHours}
+          windows={windows}
+          onWindows={setWindows}
+          iterations={iterations}
+          onIterations={setIterations}
+          optimizing={optimizing}
+          onRun={() => setRequest({ symbol: sym, interval, horizon, lookback, method, token: Date.now() })}
+          onOptimize={() => void runOptimizer()}
+          forecastReady={graded.result !== null && graded.result !== undefined}
+          onShowChart={() => chartRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+          liveText={request === null ? 'idle' : live ? 'live · 5s' : 'offline'}
+          isLive={live}
+          requestPending={false}
+        />
       </Section>
 
       <Section id="fl.live" title="Live engine" meta={<span>GPU workers · always running</span>}>
