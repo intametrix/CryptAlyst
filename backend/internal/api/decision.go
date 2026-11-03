@@ -128,13 +128,34 @@ func (s *Server) handleEnvelopeChain(w http.ResponseWriter, r *http.Request) {
 		fail(w, "cid required")
 		return
 	}
-	var chain []envelope.Packet
+	// Build the journal index once, then walk BACK along parent links. Walking
+	// forward answered "what came from this", which is not the question: a reviewer
+	// asking "why did we buy?" wants the inputs, not the consequences.
+	byCID := map[string]envelope.Packet{}
+	var children []envelope.Packet
 	_ = envelope.Replay(envelopeJournalPath(), nil, func(p envelope.Packet) {
-		if p.Meta.CID == cid || p.Meta.ParentCID == cid {
-			chain = append(chain, p)
+		if p.Meta.CID != "" {
+			byCID[p.Meta.CID] = p
+		}
+		if p.Meta.ParentCID == cid {
+			children = append(children, p)
 		}
 	})
-	ok(w, map[string]any{"cid": cid, "packets": chain, "count": len(chain)})
+
+	var lineage []envelope.Packet
+	seen := map[string]bool{}
+	for cur := cid; cur != "" && !seen[cur]; {
+		seen[cur] = true
+		p, okp := byCID[cur]
+		if !okp {
+			break
+		}
+		lineage = append(lineage, p)
+		cur = p.Meta.ParentCID
+	}
+	ok(w, map[string]any{
+		"cid": cid, "packets": lineage, "count": len(lineage), "children": children,
+	})
 }
 
 // decide is the rule, kept pure so it can be tested without a journal, a network or
