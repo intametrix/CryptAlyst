@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { usePersistentSize } from '../hooks/usePersistentSize';
 
 /**
  * A container every chart lives in.
@@ -25,6 +26,15 @@ export function ChartPanel({
   const [full, setFull] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
+  // Charts take the space they are given. The height is remembered per chart, so
+  // a reader who wants the projection taller is not made to fix it every reload.
+  const { ref: sizeRef, size, startDragY, dragging } = usePersistentSize({
+    id: `chart.${title.replace(/\s+/g, '-')}`,
+    axis: 'y',
+    minHeight: 160,
+    maxHeight: 1200,
+  });
+
   useEffect(() => {
     if (!full) return undefined;
     const onKey = (e: KeyboardEvent) => {
@@ -41,7 +51,14 @@ export function ChartPanel({
   }, [full]);
 
   return (
-    <div className={`cp${full ? ' is-full' : ''}${open ? '' : ' is-min'}`} ref={wrapRef}>
+    <div
+      className={`cp${full ? ' is-full' : ''}${open ? '' : ' is-min'}${dragging ? ' dragging' : ''}`}
+      ref={(el) => {
+        wrapRef.current = el;
+        sizeRef.current = el;
+      }}
+      style={!full && open && size.h > 0 ? { height: `${size.h}px` } : undefined}
+    >
       <div className="cp-head">
         <button
           type="button"
@@ -81,6 +98,18 @@ export function ChartPanel({
         </span>
       </div>
       {open && <div className="cp-body">{children}</div>}
+      {open && !full && (
+        <button
+          type="button"
+          className="cp-grip"
+          aria-label="resize this chart"
+          title="drag to resize this chart"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            startDragY(e);
+          }}
+        />
+      )}
     </div>
   );
 }

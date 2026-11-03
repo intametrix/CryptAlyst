@@ -5418,3 +5418,25 @@ table {
 .ceb-where { font-size: 10.5px; color: #ff9aa6; font-weight: 600; }
 .ceb-msg { font-size: 11px; color: #c3d2e0; overflow-wrap: anywhere; }
 .ceb-clear { align-self: flex-end; min-width: 0; min-height: 0; padding: 2px 8px; font-size: 10.5px; color: #9fb4c8; background: #16283a; border: 1px solid #294054; border-radius: 6px; cursor: pointer; }
+
+/* type filter on the leaderboard, and a header that stays put while it scrolls */
+.flow-kind { display: inline-flex; gap: 3px; margin-left: auto; min-width: 0; min-height: 0; }
+.flow-kind-btn { min-width: 0; min-height: 0; padding: 1px 7px; font-size: 9.5px; letter-spacing: .04em; color: #8fa3b8; background: #101c28; border: 1px solid #294054; border-radius: 999px; cursor: pointer; }
+.flow-kind-btn.is-on { color: #0a1118; background: #6fd0ff; border-color: #6fd0ff; font-weight: 700; }
+.flow-kind-btn:disabled { opacity: .45; cursor: default; }
+.flow-head { position: sticky; top: 0; z-index: 2; background: #0b131a; }
+
+/* data age, so a frozen panel cannot pass for a live one */
+.freshness { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: #8fa3b8; min-width: 0; min-height: 0; }
+.freshness-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.freshness.is-fresh { color: #6ade9f; }
+.freshness.is-warn { color: #ffc35c; }
+.freshness.is-stale { color: #ff7b8a; }
+
+/* a chart you can size, with the height remembered */
+.cp { position: relative; }
+.cp.dragging { border-color: #6fd0ff; }
+.cp-body { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.cp-grip { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 56px; height: 8px; padding: 0; background: none; border: 0; cursor: ns-resize; }
+.cp-grip::after { content: ''; display: block; width: 34px; height: 2px; margin: 3px auto 0; border-radius: 2px; background: #2b4459; transition: background .15s ease; }
+.cp-grip:hover::after { background: #6fd0ff; }

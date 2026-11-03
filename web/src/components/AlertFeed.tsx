@@ -8,6 +8,7 @@ import { alertKey, prettifyEnum } from '../types';
 import { AlertCard } from './AlertCard';
 import { useContinuationPoller } from '../hooks/useContinuation';
 import { ResizablePanel } from './Panel';
+import { Freshness } from './Freshness';
 
 interface Props {
   /** Newest first, already capped by the hook. Frozen while `paused`. */
@@ -77,6 +78,7 @@ export const AlertFeed = memo(function AlertFeed({
         <section className="panel alert-feed">
           <div className="panel-head">
             <h2>live alerts</h2>
+            <Freshness atMs={alerts.length > 0 ? (alerts[0]?.ts_ms ?? null) : null} label="alerts" staleAfterS={20} warnAfterS={8} />
             <span
               className="count num"
               title={`showing ${visible.length} · ${alerts.length} held in memory (cap ${maxAlerts}, newest first)`}

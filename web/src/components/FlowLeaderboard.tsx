@@ -7,7 +7,8 @@ import { useSelection } from '../selection';
 import type { FlowMsg, FlowRow, ToolsMsg } from '../types';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
-import { typeLabel, useInstrumentType } from '../hooks/useInstrumentTypes';
+import { Freshness } from './Freshness';
+import { typeLabel, typeOf, useInstrumentType, useInstrumentTypesReady } from '../hooks/useInstrumentTypes';
 
 interface Props {
   flow: FlowMsg | null;
@@ -76,7 +77,15 @@ const InstrumentChip = memo(function InstrumentChip({ symbol }: { symbol: string
 export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Props) {
   const selection = useSelection();
   const { ref, size } = useElementSize<HTMLDivElement>();
-  const raw = Array.isArray(flow?.rows) ? flow.rows.slice(0, MAX_ROWS) : [];
+  // 13: perps and spot behave differently (funding, liquidation, borrow), so the
+  // list can be narrowed to one kind.
+  const [kind, setKind] = useState<'all' | 'perp' | 'spot'>('all');
+  const isReady = useInstrumentTypesReady();
+  const kindOf = (sym: string): string => typeLabel(typeOf(sym));
+
+  const all = Array.isArray(flow?.rows) ? flow.rows : [];
+  const raw = (kind === 'all' ? all : all.filter((r) => kindOf(String(r.symbol ?? '')) === (kind === 'perp' ? 'PERP' : 'SPOT')))
+    .slice(0, MAX_ROWS);
 
   // Sorting is per snapshot and local: the leaderboard is a live list, and a
   // reader who asked for "biggest move first" wants that order kept as the data
@@ -149,6 +158,22 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
             <h2>flow leaderboard</h2>
             <span className="sub num" title={`flow.ts_ms ${isoUtc(flow?.ts_ms)} · window ${int(flow?.window_sec)}s`}>
               {int(flow?.window_sec)}s · {clock(flow?.ts_ms)}
+            </span>
+            <Freshness atMs={flow?.ts_ms} label="flow" staleAfterS={8} warnAfterS={3} />
+            <span className="flow-kind" role="group" aria-label="filter by instrument type">
+              {(['all', 'perp', 'spot'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={`flow-kind-btn${kind === k ? ' is-on' : ''}`}
+                  aria-pressed={kind === k}
+                  disabled={!isReady && k !== 'all'}
+                  onClick={() => setKind(k)}
+                  title={k === 'all' ? 'every instrument' : `${k === 'perp' ? 'perpetuals' : 'spot'} only`}
+                >
+                  {k.toUpperCase()}
+                </button>
+              ))}
             </span>
           </div>
 

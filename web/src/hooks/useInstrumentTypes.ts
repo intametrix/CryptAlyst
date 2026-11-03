@@ -48,6 +48,11 @@ export function typeLabel(cls: string | undefined): string {
   return '';
 }
 
+/** The raw class for a symbol, for filtering rather than rendering. */
+export function typeOf(symbol: string): string | undefined {
+  return cache.get(symbol)?.cls;
+}
+
 /** The type for one symbol, subscribed to the shared map. */
 export function useInstrumentType(symbol: string | null | undefined): InstrumentType | undefined {
   const [, force] = useState(0);

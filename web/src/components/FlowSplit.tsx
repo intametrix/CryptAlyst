@@ -6,6 +6,7 @@ import type { FlowMsg, FlowSplitMsg, FlowSplitRow, ToolsMsg } from '../types';
 import { EventGlyph } from './EventGlyph';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
+import { Freshness } from './Freshness';
 
 /** One side of the split. */
 interface SideProps {
@@ -186,6 +187,7 @@ export const FlowSplit = memo(function FlowSplit({ flow, tools, onDrill }: FlowS
                   ? `scanned ${text(split?.symbols)} · dropped ${text(split?.dropped_thin)} thin / ${text(split?.dropped_stale)} stale / ${text(split?.dropped_quiet)} quiet`
                   : 'waiting for the first split…'}
               </span>
+              <Freshness atMs={split?.ts_ms ?? null} label="split" staleAfterS={8} warnAfterS={3} />
             </div>
             <div className="actions">
               <Tooltip

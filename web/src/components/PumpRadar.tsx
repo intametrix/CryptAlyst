@@ -5,6 +5,7 @@ import { useElementSize } from '../hooks/useElementSize';
 import { useSelection } from '../selection';
 import type { FlowMsg } from '../types';
 import { ResizablePanel } from './Panel';
+import { Freshness } from './Freshness';
 
 interface Props {
   flow: FlowMsg | null;
@@ -42,6 +43,7 @@ export const PumpRadar = memo(function PumpRadar({ flow }: Props) {
             <span className="sub num" title={`flow.ts_ms ${isoUtc(flow?.ts_ms)} · window ${int(flow?.window_sec)}s`}>
               {int(flow?.window_sec)}s · {clock(flow?.ts_ms)} · top {rows.length}
             </span>
+            <Freshness atMs={flow?.ts_ms} label="radar" staleAfterS={8} warnAfterS={3} />
           </div>
           {rows.length === 0 ? (
             <p className="empty">no flow snapshot yet — it pushes every second once the stream is live</p>
