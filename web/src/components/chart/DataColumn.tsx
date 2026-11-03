@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { duration, int, multiple, num, pct, px, share, text } from '../../format';
 import type { Outlook } from '../../hooks/useOutlook';
 import type { AlignedSeries, LatestSummary } from '../../chartData';
-import type { ToolsMsg } from '../../types';
 import { Tooltip } from '../Tooltip';
+import { useTools } from '../../glossaryContext';
 
 export interface DataColumnProps {
   /** The `latest` bag summarised (close, trend, volume ratio, donchian 20). */
@@ -12,7 +12,6 @@ export interface DataColumnProps {
   overlaySeries: readonly AlignedSeries[];
   /** The /api/outlook payload, polled by the popup. */
   outlook: Outlook | null;
-  tools: ToolsMsg | null;
 }
 
 interface Row {
@@ -29,7 +28,8 @@ interface Row {
  * (levels, ETA, forecast and model basis — ported from OutlookStrip's data
  * sources, rendered as rows).
  */
-export function DataColumn({ latest, overlaySeries, outlook, tools }: DataColumnProps) {
+export function DataColumn({ latest, overlaySeries, outlook }: Omit<DataColumnProps, 'tools'>) {
+  const tools = useTools();
   const seriesMap = useMemo(() => new Map(overlaySeries.map((s) => [s.key, s.data])), [overlaySeries]);
 
   const lastOf = (key: string): number | null => {

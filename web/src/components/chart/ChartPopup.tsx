@@ -603,7 +603,7 @@ export function ChartPopup({
             />
           </div>
           <div className="cp-col-data">
-            <DataColumn latest={latest} overlaySeries={overlaySeries} outlook={outlook} tools={tools} />
+            <DataColumn latest={latest} overlaySeries={overlaySeries} outlook={outlook} />
           </div>
         </div>
       </BottomPanel>
