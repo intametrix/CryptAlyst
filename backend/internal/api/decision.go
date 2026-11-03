@@ -49,16 +49,35 @@ func (s *Server) handleDecision(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 
 	// Replay the journal — the same call a backtest makes.
+	//
+	// The newest packet overall is not the right input: generations count per
+	// (topic, key), so a one-minute forecast and a four-hour forecast for the same
+	// symbol share a counter. A decision must be made from the newest forecast *for
+	// the interval asked for*, ordered by when it was computed.
+	wanted := q.interval("")
 	var latest *envelope.Packet
+	var latestInterval string
 	path := envelopeJournalPath()
 	_ = envelope.Replay(path, func(p envelope.Packet) bool {
 		return p.Meta.Topic == "intel.forecast" && p.Meta.Key == symbol
 	}, func(p envelope.Packet) {
+		var head struct {
+			Interval string `json:"interval"`
+		}
+		_ = p.Decode(&head)
+		if wanted != "" && head.Interval != wanted {
+			return
+		}
 		cp := p
-		if latest == nil || cp.Meta.Generation >= latest.Meta.Generation {
+		iv := head.Interval
+		if latest == nil ||
+			cp.Meta.ComputedAt > latest.Meta.ComputedAt ||
+			(cp.Meta.ComputedAt == latest.Meta.ComputedAt && cp.Meta.Generation >= latest.Meta.Generation) {
 			latest = &cp
+			latestInterval = iv
 		}
 	})
+	_ = latestInterval
 
 	if latest == nil {
 		fail(w, "no recorded forecast for "+symbol+" — call /api/forecast/live-chart first")

@@ -81,3 +81,47 @@ func TestChainWalksAncestors(t *testing.T) {
 		t.Fatalf("lineage does not reach the forecast it came from: %s", rec.Body.String())
 	}
 }
+
+// A decision must be made from the forecast for the interval it was asked about.
+// Generations count per (topic, key), so a 1m and a 4h forecast for one symbol share a
+// counter — picking "the newest packet" chose whichever was published last, whatever
+// its frame.
+func TestDecisionSelectsTheRequestedInterval(t *testing.T) {
+	s := newTestServer(t, &mocks.Market{})
+
+	publish := func(interval string, price, target float64) {
+		body := map[string]any{
+			"interval": interval, "method": "test", "horizon": 6,
+			"actual": []float64{price}, "forecast": []float64{target},
+		}
+		pkt, _, err := envelope.Run(
+			envelope.Request{Topic: "intel.forecast", Key: "BTCUSDT", Producer: "forecast"},
+			time.Now(), func() (any, error) { return body, nil })
+		if err != nil {
+			t.Fatal(err)
+		}
+		recordEnvelope(pkt)
+	}
+	// The one-minute forecast is flat; the four-hour one projects a 1% fall.
+	publish("1m", 1000, 1000)
+	publish("4h", 1000, 990)
+
+	rec := httptest.NewRecorder()
+	s.Routes().ServeHTTP(rec, httptest.NewRequest("GET", "/api/decision?symbol=BTCUSDT&interval=4h", nil))
+	var out struct {
+		Verdict struct {
+			Interval string  `json:"interval"`
+			Verdict  string  `json:"verdict"`
+			EdgePct  float64 `json:"edge_pct"`
+		} `json:"verdict"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("%v — %s", err, rec.Body.String())
+	}
+	if out.Verdict.Interval != "4h" {
+		t.Fatalf("decision used the %q forecast, want 4h: %s", out.Verdict.Interval, rec.Body.String())
+	}
+	if out.Verdict.Verdict != "sell" {
+		t.Fatalf("verdict = %q, want sell for a 1%% projected fall: %s", out.Verdict.Verdict, rec.Body.String())
+	}
+}
