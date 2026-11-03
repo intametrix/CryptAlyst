@@ -1,0 +1,25 @@
+flowchart LR
+  IN["a producer<br/>wants to publish"] --> A{"<b>authority</b><br/>may this producer<br/>write this topic?"}
+  A -->|no| RF["<b>refusal packet</b><br/>on system.error"]
+  A -->|yes| K{"<b>keying</b><br/>is the topic keyed<br/>by a symbol?"}
+  K -->|no| RF
+  K -->|yes| C["<b>correlation</b><br/>mint a cid<br/>chain the parent"]
+  C --> F{"<b>freshness</b><br/>is computed_at<br/>within the topic TTL?"}
+  F -->|no| RF
+  F -->|yes| OP["<b>operator</b><br/>the payload is computed"]
+  OP --> T["<b>transformer</b><br/>normalise, never alter"]
+  T --> OUT["packet published"]
+  class IN c_neutral;
+  class A,K,F c_control;
+  class C c_intel;
+  class OP,T c_model;
+  class RF c_risk;
+  class OUT c_market;
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

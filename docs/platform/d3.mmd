@@ -1,0 +1,39 @@
+flowchart LR
+  subgraph MKT["market — live only, never recorded"]
+    m1["market.price"]:::c_market
+    m2["market.depth"]:::c_market
+    m3["market.candle"]:::c_market
+    m4["market.mini24h · ticks"]:::c_market
+  end
+  subgraph INT["intel — computed readings, each with refs"]
+    i1["intel.signal · intel.flow"]:::c_intel
+    i2["intel.ta · intel.movers"]:::c_intel
+    i3["intel.forecast"]:::c_intel
+    i4["intel.forecast.outcome · intel.backtest"]:::c_intel
+    i5["alert.pumpdump"]:::c_intel
+  end
+  subgraph MOD["model — the trading trail"]
+    d1["model.decision"]:::c_model
+    d2["model.fill"]:::c_model
+    d3["model.pnl"]:::c_model
+  end
+  subgraph RSK["risk"]
+    r1["risk.state · risk.refusal"]:::c_risk
+  end
+  subgraph CTL["control and system"]
+    c1["control.engine"]:::c_control
+    c2["system.error"]:::c_neutral
+  end
+  MKT --> INT
+  INT --> MOD
+  MOD --> RSK
+  RSK --> MOD
+  CTL -.-> INT
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

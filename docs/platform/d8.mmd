@@ -1,0 +1,19 @@
+flowchart LR
+  J["journal<br/>every intel.forecast ever recorded"]:::c_store
+  J --> RP["<b>replay</b><br/>same decide() the live path uses"]
+  RP --> D["verdict per packet<br/>buy · sell · none"]
+  D --> G["grade at anchor + horizon<br/>close from the bar store"]
+  G --> O["outcomes<br/>hit rate · mean edge · correctness"]
+  O --> R["the scorecard<br/>164 graded · 7 sells · 0 buys · 157 declines"]
+  class RP c_control;
+  class D c_model;
+  class G,O c_intel;
+  class R c_neutral;
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
