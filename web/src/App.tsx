@@ -640,7 +640,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
 
         <MoversPanel tools={tools} />
 
-        <ModelsPanel tools={tools} />
+        <ModelsPanel />
 
         <TurtlePanel tools={tools} />
         </>

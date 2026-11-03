@@ -2,7 +2,7 @@ import { useResource } from '../hooks/useResource';
 import { memo, useMemo } from 'react';
 import { clock, int, num } from '../format';
 import { useSelection } from '../selection';
-import type { ToolsMsg } from '../types';
+import { useTools } from '../glossaryContext';
 import { ChartIcon } from './ChartIcon';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
@@ -37,7 +37,8 @@ interface ModelSignal {
   detail: { buy_ratio?: number | null; taker_quote?: number | null } | null;
 }
 
-export const ModelsPanel = memo(function ModelsPanel({ tools }: { tools: ToolsMsg | null }) {
+export const ModelsPanel = memo(function ModelsPanel() {
+  const tools = useTools();
   const selection = useSelection();
 
   // One resource per endpoint; both poll on the same three-second beat.
