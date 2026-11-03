@@ -50,6 +50,7 @@ export const AlertFeed = memo(function AlertFeed({
   useContinuationPoller();
   const [onlySelected, setOnlySelected] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [dense, setDense] = useState(false);
   // One clock for the whole feed: cards are memoised on it, so a tick re-renders
   // the feed's cards but not the surrounding panels, and unmounted cost is zero.
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -87,6 +88,15 @@ export const AlertFeed = memo(function AlertFeed({
               {onlySelected ? ` / ${int(alerts.length)}` : ''}
             </span>
             <div className="actions">
+              <button
+                type="button"
+                className={`btn${dense ? ' is-armed' : ''}`}
+                aria-pressed={dense}
+                onClick={() => setDense((v) => !v)}
+                title={dense ? 'show the full cards again' : 'compact cards — twice as many fit on screen'}
+              >
+                {dense ? 'detail' : 'compact'}
+              </button>
               <button
                 type="button"
                 className={`chip${onlySelected ? ' on' : ''}`}
@@ -173,6 +183,7 @@ export const AlertFeed = memo(function AlertFeed({
                 return (
                   <AlertCard
                     key={key}
+                    dense={dense}
                     alert={a}
                     flash={flashIds.has(key)}
                     tools={tools}

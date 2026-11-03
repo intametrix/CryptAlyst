@@ -31,6 +31,8 @@ interface Props {
   alert: AlertMsg;
   /** True for events that arrived live — plays the one-shot flash animation. */
   flash: boolean;
+  /** Compact layout: fewer rows per card, so twice as many fit on screen. */
+  dense?: boolean;
   tools: ToolsMsg | null;
   /**
    * Shared clock (seconds precision) so "snapshot 42s ago" ticks without each
@@ -186,6 +188,7 @@ const InstrumentChip = memo(function InstrumentChip({ symbol }: { symbol: string
 export const AlertCard = memo(function AlertCard({
   alert,
   flash,
+  dense = false,
   tools,
   nowMs,
   onFilterToggle,
@@ -215,7 +218,7 @@ export const AlertCard = memo(function AlertCard({
   return (
     <article
       ref={ref}
-      className={`alert-card${flash ? ' flash' : ''}${selected ? ' selected' : ''}${open ? ' open' : ''}${narrow ? ' narrow' : ''}`}
+      className={`alert-card${dense ? ' is-dense' : ''}${flash ? ' flash' : ''}${selected ? ' selected' : ''}${open ? ' open' : ''}${narrow ? ' narrow' : ''}`}
       data-event-id={alert.event_id ?? undefined}
     >
       <div className="alert-top">
