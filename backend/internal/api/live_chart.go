@@ -46,16 +46,13 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 		fail(w, "market client unavailable")
 		return
 	}
-	// The store answers first; five and thirty second frames are aggregated there.
-	bars, err := s.barsFor(ctx, symbol, interval, history+120)
-	// A thirty-second view can only reach as far back as the one-second feed
-	// allows, which is several minutes — not the 120 bars the wider intervals get.
-	minBars := 60
-	if interval == "30s" {
-		minBars = 25
-	}
-	if err != nil || len(bars) < minBars {
-		fail(w, "not enough bars")
+	// One policy for every frame: the store answers first, the minimum and the
+	// sub-minute aggregation both come from intervalPolicies.
+	bars, err := s.barsForRequest(ctx, forecastRequest{
+		Symbol: symbol, Interval: interval, Horizon: horizon, Bars: history, Method: method,
+	}, 120)
+	if err != nil {
+		fail(w, err.Error())
 		return
 	}
 

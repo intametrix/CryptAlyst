@@ -91,18 +91,12 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 		fail(w, "market client unavailable")
 		return
 	}
-	bars, err := s.barsFor(ctx, symbol, interval, barsWanted+horizon+60)
-	// Sub-minute frames can only reach a few minutes back, so the minimum has to
-	// scale with the frame rather than assume an hour of history.
-	minBars := 120 + horizon
-	if interval == "5s" {
-		minBars = 40 + horizon
-	}
-	if interval == "30s" {
-		minBars = 18 + horizon
-	}
-	if err != nil || len(bars) < minBars {
-		fail(w, "not enough bars for a backtest")
+	bars, err := s.barsForRequest(ctx, forecastRequest{
+		Symbol: symbol, Interval: interval, Horizon: horizon, Bars: barsWanted,
+		Lookback: lookback, FromMS: fromMS, ToMS: toMS, Method: method,
+	}, 60)
+	if err != nil {
+		fail(w, err.Error())
 		return
 	}
 
