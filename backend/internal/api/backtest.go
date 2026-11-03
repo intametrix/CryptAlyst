@@ -104,8 +104,17 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
 		return
 	}
-	bars, err := s.deps.Market.Klines(ctx, symbol, interval, barsWanted+horizon+60)
-	if err != nil || len(bars) < 120+horizon {
+	bars, err := s.barsFor(ctx, symbol, interval, barsWanted+horizon+60)
+	// Sub-minute frames can only reach a few minutes back, so the minimum has to
+	// scale with the frame rather than assume an hour of history.
+	minBars := 120 + horizon
+	if interval == "5s" {
+		minBars = 40 + horizon
+	}
+	if interval == "30s" {
+		minBars = 18 + horizon
+	}
+	if err != nil || len(bars) < minBars {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars for a backtest"})
 		return
 	}
@@ -128,6 +137,12 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 
 	// Start far enough in that every model has its warm-up history.
 	start := 60
+	if len(bars)-horizon-10 < start {
+		start = len(bars) - horizon - 10
+	}
+	if start < 5 {
+		start = 5
+	}
 	last := len(bars) - horizon
 	if last <= start {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "window too short"})
@@ -175,7 +190,13 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 		mean += a
 		n++
 	}
-	if n < 20 {
+	// A thirty-second frame only holds a few minutes, so demanding twenty points
+	// would make the frame permanently untestable. Grade what exists.
+	minPoints := 20
+	if interval == "5s" || interval == "30s" {
+		minPoints = 6
+	}
+	if n < minPoints {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "backtest produced too few points"})
 		return
 	}

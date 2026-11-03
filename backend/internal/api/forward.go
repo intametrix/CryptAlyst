@@ -17,6 +17,10 @@ import (
 
 func intervalMS(interval string) int64 {
 	switch interval {
+	case "5s":
+		return 5_000
+	case "30s":
+		return 30_000
 	case "1m":
 		return 60_000
 	case "5m":

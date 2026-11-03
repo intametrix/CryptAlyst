@@ -28,6 +28,10 @@ const PAD = { top: 18, right: 14, bottom: 26, left: 64 };
  * claims to predict.
  */
 export function LiveForecastChart({ symbol, interval }: { symbol: string; interval: string }) {
+  // The engine optimises on 4h candles; the live chart is about the next few
+  // seconds, so it has its own time-frame switch.
+  const [tf, setTf] = useState<string>('5s');
+  const active = tf === '' ? interval : tf;
   const [data, setData] = useState<Payload | null>(null);
   const [live, setLive] = useState<{ price: number; at: number } | null>(null);
   const [tick, setTick] = useState(0);
@@ -39,7 +43,7 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
     let alive = true;
     const load = async () => {
       try {
-        const q = new URLSearchParams({ symbol, interval, horizon: '6', bars: '90' });
+        const q = new URLSearchParams({ symbol, interval: active, horizon: '6', bars: '60' });
         const r = await fetch(`/api/forecast/live-chart?${q.toString()}`, { headers: { accept: 'application/json' } });
         const body = (await r.json()) as Payload;
         if (alive && body.ok) setData(body);
@@ -70,7 +74,7 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
       window.clearInterval(pricePoll);
       window.clearInterval(clock);
     };
-  }, [symbol, interval]);
+  }, [symbol, active]);
 
   const geom = useMemo(() => {
     if (data === null) return null;
@@ -79,11 +83,13 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
     const h = data.forecast.length;
     if (n < 5 || h === 0) return null;
 
-    // Scale the forecast so it starts at the live price rather than the last
-    // close: the projection should move with the market, not lag a bar behind.
+    // The forecast is NOT rescaled by the live price. Doing that moved every
+    // point of the projection on every tick, which read as the chart jumping
+    // while the shape was unchanged. The projection stays where the model put
+    // it; only the price tip moves, and the join line between them bends.
     const lastClose = data.last_close || base[n - 1] || 1;
     const livePrice = live?.price ?? lastClose;
-    const ratio = lastClose > 0 ? livePrice / lastClose : 1;
+    const ratio = 1;
     const forecast = data.forecast.map((v) => v * ratio);
     const actual = [...base, livePrice];
 
@@ -150,6 +156,23 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
           <>
             <span className="lfc-sym">{data.symbol}</span>
             <span className="lfc-meta">{data.method} · lb{data.lookback} · {data.interval}</span>
+            <span className="lfc-tf">
+              {[
+                { k: '5s', label: '5s' },
+                { k: '30s', label: '30s' },
+                { k: '1m', label: '1m' },
+                { k: '', label: 'engine' },
+              ].map((o) => (
+                <button
+                  key={o.label}
+                  type="button"
+                  className={`lfc-tf-btn${(o.k === '' && tf === '') || o.k === tf ? ' is-on' : ''}`}
+                  onClick={() => setTf(o.k)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </span>
             <span className="lfc-meta">last {(live?.price ?? data.last_close).toPrecision(6)}</span>
             {live !== null && (
               <span className="lfc-live">

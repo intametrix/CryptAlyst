@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+
 	"net/http"
+	"pumpdump/backend/internal/binance"
 	"strings"
 	"time"
 )
@@ -47,8 +49,15 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "market client unavailable"})
 		return
 	}
-	bars, err := s.deps.Market.Klines(ctx, symbol, interval, history+120)
-	if err != nil || len(bars) < 120 {
+	// The store answers first; five and thirty second frames are aggregated there.
+	bars, err := s.barsFor(ctx, symbol, interval, history+120)
+	// A thirty-second view can only reach as far back as the one-second feed
+	// allows, which is several minutes — not the 120 bars the wider intervals get.
+	minBars := 60
+	if interval == "30s" {
+		minBars = 25
+	}
+	if err != nil || len(bars) < minBars {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not enough bars"})
 		return
 	}
@@ -71,7 +80,10 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 	step := intervalMS(interval)
 	last := bars[len(bars)-1]
 	shown := history
-	if shown > len(bars) {
+	if shown > len(bars)-horizon {
+		shown = len(bars) - horizon
+	}
+	if shown < 20 {
 		shown = len(bars)
 	}
 	times := make([]int64, shown)
@@ -99,4 +111,39 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 		out["fan"] = map[string]any{"p10": p10, "p50": p50, "p90": p90}
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// aggregateBars rolls one-second bars into wider buckets, so the live chart can
+// offer five and thirty second candles that the feed itself does not publish.
+func aggregateBars(in []binance.Kline, stepMS int64) []binance.Kline {
+	if stepMS <= 0 || len(in) == 0 {
+		return in
+	}
+	out := make([]binance.Kline, 0, len(in)/int(stepMS/1000)+1)
+	var cur *binance.Kline
+	for _, b := range in {
+		bucket := (b.OpenTime / stepMS) * stepMS
+		if cur == nil || cur.OpenTime != bucket {
+			if cur != nil {
+				out = append(out, *cur)
+			}
+			nb := b
+			nb.OpenTime = bucket
+			cur = &nb
+			continue
+		}
+		if b.High > cur.High {
+			cur.High = b.High
+		}
+		if b.Low < cur.Low {
+			cur.Low = b.Low
+		}
+		cur.Close = b.Close
+		cur.Volume += b.Volume
+		cur.CloseTime = b.CloseTime
+	}
+	if cur != nil {
+		out = append(out, *cur)
+	}
+	return out
 }

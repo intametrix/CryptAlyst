@@ -6,6 +6,7 @@ import { TickerPicker } from './TickerPicker';
 import { ForecastChart, priceLabel } from './ForecastChart';
 import { BacktestPanel } from './BacktestPanel';
 import { LiveEnginePanel } from './LiveEnginePanel';
+import { DataPanel } from './DataPanel';
 import { Section } from './Section';
 import { useEffect as useFx, useRef as useRf } from 'react';
 import type { Interval } from '../types';
@@ -594,6 +595,10 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
 
       <Section id="fl.live" title="Live engine" meta={<span>GPU workers · always running</span>}>
         <LiveEnginePanel />
+      </Section>
+
+      <Section id="fl.data" title="Data" meta={<span>what is stored locally</span>}>
+        <DataPanel symbol={sym} />
       </Section>
 
       <Section id="fl.history" title="History" meta={<span>{coverage ? `${coverage.bars} bars` : '—'}</span>}>

@@ -111,7 +111,7 @@ export function LiveEnginePanel() {
   const series = current?.series?.[0];
 
   return (
-    <div className={`le${full ? ' is-full' : ''}`}>
+    <div className={`le${full ? ' is-full' : ''}${states.length === 0 ? ' is-warming' : ''}`}>
       <div className="le-bar">
         <span className="le-live"><i />LIVE ENGINE</span>
         <span className="le-meta">{data?.parallel_workers ?? 0} parallel GPU workers · {data?.interval ?? '4h'} candles</span>

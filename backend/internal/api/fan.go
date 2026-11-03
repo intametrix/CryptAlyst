@@ -16,7 +16,10 @@ import (
 // The seed is fixed so the same history always yields the same fan.
 func bootstrapFan(closes []float64, horizon int, sims int) (p10, p25, p50, p75, p90 []float64, ok bool) {
 	n := len(closes)
-	if n < 60 || horizon < 2 {
+	// A thirty-second frame only holds a few dozen bars. Refusing below sixty
+	// meant that view could never show a funnel at all, so the floor is what the
+	// resampling actually needs: enough returns to sample from.
+	if n < 12 || horizon < 2 {
 		return nil, nil, nil, nil, nil, false
 	}
 	if sims < 100 {
@@ -31,7 +34,7 @@ func bootstrapFan(closes []float64, horizon int, sims int) (p10, p25, p50, p75, 
 			}
 		}
 	}
-	if len(rets) < 40 {
+	if len(rets) < 8 {
 		return nil, nil, nil, nil, nil, false
 	}
 

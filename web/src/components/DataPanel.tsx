@@ -1,0 +1,113 @@
+import { useEffect, useState } from 'react';
+
+interface Dataset {
+  symbol: string; interval: string; bars: number;
+  from_ms: number; to_ms: number; bytes: number; file: string;
+}
+
+const INTERVALS = ['5s', '30s', '1m', '15m', '1h', '4h', '1d'];
+
+function when(ms: number): string {
+  if (!ms) return '—';
+  const d = new Date(ms);
+  return `${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { month: 'short' })} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function size(bytes: number): string {
+  if (bytes > 1 << 20) return `${(bytes / (1 << 20)).toFixed(1)} MB`;
+  if (bytes > 1 << 10) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+/**
+ * What data exists locally, and a way to add more.
+ *
+ * Every forecast used to re-download its history. This is the inventory of what
+ * has already been fetched — symbol, interval, how far back it reaches — so a
+ * gap is visible and only the gap gets loaded.
+ */
+export function DataPanel({ symbol }: { symbol: string }) {
+  const [rows, setRows] = useState<Dataset[]>([]);
+  const [root, setRoot] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [draft, setDraft] = useState(symbol);
+  const [interval, setInterval] = useState('1h');
+  const [note, setNote] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      const r = await fetch('/api/data/inventory', { headers: { accept: 'application/json' } });
+      const body = (await r.json()) as { datasets?: Dataset[]; root?: string };
+      setRows(body.datasets ?? []);
+      setRoot(body.root ?? '');
+    } catch {
+      /* keep the last view */
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    const id = window.setInterval(() => void load(), 15000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const ingest = async () => {
+    const sym = draft.trim().toUpperCase();
+    if (sym === '') return;
+    setBusy(sym + interval);
+    setNote(null);
+    try {
+      const q = new URLSearchParams({ symbol: sym, interval, bars: '1000' });
+      const r = await fetch(`/api/data/load?${q.toString()}`, { method: 'POST', headers: { accept: 'application/json' } });
+      const body = (await r.json()) as { ok: boolean; stored?: number; error?: string };
+      setNote(body.ok ? `${sym} ${interval}: ${body.stored ?? 0} bars in the store` : (body.error ?? 'load failed'));
+      await load();
+    } catch (e) {
+      setNote((e as Error).message);
+    }
+    setBusy(null);
+  };
+
+  const total = rows.reduce((n, r) => n + r.bytes, 0);
+
+  return (
+    <div className="dp">
+      <div className="dp-bar">
+        <span className="dp-label">DATA ON DISK</span>
+        <span className="dp-meta">{rows.length} datasets · {size(total)}</span>
+        <span className="dp-meta">{root}</span>
+      </div>
+
+      <div className="dp-load">
+        <input value={draft} onChange={(e) => setDraft(e.target.value.toUpperCase())} placeholder="symbol" aria-label="symbol to load" />
+        <select value={interval} onChange={(e) => setInterval(e.target.value)} aria-label="interval to load">
+          {INTERVALS.map((i) => <option key={i} value={i}>{i}</option>)}
+        </select>
+        <button type="button" onClick={() => void ingest()} disabled={busy !== null}>
+          {busy !== null ? 'loading…' : 'fetch 1000 bars'}
+        </button>
+        {note !== null && <span className="dp-note">{note}</span>}
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="fl-hint">nothing stored yet — fetch a symbol and interval above</p>
+      ) : (
+        <div className="dp-table">
+          <div className="dp-row dp-head">
+            <span>symbol</span><span>interval</span><span>bars</span><span>from</span><span>to</span><span>size</span>
+          </div>
+          {rows.map((r) => (
+            <div className="dp-row" key={`${r.symbol}-${r.interval}`}>
+              <span className="dp-sym">{r.symbol}</span>
+              <span>{r.interval}</span>
+              <span className="dp-num">{r.bars}</span>
+              <span>{when(r.from_ms)}</span>
+              <span>{when(r.to_ms)}</span>
+              <span className="dp-num">{size(r.bytes)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
