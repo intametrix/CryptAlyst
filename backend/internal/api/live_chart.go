@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"pumpdump/backend/internal/envelope"
 
 	"net/http"
 	"pumpdump/backend/internal/binance"
@@ -108,6 +109,24 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 	// single line with a shaded band around it.
 	if branches := samplePaths(closes, horizon, 12); len(branches) > 0 {
 		out["branches"] = branches
+	}
+	// Publish the projection as an intel.forecast envelope: the chart is a
+	// consumer of the envelope, and the packet is what gets recorded, so a
+	// forecast can be replayed and graded later.
+	req := envelope.Request{
+		Topic: "intel.forecast", Key: strings.ToUpper(symbol), Producer: "forecast",
+		Refs: []envelope.Ref{{
+			Topic: "market.candle", Key: strings.ToUpper(symbol),
+			Generation: envelope.Generation("market.candle", strings.ToUpper(symbol)),
+			AgeMS:      time.Since(time.UnixMilli(bars[len(bars)-1].OpenTime)).Milliseconds(),
+		}},
+	}
+	pkt, _, perr := envelope.Run(req, time.Now(), func() (any, error) { return out, nil })
+	if perr == nil {
+		out["cid"] = pkt.Meta.CID
+		out["generation"] = pkt.Meta.Generation
+		out["computed_at"] = pkt.Meta.ComputedAt
+		recordEnvelope(pkt)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
