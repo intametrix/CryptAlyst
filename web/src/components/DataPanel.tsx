@@ -1,5 +1,4 @@
-import { usePoll } from '../hooks/usePoll';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TickerPicker } from './TickerPicker';
 
 interface Dataset {
@@ -48,7 +47,11 @@ export function DataPanel({ symbol }: { symbol: string }) {
     }
   };
 
-  usePoll(load, 15000, { immediate: true });
+  useEffect(() => {
+    void load();
+    const id = window.setInterval(() => void load(), 15000);
+    return () => window.clearInterval(id);
+  }, []);
 
   const ingest = async () => {
     const sym = draft.trim().toUpperCase();
