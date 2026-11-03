@@ -598,7 +598,6 @@ export function ChartPopup({
               symbol={symbol}
               selected={selectedEvent}
               onSelect={setSelectedEvent}
-              tools={tools}
               canon={canon}
             />
           </div>

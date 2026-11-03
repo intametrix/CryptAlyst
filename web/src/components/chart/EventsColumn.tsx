@@ -1,9 +1,10 @@
 import { memo, useEffect, useMemo, useRef } from 'react';
 import { useNow } from '../../hooks/useNow';
+import { useTools } from '../../glossaryContext';
 import { clock, int, isoUtc, multiple, num, usd } from '../../format';
 import type { ChartMarker } from '../../chartData';
 import { prettifyEnum } from '../../types';
-import type { AlertMsg, ToolsMsg } from '../../types';
+import type { AlertMsg, } from '../../types';
 import { KindBadge, SeverityBadge } from '../Badges';
 import { EventGlyph } from '../EventGlyph';
 import { AlertCard } from '../AlertCard';
@@ -44,7 +45,6 @@ export interface EventsColumnProps {
   /** The shared selection — the same value the chart highlights. */
   selected: number | null;
   onSelect: (time: number | null) => void;
-  tools: ToolsMsg | null;
   /** The chart's own reason for a missing event, if any. */
   emptyNote?: string;
   /** The canonical palette, so the rows match the markers exactly. */
@@ -62,10 +62,10 @@ export const EventsColumn = memo(function EventsColumn({
   symbol,
   selected,
   onSelect,
-  tools,
   emptyNote,
   canon = null,
 }: EventsColumnProps) {
+  const tools = useTools();
   // The cards print relative times ("42s ago"), so the column owns the same
   // one-second clock the main feed shares with its cards.
   const nowMs = useNow();
