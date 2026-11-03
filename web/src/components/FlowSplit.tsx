@@ -3,6 +3,7 @@ import { useTools } from '../glossaryContext';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { multiple, num, pct, px, text, toNum, tone, usd } from '../format';
 import { useSelection } from '../selection';
+import { getJSON } from '../data/client';
 import type { FlowMsg, FlowSplitMsg, FlowSplitRow, ToolsMsg } from '../types';
 import { EventGlyph } from './EventGlyph';
 import { ResizablePanel } from './Panel';
@@ -147,14 +148,10 @@ export const FlowSplit = memo(function FlowSplit({ flow, onDrill }: Omit<FlowSpl
     const controller = new AbortController();
     void (async () => {
       try {
-        const res = await fetch('/api/flow?split=1&limit=25', {
-          headers: { accept: 'application/json' },
-          signal: controller.signal,
-        });
-        if (!res.ok) return;
-        if (!(res.headers.get('content-type') ?? '').toLowerCase().includes('json')) return;
-        const body: unknown = await res.json();
-        if (!cancelled && typeof body === 'object' && body !== null) setSeed(body as FlowSplitMsg);
+        // getJSON also refuses a body that is not JSON, which the SPA fallback would
+        // otherwise hand back as index.html.
+        const body = await getJSON<FlowSplitMsg>('/api/flow?split=1&limit=25', controller.signal);
+        if (!cancelled && typeof body === 'object' && body !== null) setSeed(body);
       } catch {
         // The stream is the primary source; a failed seed just leaves the panels
         // on their (explanatory) empty state.
