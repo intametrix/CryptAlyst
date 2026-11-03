@@ -1,4 +1,5 @@
-import { memo, useEffect, useState } from 'react';
+import { useResource } from '../hooks/useResource';
+import { memo, useMemo } from 'react';
 import { clock, int, num } from '../format';
 import { useSelection } from '../selection';
 import type { ToolsMsg } from '../types';
@@ -36,42 +37,21 @@ interface ModelSignal {
   detail: { buy_ratio?: number | null; taker_quote?: number | null } | null;
 }
 
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url, { headers: { accept: 'application/json' } });
-  if (!res.ok) throw new Error(`http ${res.status}`);
-  return res.json();
-}
-
 export const ModelsPanel = memo(function ModelsPanel({ tools }: { tools: ToolsMsg | null }) {
-  const [health, setHealth] = useState<ModelHealth[]>([]);
-  const [signals, setSignals] = useState<ModelSignal[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const selection = useSelection();
 
-  useEffect(() => {
-    let alive = true;
-    const tick = async () => {
-      try {
-        const [h, s] = await Promise.all([fetchJson('/api/models'), fetchJson('/api/models/signals')]);
-        if (!alive) return;
-        setHealth(((h as { models?: ModelHealth[] }).models ?? []).slice().sort((a, b) => b.signals - a.signals));
-        setSignals(
-          ((s as { signals?: ModelSignal[] }).signals ?? [])
-            .filter((sig) => sig.model === 'flow-imbalance')
-            .slice(0, 25),
-        );
-        setError(null);
-      } catch (e) {
-        if (alive) setError(String(e).slice(0, 80));
-      }
-    };
-    void tick();
-    const id = window.setInterval(() => void tick(), 3000);
-    return () => {
-      alive = false;
-      window.clearInterval(id);
-    };
-  }, []);
+  // One resource per endpoint; both poll on the same three-second beat.
+  const healthRes = useResource<{ models?: ModelHealth[] }>('/api/models', { pollMs: 3000 });
+  const signalsRes = useResource<{ signals?: ModelSignal[] }>('/api/models/signals', { pollMs: 3000 });
+  const health = useMemo(
+    () => (healthRes.data?.models ?? []).slice().sort((a, b) => b.signals - a.signals),
+    [healthRes.data],
+  );
+  const signals = useMemo(
+    () => (signalsRes.data?.signals ?? []).filter((sig) => sig.model === 'flow-imbalance').slice(0, 25),
+    [signalsRes.data],
+  );
+  const error = healthRes.error ?? signalsRes.error;
 
   return (
     <ResizablePanel id="models.panel" axis="y" minHeight={200} maxHeight={1200}>

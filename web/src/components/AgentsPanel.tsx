@@ -1,4 +1,6 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
+import { useResource } from '../hooks/useResource';
+import { useNow } from '../hooks/useNow';
 import { age, int, text } from '../format';
 import { isAgentActive } from '../agentStatus';
 import { useSelection } from '../selection';
@@ -158,32 +160,21 @@ function Badges({ items, tone }: { items: string[] | undefined; tone?: 'priv' })
 }
 
 export const AgentsPanel = memo(function AgentsPanel({ onOpenForecast }: { onOpenForecast?: () => void }) {
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [live, setLive] = useState(false);
+  // Agents and the clock come from the shared hooks: one poll, one timer.
+  const agentsRes = useResource<{ agents?: AgentInfo[] }>('/api/agents', { pollMs: 5000 });
+  const agents = useMemo(
+    () => (Array.isArray(agentsRes.data?.agents) ? (agentsRes.data?.agents ?? []) : []),
+    [agentsRes.data],
+  );
+  const live = agentsRes.error === null && agentsRes.data !== null;
   const selection = useSelection();
-  const [now, setNow] = useState(() => Date.now());
+  const now = useNow();
   const [selected, setSelected] = useState<AgentInfo | null>(null);
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [jobResult, setJobResult] = useState('');
   const [verify, setVerify] = useState<VerifyResult | null>(null);
   const [backtest, setBacktest] = useState<BacktestResult | null>(null);
   const [jobBusy, setJobBusy] = useState(false);
-
-  useEffect(() => {
-    let dead = false;
-    const tick = async () => {
-      try {
-        const res = await fetch('/api/agents', { headers: { accept: 'application/json' } });
-        if (!res.ok) { if (!dead) setLive(false); return; }
-        const body = (await res.json()) as { agents?: AgentInfo[] };
-        if (!dead) { setAgents(Array.isArray(body.agents) ? body.agents : []); setLive(true); }
-      } catch { if (!dead) setLive(false); }
-    };
-    void tick();
-    const poll = window.setInterval(() => void tick(), 5000);
-    const clock = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => { dead = true; window.clearInterval(poll); window.clearInterval(clock); };
-  }, []);
 
   // Only agents still beaconing are listed; a dead agent is not shown at all.
   const active = useMemo(() => agents.filter((a) => isAgentActive(a.last_seen_ms, now)), [agents, now]);

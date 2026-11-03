@@ -1,4 +1,5 @@
-import { memo, useEffect, useState } from 'react';
+import { memo } from 'react';
+import { useResource } from '../hooks/useResource';
 import { num, pct, px, usd } from '../format';
 import { useSelection } from '../selection';
 import type { ToolsMsg } from '../types';
@@ -25,16 +26,6 @@ interface MoversMsg {
   scanned: number;
   tradable: number;
   min_quote_volume: number;
-}
-
-async function fetchMovers(): Promise<MoversMsg | null> {
-  try {
-    const res = await fetch('/api/movers?limit=5', { headers: { accept: 'application/json' } });
-    if (!res.ok) return null;
-    return (await res.json()) as MoversMsg;
-  } catch {
-    return null;
-  }
 }
 
 function MoverRow({ m, tools }: { m: Mover; tools: ToolsMsg | null }) {
@@ -78,22 +69,8 @@ function MoverRow({ m, tools }: { m: Mover; tools: ToolsMsg | null }) {
  * +20% that is still AT its low reads differently from one pinned at its high.
  */
 export const MoversPanel = memo(function MoversPanel({ tools }: { tools: ToolsMsg | null }) {
-  const [movers, setMovers] = useState<MoversMsg | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    const tick = () => {
-      void fetchMovers().then((m) => {
-        if (alive) setMovers(m);
-      });
-    };
-    tick();
-    const id = window.setInterval(tick, 10_000);
-    return () => {
-      alive = false;
-      window.clearInterval(id);
-    };
-  }, []);
+  // One resource: load, poll and failure handled once.
+  const movers = useResource<MoversMsg>('/api/movers?limit=5', { pollMs: 10_000 }).data;
 
   const side = (rows: Mover[] | null | undefined, title: string) => (
     <section className="movers-side">
