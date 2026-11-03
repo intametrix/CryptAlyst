@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TickerPicker } from './TickerPicker';
+import { postAction, postJSON } from '../data/client';
 import { useResource } from '../hooks/useResource';
 
 interface Dataset {
@@ -46,9 +47,8 @@ export function DataPanel({ symbol }: { symbol: string }) {
     setNote(null);
     try {
       const q = new URLSearchParams({ symbol: sym, interval, bars: '1000' });
-      const r = await fetch(`/api/data/load?${q.toString()}`, { method: 'POST', headers: { accept: 'application/json' } });
-      const body = (await r.json()) as { ok: boolean; stored?: number; error?: string };
-      setNote(body.ok ? `${sym} ${interval}: ${body.stored ?? 0} bars in the store` : (body.error ?? 'load failed'));
+      const body = await postJSON<{ stored?: number; error?: string }>(`/api/data/load?${q.toString()}`);
+      setNote(`${sym} ${interval}: ${body.stored ?? 0} bars in the store`);
       inventory.reload();
     } catch (e) {
       setNote((e as Error).message);
@@ -104,9 +104,9 @@ export function DataPanel({ symbol }: { symbol: string }) {
                     return;
                   }
                   setArmed(null);
-                  void fetch(`/api/data/prune?symbol=${encodeURIComponent(r.symbol)}&interval=${encodeURIComponent(r.interval)}`, {
-                    method: 'POST',
-                  }).then(() => inventory.reload());
+                  void postAction(
+                    `/api/data/prune?symbol=${encodeURIComponent(r.symbol)}&interval=${encodeURIComponent(r.interval)}`,
+                  ).then(() => inventory.reload());
                 }}
               >
                 {armed === `${r.symbol}-${r.interval}` ? 'delete?' : '×'}
