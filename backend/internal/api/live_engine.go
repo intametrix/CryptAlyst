@@ -63,6 +63,7 @@ var engine = &liveEngine{
 }
 
 func (e *liveEngine) snapshot() map[string]any {
+	e.normalise()
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	out := make([]*liveState, 0, len(e.states))
@@ -263,11 +264,11 @@ func (e *liveEngine) setState(symbol, family string, index int) {
 	defer e.mu.Unlock()
 	st, ok := e.states[symbol]
 	if !ok {
-		st = &liveState{Symbol: symbol, History: []float64{}, PerModel: map[string]float64{}}
+		st = &liveState{Symbol: symbol, History: []float64{}, PerModel: map[string]float64{}, Trace: []tracePoint{}}
 		e.states[symbol] = st
 	}
 	st.Phase = family
-	st.Trace = nil
+	st.Trace = []tracePoint{}
 	st.PhaseIndex = index + 1
 	st.PhaseTotal = len(modelFamilies)
 	st.PhaseBest = st.PerModel[family]
@@ -331,5 +332,29 @@ func (e *liveEngine) pushTrace(symbol string, chunk []int, res map[string]any) {
 	st.Trace = append(st.Trace, tracePoint{Lookback: chunk[0], R2: best, MAPE: mape})
 	if len(st.Trace) > 60 {
 		st.Trace = st.Trace[len(st.Trace)-60:]
+	}
+}
+
+// normalise replaces nil slices with empty ones before serialising: a null array
+// reaching the browser is a crash, and it already cost one.
+func (e *liveEngine) normalise() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, st := range e.states {
+		if st.Trace == nil {
+			st.Trace = []tracePoint{}
+		}
+		if st.History == nil {
+			st.History = []float64{}
+		}
+		if st.PerModel == nil {
+			st.PerModel = map[string]float64{}
+		}
+		if st.Rows == nil {
+			st.Rows = []map[string]any{}
+		}
+		if st.Series == nil {
+			st.Series = []map[string]any{}
+		}
 	}
 }

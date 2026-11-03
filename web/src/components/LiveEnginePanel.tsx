@@ -170,7 +170,7 @@ export function LiveEnginePanel() {
             <div className="le-trace">
               <span className="le-trace-label">
                 optimising <b>{current.phase ?? '—'}</b> ({current.phase_index ?? 0}/{current.phase_total ?? 0})
-                {current.trace !== undefined && current.trace.length === 0 && <i className="le-trace-wait">starting…</i>}
+                {(current.trace ?? []).length === 0 && <i className="le-trace-wait">starting…</i>}
               </span>
               {(current.trace ?? []).map((t, i) => (
                 <span

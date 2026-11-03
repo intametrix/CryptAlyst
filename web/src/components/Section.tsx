@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ErrorBoundary } from '../ErrorBoundary';
 
 const STORE_PREFIX = 'cryptalas.section.';
 
@@ -137,7 +138,11 @@ export function Section({
             id={`sec-body-${id}`}
             style={height !== null ? { height: `${height}px`, overflowY: 'auto' } : undefined}
           >
-            {children}
+            {/* One panel failing must not blank the workspace, and the message
+                has to name the panel so the failure is actionable. */}
+            <ErrorBoundary where={id}>
+              {children}
+            </ErrorBoundary>
           </div>
           <div
             className="sec-grip"
