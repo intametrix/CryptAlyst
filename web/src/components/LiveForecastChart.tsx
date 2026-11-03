@@ -229,7 +229,7 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
             {geom.ticks.map((t) => (
               <g key={t.label + t.y.toFixed(0)}>
                 <line x1={PAD.left} y1={t.y} x2={width - PAD.right} y2={t.y} className="fchart-grid" />
-                <text x={PAD.left - 8} y={t.y + 3} textAnchor="end" className="fchart-axis-text">{t.label}</text>
+                <text x={width - PAD.right + 8} y={t.y + 3} textAnchor="start" className="fchart-axis-text">{t.label}</text>
               </g>
             ))}
             {geom.branches.map((pts, i) => (
