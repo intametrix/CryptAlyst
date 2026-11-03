@@ -5356,7 +5356,7 @@ table {
 .dp-load button:disabled { opacity: .6; cursor: progress; }
 .dp-note { font-size: var(--fs-body); color: #8ff0c2; }
 .dp-table { display: flex; flex-direction: column; gap: 2px; min-width: 0; min-height: 0; }
-.dp-row { display: grid; grid-template-columns: 110px 70px 70px 1fr 1fr 80px; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; font-size: var(--fs-body); color: #c3d2e0; min-width: 0; min-height: 0; }
+.dp-row { display: grid; grid-template-columns: 110px 70px 70px 1fr 1fr 80px 28px; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; font-size: var(--fs-body); color: #c3d2e0; min-width: 0; min-height: 0; }
 .dp-head { font-size: var(--fs-tiny); letter-spacing: .1em; text-transform: uppercase; color: #6b7f93; }
 .dp-sym { font-weight: 700; color: #dff2ff; }
 .dp-num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -5457,3 +5457,12 @@ table {
 .cp-grip { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); width: 56px; height: 8px; padding: 0; background: none; border: 0; cursor: ns-resize; }
 .cp-grip::after { content: ''; display: block; width: 34px; height: 2px; margin: 3px auto 0; border-radius: 2px; background: #2b4459; transition: background .15s ease; }
 .cp-grip:hover::after { background: #6fd0ff; }
+
+/* the keyboard cursor in the leaderboard */
+.flow-row.is-cursor { outline: 1px solid rgba(111, 208, 255, .45); outline-offset: -1px; border-radius: 6px; }
+.flow-rows:focus-visible { outline: 1px solid rgba(111, 208, 255, .5); outline-offset: 2px; border-radius: 6px; }
+
+/* deleting a stored dataset is explicit */
+.dp-del { min-width: 0; min-height: 0; width: 20px; padding: 0; font-size: var(--fs-small); line-height: 18px; color: #6b7f93; background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer; }
+.dp-del:hover { color: #ff9aa6; border-color: #7d2f3a; }
+.dp-del.is-armed { color: #ffc9d0; background: #2a1216; border-color: #7d2f3a; font-size: var(--fs-micro); }

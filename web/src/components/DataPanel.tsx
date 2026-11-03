@@ -34,6 +34,7 @@ export function DataPanel({ symbol }: { symbol: string }) {
   const [draft, setDraft] = useState(symbol);
   const [interval, setInterval] = useState('1h');
   const [note, setNote] = useState<string | null>(null);
+  const [armed, setArmed] = useState<string | null>(null);
 
   const load = async () => {
     try {
@@ -105,6 +106,25 @@ export function DataPanel({ symbol }: { symbol: string }) {
               <span>{when(r.from_ms)}</span>
               <span>{when(r.to_ms)}</span>
               <span className="dp-num">{size(r.bytes)}</span>
+              <button
+                type="button"
+                className={`dp-del${armed === `${r.symbol}-${r.interval}` ? ' is-armed' : ''}`}
+                title={`delete ${r.symbol} ${r.interval} from the store`}
+                onClick={() => {
+                  const id = `${r.symbol}-${r.interval}`;
+                  if (armed !== id) {
+                    setArmed(id);
+                    window.setTimeout(() => setArmed(null), 4000);
+                    return;
+                  }
+                  setArmed(null);
+                  void fetch(`/api/data/prune?symbol=${encodeURIComponent(r.symbol)}&interval=${encodeURIComponent(r.interval)}`, {
+                    method: 'POST',
+                  }).then(() => load());
+                }}
+              >
+                {armed === `${r.symbol}-${r.interval}` ? 'delete?' : '×'}
+              </button>
             </div>
           ))}
         </div>

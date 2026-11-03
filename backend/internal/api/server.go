@@ -271,6 +271,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/forecast/live-chart", s.handleLiveChart)
 	mux.HandleFunc("/api/data/load", s.handleDataLoad)
 	mux.HandleFunc("/api/data/inventory", s.handleDataInventory)
+	mux.HandleFunc("/api/data/prune", s.handleDataPrune)
 	mux.HandleFunc("/api/forecast/live-state", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, engine.snapshot(s))
 	})

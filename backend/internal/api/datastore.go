@@ -257,3 +257,30 @@ func (s *Server) handleDataInventory(w http.ResponseWriter, r *http.Request) {
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "root": storeRoot, "datasets": out})
 }
+
+// handleDataPrune removes a dataset from the store.
+//
+// The inventory is a list of things that cost disk and time to fetch; a list you
+// cannot shorten is a hoard. Deleting is explicit and per dataset.
+func (s *Server) handleDataPrune(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "POST or DELETE only", http.StatusMethodNotAllowed)
+		return
+	}
+	symbol := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("symbol")))
+	interval := strings.TrimSpace(r.URL.Query().Get("interval"))
+	if symbol == "" || interval == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"ok": false, "error": "symbol and interval required"})
+		return
+	}
+	path := storePath(symbol, interval)
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "not stored"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "symbol": symbol, "interval": interval})
+}

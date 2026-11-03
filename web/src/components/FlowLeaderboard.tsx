@@ -1,5 +1,5 @@
 import { ChartIcon } from './ChartIcon';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { clock, int, isoUtc, multiple, num, pct, px, share, toNum, tone, usd } from '../format';
 import { visibleFlowColumns } from '../columns';
 import { useElementSize } from '../hooks/useElementSize';
@@ -39,11 +39,32 @@ interface FlowSort {
   dir: 1 | -1;
 }
 
-let flowSort: FlowSort = { key: 'burst', dir: -1 };
+const FLOW_SORT_KEY = 'cryptalyst.flow.sort';
+
+function readFlowSort(): FlowSort {
+  try {
+    const raw = window.localStorage.getItem(FLOW_SORT_KEY);
+    if (raw === null) return { key: 'burst', dir: -1 };
+    const parsed = JSON.parse(raw) as { key?: string; dir?: number };
+    return {
+      key: typeof parsed.key === 'string' ? parsed.key : 'burst',
+      dir: parsed.dir === 1 ? 1 : -1,
+    };
+  } catch {
+    return { key: 'burst', dir: -1 };
+  }
+}
+
+let flowSort: FlowSort = readFlowSort();
 const flowSortListeners = new Set<() => void>();
 
 function setFlowSort(next: FlowSort): void {
   flowSort = next;
+  try {
+    window.localStorage.setItem(FLOW_SORT_KEY, JSON.stringify(next));
+  } catch {
+    /* a private window still sorts, it just forgets */
+  }
   for (const l of flowSortListeners) l();
 }
 
@@ -140,6 +161,32 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
 
   const rows = frozen ?? live;
 
+  // One row is reachable by keyboard: arrows move, Enter selects, C charts.
+  const [cursor, setCursor] = useState(-1);
+  const rowRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const onListKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (rows.length === 0) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setCursor((prev) => {
+        const next = e.key === 'ArrowDown' ? Math.min(prev + 1, rows.length - 1) : Math.max(prev - 1, 0);
+        rowRefs.current[next]?.focus();
+        return next;
+      });
+      return;
+    }
+    const row = rows[cursor];
+    if (row === undefined) return;
+    const sym = String(row.symbol ?? '');
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      selection.selectSymbol(sym);
+    } else if (e.key === 'c' || e.key === 'C') {
+      e.preventDefault();
+      selection.openChart(sym);
+    }
+  };
+
   // Bars are scaled against the strongest multiple in this snapshot.
   let peak = 1;
   for (const r of rows) {
@@ -185,6 +232,10 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
               ref={ref}
               onPointerEnter={() => setFrozen(live)}
               onPointerLeave={() => setFrozen(null)}
+              onKeyDown={onListKey}
+              tabIndex={0}
+              role="grid"
+              aria-label="flow leaderboard rows"
             >
               <div className="flow-row flow-head" style={{ gridTemplateColumns: template }} role="row">
                 {columns.map((c) => (
@@ -219,7 +270,10 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
                 return (
                   <div
                     key={symbol !== '' ? symbol : `row-${i}`}
-                    className={`flow-row${selected ? ' selected' : ''}${t === 'up' ? ' up' : t === 'down' ? ' down' : ''}`}
+                    ref={(el) => {
+                      rowRefs.current[i] = el;
+                    }}
+                    className={`flow-row${selected ? ' selected' : ''}${cursor === i ? ' is-cursor' : ''}${t === 'up' ? ' up' : t === 'down' ? ' down' : ''}`}
                     style={{ gridTemplateColumns: template }}
                   >
                     {columns.map((c) => {
