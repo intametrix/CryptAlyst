@@ -19,7 +19,6 @@ import (
 	"sync"
 	"time"
 
-	"pumpdump/backend/internal/binance"
 	"pumpdump/backend/internal/detect"
 	"pumpdump/backend/internal/events"
 	"pumpdump/backend/internal/flow"
@@ -217,7 +216,7 @@ type Deps struct {
 	// Market is the REST client used for chart klines. The survey and screen
 	// own their own clients, but the chart endpoint is ad-hoc per request, so
 	// it borrows this one.
-	Market *binance.Client
+	Market KlinesSource
 	Static fs.FS
 	// StaticDir, when set, serves the dashboard from disk instead of the
 	// embedded build. A UI change then needs only a browser refresh: no Go

@@ -52,7 +52,7 @@ func NewKlinesCache() *klinesCache {
 // cannot serialise every other symbol's chart behind it. Two simultaneous
 // misses for the same key may therefore both fetch; that is the right trade
 // here, since a duplicated request is cheaper than a global stall.
-func (c *klinesCache) Get(ctx context.Context, client *binance.Client, key klinesKey) ([]binance.Kline, error) {
+func (c *klinesCache) Get(ctx context.Context, client KlinesSource, key klinesKey) ([]binance.Kline, error) {
 	now := time.Now().UnixMilli()
 
 	c.mu.Lock()
