@@ -4,10 +4,10 @@ import { useSelection } from '../selection';
 import { useResource } from '../hooks/useResource';
 import { useForecastOverlay } from '../hooks/useForecastOverlay';
 import { TickerPicker } from './TickerPicker';
-import { ForecastChart, priceLabel } from './ForecastChart';
-import { ChartPanel } from './ChartPanel';
+import { priceLabel } from './ForecastChart';
 import { ModelRanking, type ModelScore } from './ModelRanking';
 import { ForecastCompare } from './ForecastCompare';
+import { ForecastChartSection } from './ForecastChartSection';
 import { BacktestPanel } from './BacktestPanel';
 import { LiveEnginePanel } from './LiveEnginePanel';
 import { DataPanel } from './DataPanel';
@@ -773,63 +773,16 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
       </Section>
 
       <Section id="fl.chart" title="Forecast chart" meta={<span>{graded.result ? `${graded.result.symbol} · ${runs.length} model${runs.length === 1 ? '' : 's'}` : 'not run'}</span>}>
-        {request === null ? (
-          <p className="fl-hint">
-            press <b>train + forecast</b> at the top — the chart appears here, in its own
-            collapsible panel, sized to the window.
-          </p>
-        ) : graded.error ? (
-          <p className="fl-hint">forecast unavailable — {graded.error}</p>
-        ) : gradedPoints.length === 0 ? (
-          <p className="fl-hint">waiting for the first forecast…</p>
-        ) : (
-          <ChartPanel title="forecast" meta={<span>{graded.result?.symbol ?? ''} · {runs.length} model{runs.length === 1 ? '' : 's'}</span>}>
-          <div className="fl-chart-wrap">
-            <ForecastChart
-              times={
-                graded.result?.anchor_t
-                  ? [graded.result.anchor_t, ...gradedPoints.map((p) => p.t)]
-                  : gradedPoints.map((p) => p.t)
-              }
-              actual={
-                graded.result?.anchor_price !== undefined
-                  ? [graded.result.anchor_price, ...gradedPoints.map((p) => p.actual)]
-                  : gradedPoints.map((p) => p.actual)
-              }
-              forecasts={runs.map((r) => ({
-                label: r.method,
-                values:
-                  graded.result?.anchor_price !== undefined
-                    ? [graded.result.anchor_price, ...r.points.map((p) => p.forecast)]
-                    : r.points.map((p) => p.forecast),
-                mape: r.mape,
-              }))}
-              sigma={showSigma ? errs?.rmse : undefined}
-              paths={
-                graded.result?.paths?.map((pth) =>
-                  graded.result?.anchor_price !== undefined ? [graded.result.anchor_price, ...pth] : pth,
-                ) ?? null
-              }
-              history={graded.result?.history}
-              historyTimes={graded.result?.history_times}
-              showWhiskers={showError}
-              fan={
-                !showFan
-                  ? null
-                  : graded.result?.fan && graded.result?.anchor_price !== undefined
-                  ? {
-                      p10: [graded.result.anchor_price, ...graded.result.fan.p10],
-                      p25: [graded.result.anchor_price, ...graded.result.fan.p25],
-                      p50: [graded.result.anchor_price, ...graded.result.fan.p50],
-                      p75: [graded.result.anchor_price, ...graded.result.fan.p75],
-                      p90: [graded.result.anchor_price, ...graded.result.fan.p90],
-                    }
-                  : graded.result?.fan ?? null
-              }
-            />
-          </div>
-          </ChartPanel>
-        )}
+        <ForecastChartSection
+          graded={graded}
+          points={gradedPoints}
+          runs={runs}
+          showFan={showFan}
+          showSigma={showSigma}
+          showError={showError}
+          rmse={errs?.rmse}
+          notRun="press train + forecast at the top — the chart appears here, in its own collapsible panel, sized to the window."
+        />
       </Section>
 
       <Section id="fl.forecast" title="Forecast" forceOpen={request?.token ?? 0} meta={<span>{request ? `${request.symbol} · ${request.method}` : 'not run'}</span>}>
