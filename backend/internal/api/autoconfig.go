@@ -105,7 +105,7 @@ func (s *Server) handleAutoConfig(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		bars, err := s.barsFor(ctx, sym, interval, 320)
-		if err != nil || len(bars) < 140+horizon {
+		if err != nil || len(bars) < policyFor(interval).minBarsFor(horizon) {
 			continue
 		}
 		m, lb, ok := s.autoConfig(sym, interval, bars, horizon)

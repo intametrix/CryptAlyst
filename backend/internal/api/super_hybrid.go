@@ -123,7 +123,7 @@ func validated(bars []binance.Kline, horizon, checks int) map[string]float64 {
 // superForecast blends the components by inverse squared error, then keeps the
 // blend only if it beats the best component on the same validation window.
 func superForecast(bars []binance.Kline, horizon int) ([]float64, bool) {
-	if len(bars) < 120+horizon {
+	if len(bars) < minBarsForHorizon(horizon) {
 		return nil, false
 	}
 	errs := validated(bars, horizon, 8)

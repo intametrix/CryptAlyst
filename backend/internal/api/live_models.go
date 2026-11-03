@@ -72,7 +72,7 @@ func scoreModel(method string, bars []binance.Kline, horizon, lookback, step int
 // returns a payload shaped like the agent's, so record() needs no special case.
 func (s *Server) localModelSweep(ctx context.Context, symbol, interval string) (map[string]any, error) {
 	bars, err := s.barsFor(ctx, symbol, interval, 900)
-	if err != nil || len(bars) < 90 {
+	if err != nil || len(bars) < policyFor(interval).minBarsFor(6) {
 		return nil, err
 	}
 	rows := []map[string]any{}

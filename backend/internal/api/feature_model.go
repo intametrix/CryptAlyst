@@ -115,7 +115,7 @@ func (s *Server) handleFeatureForecast(w http.ResponseWriter, r *http.Request) {
 	// length alone is what makes this work, and the same mistake was fixed in the
 	// continuation handler.
 	bars, _ := s.labSeries(ctx, symbol, interval, 400)
-	if len(bars) < horizon+80 {
+	if len(bars) < policyFor(interval).minBarsFor(horizon) {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"ok": false, "error": "not enough price history to grade features",
 			"bars": len(bars), "need": horizon + 80,

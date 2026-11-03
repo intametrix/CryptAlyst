@@ -61,7 +61,7 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bars, err := s.barsFor(ctx, symbol, interval, 700)
-	if err != nil || len(bars) < 120 {
+	if err != nil || len(bars) < policyFor(interval).minBarsFor(horizon) {
 		fail(w, "not enough bars")
 		return
 	}

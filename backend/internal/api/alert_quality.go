@@ -100,7 +100,7 @@ func (s *Server) buildAlertSamples(ctx context.Context, horizon int, threshold f
 	for _, sym := range symNames {
 		list := bySym[sym]
 		bars, _ := s.labSeries(ctx, sym, "1h", 400)
-		if len(bars) < horizon+60 {
+		if len(bars) < policyFor("1h").minBarsFor(horizon) {
 			continue
 		}
 		closes := make([]float64, len(bars))

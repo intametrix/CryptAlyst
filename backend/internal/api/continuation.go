@@ -177,7 +177,7 @@ func (s *Server) handleContinuation(w http.ResponseWriter, r *http.Request) {
 	// not whether it is usable — a cache hit returns 400 good bars with false.
 	// Judging usability by length alone is what makes this work at all.
 	bars, _ := s.labSeries(ctx, symbol, interval, 400)
-	if len(bars) < 120+horizon {
+	if len(bars) < policyFor(interval).minBarsFor(horizon) {
 		// Say what actually happened: a failed fetch and a short series are
 		// different problems and were indistinguishable before.
 		writeJSON(w, http.StatusOK, map[string]any{

@@ -324,7 +324,7 @@ func (s *Server) handleOptimizeBacktest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	bars, err := s.barsFor(ctx, symbol, interval, barsWanted+horizon+60)
-	if err != nil || len(bars) < 140+horizon {
+	if err != nil || len(bars) < policyFor(interval).minBarsFor(horizon) {
 		fail(w, "not enough bars to optimise")
 		return
 	}

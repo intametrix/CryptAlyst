@@ -216,7 +216,7 @@ func (s *Server) handleMLR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	bars, err := s.barsFor(ctx, symbol, interval, 500)
-	if err != nil || len(bars) < 120+horizon {
+	if err != nil || len(bars) < policyFor(interval).minBarsFor(horizon) {
 		fail(w, "not enough bars with volume")
 		return
 	}

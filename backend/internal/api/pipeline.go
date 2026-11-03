@@ -100,3 +100,9 @@ func (s *Server) barsForRequest(ctx context.Context, req forecastRequest, extra 
 	}
 	return bars, nil
 }
+
+// minBarsForHorizon is the default minimum for a call site that has no frame in
+// scope — the composite and its components fit on an hourly-sized window.
+func minBarsForHorizon(horizon int) int {
+	return policyFor("1h").minBarsFor(horizon)
+}
