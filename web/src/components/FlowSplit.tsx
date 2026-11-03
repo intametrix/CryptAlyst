@@ -1,4 +1,5 @@
 import { ChartIcon } from './ChartIcon';
+import { useTools } from '../glossaryContext';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { multiple, num, pct, px, text, toNum, tone, usd } from '../format';
 import { useSelection } from '../selection';
@@ -56,7 +57,8 @@ export function emptyReason(split: FlowSplitMsg | null): string {
   return `nothing ${gateText} in ${windowText} — ${parts.join(', ')} of ${text(split?.symbols)} symbols dropped`;
 }
 
-function Side({ title, rows, kind, emptyText, tools }: SideProps) {
+function Side({ title, rows, kind, emptyText }: Omit<SideProps, 'tools'>) {
+  const tools = useTools();
   const selection = useSelection();
   // `change_24h_pct` sits beside the 10s move on purpose: a bounce inside a
   // downtrend must not read as a pump, and the daily figure is what says so.
@@ -128,7 +130,8 @@ export interface FlowSplitProps {
  * way. Rows are clickable through to the trade drill-down, like every other
  * symbol in the dashboard.
  */
-export const FlowSplit = memo(function FlowSplit({ flow, tools, onDrill }: FlowSplitProps) {
+export const FlowSplit = memo(function FlowSplit({ flow, onDrill }: Omit<FlowSplitProps, 'tools'>) {
+  const tools = useTools();
   const selection = useSelection();
   /**
    * A REST seed, because the SSE `flow` message only carries the split once the
@@ -209,7 +212,6 @@ export const FlowSplit = memo(function FlowSplit({ flow, tools, onDrill }: FlowS
               kind="PUMP"
               emptyText={emptyText}
               onDrill={onDrill}
-              tools={tools}
             />
             <Side
               title="biggest dumps"
@@ -217,7 +219,6 @@ export const FlowSplit = memo(function FlowSplit({ flow, tools, onDrill }: FlowS
               kind="DUMP"
               emptyText={emptyText}
               onDrill={onDrill}
-              tools={tools}
             />
           </div>
         </section>

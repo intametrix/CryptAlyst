@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useTools } from '../glossaryContext';
 import { int, usd } from '../format';
 import { useElementSize } from '../hooks/useElementSize';
 import type { StatusMsg, ToolsMsg } from '../types';
@@ -28,13 +29,8 @@ interface Cell {
   note: string;
 }
 
-function Stat({
-  cell,
-  tools,
-}: {
-  cell: Cell;
-  tools: ToolsMsg | null;
-}) {
+function Stat({ cell }: { cell: Cell }) {
+  const tools = useTools();
   const { ref, size } = useElementSize<HTMLDivElement>();
   const stacked = size.width > 0 && size.width < 130;
   return (
@@ -67,7 +63,7 @@ function Stat({
  * about), measures itself, and reflows from a row to a stacked label/value pair
  * when its own box gets narrow — not when the viewport does.
  */
-export const StatStrip = memo(function StatStrip({ stats, status, tools }: Props) {
+export const StatStrip = memo(function StatStrip({ stats, status }: Omit<Props, 'tools'>) {
   const cells: Cell[] = [
     {
       key: 'pumps',
@@ -131,7 +127,7 @@ export const StatStrip = memo(function StatStrip({ stats, status, tools }: Props
           minHeight={0}
           className="stat-box"
         >
-          {() => <Stat cell={cell} tools={tools} />}
+          {() => <Stat cell={cell} />}
         </ResizablePanel>
       ))}
     </section>

@@ -3,6 +3,7 @@ import { MAX_ALERTS, useEventStream } from './api';
 import { AlertFeed } from './components/AlertFeed';
 import { ChartPopup } from './components/chart/ChartPopup';
 import { ClientErrorBadge } from './components/ClientErrorBadge';
+import { ToolsProvider } from './glossaryContext';
 import { DelayedTitles } from './components/DelayedTitles';
 import type { ChartZoomControls } from './components/chart/ChartPopup';
 import { ChartOverlay } from './components/ChartOverlay';
@@ -471,6 +472,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
 
   return (
     <div className="app" data-layout-nonce={layoutNonce}>
+      <ToolsProvider tools={tools}>
       <TooltipViewer>
         <ClientErrorBadge />
         <DelayedTitles />
@@ -489,7 +491,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           toolsFallback={toolsFallback}
         />
 
-        <StatStrip stats={alertStats} status={status} tools={tools} />
+        <StatStrip stats={alertStats} status={status} />
 
         <nav className="view-bar" aria-label="dashboard view">
           <button
@@ -582,8 +584,8 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
               onDrill={drillInto}
             />
             <div className="pd-side">
-              <FlowLeaderboard flow={flow} tools={tools} />
-              <FlowSplit flow={flow} tools={tools} onDrill={drillInto} />
+              <FlowLeaderboard flow={flow} />
+              <FlowSplit flow={flow} onDrill={drillInto} />
             </div>
             <PumpRadar flow={flow} />
           </div>
@@ -617,10 +619,10 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
             }
             second={
               <div className="flow-column">
-                <FlowLeaderboard flow={flow} tools={tools} />
+                <FlowLeaderboard flow={flow} />
                 {/* The two-panel split: the strongest bursts up and down, with an
                     empty state built from the backend's own drop counters. */}
-                <FlowSplit flow={flow} tools={tools} onDrill={drillInto} />
+                <FlowSplit flow={flow} onDrill={drillInto} />
               </div>
             }
           />
@@ -728,6 +730,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           </ChartOverlay>
         )}
       </TooltipViewer>
+      </ToolsProvider>
     </div>
   );
 }

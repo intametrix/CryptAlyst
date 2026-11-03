@@ -1,4 +1,5 @@
 import { ChartIcon } from './ChartIcon';
+import { useTools } from '../glossaryContext';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { clock, int, isoUtc, multiple, num, pct, px, share, toNum, tone, usd } from '../format';
 import { visibleFlowColumns } from '../columns';
@@ -95,7 +96,8 @@ const InstrumentChip = memo(function InstrumentChip({ symbol }: { symbol: string
   );
 });
 
-export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Props) {
+export const FlowLeaderboard = memo(function FlowLeaderboard({ flow }: Omit<Props, 'tools'>) {
+  const tools = useTools();
   const selection = useSelection();
   const { ref, size } = useElementSize<HTMLDivElement>();
   // 13: perps and spot behave differently (funding, liquidation, borrow), so the
