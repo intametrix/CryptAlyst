@@ -1,0 +1,198 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useElementSize } from '../hooks/useElementSize';
+
+interface Payload {
+  ok: boolean;
+  error?: string;
+  symbol: string;
+  interval: string;
+  method: string;
+  lookback: number;
+  horizon: number;
+  last_close: number;
+  times: number[];
+  actual: number[];
+  forecast_times: number[];
+  forecast: number[];
+  fan?: { p10: number[]; p50: number[]; p90: number[] };
+}
+
+const PAD = { top: 18, right: 14, bottom: 26, left: 64 };
+
+/**
+ * Price now, and the next few bars with a funnel around them.
+ *
+ * The optimiser panel answers "which model"; this answers "so what next". The
+ * funnel is a bootstrap of the symbol's own one-bar returns, so its width is a
+ * measured spread rather than a drawn guess, and it widens with every step it
+ * claims to predict.
+ */
+export function LiveForecastChart({ symbol, interval }: { symbol: string; interval: string }) {
+  const [data, setData] = useState<Payload | null>(null);
+  const [live, setLive] = useState<{ price: number; at: number } | null>(null);
+  const [tick, setTick] = useState(0);
+  const { ref, size } = useElementSize<HTMLDivElement>({ box: 'content-box' });
+  const width = Math.max(320, size.width || 0);
+  const height = Math.max(180, size.height || 220);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      try {
+        const q = new URLSearchParams({ symbol, interval, horizon: '6', bars: '90' });
+        const r = await fetch(`/api/forecast/live-chart?${q.toString()}`, { headers: { accept: 'application/json' } });
+        const body = (await r.json()) as Payload;
+        if (alive && body.ok) setData(body);
+      } catch {
+        /* keep the last frame */
+      }
+    };
+    // The candles change rarely; the traded price changes constantly. Polling the
+    // ticker is what makes the right edge of the chart move in real time.
+    const loadPrice = async () => {
+      try {
+        const r = await fetch(`/api/ticker?symbol=${encodeURIComponent(symbol)}`, { headers: { accept: 'application/json' } });
+        const body = (await r.json()) as { rows?: { price?: number; ts_ms?: number }[] };
+        const row = body.rows?.[0];
+        if (alive && row?.price !== undefined) setLive({ price: row.price, at: row.ts_ms ?? Date.now() });
+      } catch {
+        /* the candle chart still works without the tick */
+      }
+    };
+    void load();
+    void loadPrice();
+    const poll = window.setInterval(() => void load(), 30000);
+    const pricePoll = window.setInterval(() => void loadPrice(), 1500);
+    const clock = window.setInterval(() => setTick((t) => t + 1), 1000);
+    return () => {
+      alive = false;
+      window.clearInterval(poll);
+      window.clearInterval(pricePoll);
+      window.clearInterval(clock);
+    };
+  }, [symbol, interval]);
+
+  const geom = useMemo(() => {
+    if (data === null) return null;
+    const base = data.actual;
+    const n = base.length;
+    const h = data.forecast.length;
+    if (n < 5 || h === 0) return null;
+
+    // Scale the forecast so it starts at the live price rather than the last
+    // close: the projection should move with the market, not lag a bar behind.
+    const lastClose = data.last_close || base[n - 1] || 1;
+    const livePrice = live?.price ?? lastClose;
+    const ratio = lastClose > 0 ? livePrice / lastClose : 1;
+    const forecast = data.forecast.map((v) => v * ratio);
+    const actual = [...base, livePrice];
+
+    const totalBars = actual.length + h;
+    const total = totalBars;
+    const values = [...actual, ...forecast];
+    if (data.fan) values.push(...data.fan.p10, ...data.fan.p90);
+    const lo = Math.min(...values);
+    const hi = Math.max(...values);
+    const span = Math.max(hi - lo, 1e-9);
+    const x = (i: number) => PAD.left + (i / Math.max(total - 1, 1)) * (width - PAD.left - PAD.right);
+    const y = (v: number) => PAD.top + (1 - (v - lo) / span) * (height - PAD.top - PAD.bottom);
+
+    const last = actual[actual.length - 1] ?? 0;
+    const price = actual.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const anchorIdx = actual.length - 1;
+    const future = [
+      `${x(anchorIdx).toFixed(1)},${y(last).toFixed(1)}`,
+      ...forecast.map((v, i) => `${x(anchorIdx + 1 + i).toFixed(1)},${y(v).toFixed(1)}`),
+    ].join(' ');
+
+    let cone = '';
+    let inner = '';
+    if (data.fan) {
+      const up = data.fan.p90.map((v, i) => `${x(anchorIdx + 1 + i).toFixed(1)},${y(v * ratio).toFixed(1)}`);
+      const dn = data.fan.p10.map((v, i) => `${x(anchorIdx + 1 + i).toFixed(1)},${y(v * ratio).toFixed(1)}`).reverse();
+      cone = [...up, ...dn].join(' ');
+      const mid = data.fan.p50.map((v, i) => `${x(anchorIdx + 1 + i).toFixed(1)},${y(v * ratio).toFixed(1)}`);
+      inner = mid.join(' ');
+    }
+
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+      const v = hi - span * f;
+      return { y: y(v), label: v >= 1000 ? v.toFixed(0) : v.toPrecision(4) };
+    });
+    const label = (ms: number): string => {
+      const d = new Date(ms);
+      return `${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-GB', { month: 'short' })} ${String(d.getHours()).padStart(2, '0')}:00`;
+    };
+    const xTicks = [0, Math.floor((total - 1) / 2), total - 1].map((i) => ({
+      x: x(i),
+      label:
+        i < n
+          ? label(data.times[i] ?? data.times[0] ?? 0)
+          : i === n
+            ? 'now'
+            : label(data.forecast_times[i - n - 1] ?? 0),
+    }));
+
+    return { price, future, cone, inner, ticks, xTicks, x, y, n, h, lo, hi };
+  }, [data, width, height, tick, live]);
+
+  const lastForecast = data?.forecast[data.forecast.length - 1];
+  const changePct =
+    data !== null && lastForecast !== undefined && data.last_close > 0
+      ? (lastForecast / data.last_close - 1) * 100
+      : 0;
+
+  return (
+    <div className="lfc">
+      <div className="lfc-bar">
+        <span className="lfc-title">NEXT BARS</span>
+        {data !== null && (
+          <>
+            <span className="lfc-sym">{data.symbol}</span>
+            <span className="lfc-meta">{data.method} · lb{data.lookback} · {data.interval}</span>
+            <span className="lfc-meta">last {(live?.price ?? data.last_close).toPrecision(6)}</span>
+            {live !== null && (
+              <span className="lfc-live">
+                <i />LIVE {Math.max(0, Math.round((Date.now() - live.at) / 1000))}s
+              </span>
+            )}
+            <span className={`lfc-delta${changePct >= 0 ? ' is-up' : ' is-down'}`}>
+              {changePct >= 0 ? '+' : ''}{changePct.toFixed(2)}% over {data.horizon} bars
+            </span>
+          </>
+        )}
+      </div>
+
+      <div className="lfc-plot" ref={ref}>
+        {geom === null ? (
+          <p className="fl-hint">loading the next bars…</p>
+        ) : (
+          <svg width={width} height={height} className="lfc-svg" role="img">
+            {geom.ticks.map((t) => (
+              <g key={t.label + t.y.toFixed(0)}>
+                <line x1={PAD.left} y1={t.y} x2={width - PAD.right} y2={t.y} className="fchart-grid" />
+                <text x={PAD.left - 8} y={t.y + 3} textAnchor="end" className="fchart-axis-text">{t.label}</text>
+              </g>
+            ))}
+            {geom.cone !== '' && <polygon points={geom.cone} className="lfc-cone" />}
+            <polyline points={geom.price} className="fchart-actual" fill="none" />
+            {geom.inner !== '' && <polyline points={geom.inner} className="lfc-median" fill="none" />}
+            <polyline points={geom.future} className="lfc-future" fill="none" />
+            {geom.xTicks.map((t, i) => (
+              <text key={`x${i}`} x={t.x} y={height - 8} textAnchor={i === 0 ? 'start' : i === geom.xTicks.length - 1 ? 'end' : 'middle'} className="fchart-axis-text">
+                {t.label}
+              </text>
+            ))}
+          </svg>
+        )}
+      </div>
+
+      <div className="fchart-legend">
+        <span className="fchart-key"><span className="fchart-swatch swatch-actual" />price</span>
+        <span className="fchart-key"><span className="fchart-swatch swatch-future" />forecast</span>
+        <span className="fchart-key"><span className="fchart-swatch swatch-fan" />funnel 10–90%</span>
+        {data?.fan !== undefined && <span className="fchart-key"><span className="fchart-swatch swatch-median" />fan median</span>}
+      </div>
+    </div>
+  );
+}

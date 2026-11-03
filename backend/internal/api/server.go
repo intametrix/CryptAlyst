@@ -268,10 +268,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/forecast/auto-config", s.handleAutoConfig)
 	mux.HandleFunc("/api/forecast/gpu-sweep", s.handleGPUSweep)
 	mux.HandleFunc("/api/forecast/forward", s.handleForward)
+	mux.HandleFunc("/api/forecast/live-chart", s.handleLiveChart)
 	mux.HandleFunc("/api/forecast/live-state", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, engine.snapshot())
+		writeJSON(w, http.StatusOK, engine.snapshot(s))
 	})
 	mux.HandleFunc("/api/forecast/live-symbols", s.handleLiveSymbols)
+	mux.HandleFunc("/api/forecast/engine-control", s.handleEngineControl)
 	mux.HandleFunc("/api/forecast/configs", s.handleConfigs)
 	mux.HandleFunc("/api/forecast/gpu-sweep-status", s.handleGPUSweepStatus)
 	mux.HandleFunc("/api/forecast/mlr", s.handleMLR)

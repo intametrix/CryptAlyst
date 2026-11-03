@@ -356,8 +356,47 @@ func (a *Agent) persist() {
 }
 
 // gpuReport is the /gpu payload.
+// describe renders what a job is doing in words, so the platform can show it.
+func describeJob(j *Job) string {
+	if j == nil {
+		return ""
+	}
+	switch {
+	case strings.EqualFold(j.Type, "backtest_sweep"):
+		cells := 0
+		if g, ok := j.Payload["grid"].([]any); ok {
+			cells = len(g)
+		}
+		lbs := 0
+		if l, ok := j.Payload["lookbacks"].([]any); ok {
+			lbs = len(l)
+		}
+		where := "all models"
+		if m, ok := j.Payload["methods"].([]any); ok && len(m) > 0 {
+			parts := make([]string, 0, len(m))
+			for _, v := range m {
+				if str, ok := v.(string); ok {
+					parts = append(parts, str)
+				}
+			}
+			if len(parts) > 0 {
+				where = strings.Join(parts, "+")
+			}
+		}
+		return fmt.Sprintf("backtesting %s: %d lookbacks x %d windows = %d forecasts on the GPU", where, lbs, cells, lbs*cells)
+	case strings.EqualFold(j.Type, "train_sequence"):
+		ep, _ := j.Payload["epochs"].(float64)
+		h, _ := j.Payload["horizon"].(float64)
+		return fmt.Sprintf("training a sequence model: horizon %.0f bars, %.0f epochs", h, ep)
+	case strings.EqualFold(j.Type, "forecast"):
+		return fmt.Sprintf("forecasting with %s over %v bars", j.Model, j.Payload["horizon"])
+	}
+	return j.Type
+}
+
 func (a *Agent) gpuReport() map[string]any {
 	return map[string]any{
+		"computing":        a.computingText(),
 		"device":           a.device,
 		"arch":             runtime.GOARCH,
 		"num_cpu":          runtime.NumCPU(),
@@ -427,6 +466,28 @@ func (a *Agent) runOllama(j *Job) map[string]any {
 // activeJobs lists the jobs running right now, so the dashboard can show what
 // an agent is actually busy with (an install, a training run, a forecast)
 // instead of only a count.
+// computingText summarises the running work in one line, for a human reading a
+// panel rather than parsing JSON.
+func (a *Agent) computingText() string {
+	jobs := a.activeJobs()
+	if len(jobs) == 0 {
+		return "idle"
+	}
+	parts := make([]string, 0, len(jobs))
+	for _, j := range jobs {
+		if t, ok := j["what"].(string); ok && t != "" {
+			parts = append(parts, t)
+		}
+	}
+	if len(parts) == 0 {
+		return fmt.Sprintf("%d job(s) running", len(jobs))
+	}
+	if len(parts) > 2 {
+		return fmt.Sprintf("%s (+%d more)", parts[0], len(parts)-1)
+	}
+	return strings.Join(parts, " · ")
+}
+
 func (a *Agent) activeJobs() []map[string]any {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -439,6 +500,7 @@ func (a *Agent) activeJobs() []map[string]any {
 		}
 		out = append(out, map[string]any{
 			"id":         j.ID,
+			"what":       describeJob(j),
 			"type":       j.Type,
 			"model":      j.Model,
 			"device":     j.Device,

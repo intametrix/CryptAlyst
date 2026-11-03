@@ -5282,3 +5282,29 @@ table {
 .le-save:disabled { opacity: .5; cursor: default; }
 
 .le-trace-wait { font-style: normal; margin-left: 6px; color: #ffb300; }
+
+/* what the GPU is doing, and the training switch */
+.le-gpu { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(56, 211, 159, .10); border: 1px solid rgba(56, 211, 159, .35); font-size: 11px; color: #8ff0c2; min-width: 0; }
+.le-gpu i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #38d39f; animation: le-pulse 1.4s ease-in-out infinite; }
+.le-train { min-width: 0; min-height: 0; padding: 4px 10px; font-size: 11px; color: #ffb3bd; background: #2a1216; border: 1px solid #7d2f3a; border-radius: 6px; cursor: pointer; }
+.le-train.is-off { color: #8ff0c2; background: #10241c; border-color: #2f7d5b; }
+
+/* the next-bars chart: price plus the forecast funnel */
+.lfc { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
+.lfc-bar { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; min-width: 0; min-height: 0; }
+.lfc-title { font-size: 10px; letter-spacing: .14em; color: #6fd0ff; font-weight: 700; }
+.lfc-sym { font-size: 14px; font-weight: 700; color: #e6f3ff; }
+.lfc-meta { font-size: 11.5px; color: #8fa3b8; font-variant-numeric: tabular-nums; }
+.lfc-delta { font-size: 11.5px; font-weight: 700; }
+.lfc-delta.is-up { color: #7ff0c4; }
+.lfc-delta.is-down { color: #ff9aa6; }
+.lfc-plot { height: 230px; min-height: 0; min-width: 0; }
+.lfc-svg { display: block; background: #0b1620; border: 1px solid #1c2f40; border-radius: 8px; }
+.lfc-cone { fill: rgba(111, 208, 255, .16); stroke: rgba(111, 208, 255, .5); stroke-width: 1; }
+.lfc-median { stroke: #4a6b85; stroke-width: 1; stroke-dasharray: 3 3; }
+.lfc-future { stroke: #6fd0ff; stroke-width: 2; stroke-dasharray: 5 3; }
+.swatch-median { background: #4a6b85; }
+
+/* the right edge is the live price, refreshed every 1.5s */
+.lfc-live { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: .08em; color: #8ff0c2; min-width: 0; }
+.lfc-live i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #38d39f; animation: le-pulse 1.3s ease-in-out infinite; }

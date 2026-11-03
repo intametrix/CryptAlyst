@@ -30,6 +30,8 @@ type backtestPoint struct {
 // pathFor computes a model's forecast path from bars up to the end.
 func pathForLookback(method string, bars []binance.Kline, horizon, lookback int) ([]float64, bool) {
 	switch method {
+	case "super":
+		return superForecast(bars, horizon)
 	case "hybrid":
 		return hybridForecast(bars, horizon)
 	case "vwap":
@@ -333,7 +335,7 @@ func (s *Server) handleOptimizeBacktest(w http.ResponseWriter, r *http.Request) 
 		lookback int
 	}
 	cands := []cand{}
-	for _, m := range []string{"naive", "hybrid", "vwap", "vwtrend", "vwdrift", "arima", "analog10", "trend50", "mlr"} {
+	for _, m := range []string{"naive", "super", "hybrid", "vwap", "vwtrend", "vwdrift", "arima", "analog10", "trend50", "mlr"} {
 		for _, lb := range []int{12, 24, 50, 100} {
 			cands = append(cands, cand{method: m, lookback: lb})
 		}

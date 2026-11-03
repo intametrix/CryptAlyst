@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ForecastChart } from './ForecastChart';
+import { LiveForecastChart } from './LiveForecastChart';
 
 interface Row {
   method: string; lookback: number; r2: number; mape_pct: number;
@@ -27,6 +28,8 @@ interface LiveState {
 }
 interface Payload {
   ok: boolean;
+  training?: boolean;
+  gpu?: string;
   interval: string;
   symbols: string[];
   parallel_workers: number;
@@ -43,7 +46,24 @@ interface Payload {
 export function LiveEnginePanel() {
   const [data, setData] = useState<Payload | null>(null);
   const [age, setAge] = useState(0);
-  const [active, setActive] = useState(0);
+  // Selection is a symbol, not an index: an index silently snaps back to the
+  // first tab whenever the panel re-renders, which is why the header kept
+  // saying BTCUSDT after picking something else.
+  const [activeSymbol, setActiveSymbol] = useState<string>(() => {
+    try {
+      return window.localStorage.getItem('cryptalas.live.symbol') ?? '';
+    } catch {
+      return '';
+    }
+  });
+  const selectSymbol = (sym: string) => {
+    setActiveSymbol(sym);
+    try {
+      window.localStorage.setItem('cryptalas.live.symbol', sym);
+    } catch {
+      /* a disabled localStorage must not break selection */
+    }
+  };
   const [full, setFull] = useState(false);
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState<string | null>(null);
@@ -87,7 +107,7 @@ export function LiveEnginePanel() {
   }, []);
 
   const states = data?.states ?? [];
-  const current = states[active] ?? states[0];
+  const current = states.find((st) => st.symbol === activeSymbol) ?? states[0];
   const series = current?.series?.[0];
 
   return (
@@ -96,6 +116,11 @@ export function LiveEnginePanel() {
         <span className="le-live"><i />LIVE ENGINE</span>
         <span className="le-meta">{data?.parallel_workers ?? 0} parallel GPU workers · {data?.interval ?? '4h'} candles</span>
         <span className="le-meta">state {age}s old</span>
+        {data?.gpu !== undefined && data.gpu !== '' && (
+          <span className="le-gpu" title="what the GPU agent is computing right now">
+            <i />{data.gpu}
+          </span>
+        )}
         <span className="le-add">
           <input
             value={draft}
@@ -122,6 +147,16 @@ export function LiveEnginePanel() {
         </span>
         <button
           type="button"
+          className={`le-train${data?.training === false ? ' is-off' : ''}`}
+          onClick={() => {
+            const next = data?.training === false ? 'on' : 'off';
+            void fetch(`/api/forecast/engine-control?training=${next}`).then(() => setAge(0));
+          }}
+        >
+          {data?.training === false ? 'resume training' : 'stop training'}
+        </button>
+        <button
+          type="button"
           className="le-save"
           disabled={current?.best === null || current?.best === undefined}
           onClick={() => current && void saveConfig(current)}
@@ -139,12 +174,12 @@ export function LiveEnginePanel() {
       ) : (
         <>
           <div className="le-tabs">
-            {states.map((s, i) => (
+            {states.map((s) => (
               <button
                 key={s.symbol}
                 type="button"
-                className={`le-tab${i === active ? ' is-on' : ''}`}
-                onClick={() => setActive(i)}
+                className={`le-tab${s.symbol === current?.symbol ? ' is-on' : ''}`}
+                onClick={() => selectSymbol(s.symbol)}
               >
                 <b>{s.symbol}</b>
                 <span>R² {(s.best?.r2 ?? 0).toFixed(3)}</span>
@@ -208,6 +243,10 @@ export function LiveEnginePanel() {
               forecasts={[{ label: `${series.method} lb${series.lookback}`, values: (series.points ?? []).map((p) => p.forecast), mape: series.mape_pct }]}
               showWhiskers={false}
             />
+          )}
+
+          {current !== undefined && (
+            <LiveForecastChart symbol={current.symbol} interval={data?.interval ?? '4h'} />
           )}
 
           {current && current.rows.length > 0 && (

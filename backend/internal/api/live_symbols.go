@@ -12,7 +12,7 @@ import (
 func (s *Server) handleLiveSymbols(w http.ResponseWriter, r *http.Request) {
 	raw := strings.TrimSpace(r.URL.Query().Get("symbols"))
 	if raw == "" {
-		writeJSON(w, http.StatusOK, engine.snapshot())
+		writeJSON(w, http.StatusOK, engine.snapshot(s))
 		return
 	}
 	for _, part := range strings.Split(raw, ",") {
@@ -22,5 +22,5 @@ func (s *Server) handleLiveSymbols(w http.ResponseWriter, r *http.Request) {
 		}
 		engine.AddSymbol(s, sym)
 	}
-	writeJSON(w, http.StatusOK, engine.snapshot())
+	writeJSON(w, http.StatusOK, engine.snapshot(s))
 }

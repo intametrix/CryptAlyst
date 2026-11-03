@@ -60,7 +60,10 @@ func vwapForecast(bars []binance.Kline, horizon int, lookback int) ([]float64, b
 // vwTrend fits a line whose every bar is weighted by its own volume, so heavy
 // bars steer the slope and thin ones barely register.
 func vwTrend(bars []binance.Kline, horizon int, lookback int) ([]float64, bool) {
-	if len(bars) < lookback+horizon || lookback < 5 {
+	if lookback < 2 {
+		lookback = 2
+	}
+	if len(bars) < lookback+horizon {
 		return nil, false
 	}
 	seg := bars[len(bars)-lookback:]
@@ -97,7 +100,13 @@ func vwTrend(bars []binance.Kline, horizon int, lookback int) ([]float64, bool) 
 // vwapDrift scales the recent move by how unusual the volume is: the same
 // return means more when it arrived on exceptional participation.
 func vwapDrift(bars []binance.Kline, horizon int, lookback int) ([]float64, bool) {
-	if len(bars) < lookback+21 || lookback < 5 {
+	// The volume baseline needs 21 bars; the lookback itself can be as short as
+	// the move it measures. Refusing small lookbacks here made vwdrift unavailable
+	// for the configurations the optimiser actually picks (lb2, lb3).
+	if lookback < 1 {
+		lookback = 1
+	}
+	if len(bars) < lookback+22 {
 		return nil, false
 	}
 	seg := bars[len(bars)-lookback:]

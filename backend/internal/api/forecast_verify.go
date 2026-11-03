@@ -197,7 +197,7 @@ func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if s.deps.Market != nil && (method == "hybrid" || method == "vwap" || method == "vwtrend" || method == "vwdrift") {
+	if s.deps.Market != nil && (method == "super" || method == "hybrid" || method == "vwap" || method == "vwtrend" || method == "vwdrift") {
 		if vb, verr := s.deps.Market.Klines(ctx, symbol, interval, 500); verr == nil && len(vb) > 120+horizon {
 			var pts []float64
 			var ok bool
@@ -207,6 +207,8 @@ func (s *Server) handleForecastVerify(w http.ResponseWriter, r *http.Request) {
 				vwapLB, trendLB, driftLB = savedLookback, savedLookback, savedLookback
 			}
 			switch method {
+			case "super":
+				pts, ok = superForecast(vb, horizon)
 			case "hybrid":
 				pts, ok = hybridForecast(vb, horizon)
 			case "vwap":

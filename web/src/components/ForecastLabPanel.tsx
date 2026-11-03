@@ -161,6 +161,7 @@ function modelDetails(name: string): { family: string; lookback: string; param: 
   if (name === 'best') return { family: 'auto', lookback: '—', param: 'picked by ranking', shape: 'varies' };
   if (name === 'arima') return { family: 'ARIMA', lookback: 'p,1,q', param: 'order by BIC', shape: 'dynamic' };
   if (name === 'mlr') return { family: 'regression', lookback: '20 bars', param: 'price+volume+time', shape: 'path' };
+  if (name === 'super') return { family: 'composite', lookback: '16 models', param: 'inverse-error weights', shape: 'path' };
   if (name === 'vwap') return { family: 'volume-weighted', lookback: '24 bars', param: 'volume weights', shape: 'path' };
   if (name === 'vwtrend') return { family: 'volume-weighted', lookback: '50 bars', param: 'volume weights', shape: 'slope' };
   if (name === 'vwdrift') return { family: 'volume-weighted', lookback: '24 bars', param: 'volume z-score', shape: 'path' };
@@ -221,6 +222,7 @@ function describeModel(name: string): string {
   if (name === 'best') return 'whichever model wins the ranking';
   if (name === 'arima') return 'ARIMA fitted on the series, order chosen by BIC';
   if (name === 'mlr') return 'price, volume and time regression fitted walk-forward';
+  if (name === 'super') return 'blends every family by measured skill, falling back to the best';
   if (name === 'vwap') return 'converges to the volume-weighted average price';
   if (name === 'vwtrend') return 'trend fitted with every bar weighted by its volume';
   if (name === 'vwdrift') return 'recent move scaled by how unusual the volume is';
@@ -242,7 +244,7 @@ const POLL_MS = 5000;
 /** Every model the lab can rank, plus "best" to let it choose. */
 const MODELS = [
   'best', 'naive', 'mean', 'arima', 'mlr', 'timestral',
-  'vwap', 'vwtrend', 'vwdrift',
+  'super', 'vwap', 'vwtrend', 'vwdrift',
   'sma3', 'sma5', 'sma8', 'sma10', 'sma15', 'sma20', 'sma30', 'sma50', 'sma80', 'sma100', 'sma150',
   'ema5', 'ema10', 'ema15', 'ema20', 'ema30', 'ema40', 'ema50', 'ema60',
   'trend', 'trend20', 'trend30', 'trend50', 'trend75', 'trend100', 'trend150',
