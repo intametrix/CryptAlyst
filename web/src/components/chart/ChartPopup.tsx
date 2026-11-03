@@ -11,7 +11,8 @@ import { type ColorCanon } from '../../colors';
 import { useFlowHistory } from '../../hooks/useFlowHistory';
 import { INTERVAL_MS, useKlines } from '../../hooks/useKlines';
 import { useOutlook } from '../../hooks/useOutlook';
-import type { AlertMsg, Interval, ToolsMsg } from '../../types';
+import type { AlertMsg, Interval } from '../../types';
+import { useTools } from '../../glossaryContext';
 import { INTERVALS } from '../../types';
 import { type ZoomPreset } from '../../zoom';
 import { Tooltip } from '../Tooltip';
@@ -44,7 +45,6 @@ const DATA_EXTRA_KEYS = ['atr20', 'atr_pct', 'adx14', 'plus_di', 'minus_di', 'rs
 export interface ChartPopupProps {
   symbol: string;
   interval: Interval;
-  tools: ToolsMsg | null;
   /** Called when the user picks a different timeframe chip. */
   onIntervalChange: (interval: Interval) => void;
   priceTick?: { symbol: string; price: number; atMs: number } | null;
@@ -86,7 +86,6 @@ export interface ChartPopupProps {
 export function ChartPopup({
   symbol,
   interval,
-  tools,
   onIntervalChange,
   priceTick = null,
   tickerTick = null,
@@ -101,6 +100,7 @@ export function ChartPopup({
   onOpenDrill,
   onClose,
 }: ChartPopupProps) {
+  const tools = useTools();
   const klines = useKlines(symbol, interval, { active: true });
   const { data, live } = klines;
   const outlook = useOutlook(symbol);

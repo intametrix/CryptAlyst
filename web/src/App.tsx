@@ -661,7 +661,6 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
             <ChartPopup
               symbol={selection.symbol}
               interval={selection.interval}
-              tools={tools}
               onIntervalChange={selection.selectInterval}
               priceTick={priceTick}
               tickerTick={ticker.tick}
