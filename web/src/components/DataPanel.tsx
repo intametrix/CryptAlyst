@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { TickerPicker } from './TickerPicker';
+import { useResource } from '../hooks/useResource';
 
 interface Dataset {
   symbol: string; interval: string; bars: number;
@@ -28,30 +29,15 @@ function size(bytes: number): string {
  * gap is visible and only the gap gets loaded.
  */
 export function DataPanel({ symbol }: { symbol: string }) {
-  const [rows, setRows] = useState<Dataset[]>([]);
-  const [root, setRoot] = useState('');
+  // The inventory is a resource: one hook owns load, poll, abort and error.
+  const inventory = useResource<{ datasets?: Dataset[]; root?: string }>('/api/data/inventory', { pollMs: 15000 });
+  const rows = inventory.data?.datasets ?? [];
+  const root = inventory.data?.root ?? '';
   const [busy, setBusy] = useState<string | null>(null);
   const [draft, setDraft] = useState(symbol);
   const [interval, setInterval] = useState('1h');
   const [note, setNote] = useState<string | null>(null);
   const [armed, setArmed] = useState<string | null>(null);
-
-  const load = async () => {
-    try {
-      const r = await fetch('/api/data/inventory', { headers: { accept: 'application/json' } });
-      const body = (await r.json()) as { datasets?: Dataset[]; root?: string };
-      setRows(body.datasets ?? []);
-      setRoot(body.root ?? '');
-    } catch {
-      /* keep the last view */
-    }
-  };
-
-  useEffect(() => {
-    void load();
-    const id = window.setInterval(() => void load(), 15000);
-    return () => window.clearInterval(id);
-  }, []);
 
   const ingest = async () => {
     const sym = draft.trim().toUpperCase();
@@ -63,14 +49,14 @@ export function DataPanel({ symbol }: { symbol: string }) {
       const r = await fetch(`/api/data/load?${q.toString()}`, { method: 'POST', headers: { accept: 'application/json' } });
       const body = (await r.json()) as { ok: boolean; stored?: number; error?: string };
       setNote(body.ok ? `${sym} ${interval}: ${body.stored ?? 0} bars in the store` : (body.error ?? 'load failed'));
-      await load();
+      inventory.reload();
     } catch (e) {
       setNote((e as Error).message);
     }
     setBusy(null);
   };
 
-  const total = rows.reduce((n, r) => n + r.bytes, 0);
+  const total = rows.reduce((n: number, r: Dataset) => n + r.bytes, 0);
 
   return (
     <div className="dp">
@@ -120,7 +106,7 @@ export function DataPanel({ symbol }: { symbol: string }) {
                   setArmed(null);
                   void fetch(`/api/data/prune?symbol=${encodeURIComponent(r.symbol)}&interval=${encodeURIComponent(r.interval)}`, {
                     method: 'POST',
-                  }).then(() => load());
+                  }).then(() => inventory.reload());
                 }}
               >
                 {armed === `${r.symbol}-${r.interval}` ? 'delete?' : '×'}

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
+import { useResource } from '../hooks/useResource';
 
 interface Report {
   where: string;
@@ -15,24 +16,9 @@ interface Report {
  * report, surfaced: a count in the header, and the details on click.
  */
 export function ClientErrorBadge() {
-  const [reports, setReports] = useState<Report[]>([]);
   const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    const poll = async () => {
-      try {
-        const r = await fetch('/api/client-errors', { headers: { accept: 'application/json' } });
-        if (!r.ok) return;
-        const body = (await r.json()) as { errors?: Report[] };
-        setReports(body.errors ?? []);
-      } catch {
-        /* the badge simply stays as it was */
-      }
-    };
-    void poll();
-    const id = window.setInterval(() => void poll(), 10000);
-    return () => window.clearInterval(id);
-  }, []);
+  const resource = useResource<{ errors?: Report[] }>('/api/client-errors', { pollMs: 10000 });
+  const reports = resource.data?.errors ?? [];
 
   if (reports.length === 0) return null;
 
@@ -49,7 +35,7 @@ export function ClientErrorBadge() {
       </button>
       {open && (
         <span className="ceb-list" role="dialog" aria-label="render errors">
-          {reports.slice(0, 8).map((e) => (
+          {reports.slice(0, 8).map((e: Report) => (
             <span className="ceb-row" key={`${e.at_ms}-${e.where}`}>
               <span className="ceb-where">{e.where}</span>
               <span className="ceb-msg">{e.message}</span>
@@ -60,7 +46,7 @@ export function ClientErrorBadge() {
             className="ceb-clear"
             onClick={() => {
               void fetch('/api/client-errors/clear', { method: 'POST' }).then(() => {
-                setReports([]);
+                resource.reload();
                 setOpen(false);
               });
             }}
