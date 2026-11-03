@@ -632,7 +632,7 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           onDrill={drillInto}
         />
 
-        <SurveyPanel survey={survey} onRefresh={refreshSurvey} tools={tools} onDrill={drillInto} />
+        <SurveyPanel survey={survey} onRefresh={refreshSurvey} onDrill={drillInto} />
 
         <MoversPanel />
 

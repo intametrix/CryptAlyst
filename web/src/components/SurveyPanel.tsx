@@ -1,7 +1,8 @@
 import { memo, useState } from 'react';
 import { clock, flag, int, isoUtc, joinList, num, px, share, text, tone, usd } from '../format';
 import { useSelection } from '../selection';
-import type { Setup, SetupPlan, SurveyMsg, ToolsMsg } from '../types';
+import { useTools } from '../glossaryContext';
+import type {Setup,SetupPlan,SurveyMsg} from '../types';
 import { HeatBorder } from './HeatBorder';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
@@ -9,7 +10,6 @@ import { Tooltip } from './Tooltip';
 interface Props {
   survey: SurveyMsg | null;
   onRefresh: () => void;
-  tools: ToolsMsg | null;
   /** Opens the trade drill-down for a symbol, seeded with this setup. */
   onDrill?: (symbol: string, seed?: { setup: Setup; trade: SetupPlan | null }) => void;
 }
@@ -17,14 +17,13 @@ interface Props {
 function BudgetCell({
   label,
   value,
-  tools,
   toolKeys,
 }: {
   label: string;
   value: string;
-  tools: ToolsMsg | null;
   toolKeys: string[];
 }) {
+  const tools = useTools();
   return (
     <Tooltip keys={toolKeys} tools={tools} fallbackTitle={label} value={value} tone="stat">
       <div className="budget-cell" tabIndex={0}>
@@ -39,14 +38,13 @@ function BudgetCell({
 function Head({
   label,
   toolKeys,
-  tools,
   numeric = false,
 }: {
   label: string;
   toolKeys: string[];
-  tools: ToolsMsg | null;
   numeric?: boolean;
 }) {
+  const tools = useTools();
   return (
     <th scope="col" className={numeric ? 'num-col' : ''}>
       <Tooltip keys={toolKeys} tools={tools} fallbackTitle={label} tone="header">
@@ -59,7 +57,7 @@ function Head({
 }
 
 /** Collapsible turtle-indicator survey: budget summary, setups with plans, exits. */
-export const SurveyPanel = memo(function SurveyPanel({ survey, onRefresh, tools, onDrill }: Props) {
+export const SurveyPanel = memo(function SurveyPanel({ survey, onRefresh, onDrill }: Omit<Props, 'tools'>) {
   const [open, setOpen] = useState(true);
   const selection = useSelection();
 
@@ -103,18 +101,17 @@ export const SurveyPanel = memo(function SurveyPanel({ survey, onRefresh, tools,
       ) : (
         <div className="survey-body">
           <div className="budget">
-            <BudgetCell label="total units" value={int(budget?.total_units)} tools={tools} toolKeys={['units']} />
-            <BudgetCell label="long units" value={int(budget?.long_units)} tools={tools} toolKeys={['units']} />
-            <BudgetCell label="short units" value={int(budget?.short_units)} tools={tools} toolKeys={['units']} />
+            <BudgetCell label="total units" value={int(budget?.total_units)} toolKeys={['units']} />
+            <BudgetCell label="long units" value={int(budget?.long_units)} toolKeys={['units']} />
+            <BudgetCell label="short units" value={int(budget?.short_units)} toolKeys={['units']} />
             <BudgetCell
               label="notional"
               value={usd(budget?.total_notional)}
-              tools={tools}
               toolKeys={['total_notional']}
             />
-            <BudgetCell label="risk" value={usd(budget?.total_risk)} tools={tools} toolKeys={['total_risk']} />
-            <BudgetCell label="positions" value={int(budget?.positions)} tools={tools} toolKeys={['positions']} />
-            <BudgetCell label="rejected" value={int(budget?.rejected)} tools={tools} toolKeys={['rejected']} />
+            <BudgetCell label="risk" value={usd(budget?.total_risk)} toolKeys={['total_risk']} />
+            <BudgetCell label="positions" value={int(budget?.positions)} toolKeys={['positions']} />
+            <BudgetCell label="rejected" value={int(budget?.rejected)} toolKeys={['rejected']} />
           </div>
 
           {setups.length === 0 ? (
@@ -124,25 +121,25 @@ export const SurveyPanel = memo(function SurveyPanel({ survey, onRefresh, tools,
               <table className="survey-table">
                 <thead>
                   <tr>
-                    <Head label="symbol" toolKeys={['symbol']} tools={tools} />
-                    <Head label="dir" toolKeys={['kind']} tools={tools} />
-                    <Head label="score" toolKeys={['score']} tools={tools} numeric />
-                    <Head label="close" toolKeys={['closing_price', 'price']} tools={tools} numeric />
-                    <Head label="atr %" toolKeys={['atr_pct']} tools={tools} numeric />
-                    <Head label="adx" toolKeys={['adx14', 'adx']} tools={tools} numeric />
-                    <Head label="rsi" toolKeys={['rsi14', 'rsi']} tools={tools} numeric />
-                    <Head label="ext atr" toolKeys={['extension_up_atr']} tools={tools} numeric />
-                    <Head label="group" toolKeys={['group']} tools={tools} />
-                    <Head label="status" toolKeys={['accepted']} tools={tools} />
-                    <Head label="entry" toolKeys={['entry']} tools={tools} numeric />
-                    <Head label="stop" toolKeys={['stop']} tools={tools} numeric />
-                    <Head label="units" toolKeys={['units']} tools={tools} numeric />
-                    <Head label="unit $" toolKeys={['unit_notional']} tools={tools} numeric />
-                    <Head label="total $" toolKeys={['total_notional']} tools={tools} numeric />
-                    <Head label="risk $" toolKeys={['total_risk']} tools={tools} numeric />
-                    <Head label="pyramid levels" toolKeys={['pyramid_levels']} tools={tools} numeric />
-                    <Head label="exit" toolKeys={['exit_level']} tools={tools} numeric />
-                    <Head label="capped" toolKeys={['notional_capped']} tools={tools} />
+                    <Head label="symbol" toolKeys={['symbol']} />
+                    <Head label="dir" toolKeys={['kind']} />
+                    <Head label="score" toolKeys={['score']} numeric />
+                    <Head label="close" toolKeys={['closing_price', 'price']} numeric />
+                    <Head label="atr %" toolKeys={['atr_pct']} numeric />
+                    <Head label="adx" toolKeys={['adx14', 'adx']} numeric />
+                    <Head label="rsi" toolKeys={['rsi14', 'rsi']} numeric />
+                    <Head label="ext atr" toolKeys={['extension_up_atr']} numeric />
+                    <Head label="group" toolKeys={['group']} />
+                    <Head label="status" toolKeys={['accepted']} />
+                    <Head label="entry" toolKeys={['entry']} numeric />
+                    <Head label="stop" toolKeys={['stop']} numeric />
+                    <Head label="units" toolKeys={['units']} numeric />
+                    <Head label="unit $" toolKeys={['unit_notional']} numeric />
+                    <Head label="total $" toolKeys={['total_notional']} numeric />
+                    <Head label="risk $" toolKeys={['total_risk']} numeric />
+                    <Head label="pyramid levels" toolKeys={['pyramid_levels']} numeric />
+                    <Head label="exit" toolKeys={['exit_level']} numeric />
+                    <Head label="capped" toolKeys={['notional_capped']} />
                   </tr>
                 </thead>
                 <tbody>
@@ -158,7 +155,7 @@ export const SurveyPanel = memo(function SurveyPanel({ survey, onRefresh, tools,
                         title={s.accepted === false ? `rejected: ${text(s.reject_reason)}` : 'plan from survey.setups[]'}
                       >
                         <td className="sym">
-                          <HeatBorder symbol={typeof s.symbol === 'string' ? s.symbol : ''} tools={tools}>
+                          <HeatBorder symbol={typeof s.symbol === 'string' ? s.symbol : ''}>
                             <button
                               type="button"
                               className={`sym-btn${selection.isSelected(s.symbol) ? ' selected' : ''}`}
@@ -215,12 +212,12 @@ export const SurveyPanel = memo(function SurveyPanel({ survey, onRefresh, tools,
               <table className="survey-table">
                 <thead>
                   <tr>
-                    <Head label="symbol" toolKeys={['symbol']} tools={tools} />
-                    <Head label="close" toolKeys={['closing_price', 'price']} tools={tools} numeric />
-                    <Head label="exit long" toolKeys={['exit_long']} tools={tools} />
-                    <Head label="exit short" toolKeys={['exit_short']} tools={tools} />
-                    <Head label="low 10" toolKeys={['exit_low_10']} tools={tools} numeric />
-                    <Head label="adx" toolKeys={['adx14', 'adx']} tools={tools} numeric />
+                    <Head label="symbol" toolKeys={['symbol']} />
+                    <Head label="close" toolKeys={['closing_price', 'price']} numeric />
+                    <Head label="exit long" toolKeys={['exit_long']} />
+                    <Head label="exit short" toolKeys={['exit_short']} />
+                    <Head label="low 10" toolKeys={['exit_low_10']} numeric />
+                    <Head label="adx" toolKeys={['adx14', 'adx']} numeric />
                   </tr>
                 </thead>
                 <tbody>
@@ -230,7 +227,7 @@ export const SurveyPanel = memo(function SurveyPanel({ survey, onRefresh, tools,
                       className={selection.isSelected(e.symbol) ? 'selected' : ''}
                     >
                       <td className="sym">
-                        <HeatBorder symbol={typeof e.symbol === 'string' ? e.symbol : ''} tools={tools}>
+                        <HeatBorder symbol={typeof e.symbol === 'string' ? e.symbol : ''}>
                           <button
                             type="button"
                             className={`sym-btn${selection.isSelected(e.symbol) ? ' selected' : ''}`}
