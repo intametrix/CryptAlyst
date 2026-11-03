@@ -10,6 +10,7 @@ import { ModelRanking, type ModelScore } from './ModelRanking';
 import { ForecastCompare } from './ForecastCompare';
 import { ForecastChartSection } from './ForecastChartSection';
 import { HistorySection } from './HistorySection';
+import { ModelPicker, type PickableModel, type PickedScore } from './ModelPicker';
 import { BacktestPanel } from './BacktestPanel';
 import { LiveEnginePanel } from './LiveEnginePanel';
 import { DataPanel } from './DataPanel';
@@ -397,8 +398,6 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
   const chartRef = useRf<HTMLDivElement | null>(null);
   const modelsRef = useRf<HTMLDivElement | null>(null);
 
-  /** The model list runs to ninety entries: it needs a filter, not a scroll. */
-  const [modelQuery, setModelQuery] = useState('');
   const catalogResource = useResource<{ models?: { name: string; platform: boolean; agent_only: boolean }[] }>('/api/forecast/models');
   const MODELS = useMemo(() => {
     const listed = catalogResource.data?.models;
@@ -408,24 +407,15 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
     return ['best', ...names.filter((n) => n !== 'best')];
   }, [catalogResource.data]);
 
-  const filteredModels = useMemo(() => {
-    const q = modelQuery.trim().toLowerCase();
-    if (q === '') return MODELS;
-    return MODELS.filter((mn) => mn.toLowerCase().includes(q) || modelDetails(mn).family.toLowerCase().includes(q));
-  }, [modelQuery]);
-
-  const groups = useMemo(() => {
-    const byFamily = new Map<string, string[]>();
-    for (const mn of filteredModels) {
-      const fam = modelDetails(mn).family;
-      const list = byFamily.get(fam);
-      if (list === undefined) byFamily.set(fam, [mn]);
-      else list.push(mn);
-    }
-    return [...byFamily.entries()]
-      .map(([family, items]) => ({ family, items }))
-      .sort((a, b) => a.family.localeCompare(b.family));
-  }, [filteredModels]);
+  /** The pickable list, with each model's facts resolved once. */
+  const pickableModels: PickableModel[] = useMemo(
+    () =>
+      MODELS.map((mn) => {
+        const d = modelDetails(mn);
+        return { name: mn, family: d.family, lookback: d.lookback, params: d.param, output: d.shape, describedAs: describeModel(mn) };
+      }),
+    [MODELS],
+  );
 
   /** The side panel shows the selected model's adjustable parameters. */
   const [panelOpen, setPanelOpen] = useState(false);
@@ -635,71 +625,21 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
         />
       </Section>
 
-      <Section
-        id="fl.models"
-        title="Model to train"
-        meta={<span>selected: {method}</span>}
-      >
+      <Section id="fl.models" title="Model to train" meta={<span>selected: {method}</span>}>
         <p className="fl-model-note">
           Each model produces a different forecast. Choose one to train, then press forecast. The
           score column is how that model has actually performed on this symbol.
         </p>
-        <div className="fl-model-tools">
-          <input
-            className="fl-model-search"
-            value={modelQuery}
-            onChange={(e) => setModelQuery(e.target.value)}
-            placeholder="filter models by name or family"
-            aria-label="filter models"
-          />
-          <span className="fl-model-count">{filteredModels.length} of {MODELS.length}</span>
-        </div>
-
-        <div className="fl-model-row fl-model-row-head" role="presentation">
-          <span>model</span><span>lookback</span><span>params</span><span>output</span><span>MAPE</span><span>coverage</span>
-        </div>
-        <div className="fl-models" ref={modelsRef}>
-          {groups.map((g) => (
-            <section className="fl-model-group" key={g.family}>
-              <h4 className="fl-model-group-head">
-                {g.family} <span>{g.items.length}</span>
-              </h4>
-              <div className="fl-model-rows" role="list">
-                {g.items.map((mn) => {
-                  const row = scores.find((sc) => sc.model === mn);
-                  const chosen = method === mn;
-                  const d = modelDetails(mn);
-                  return (
-                    <button
-                      type="button"
-                      key={mn}
-                      role="listitem"
-                      className={`fl-model-row${chosen ? ' is-chosen' : ''}`}
-                      aria-pressed={chosen}
-                      title={describeModel(mn)}
-                      onClick={() => {
-                        setMethod(mn);
-                        setPanelOpen(true);
-                      }}
-                    >
-                      <span className="fl-model-row-name">
-                        {mn}
-                        {study?.best === mn && <span className="fl-model-best">best</span>}
-                        {chosen && <span className="fl-model-chosen">selected</span>}
-                      </span>
-                      <span>{d.lookback}</span>
-                      <span>{d.param}</span>
-                      <span>{d.shape}</span>
-                      <span className="num fl-model-row-mape">{row !== undefined ? `${row.mape.toFixed(3)}%` : '—'}</span>
-                      <span className="num">{row !== undefined ? `${(row.coverage80 * 100).toFixed(0)}%` : '—'}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-          {groups.length === 0 && <p className="fl-hint">no model matches “{modelQuery}”</p>}
-        </div>
+        <ModelPicker
+          models={pickableModels}
+          scores={scores as PickedScore[]}
+          best={study?.best}
+          chosen={method}
+          onPick={(name) => {
+            setMethod(name);
+            setPanelOpen(true);
+          }}
+        />
       </Section>
 
       <Section id="fl.chart" title="Forecast chart" meta={<span>{graded.result ? `${graded.result.symbol} · ${runs.length} model${runs.length === 1 ? '' : 's'}` : 'not run'}</span>}>
