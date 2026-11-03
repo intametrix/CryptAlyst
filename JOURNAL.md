@@ -830,3 +830,49 @@ alone, publishing `control.engine` requests for anything stale.
 Its honest result so far: replaying 23 recorded forecasts produced **no trades** — every
 verdict was "none", because the models project an edge below the 0.05% floor on 1m frames.
 The platform is now able to say that, which is the point.
+
+## Feature sweep — what was tested and what it found (Nov 3)
+
+Every route and every view was exercised against the running platform, and the
+interactions were driven in a real browser rather than asserted from the code.
+
+**API: 75 routes, 0 failures.** Fourteen more were skipped because they are POST-only
+(`verify`, `screen/refresh`, `agents/register`, `data/load`, …) and were exercised
+separately, where they belong.
+
+**Views: six, zero console errors and no error boundary fired.**
+
+| view | panels | notes |
+|---|---|---|
+| OVERVIEW | 5 | alerts, leaderboard, split, screen, survey + movers/models/turtle |
+| PUMP & DUMP | 4 | feeds populate |
+| MESSAGE BUS | 1 | live counters |
+| SETTINGS | 1 | 8 fields |
+| AGENTS | 1 | both agents with GPU details |
+| FORECAST | 10 | every section renders |
+
+**Interactions, all passing:** leaderboard sort (descending by 10s %), type filter (SPOT
+leaves 0 perps), hover freeze, keyboard cursor (arrow moves, exactly one row lit), alert
+compact mode (17 cards), drill-down (11 fields, Escape closes), chart glyph opens the
+ATLAS popup, chart zoom preset (first point 16.0 → −1444.7), reset, full screen, Escape
+out of full screen, and train+forecast end to end (11 polylines, 25 comparison rows).
+
+### Three defects the sweep found and fixed
+
+1. **`/api/envelope/chain` walked the wrong direction.** It matched children of a cid, so
+   "why did we buy?" returned the decision alone. Now it indexes by cid and follows
+   `parent_cid` backwards: depth 2, decision → forecast.
+2. **A decision could be made from the wrong timeframe.** Generations count per (topic,
+   key), so a 1m and a 4h forecast share a counter; "newest packet" picked whichever was
+   published last. Asking for a 4h decision returned a flat 1m forecast and refused it as
+   stale. It now filters on the packet's own interval and orders by `computed_at`.
+3. **The recorder was down.** `/api/bus` answered 502; the bus tab had been showing
+   counters earlier, so it had stopped silently. Starting `bin/recorder` restored it, and
+   its stats prove the envelope path end to end: `intel.forecast 184`, `market.candle
+   5768`, `ticks 12544`, at ~1000 envelopes/s.
+
+### The honest state of the trading evidence
+
+Replaying every recorded forecast: **158 packets, 157 graded, 6 sells, 0 buys, 151
+declines.** The six directional calls were all wrong. The platform is now capable of
+saying that, with the packets to prove it — which is precisely what the envelope was for.
