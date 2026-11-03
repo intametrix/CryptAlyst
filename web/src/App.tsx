@@ -484,7 +484,6 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           lastEventMs={lastEventMs}
           serverTimeMs={serverTimeMs}
           paused={paused}
-          tools={tools}
           heatCount={activeHeat}
           onResetLayout={resetEverything}
           onReloadTools={reloadTools}

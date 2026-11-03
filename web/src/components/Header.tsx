@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from 'react';
 import { age, duration, int, isoUtc, multiple, num, text, usd } from '../format';
-import type { Config, ConnectionState, StatusMsg, ToolsMsg } from '../types';
+import type { Config, ConnectionState, StatusMsg } from '../types';
+import { useTools } from '../glossaryContext';
 import { HeatLegend } from './HeatBorder';
 import { Tooltip } from './Tooltip';
 
@@ -13,7 +14,6 @@ interface Props {
   serverTimeMs: number | null;
   paused: boolean;
   /** Glossary for tooltips (may be `null` — the local copy carries the UI). */
-  tools: ToolsMsg | null;
   /** Number of symbols currently glowing. */
   heatCount: number;
   /** Clear every persisted size and toggle. */
@@ -68,7 +68,8 @@ function useNow(intervalMs: number): number {
   return now;
 }
 
-function Meta({ label, value, note, tools }: { label: string; value: string; note: string; tools: ToolsMsg | null }) {
+function Meta({ label, value, note }: { label: string; value: string; note: string }) {
+  const tools = useTools();
   return (
     <Tooltip keys={[label.replace(' ', '_')]} tools={tools} fallbackTitle={label} label={note} value={value} tone="stat">
       <div className="meta" tabIndex={0}>
@@ -87,12 +88,12 @@ export const Header = memo(function Header({
   lastEventMs,
   serverTimeMs,
   paused,
-  tools,
   heatCount,
   onResetLayout,
   onReloadTools,
   toolsFallback,
 }: Props) {
+  const tools = useTools();
   const now = useNow(1000);
   const pill = PILL[connection];
   const lastAge = lastEventMs === null ? '—' : `${age(lastEventMs, now)} ago`;
@@ -163,7 +164,7 @@ export const Header = memo(function Header({
           </span>
         )}
         <div className="meta-row">
-          <Meta label="uptime" value={duration(status?.uptime_sec)} note="status.uptime_sec" tools={tools} />
+          <Meta label="uptime" value={duration(status?.uptime_sec)} note="status.uptime_sec" />
           <Meta
             label="symbols"
             value={
@@ -172,25 +173,21 @@ export const Header = memo(function Header({
                 : int(status?.symbols_tracked)
             }
             note={`status.symbols_tracked · baselines ready ${int(status?.baselines_ready)}`}
-            tools={tools}
           />
           <Meta
             label="alerts"
             value={int(alertCount)}
             note="status.alerts (falls back to the in-memory buffer)"
-            tools={tools}
           />
           <Meta
             label="last event"
             value={lastAge}
             note={lastEventMs === null ? 'no message parsed yet' : `received ${isoUtc(lastEventMs)}`}
-            tools={tools}
           />
           <Meta
             label="server clock"
             value={isoUtc(serverTimeMs).replace('T', ' ').replace('Z', ' UTC')}
             note="hello.server_time_ms"
-            tools={tools}
           />
         </div>
       </div>
