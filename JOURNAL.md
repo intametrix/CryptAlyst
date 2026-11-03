@@ -763,3 +763,70 @@ inline contexts/closes) and wired `POST /sweep` into the CryptALAS agent. Client
 round-trip tested over httptest (job -> run -> result). The envelope now flows end-to-end
 on CPU; the GPU path reproduces the same result behind -device gpu. Full backend gate
 green (18 packages).
+
+## Refactoring programme — outcome and the one item left open (Nov 3)
+
+The ten items in `CryptAlyst-refactoring-findings.pdf` were worked in order, one commit
+per item, each gated on the full suite (Go: gofmt/vet/build/test; web: tsc, audit-css,
+verify, render-smoke) and each verified in a browser where it could change behaviour.
+
+Done:
+1. **One request layer** — `respond.go` owns ok/fail/requireMethod/param*, replacing 35
+   hand-built error envelopes, 22 symbol parses and every method rejection.
+2. **One client layer** — `data/client.ts` (getJSON/postJSON/postAction) and
+   `useResource`/`usePoll`; 24 direct fetch sites in components became 0, 30 timers
+   became 16.
+3. **One forecast pipeline** — `pipeline.go`: intervalPolicies keyed by frame, so the
+   sub-minute thresholds live in one table instead of twelve handlers.
+4. **One market port** — `Deps.Market` is `KlinesSource`; `internal/mocks` gives tests a
+   deterministic exchange and a fake agent, and fourteen offline tests now cover handlers
+   that previously could not be exercised at all.
+5. **ForecastLabPanel split** — 1,182 → 906 lines, six sections extracted (ranking,
+   compare table, chart, history, model picker, parameter bar).
+6. *(open — see below)*
+7. **One glossary** — `glossaryContext`; `tools` was threaded through 14 components and
+   is now a context read where the tooltip is drawn. App call sites: 14 → 1.
+8. **A named palette** — eighteen repeating colours became `--pal-*` tokens with values
+   equal to the literals they replace, so the commit changed no pixel. Tokens are
+   prefixed deliberately: the first attempt used `--panel-2` and collided with the theme.
+9. **One model catalogue** — `GET /api/forecast/models` serves 49 models in 12 families
+   with platform/agent availability; the UI renders what exists instead of a hand-kept
+   array.
+10. **Typed boundary** — `sweepRow`/`sweepSeries` decode the agent's JSON once; the live
+    board's merge and best-ever comparison are struct comparisons.
+
+**Item 6 (one chart) is open, deliberately.** Three renderers remain: `PriceChart`
+(lightweight-charts, used by the ATLAS popup), `ForecastChart` (a forecast anchored over
+known bars) and `LiveForecastChart` (a projection into the future from the live price).
+The navigation duplication the item was aimed at is gone — both SVG charts share
+`useZoomPan`. What remains is rendering, and the two SVG charts have different contracts:
+`ForecastChart`'s future support uses a separate x-mapping from its zoomable axis, so
+passing live data through it produced `TypeError: e is not iterable` and a blank chart.
+That was attempted, caught in a browser, and reverted in the same round.
+
+Merging them means giving `ForecastChart` a real future-projection mode — new geometry,
+not a refactor — and it would put a chart used every session at risk for a file count.
+It stays open until the human asks for that mode.
+
+## Envelope — the platform contract, implemented (Nov 3)
+
+`internal/envelope` now carries the architecture documents' contract: `Packet{data, meta,
+refs}` with version, plane, topic, key, producer, generation, cid/parent_cid, computed_at
+and the pipeline record. A single topic registry (23 topics, six planes) declares producers
+and TTLs; `Run` applies authority → keying → correlation → freshness before the operator
+computes a payload; a refusal is recorded as an envelope on `system.error`.
+
+The recorder is an append-only JSONL journal that never blocks a request; `Replay` reads it
+back in order. Packets publish to RabbitMQ over STOMP, exchange = plane, routing key = topic
+— the topology the broker already carries — with provenance repeated as STOMP headers.
+
+On top of that: `/api/decision` reads the newest recorded forecast, refuses it if
+`meta.computed_at` is older than the topic TTL, and publishes `model.decision` with the
+forecast's cid as `parent_cid`; `/api/replay` re-derives every verdict from the journal and
+grades it against the price the market actually reached at anchor + horizon; and
+`/api/orchestrator/plan` decides serve-or-recompute from capabilities and generations
+alone, publishing `control.engine` requests for anything stale.
+
+Its honest result so far: replaying 23 recorded forecasts produced **no trades** — every
+verdict was "none", because the models project an edge below the 0.05% floor on 1m frames.
+The platform is now able to say that, which is the point.
