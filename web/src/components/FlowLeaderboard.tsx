@@ -1,5 +1,5 @@
 import { ChartIcon } from './ChartIcon';
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { clock, int, isoUtc, multiple, num, pct, px, share, toNum, tone, usd } from '../format';
 import { visibleFlowColumns } from '../columns';
 import { useElementSize } from '../hooks/useElementSize';
@@ -7,6 +7,7 @@ import { useSelection } from '../selection';
 import type { FlowMsg, ToolsMsg } from '../types';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
+import { typeLabel, useInstrumentType } from '../hooks/useInstrumentTypes';
 
 interface Props {
   flow: FlowMsg | null;
@@ -24,10 +25,104 @@ const MAX_ROWS = 25;
  * is the selection. The column set follows the measured container width, so a
  * narrowed box degrades gracefully instead of clipping.
  */
+
+/**
+ * The sort choice lives outside the component.
+ *
+ * The panel is re-created when a new flow snapshot arrives, and component state
+ * went with it: a reader who sorted by name saw the list snap back to "burst"
+ * within a second. Keeping the choice here means a live push cannot undo it.
+ */
+interface FlowSort {
+  key: string;
+  dir: 1 | -1;
+}
+
+let flowSort: FlowSort = { key: 'burst', dir: -1 };
+const flowSortListeners = new Set<() => void>();
+
+function setFlowSort(next: FlowSort): void {
+  flowSort = next;
+  for (const l of flowSortListeners) l();
+}
+
+function useFlowSort(): FlowSort {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const l = () => force((v) => v + 1);
+    flowSortListeners.add(l);
+    return () => {
+      flowSortListeners.delete(l);
+    };
+  }, []);
+  return flowSort;
+}
+
+/** PERP / SPOT, next to the symbol so a mixed list says what it is. */
+const InstrumentChip = memo(function InstrumentChip({ symbol }: { symbol: string }) {
+  const inst = useInstrumentType(symbol);
+  const label = typeLabel(inst?.cls);
+  if (label === '') return null;
+  return (
+    <span
+      className={`inst-chip${label === 'PERP' ? ' is-perp' : ' is-spot'}`}
+      title={inst?.name !== '' ? inst?.name : `${symbol} ${label.toLowerCase()}`}
+    >
+      {label}
+    </span>
+  );
+});
+
 export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Props) {
   const selection = useSelection();
   const { ref, size } = useElementSize<HTMLDivElement>();
-  const rows = Array.isArray(flow?.rows) ? flow.rows.slice(0, MAX_ROWS) : [];
+  const raw = Array.isArray(flow?.rows) ? flow.rows.slice(0, MAX_ROWS) : [];
+
+  // Sorting is per snapshot and local: the leaderboard is a live list, and a
+  // reader who asked for "biggest move first" wants that order kept as the data
+  // changes underneath, not reset by the next push.
+  const sort = useFlowSort();
+  const toggleSort = (key: string) =>
+    setFlowSort(
+      sort.key === key
+        ? { key, dir: sort.dir === 1 ? -1 : 1 }
+        : { key, dir: key === 'symbol' ? 1 : -1 },
+    );
+
+  const rows = useMemo(() => {
+    const value = (r: Record<string, unknown>): number | string => {
+      switch (sort.key) {
+        case 'symbol':
+          return String(r.symbol ?? '');
+        case 'type':
+          return '';
+        case 'change':
+          return toNum(r.change_10s) ?? -Infinity;
+        case 'flow':
+          return toNum(r.flow_quote) ?? -Infinity;
+        case 'price':
+          return toNum(r.last_price) ?? -Infinity;
+        case 'z':
+          return toNum(r.burst_z) ?? -Infinity;
+        case 'taker':
+          return toNum(r.taker_buy_ratio) ?? -Infinity;
+        case 'vol24':
+          return toNum(r.quote_volume_24h) ?? -Infinity;
+        default:
+          return toNum(r.burst_multiple) ?? -Infinity;
+      }
+    };
+    const copy = [...raw];
+    copy.sort((a, b) => {
+      const av = value(a as Record<string, unknown>);
+      const bv = value(b as Record<string, unknown>);
+      if (typeof av === 'string' || typeof bv === 'string') {
+        return String(av).localeCompare(String(bv)) * sort.dir;
+      }
+      return (av - bv) * sort.dir;
+    });
+    return copy;
+  }, [raw, sort]);
 
   // Bars are scaled against the strongest multiple in this snapshot.
   let peak = 1;
@@ -62,11 +157,18 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
                     keys={c.toolKeys}
                     tools={tools}
                     fallbackTitle={c.label}
-                    label="Click a row to chart that symbol."
+                    label="Click to sort by this column. Click a row to chart that symbol."
                   >
-                    <span className="col-head" tabIndex={0}>
+                    <button
+                      type="button"
+                      className={`col-head col-sort${sort.key === c.key ? ' is-sorted' : ''}`}
+                      onClick={() => toggleSort(c.key)}
+                      aria-sort={sort.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}
+                      title={`sort by ${c.label}`}
+                    >
                       {c.label}
-                    </span>
+                      <span className="col-sort-mark">{sort.key === c.key ? (sort.dir === 1 ? '▲' : '▼') : ''}</span>
+                    </button>
                   </Tooltip>
                 ))}
               </div>
@@ -106,6 +208,8 @@ export const FlowLeaderboard = memo(function FlowLeaderboard({ flow, tools }: Pr
                               {symbol !== '' ? symbol : '—'}
                             </button>
                           );
+                        case 'type':
+                          return <InstrumentChip key={c.key} symbol={symbol} />;
                         case 'burst':
                           return (
                             <span key={c.key} className="flow-bar" title={`${multiple(r.burst_multiple)} baseline`}>

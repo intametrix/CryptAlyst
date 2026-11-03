@@ -77,9 +77,10 @@ export interface FlowColumn {
  */
 export const FLOW_COLUMNS: readonly FlowColumn[] = [
   { key: 'symbol', label: 'symbol', toolKeys: ['symbol'], minWidth: 0, fr: 1.1 },
+  { key: 'type', label: 'type', toolKeys: ['symbol'], minWidth: 0, fr: 0.55 },
   { key: 'burst', label: 'burst', toolKeys: ['burst_multiple'], minWidth: 0, fr: 1.2 },
   { key: 'flow', label: 'flow', toolKeys: ['flow_quote'], minWidth: 300, fr: 0.9 },
-  { key: 'change', label: '10s', toolKeys: ['change_10s'], minWidth: 380, fr: 0.8 },
+  { key: 'change', label: '10s %', toolKeys: ['change_10s'], minWidth: 0, fr: 0.85 },
   { key: 'price', label: 'price', toolKeys: ['price'], minWidth: 460, fr: 0.9 },
   { key: 'z', label: 'z', toolKeys: ['burst_z'], minWidth: 540, fr: 0.6 },
   { key: 'taker', label: 'taker', toolKeys: ['taker_buy_ratio'], minWidth: 620, fr: 0.7 },

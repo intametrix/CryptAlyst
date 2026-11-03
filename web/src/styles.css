@@ -5370,3 +5370,14 @@ table {
 /* the fan-out: individual sampled futures branching from the live price */
 .lfc-branch { stroke: rgba(255, 200, 90, .38); stroke-width: 1; }
 .swatch-branch { background: rgba(255, 200, 90, .5); }
+
+/* sortable column headers in the flow leaderboard */
+.col-sort { display: inline-flex; align-items: center; gap: 4px; min-width: 0; min-height: 0; padding: 0; background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.col-sort:hover { color: #dff2ff; }
+.col-sort.is-sorted { color: #6fd0ff; }
+.col-sort-mark { font-size: 8px; }
+
+/* instrument type, so a mixed list says whether it is a perpetual or spot */
+.inst-chip { display: inline-block; margin-left: 0; padding: 0 4px; border-radius: 4px; font-size: 8px; letter-spacing: .06em; line-height: 13px; vertical-align: middle; }
+.inst-chip.is-perp { color: #9fd8f5; background: rgba(111, 208, 255, .12); border: 1px solid rgba(111, 208, 255, .30); }
+.inst-chip.is-spot { color: #c8b6ff; background: rgba(160, 130, 255, .12); border: 1px solid rgba(160, 130, 255, .30); }

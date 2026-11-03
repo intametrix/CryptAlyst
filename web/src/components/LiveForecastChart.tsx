@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useElementSize } from '../hooks/useElementSize';
+import { useZoomPan } from '../hooks/useZoomPan';
 
 interface Payload {
   ok: boolean;
@@ -78,6 +79,12 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
     };
   }, [symbol, active]);
 
+  // The same navigation the forecast chart has: wheel zooms at the cursor, drag
+  // pans, double-click resets. Without it a live chart is a picture rather than a
+  // chart.
+  const total = (data?.actual.length ?? 0) + (data?.forecast.length ?? 0);
+  const zoomPan = useZoomPan(Math.max(total, 1), width);
+
   const geom = useMemo(() => {
     if (data === null) return null;
     const base = data.actual;
@@ -99,10 +106,14 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
     const total = totalBars;
     const values = [...actual, ...forecast];
     if (data.fan) values.push(...data.fan.p10, ...data.fan.p90);
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
+    const visFrom = Math.max(0, Math.floor(zoomPan.d0));
+    const visTo = Math.min(values.length - 1, Math.ceil(zoomPan.d1));
+    const visible = zoomPan.zoomed && visTo > visFrom ? values.slice(visFrom, visTo + 1) : values;
+    const lo = Math.min(...visible);
+    const hi = Math.max(...visible);
     const span = Math.max(hi - lo, 1e-9);
-    const x = (i: number) => PAD.left + (i / Math.max(total - 1, 1)) * (width - PAD.left - PAD.right);
+    const zSpan = Math.max(zoomPan.d1 - zoomPan.d0, 1e-6);
+    const x = (i: number) => PAD.left + ((i - zoomPan.d0) / zSpan) * (width - PAD.left - PAD.right);
     const y = (v: number) => PAD.top + (1 - (v - lo) / span) * (height - PAD.top - PAD.bottom);
 
     const last = actual[actual.length - 1] ?? 0;
@@ -153,7 +164,7 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
     }));
 
     return { price, future, cone, inner, branches, ticks, xTicks, x, y, n, h, lo, hi };
-  }, [data, width, height, tick, live]);
+  }, [data, width, height, tick, live, zoomPan.d0, zoomPan.d1]);
 
   const lastForecast = data?.forecast[data.forecast.length - 1];
   const changePct =
@@ -203,7 +214,18 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
         {geom === null ? (
           <p className="fl-hint">loading the next bars…</p>
         ) : (
-          <svg width={width} height={height} className="lfc-svg" role="img">
+          <svg
+            width={width}
+            height={height}
+            className="lfc-svg"
+            role="img"
+            onWheel={zoomPan.onWheel}
+            onPointerDown={zoomPan.onPointerDown}
+            onPointerMove={zoomPan.onPointerMove}
+            onPointerUp={zoomPan.onPointerUp}
+            onDoubleClick={zoomPan.reset}
+            style={{ cursor: zoomPan.zoomed ? 'grab' : 'default', touchAction: 'none' }}
+          >
             {geom.ticks.map((t) => (
               <g key={t.label + t.y.toFixed(0)}>
                 <line x1={PAD.left} y1={t.y} x2={width - PAD.right} y2={t.y} className="fchart-grid" />
@@ -234,6 +256,18 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
           <span className="fchart-key"><span className="fchart-swatch swatch-branch" />{data.branches.length} branches</span>
         )}
         {data?.fan !== undefined && <span className="fchart-key"><span className="fchart-swatch swatch-median" />fan median</span>}
+        <span className="fchart-zoom">
+          <span>zoom</span>
+          {[30, 60, 120].map((n) => (
+            <button key={n} type="button" className="fchart-zoom-btn" onClick={() => zoomPan.show(n)} title={`show the newest ${n} points`}>
+              {n}
+            </button>
+          ))}
+          <button type="button" className="fchart-zoom-btn" onClick={zoomPan.reset} title="fit everything">
+            all
+          </button>
+        </span>
+        <span className="fchart-note">scroll to zoom · drag to pan · double-click to fit</span>
       </div>
     </div>
   );

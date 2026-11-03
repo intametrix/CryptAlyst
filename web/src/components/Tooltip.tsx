@@ -31,6 +31,12 @@ export interface TooltipProps {
   className?: string;
   /** Tooltip placement preference; it flips automatically when it does not fit. */
   preferred?: 'top' | 'bottom';
+  /**
+   * How long the pointer must rest before the tooltip appears. The default is
+   * deliberately slow: these explain, they do not decorate, and a tooltip that
+   * fires on contact covers the thing being looked at.
+   */
+  delayMs?: number;
   children: React.ReactNode;
 }
 
@@ -159,9 +165,11 @@ export function Tooltip({
   tone = 'default',
   className,
   preferred = 'bottom',
+  delayMs = 3000,
   children,
 }: TooltipProps) {
   const viewer = useTooltipViewer();
+  const dwell = useRef<number | null>(null);
   const generatedId = useId();
   const id = useMemo(() => `tip-${generatedId.replace(/:/g, '')}`, [generatedId]);
 
@@ -176,19 +184,28 @@ export function Tooltip({
         className={`tip-trigger${className !== undefined ? ` ${className}` : ''}`}
         aria-describedby={viewer.activeId === id ? id : undefined}
         onPointerEnter={(event) => {
-          viewer.show({
-            spec,
-            value,
-            reasons,
-            breakdown,
-            breakdownLabels,
-            tone,
-            preferred,
-            anchor: event.currentTarget,
-            id,
-          });
+          // Only after a deliberate dwell: a tooltip that appears instantly
+          // covers the thing a reader is already trying to look at.
+          const anchor = event.currentTarget;
+          if (dwell.current !== null) window.clearTimeout(dwell.current);
+          dwell.current = window.setTimeout(() => {
+            viewer.show({
+              spec,
+              value,
+              reasons,
+              breakdown,
+              breakdownLabels,
+              tone,
+              preferred,
+              anchor,
+              id,
+            });
+          }, Math.max(0, delayMs));
         }}
-        onPointerLeave={() => viewer.hide(id)}
+        onPointerLeave={() => {
+          if (dwell.current !== null) window.clearTimeout(dwell.current);
+          viewer.hide(id);
+        }}
         onFocus={(event) => {
           viewer.show({
             spec,
