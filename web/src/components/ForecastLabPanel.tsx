@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react';
+import { getJSON } from '../data/client';
 import { num, text } from '../format';
 import { useSelection } from '../selection';
 import { useResource } from '../hooks/useResource';
@@ -380,9 +381,7 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
     const run = async () => {
       try {
         const q = new URLSearchParams({ symbol: sym, interval, limit: '400' });
-        const res = await fetch(`/api/history/coverage?${q.toString()}`);
-        if (!res.ok) return;
-        const body = (await res.json()) as Coverage;
+        const body = await getJSON<Coverage>(`/api/history/coverage?${q.toString()}`);
         if (!dead) setCoverage(body);
       } catch {
         /* coverage is advisory: the panel still works without it */

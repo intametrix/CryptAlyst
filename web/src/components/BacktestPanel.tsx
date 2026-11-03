@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getJSON } from '../data/client';
 import { ForecastChart } from './ForecastChart';
 import type { Interval } from '../types';
 
@@ -35,10 +36,8 @@ export function BacktestPanel({ symbol, interval, method }: { symbol: string; in
       void days;
       if (from !== '') q.set('from_ms', String(new Date(from).getTime()));
       if (to !== '') q.set('to_ms', String(new Date(to).getTime()));
-      const r = await fetch(`/api/forecast/backtest?${q.toString()}`, { headers: { accept: 'application/json' } });
-      const body = (await r.json()) as BacktestResult;
-      if (!body.ok) { setErr(body.error ?? 'backtest failed'); setRes(null); }
-      else setRes(body);
+      const body = await getJSON<BacktestResult>(`/api/forecast/backtest?${q.toString()}`);
+      setRes(body);
     } catch (e) {
       setErr((e as Error).message);
     } finally {

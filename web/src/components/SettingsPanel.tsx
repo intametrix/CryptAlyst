@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { getJSON } from '../data/client';
 
 /** GET /api/settings — live detection/universe thresholds. */
 export interface Settings {
@@ -53,9 +54,7 @@ export const SettingsPanel = memo(function SettingsPanel() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch('/api/settings', { headers: { accept: 'application/json' } });
-      if (!res.ok) throw new Error(`GET /api/settings ${res.status}`);
-      const body = (await res.json()) as Settings;
+      const body = await getJSON<Settings>('/api/settings');
       setSettings(body);
       setDraft(Object.fromEntries(Object.entries(body).map(([k, v]) => [k, String(v)])));
       setError(null);
