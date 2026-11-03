@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { usePoll } from '../hooks/usePoll';
+import { memo, useCallback, useState } from 'react';
 import { clock, int, num, px, usd } from '../format';
 import { useSelection } from '../selection';
 import { ChartIcon } from './ChartIcon';
@@ -160,11 +161,9 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
     }
   }, []);
 
-  useEffect(() => {
-    void refresh();
-    const id = window.setInterval(() => void refresh(), running ? 3000 : 10000);
-    return () => window.clearInterval(id);
-  }, [refresh, running]);
+  // A variable beat: faster while a session is running. usePoll owns the timer;
+  // the interval changes with the session state.
+  usePoll(refresh, running ? 3000 : 10000);
 
   const act = useCallback(
     async (action: 'start' | 'stop') => {

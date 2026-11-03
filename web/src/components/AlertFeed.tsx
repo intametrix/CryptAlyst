@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
+import { useNow } from '../hooks/useNow';
 import type { ColorCanon } from '../colors';
 import { activeFilters, clearFilter, hasFilters, matchesFilter, type FeedFilter, type FilterKey } from '../filters';
 import { int } from '../format';
@@ -53,11 +54,7 @@ export const AlertFeed = memo(function AlertFeed({
   const [dense, setDense] = useState(false);
   // One clock for the whole feed: cards are memoised on it, so a tick re-renders
   // the feed's cards but not the surrounding panels, and unmounted cost is zero.
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
+  const nowMs = useNow();
 
   const visible = useMemo(() => {
     const byBadges = alerts.filter((a) => matchesFilter(a, filter));

@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
+import { useNow } from '../../hooks/useNow';
 import { clock, int, isoUtc, multiple, num, usd } from '../../format';
 import type { ChartMarker } from '../../chartData';
 import { prettifyEnum } from '../../types';
@@ -67,11 +68,7 @@ export const EventsColumn = memo(function EventsColumn({
 }: EventsColumnProps) {
   // The cards print relative times ("42s ago"), so the column owns the same
   // one-second clock the main feed shares with its cards.
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
+  const nowMs = useNow();
   const selectedMark = useMemo(
     () => (selected === null ? null : events.find((m) => m.time === selected) ?? null),
     [events, selected],
