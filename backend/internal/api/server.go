@@ -263,6 +263,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/envelope/stats", s.handleEnvelopeStats)
 	mux.HandleFunc("/api/decision", s.handleDecision)
 	mux.HandleFunc("/api/envelope/chain", s.handleEnvelopeChain)
+	mux.HandleFunc("/api/replay", s.handleReplay)
 	mux.HandleFunc("/api/agent/python", s.handleAgentPython)
 	mux.HandleFunc("/api/instruments", s.handleInstruments)
 	mux.HandleFunc("/api/features", s.handleFeatures)
