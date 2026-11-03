@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ForecastChart } from './ForecastChart';
 import { LiveForecastChart } from './LiveForecastChart';
+import { ChartPanel } from './ChartPanel';
 
 interface Row {
   method: string; lookback: number; r2: number; mape_pct: number;
@@ -236,6 +237,10 @@ export function LiveEnginePanel() {
           )}
 
           {series && Array.isArray(series.points) && series.points.length > 0 && (
+            <ChartPanel
+              title="model forecast"
+              meta={`${current?.symbol ?? ''} · ${series.method} lb${series.lookback} · MAPE ${series.mape_pct.toFixed(3)}%`}
+            >
             <ForecastChart
               symbol={current?.symbol}
               times={(series.points ?? []).map((p) => p.t)}
@@ -243,10 +248,13 @@ export function LiveEnginePanel() {
               forecasts={[{ label: `${series.method} lb${series.lookback}`, values: (series.points ?? []).map((p) => p.forecast), mape: series.mape_pct }]}
               showWhiskers={false}
             />
+            </ChartPanel>
           )}
 
           {current !== undefined && (
-            <LiveForecastChart symbol={current.symbol} interval={data?.interval ?? '4h'} />
+            <ChartPanel title="next bars" meta={<span>{current.symbol} · live</span>}>
+              <LiveForecastChart symbol={current.symbol} interval={data?.interval ?? '4h'} />
+            </ChartPanel>
           )}
 
           {current && current.rows.length > 0 && (

@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useElementSize } from '../hooks/useElementSize';
+import { useZoomPan } from '../hooks/useZoomPan';
+import { ZOOM_PLAN_FALLBACK } from '../zoom';
 
 /** One model's forecast path, drawn against the same actual bars. */
 export interface ForecastSeries {
@@ -89,6 +91,8 @@ export function ForecastChart({
       return next;
     });
 
+  const zoomPan = useZoomPan(Math.max((history?.length ?? 0) + actual.length, 1), width);
+
   const geom = useMemo(() => {
     const hist = history ?? [];
     if (actual.length === 0) return null;
@@ -115,7 +119,10 @@ export function ForecastChart({
     const plotW = Math.max(10, width - PAD.left - PAD.right);
     const plotH = Math.max(10, height - PAD.top - PAD.bottom);
     const n = actualAll.length;
-    const x = (i: number) => PAD.left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+    // Zoom maps a visible window of the series into the plot: the same geometry,
+    // a narrower domain. Points outside are clipped by the plot's clip path.
+    const zSpan = Math.max(zoomPan.d1 - zoomPan.d0, 1e-6);
+    const x = (i: number) => PAD.left + ((i - zoomPan.d0) / zSpan) * plotW;
     const y = (v: number) => PAD.top + plotH - ((v - y0) / (y1 - y0)) * plotH;
 
     const ticks: { y: number; label: string }[] = [];
@@ -208,13 +215,29 @@ export function ForecastChart({
       actualLine, histLine, lines, simLines, futureLine, nTotal, xTotal, futTimes: future?.t ?? [], upper, lower, whiskers, ticks, xTicks, x, band90, band50, median,
       nAll: actualAll.length, timesAll,
     };
-  }, [times, actual, forecasts, width, height, sigma, fan, showWhiskers, history, historyTimes, paths, future]);
+  }, [times, actual, forecasts, width, height, sigma, fan, showWhiskers, history, historyTimes, paths, future, zoomPan.d0, zoomPan.d1]);
 
   return (
     <div className={`fchart${geom === null ? ' is-empty' : ''}`}>
       {geom === null ? null : (
         <div className="fchart-plot" ref={ref}>
-        <svg width={width} height={height} className="fchart-svg" role="img">
+        <svg
+          width={width}
+          height={height}
+          className="fchart-svg"
+          role="img"
+          onWheel={zoomPan.onWheel}
+          onPointerDown={zoomPan.onPointerDown}
+          onPointerMove={zoomPan.onPointerMove}
+          onPointerUp={zoomPan.onPointerUp}
+          onDoubleClick={zoomPan.reset}
+          style={{ cursor: zoomPan.zoomed ? 'grab' : 'default', touchAction: 'none' }}
+        >
+          <defs>
+            <clipPath id="fchart-clip">
+              <rect x={PAD.left} y={PAD.top} width={Math.max(0, width - PAD.left - PAD.right)} height={Math.max(0, height - PAD.top - PAD.bottom)} />
+            </clipPath>
+          </defs>
           <title>{`forecast vs actual — ${forecasts.map((f) => f.label).join(', ') || 'none'}`}</title>
 
           {symbol !== undefined && symbol !== '' && (
@@ -273,6 +296,7 @@ export function ForecastChart({
           {geom.simLines.map((pts, i) => (
             <polyline key={`sim${i}`} points={pts} className="fchart-sim" fill="none" />
           ))}
+          <g clipPath="url(#fchart-clip)">
           {geom.upper !== '' && <polyline points={geom.upper} className="fchart-cone" fill="none" />}
           {geom.lower !== '' && <polyline points={geom.lower} className="fchart-cone" fill="none" />}
 
@@ -285,6 +309,7 @@ export function ForecastChart({
             className={`fchart-actual${hovered !== null ? ' is-dim' : ''}`}
             fill="none"
           />
+          </g>
           {geom.lines
             .filter((l) => !hidden.has(l.label))
             .map((l) => (
@@ -329,6 +354,31 @@ export function ForecastChart({
         {future !== undefined && future !== null && future.v.length > 0 && (
           <span className="fchart-key"><span className="fchart-swatch swatch-future" />forecast (next {future.v.length})</span>
         )}
+        {zoomPan.zoomed && (
+          <button type="button" className="fchart-key is-clickable" onClick={zoomPan.reset} title="fit the whole series">
+            ⤢ fit
+          </button>
+        )}
+        <span className="fchart-zoom">
+          <span>zoom</span>
+          {ZOOM_PLAN_FALLBACK.presets
+            .filter((p) => p.mode === 'fit' || (p.bars ?? 0) > 0)
+            .map((p) => (
+              <button
+                key={p.preset}
+                type="button"
+                className="fchart-zoom-btn"
+                onClick={() => {
+                  if (p.mode === 'fit' || p.bars === undefined) zoomPan.reset();
+                  else zoomPan.show(p.bars);
+                }}
+                title={p.mode === 'fit' ? 'fit the whole series' : `show the newest ${p.bars} bars`}
+              >
+                {p.preset}
+              </button>
+            ))}
+        </span>
+        <span className="fchart-note">scroll to zoom · drag to pan · double-click to fit</span>
         <span className="fchart-key"><span className="fchart-swatch swatch-err" />error</span>
         {fan !== null && fan !== undefined && (
           <span className="fchart-key"><span className="fchart-swatch swatch-fan" />predictive range 10-90%</span>

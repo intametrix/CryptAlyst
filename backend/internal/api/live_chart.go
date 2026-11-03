@@ -110,6 +110,11 @@ func (s *Server) handleLiveChart(w http.ResponseWriter, r *http.Request) {
 	if fanOK {
 		out["fan"] = map[string]any{"p10": p10, "p50": p50, "p90": p90}
 	}
+	// Individual branches, so the projection fans out visibly instead of being a
+	// single line with a shaded band around it.
+	if branches := samplePaths(closes, horizon, 12); len(branches) > 0 {
+		out["branches"] = branches
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 

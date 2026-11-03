@@ -4,6 +4,7 @@ import { useSelection } from '../selection';
 import { useForecastOverlay } from '../hooks/useForecastOverlay';
 import { TickerPicker } from './TickerPicker';
 import { ForecastChart, priceLabel } from './ForecastChart';
+import { ChartPanel } from './ChartPanel';
 import { BacktestPanel } from './BacktestPanel';
 import { LiveEnginePanel } from './LiveEnginePanel';
 import { DataPanel } from './DataPanel';
@@ -725,6 +726,7 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
         ) : gradedPoints.length === 0 ? (
           <p className="fl-hint">waiting for the first forecast…</p>
         ) : (
+          <ChartPanel title="forecast" meta={<span>{graded.result?.symbol ?? ''} · {runs.length} model{runs.length === 1 ? '' : 's'}</span>}>
           <div className="fl-chart-wrap">
             <ForecastChart
               times={
@@ -769,6 +771,7 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
               }
             />
           </div>
+          </ChartPanel>
         )}
       </Section>
 

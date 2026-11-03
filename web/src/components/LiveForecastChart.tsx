@@ -15,6 +15,8 @@ interface Payload {
   forecast_times: number[];
   forecast: number[];
   fan?: { p10: number[]; p50: number[]; p90: number[] };
+  /** Individual sampled futures: the visible fan-out from the current price. */
+  branches?: number[][];
 }
 
 const PAD = { top: 18, right: 14, bottom: 26, left: 64 };
@@ -111,6 +113,17 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
       ...forecast.map((v, i) => `${x(anchorIdx + 1 + i).toFixed(1)},${y(v).toFixed(1)}`),
     ].join(' ');
 
+    // Each sampled future becomes a line from the live price, so the projection
+    // branches rather than being one line with a band around it.
+    const branches = (data.branches ?? [])
+      .filter((b) => b.length === h)
+      .map((b) =>
+        [
+          `${x(anchorIdx).toFixed(1)},${y(last).toFixed(1)}`,
+          ...b.map((v, i) => `${x(anchorIdx + 1 + i).toFixed(1)},${y(v * ratio).toFixed(1)}`),
+        ].join(' '),
+      );
+
     let cone = '';
     let inner = '';
     if (data.fan) {
@@ -139,7 +152,7 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
             : label(data.forecast_times[i - n - 1] ?? 0),
     }));
 
-    return { price, future, cone, inner, ticks, xTicks, x, y, n, h, lo, hi };
+    return { price, future, cone, inner, branches, ticks, xTicks, x, y, n, h, lo, hi };
   }, [data, width, height, tick, live]);
 
   const lastForecast = data?.forecast[data.forecast.length - 1];
@@ -197,6 +210,9 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
                 <text x={PAD.left - 8} y={t.y + 3} textAnchor="end" className="fchart-axis-text">{t.label}</text>
               </g>
             ))}
+            {geom.branches.map((pts, i) => (
+              <polyline key={`b${i}`} points={pts} className="lfc-branch" fill="none" />
+            ))}
             {geom.cone !== '' && <polygon points={geom.cone} className="lfc-cone" />}
             <polyline points={geom.price} className="fchart-actual" fill="none" />
             {geom.inner !== '' && <polyline points={geom.inner} className="lfc-median" fill="none" />}
@@ -214,6 +230,9 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
         <span className="fchart-key"><span className="fchart-swatch swatch-actual" />price</span>
         <span className="fchart-key"><span className="fchart-swatch swatch-future" />forecast</span>
         <span className="fchart-key"><span className="fchart-swatch swatch-fan" />funnel 10–90%</span>
+        {data?.branches !== undefined && data.branches.length > 0 && (
+          <span className="fchart-key"><span className="fchart-swatch swatch-branch" />{data.branches.length} branches</span>
+        )}
         {data?.fan !== undefined && <span className="fchart-key"><span className="fchart-swatch swatch-median" />fan median</span>}
       </div>
     </div>

@@ -5341,3 +5341,32 @@ table {
 .fl-chart-wrap { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 0; min-height: 0; }
 .fl-chart-wrap .fchart { height: clamp(240px, 38vh, 560px); }
 .sec-body .fchart-plot { min-height: 0; }
+
+/* every chart lives in one of these, with the same three states */
+.cp { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; border: 1px solid #1b2a38; border-radius: 10px; background: #0c141c; padding: 6px 8px 8px; transition: border-color .15s ease, background .15s ease; }
+.cp:hover { border-color: #24405a; }
+.cp.is-full { position: fixed; inset: 0; z-index: 70; border-radius: 0; padding: 10px 16px 16px; background: #080f15; overflow: auto; }
+.cp.is-min { padding-bottom: 6px; }
+.cp-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; min-height: 0; }
+.cp-toggle { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 0; padding: 2px 4px; background: none; border: 0; border-radius: 6px; color: inherit; cursor: pointer; }
+.cp-toggle:hover { background: rgba(111, 208, 255, .08); }
+.cp-caret { display: inline-block; font-size: 9px; color: #6b7f93; transition: transform .15s ease; }
+.cp-caret.is-open { transform: rotate(90deg); }
+.cp-title { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #9fb4c8; }
+.cp-meta { font-size: 11.5px; color: #8fa3b8; }
+.cp-controls { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; min-width: 0; min-height: 0; }
+.cp-btn { min-width: 0; min-height: 0; padding: 3px 9px; font-size: 10.5px; color: #9fb4c8; background: #101c28; border: 1px solid #294054; border-radius: 6px; cursor: pointer; transition: color .15s ease, border-color .15s ease; }
+.cp-btn:hover { color: #dff2ff; border-color: #6fd0ff; }
+.cp-body { min-width: 0; min-height: 0; }
+.cp.is-full .cp-body .fchart, .cp.is-full .cp-body .lfc-plot { height: calc(100vh - 110px); }
+
+/* the chart zoom control, shared with the ATLAS chart */
+.fchart-zoom { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; color: #6b7f93; min-width: 0; min-height: 0; }
+.fchart-zoom select { min-width: 0; min-height: 0; padding: 2px 6px; font-size: 10.5px; color: #9fb4c8; background: #101c28; border: 1px solid #294054; border-radius: 6px; }
+
+.fchart-zoom-btn { min-width: 0; min-height: 0; padding: 2px 7px; font-size: 10px; color: #9fb4c8; background: #101c28; border: 1px solid #294054; border-radius: 6px; cursor: pointer; }
+.fchart-zoom-btn:hover { color: #dff2ff; border-color: #6fd0ff; }
+
+/* the fan-out: individual sampled futures branching from the live price */
+.lfc-branch { stroke: rgba(255, 200, 90, .38); stroke-width: 1; }
+.swatch-branch { background: rgba(255, 200, 90, .5); }
