@@ -1,4 +1,5 @@
 import { usePoll } from '../hooks/usePoll';
+import { getJSON, postAction } from '../data/client';
 import { memo, useCallback, useState } from 'react';
 import { clock, int, num, px, usd } from '../format';
 import { useSelection } from '../selection';
@@ -169,9 +170,8 @@ export const TurtlePanel = memo(function TurtlePanel({ tools }: { tools: ToolsMs
     async (action: 'start' | 'stop') => {
       setBusy(true);
       try {
-        const res = await fetch(`/api/turtle?action=${action}`, { method: 'POST' });
-        if (!res.ok) throw new Error(`http ${res.status}`);
-        setSession((await res.json()) as TurtleState);
+        await postAction(`/api/turtle?action=${action}`);
+        setSession(await getJSON<TurtleState>('/api/turtle'));
       } catch (e) {
         setError(String(e).slice(0, 80));
       } finally {

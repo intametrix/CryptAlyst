@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { postAction } from '../data/client';
 import { useResource } from '../hooks/useResource';
 
 interface Report {
@@ -45,7 +46,7 @@ export function ClientErrorBadge() {
             type="button"
             className="ceb-clear"
             onClick={() => {
-              void fetch('/api/client-errors/clear', { method: 'POST' }).then(() => {
+              void postAction('/api/client-errors/clear').then(() => {
                 resource.reload();
                 setOpen(false);
               });

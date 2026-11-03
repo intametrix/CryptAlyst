@@ -35,3 +35,15 @@ export async function postJSON<T>(path: string, body?: unknown, signal?: AbortSi
   if (!res.ok) throw new ApiError(`HTTP ${res.status} for ${path}`, res.status);
   return (await res.json()) as T;
 }
+
+/**
+ * Fire an action whose reply nobody reads.
+ *
+ * These used to be `fetch(..., {method:'POST'})` scattered through components, each
+ * with its own idea of what a failure means. Here the only behaviour is: the request
+ * happened, or it threw with the status attached.
+ */
+export async function postAction(path: string): Promise<void> {
+  const res = await fetch(path, { method: 'POST', headers: { accept: 'application/json' } });
+  if (!res.ok) throw new ApiError(`HTTP ${res.status} for ${path}`, res.status);
+}

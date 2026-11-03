@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { postAction } from '../data/client';
 import { ForecastChart } from './ForecastChart';
 import { LiveForecastChart } from './LiveForecastChart';
 import { ChartPanel } from './ChartPanel';
@@ -116,7 +117,7 @@ export function LiveEnginePanel() {
             onPick={(sym) => {
               setDraft(sym);
               if (sym.trim() === '') return;
-              void fetch(`/api/forecast/live-symbols?symbols=${encodeURIComponent(sym.trim())}`).then(() => {
+              void postAction(`/api/forecast/live-symbols?symbols=${encodeURIComponent(sym.trim())}`).then(() => {
                 setDraft('');
                 setSaved(null);
               });
@@ -136,7 +137,7 @@ export function LiveEnginePanel() {
             }
             setStopArmed(false);
             const next = data?.training === false ? 'on' : 'off';
-            void fetch(`/api/forecast/engine-control?training=${next}`).then(() => engine.reload());
+            void postAction(`/api/forecast/engine-control?training=${next}`).then(() => engine.reload());
           }}
         >
           {data?.training === false ? 'resume training' : stopArmed ? 'stop? click again' : 'stop training'}
