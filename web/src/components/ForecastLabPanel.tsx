@@ -6,6 +6,8 @@ import { useForecastOverlay } from '../hooks/useForecastOverlay';
 import { TickerPicker } from './TickerPicker';
 import { ForecastChart, priceLabel } from './ForecastChart';
 import { ChartPanel } from './ChartPanel';
+import { ModelRanking, type ModelScore } from './ModelRanking';
+import { ForecastCompare } from './ForecastCompare';
 import { BacktestPanel } from './BacktestPanel';
 import { LiveEnginePanel } from './LiveEnginePanel';
 import { DataPanel } from './DataPanel';
@@ -879,39 +881,16 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
         {graded.error && <p className="fl-hint">forecast unavailable — {graded.error}</p>}
 
         {graded.result && gradedPoints.length > 0 && (
-          <div className="fl-cmp">
-            <div className="fl-cmp-head">
-              <span>
-                forecast vs actual · {graded.result.method} · {graded.result.symbol}
-              </span>
-              <span className="num fl-cmp-mape">
-                {graded.result.source === 'agent' ? 'agent' : 'platform'} · {graded.result.device ?? 'cpu'}/{graded.result.compute ?? 'go'}
-                {' '}· MAPE {(errs?.mape_pct ?? 0).toFixed(3)}%
-                {graded.result?.calibration ? ` · λ ${graded.result.calibration.lambda.toFixed(2)}` : ''}
-              </span>
-            </div>
-            <div className="fl-cmp-table">
-              <div className="fl-cmp-row fl-cmp-row-head">
-                <span>#</span><span>forecast</span><span>actual</span><span>error</span>
-              </div>
-              {gradedPoints.map((p, i) => (
-                <div className="fl-cmp-row" key={p.t}>
-                  <span className="num">{i + 1}</span>
-                  <span className="num fl-cmp-fc">{priceLabel(p.forecast)}</span>
-                  <span className="num fl-cmp-real">{priceLabel(p.actual)}</span>
-                  <span className={`num ${p.error >= 0 ? 'fl-over' : 'fl-under'}`}>
-                    {p.error >= 0 ? '+' : ''}{priceLabel(p.error)}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="fl-cmp-stats">
-              <span>MAE <b className="num">{priceLabel(errs?.mae ?? 0)}</b></span>
-              <span>RMSE <b className="num">{priceLabel(errs?.rmse ?? 0)}</b></span>
-              <span>bias <b className="num">{(errs?.bias ?? 0) >= 0 ? '+' : ''}{priceLabel(errs?.bias ?? 0)}</b></span>
-              <span>max <b className="num">{priceLabel(errs?.max_error ?? 0)}</b></span>
-            </div>
-          </div>
+          <ForecastCompare
+            method={graded.result.method}
+            symbol={graded.result.symbol}
+            source={graded.result.source}
+            device={graded.result.device}
+            compute={graded.result.compute}
+            lambda={graded.result.calibration?.lambda ?? null}
+            points={gradedPoints}
+            errs={errs}
+          />
         )}
       </Section>
 
@@ -951,34 +930,12 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
                 ))}
             </div>
           )}
-          <div className="fl-table" role="table" aria-label="model leaderboard">
-            <div className="fl-row fl-row-head" role="row">
-              <span role="columnheader">model</span>
-              <span role="columnheader">mape</span>
-              <span role="columnheader">80% band</span>
-              <span role="columnheader">cov</span>
-            </div>
-            {scores.map((s) => {
-              const peak = scores[0]?.mape || 1;
-              const width = Math.max(2, Math.min(100, (s.mape / peak) * 100));
-              return (
-                <div className={`fl-row${s.model === study?.best ? ' is-best' : ''}`} role="row" key={s.model}>
-                  <span className="fl-model" role="cell" title={s.note}>{text(s.model)}</span>
-                  <span className="fl-metric" role="cell">
-                    <span className="fl-bar" style={{ width: `${width}%` }} aria-hidden="true" />
-                    <span className="num">{num(s.mape, 3)}%</span>
-                  </span>
-                  <span className="num" role="cell">±{num(s.band80, 0)}</span>
-                  <span className={`num${s.coverage80 >= 0.75 && s.coverage80 <= 0.85 ? ' fl-cov-ok' : ''}`} role="cell">
-                    {num(s.coverage80 * 100, 0)}%
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="fl-note">
-            graded on {windowCount} walk-forward windows · {study?.points ?? 0} bars · out-of-sample only
-          </p>
+          <ModelRanking
+            scores={scores as ModelScore[]}
+            best={study?.best}
+            windowCount={windowCount}
+            points={study?.points ?? 0}
+          />
         </Section>
       )}
 
