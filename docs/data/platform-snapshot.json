@@ -1,0 +1,706 @@
+{
+ "generated_at": "2026-11-03T22:26:57Z",
+ "commit": "c85f2ae",
+ "routes": [
+  "/api/agent/install",
+  "/api/agent/python",
+  "/api/agents",
+  "/api/agents/heartbeat",
+  "/api/agents/register",
+  "/api/alerts",
+  "/api/alerts/groups",
+  "/api/alerts/history",
+  "/api/alerts/scored",
+  "/api/bus",
+  "/api/client-error",
+  "/api/client-errors",
+  "/api/client-errors/clear",
+  "/api/colors",
+  "/api/compute",
+  "/api/config",
+  "/api/data/inventory",
+  "/api/data/load",
+  "/api/data/prune",
+  "/api/decision",
+  "/api/detectors",
+  "/api/envelope/chain",
+  "/api/envelope/recent",
+  "/api/envelope/stats",
+  "/api/envelope/topics",
+  "/api/events",
+  "/api/features",
+  "/api/flow",
+  "/api/flow/history",
+  "/api/forecast/alert-quality",
+  "/api/forecast/auto-config",
+  "/api/forecast/backtest",
+  "/api/forecast/configs",
+  "/api/forecast/continuation",
+  "/api/forecast/engine-control",
+  "/api/forecast/features",
+  "/api/forecast/forward",
+  "/api/forecast/gpu-sweep",
+  "/api/forecast/gpu-sweep-status",
+  "/api/forecast/lab",
+  "/api/forecast/live-chart",
+  "/api/forecast/live-state",
+  "/api/forecast/live-symbols",
+  "/api/forecast/mlr",
+  "/api/forecast/models",
+  "/api/forecast/optimize",
+  "/api/forecast/optimize-backtest",
+  "/api/forecast/verify",
+  "/api/graph/nodes",
+  "/api/health",
+  "/api/heat",
+  "/api/history/coverage",
+  "/api/history/download",
+  "/api/impulse",
+  "/api/instruments",
+  "/api/klines",
+  "/api/klines/latest",
+  "/api/models",
+  "/api/models/signals",
+  "/api/moneyflow",
+  "/api/movers",
+  "/api/orchestrator/plan",
+  "/api/orchestrator/tick",
+  "/api/outlook",
+  "/api/perf",
+  "/api/regime",
+  "/api/replay",
+  "/api/screen",
+  "/api/screen/refresh",
+  "/api/settings",
+  "/api/settings/apply",
+  "/api/survey",
+  "/api/survey/refresh",
+  "/api/symbol",
+  "/api/ticker",
+  "/api/tools",
+  "/api/turtle",
+  "/api/turtle/allocation",
+  "/api/turtle/config",
+  "/api/turtle/equity",
+  "/api/turtle/exposure",
+  "/api/turtle/orders",
+  "/api/turtle/rotations",
+  "/api/turtle/session-log",
+  "/api/turtle/settled",
+  "/api/turtle/stats",
+  "/api/turtle/trades",
+  "/api/universe",
+  "/api/zoom-presets"
+ ],
+ "models": [
+  {
+   "name": "analog10",
+   "family": "analogue",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "analog20",
+   "family": "analogue",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "analog5",
+   "family": "analogue",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "arima",
+   "family": "arima",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "mean",
+   "family": "benchmark",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "naive",
+   "family": "benchmark",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "super",
+   "family": "composite",
+   "volume": true,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "damped70",
+   "family": "damped trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "damped75",
+   "family": "damped trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "damped80",
+   "family": "damped trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "damped85",
+   "family": "damped trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "damped90",
+   "family": "damped trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "damped95",
+   "family": "damped trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "damped98",
+   "family": "damped trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ens_a",
+   "family": "ensemble",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ens_b",
+   "family": "ensemble",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ens_c",
+   "family": "ensemble",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ema10",
+   "family": "exponential",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ema15",
+   "family": "exponential",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ema20",
+   "family": "exponential",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ema30",
+   "family": "exponential",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ema40",
+   "family": "exponential",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ema5",
+   "family": "exponential",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ema50",
+   "family": "exponential",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "ema60",
+   "family": "exponential",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "timestral",
+   "family": "foundation model",
+   "volume": true,
+   "agent_only": true,
+   "platform": false
+  },
+  {
+   "name": "sma10",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma100",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma15",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma150",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma20",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma3",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma30",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma5",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma50",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma8",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "sma80",
+   "family": "moving average",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "mlr",
+   "family": "regression",
+   "volume": true,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "trend",
+   "family": "trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "trend100",
+   "family": "trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "trend150",
+   "family": "trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "trend20",
+   "family": "trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "trend30",
+   "family": "trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "trend50",
+   "family": "trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "trend75",
+   "family": "trend",
+   "volume": false,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "hybrid",
+   "family": "volume",
+   "volume": true,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "vwap",
+   "family": "volume",
+   "volume": true,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "vwdrift",
+   "family": "volume",
+   "volume": true,
+   "agent_only": false,
+   "platform": true
+  },
+  {
+   "name": "vwtrend",
+   "family": "volume",
+   "volume": true,
+   "agent_only": false,
+   "platform": true
+  }
+ ],
+ "topics": [
+  {
+   "Name": "market.price",
+   "Plane": "market",
+   "Producer": [
+    "marketdata"
+   ],
+   "TTLMS": 2000,
+   "Record": false
+  },
+  {
+   "Name": "market.depth",
+   "Plane": "market",
+   "Producer": [
+    "marketdata"
+   ],
+   "TTLMS": 2000,
+   "Record": false
+  },
+  {
+   "Name": "market.candle",
+   "Plane": "market",
+   "Producer": [
+    "marketdata",
+    "store"
+   ],
+   "TTLMS": 60000,
+   "Record": false
+  },
+  {
+   "Name": "market.mini24h",
+   "Plane": "market",
+   "Producer": [
+    "marketdata"
+   ],
+   "TTLMS": 5000,
+   "Record": false
+  },
+  {
+   "Name": "ticks",
+   "Plane": "market",
+   "Producer": [
+    "marketdata"
+   ],
+   "TTLMS": 2000,
+   "Record": false
+  },
+  {
+   "Name": "intel.signal",
+   "Plane": "intel",
+   "Producer": [
+    "signals",
+    "detect"
+   ],
+   "TTLMS": 60000,
+   "Record": true
+  },
+  {
+   "Name": "intel.flow",
+   "Plane": "intel",
+   "Producer": [
+    "signals",
+    "flow",
+    "detect"
+   ],
+   "TTLMS": 60000,
+   "Record": true
+  },
+  {
+   "Name": "intel.movers",
+   "Plane": "intel",
+   "Producer": [
+    "marketdata",
+    "signals"
+   ],
+   "TTLMS": 60000,
+   "Record": true
+  },
+  {
+   "Name": "intel.board",
+   "Plane": "intel",
+   "Producer": [
+    "market_agent",
+    "engine"
+   ],
+   "TTLMS": 60000,
+   "Record": true
+  },
+  {
+   "Name": "intel.ta",
+   "Plane": "intel",
+   "Producer": [
+    "tad",
+    "forecast"
+   ],
+   "TTLMS": 60000,
+   "Record": true
+  },
+  {
+   "Name": "intel.forecast",
+   "Plane": "intel",
+   "Producer": [
+    "forecast",
+    "engine",
+    "agent"
+   ],
+   "TTLMS": 60000,
+   "Record": true
+  },
+  {
+   "Name": "intel.forecast.outcome",
+   "Plane": "intel",
+   "Producer": [
+    "recorder",
+    "grader"
+   ],
+   "TTLMS": 86400000,
+   "Record": true
+  },
+  {
+   "Name": "intel.backtest",
+   "Plane": "intel",
+   "Producer": [
+    "forecast",
+    "agent"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "alert.pumpdump",
+   "Plane": "intel",
+   "Producer": [
+    "backend",
+    "signal_bus",
+    "detect"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "model.sweep",
+   "Plane": "model",
+   "Producer": [
+    "engine",
+    "agent"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "model.selection",
+   "Plane": "model",
+   "Producer": [
+    "engine"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "model.decision",
+   "Plane": "model",
+   "Producer": [
+    "models10",
+    "curve_rider",
+    "engine",
+    "risk"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "model.fill",
+   "Plane": "model",
+   "Producer": [
+    "models10",
+    "curve_rider",
+    "engine",
+    "turtle"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "model.pnl",
+   "Plane": "model",
+   "Producer": [
+    "models10",
+    "curve_rider",
+    "engine",
+    "turtle",
+    "supervisor"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "risk.state",
+   "Plane": "risk",
+   "Producer": [
+    "risk",
+    "runner"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "risk.refusal",
+   "Plane": "risk",
+   "Producer": [
+    "risk",
+    "runner"
+   ],
+   "TTLMS": 300000,
+   "Record": true
+  },
+  {
+   "Name": "control.engine",
+   "Plane": "control",
+   "Producer": [
+    "engine"
+   ],
+   "TTLMS": 60000,
+   "Record": true
+  },
+  {
+   "Name": "system.error",
+   "Plane": "system",
+   "Producer": [
+    "platform",
+    "ui"
+   ],
+   "TTLMS": 86400000,
+   "Record": true
+  }
+ ],
+ "settings": {
+  "screen_min_move": 0.5,
+  "screen_min_vol_ratio": 1.2,
+  "screen_min_vol_z": 0.8,
+  "screen_min_recent_usd": 100,
+  "screen_min_quote_volume": 100,
+  "screen_top_n": 200,
+  "min_liq": 50000,
+  "max_symbols": 500
+ },
+ "envelope_stats": {
+  "counts": {
+   "control.engine": 35,
+   "intel.forecast": 217,
+   "model.decision": 11
+  },
+  "ok": true,
+  "path": "data/envelope-journal.jsonl",
+  "total": 263
+ },
+ "replay_summary": {
+  "packets": 176,
+  "graded": 175,
+  "buy": 0,
+  "sell": 7,
+  "none": 168,
+  "correct": 0,
+  "hit_rate": 0,
+  "mean_mape": 0.0164629225242339
+ }
+}

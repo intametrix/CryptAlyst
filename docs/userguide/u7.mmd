@@ -1,0 +1,17 @@
+flowchart TB
+  a["<b>1 · notice</b><br/>a card fires or a row<br/>jumps the leaderboard"]:::c_intel
+  b["<b>2 · confirm</b><br/>open the drill-down:<br/>is the flow real or one print?"]:::c_intel
+  c["<b>3 · look</b><br/>the ATLAS chart:<br/>where is it in the range?"]:::c_model
+  d["<b>4 · forecast</b><br/>pick the frame and<br/>train + forecast"]:::c_model
+  e["<b>5 · judge</b><br/>MAPE, coverage, and<br/>does the cone contain it?"]:::c_model
+  f["<b>6 · grade</b><br/>backtest the frame:<br/>would this have worked?"]:::c_store
+  g["<b>7 · decide</b><br/>trade it yourself, or<br/>write it down and watch"]:::c_neutral
+  a --> b --> c --> d --> e --> f --> g
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

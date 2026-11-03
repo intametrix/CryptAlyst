@@ -1,0 +1,22 @@
+sequenceDiagram
+  autonumber
+  participant C as client
+  participant A as /api handler
+  participant P as pipeline
+  participant S as bar store
+  participant X as exchange
+  participant R as model registry
+  participant E as envelope
+  C->>A: GET /api/forecast/chart?symbol&interval
+  A->>P: readQuery → policyFor(interval)
+  P->>S: barsFor(symbol, interval, n)
+  alt store is short
+    S-->>P: fewer bars than the policy needs
+    P->>X: Klines (KlinesSource port)
+    X-->>S: append, then answer
+  end
+  P->>R: modelPath(method) + bars
+  R-->>P: path, sigma, fan
+  P->>E: Run(topic, key, producer, operator)
+  E-->>A: packet + pipeline record
+  A-->>C: ok{payload}

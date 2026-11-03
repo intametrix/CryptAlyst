@@ -876,3 +876,36 @@ out of full screen, and train+forecast end to end (11 polylines, 25 comparison r
 Replaying every recorded forecast: **158 packets, 157 graded, 6 sells, 0 buys, 151
 declines.** The six directional calls were all wrong. The platform is now capable of
 saying that, with the packets to prove it — which is precisely what the envelope was for.
+
+## Documentation set — three documents, generated from the platform's own facts (Nov 3)
+
+`docs/` now carries three documents built by one pipeline and one stylesheet:
+
+- **The Envelope, as built** — 17 pages: why the envelope exists, the packet shape, the four
+  interceptors, the full topic registry with each topic's producers and TTL, identity and
+  lineage, the journal, the bus, freshness, decisions from recorded evidence, replay and
+  grading, the orchestrator, the recorder and lake, the refusal taxonomy, the six adoption
+  phases with what is done and what is not, the evidence table and a reference section.
+- **Developer Guide** — 23 pages: runtimes, the tree, the request path, all 89 routes listed,
+  data formats, the detection layers with their live settings, all 49 models by family and by
+  name, the envelope, the frontend, the GPU agent, the fleet with flags and environment, the
+  gates, four recipes, a runbook, the invariants, a glossary and an FAQ.
+- **User Guide** — 17 pages: the six views, the overview panel by panel, the board, alerts and
+  cards, the forecast workflow, how to read the chart, how to read each number honestly, the
+  settings, the agents, the bus, keyboard and mouse, a worked session, troubleshooting, a
+  glossary and an FAQ.
+
+**Every count comes from `docs/data/platform-snapshot.json`**, written by `docs/snapshot.py`
+against the running platform: 89 routes, 49 models, 23 topics, 8 settings, and the replay
+summary. A number in a document is therefore a number the platform reported, and re-running
+the snapshot refreshes all three.
+
+The look is `docs/style-guide.md` plus the cover from `docs/cover.md`: A4, Calibri 10 pt,
+accent `#1F4E79`, coloured chapter bands, KPI cards, four callout colours for note/warning/
+good/example, tables in the Light-Grid-Accent-1 idiom, page numbers in the footer and none on
+the cover (the cover is printed separately and merged).
+
+Two defects were fixed on the way, both mine: extracting the content out of the f-strings
+dropped every figure (14 pages became 5), and the first build had no cover and no numbers.
+The build now reads the page and image counts back out of the produced PDF, so a missing
+figure cannot pass quietly again.

@@ -47,8 +47,30 @@ code {{ font-family: "Courier New", Courier, monospace; font-size: 8.5pt; }}
 .note {{ border-left: 2.5pt solid {ACCENT}; background: #eef5fa; padding: 6pt 9pt; margin: 7pt 0; }}
 .warn {{ border-left: 2.5pt solid #a4232b; background: #fdf0f2; padding: 6pt 9pt; margin: 7pt 0; }}
 ul, ol {{ margin: 4pt 0 6pt 16pt; padding: 0; }} li {{ margin: 2pt 0; }}
-.toc {{ columns: 2; column-gap: 22pt; font-size: 9.5pt; margin: 6pt 0 4pt; }}
+.toc {{ display: grid; grid-template-columns: 1fr 1fr; column-gap: 22pt; font-size: 9.5pt; margin: 6pt 0 4pt; }}
 .toc div {{ break-inside: avoid; margin: 1.5pt 0; }}
+h2.chapter:first-of-type {{ page-break-before: avoid; }}
+h2.chapter {{ font-size: 15.5pt; font-weight: bold; color: #ffffff; background: {ACCENT};
+      padding: 7pt 10pt; margin: 0 0 10pt; page-break-before: always;
+      border-left: 5pt solid #7ea6d8; }}
+h2.chapter .num {{ display: inline-block; min-width: 26pt; color: #9fc6ef; }}
+h3 {{ border-bottom: 0.5pt solid #d8e0e8; padding-bottom: 2pt; }}
+.co {{ border-left: 3pt solid; padding: 6pt 9pt; margin: 7pt 0; page-break-inside: avoid; }}
+.co b.t {{ display: block; font-size: 8.8pt; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 2pt; }}
+.co.note {{ border-color: #1F4E79; background: #eef5fa; }} .co.note b.t {{ color: #1F4E79; }}
+.co.warn {{ border-color: #a4232b; background: #fdf0f2; }} .co.warn b.t {{ color: #a4232b; }}
+.co.good {{ border-color: #1d7a4d; background: #eff8f2; }} .co.good b.t {{ color: #1d7a4d; }}
+.co.ex   {{ border-color: #b7791f; background: #fdf6ea; }} .co.ex b.t {{ color: #b7791f; }}
+.co.law  {{ border-color: #5b3fa8; background: #f3f0fb; }} .co.law b.t {{ color: #5b3fa8; }}
+.kpis {{ display: flex; gap: 6pt; margin: 8pt 0; page-break-inside: avoid; }}
+.kpi {{ flex: 1; border-top: 3pt solid {ACCENT}; background: #f4f7fa; padding: 6pt 7pt; }}
+.kpi .v {{ font-size: 15pt; font-weight: bold; color: {ACCENT}; line-height: 1.1; }}
+.kpi .l {{ font-size: 8pt; color: {MUTED}; text-transform: uppercase; letter-spacing: .04em; }}
+.kpi .d {{ font-size: 8pt; color: #1a1a1a; margin-top: 2pt; }}
+.defs {{ margin: 6pt 0; }}
+.defs dt {{ font-weight: bold; color: {ACCENT}; font-size: 9.5pt; margin-top: 4pt; }}
+.defs dd {{ margin: 1pt 0 0 0; font-size: 9.5pt; }}
+
 """
 
 COVER = """<!doctype html><html><head><meta charset="utf-8"><style>
@@ -98,6 +120,30 @@ def cover_html(subtitle, desc, date="November 2026"):
                  .replace("__DESC__", desc)
                  .replace("__DATE__", date))
 
+
+
+def chapter(n, title, kicker=""):
+    """A coloured chapter band. Each chapter starts on a new page."""
+    k = f'<div style="font-size:8pt;color:#9fc6ef;letter-spacing:.12em;text-transform:uppercase">{kicker}</div>' if kicker else ''
+    return f'<h2 class="chapter"><span class="num">{n}</span>{title}{k}</h2>'
+
+
+def callout(kind, title, body):
+    """note · warn · good · example · law — colour carries the meaning."""
+    return f'<div class="co {kind}"><b class="t">{title}</b>{body}</div>'
+
+
+def kpis(items):
+    """A row of coloured figures: value, label, one line of meaning."""
+    cells = "".join(
+        f'<div class="kpi"><div class="v">{v}</div><div class="l">{l}</div><div class="d">{d}</div></div>'
+        for v, l, d in items)
+    return f'<div class="kpis">{cells}</div>'
+
+
+def defs(pairs):
+    body = "".join(f'<dt>{k}</dt><dd>{v}</dd>' for k, v in pairs)
+    return f'<dl class="defs">{body}</dl>'
 
 def fig(path, caption):
     b64 = base64.b64encode(open(path, "rb").read()).decode()

@@ -1,0 +1,21 @@
+flowchart TB
+  subgraph L["the stack, from the wire down"]
+    w1["React views<br/>six of them"]:::c_intel
+    w2["panels and charts<br/>props in, events out"]:::c_intel
+    w3["useResource · usePoll<br/>one data layer"]:::c_control
+    w4["data/client.ts<br/>getJSON · postJSON · postAction"]:::c_control
+    w5["HTTP /api/*<br/>89 routes"]:::c_control
+    w6["handlers<br/>readQuery · barsForRequest · ok/fail"]:::c_model
+    w7["calculators<br/>flow · screen · turtle · models"]:::c_model
+    w8["envelope<br/>authority · keying · correlation · freshness"]:::c_store
+    w9["journal · RabbitMQ<br/>recorded and broadcast"]:::c_store
+  end
+  w1 --> w2 --> w3 --> w4 --> w5 --> w6 --> w7 --> w8 --> w9
+%% colour by role (docs/style-guide.md)
+classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
