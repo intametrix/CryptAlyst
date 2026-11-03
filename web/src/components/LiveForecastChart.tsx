@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useElementSize } from '../hooks/useElementSize';
+import { useResource } from '../hooks/useResource';
+import { useNow } from '../hooks/useNow';
 import { useZoomPan } from '../hooks/useZoomPan';
 
 interface Payload {
@@ -35,49 +37,24 @@ export function LiveForecastChart({ symbol, interval }: { symbol: string; interv
   // seconds, so it has its own time-frame switch.
   const [tf, setTf] = useState<string>('5s');
   const active = tf === '' ? interval : tf;
-  const [data, setData] = useState<Payload | null>(null);
-  const [live, setLive] = useState<{ price: number; at: number } | null>(null);
-  const [tick, setTick] = useState(0);
+  const nowMs = useNow();
   const { ref, size } = useElementSize<HTMLDivElement>({ box: 'content-box' });
   const width = Math.max(320, size.width || 0);
   const height = Math.max(180, size.height || 220);
 
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        const q = new URLSearchParams({ symbol, interval: active, horizon: '6', bars: '60' });
-        const r = await fetch(`/api/forecast/live-chart?${q.toString()}`, { headers: { accept: 'application/json' } });
-        const body = (await r.json()) as Payload;
-        if (alive && body.ok) setData(body);
-      } catch {
-        /* keep the last frame */
-      }
-    };
-    // The candles change rarely; the traded price changes constantly. Polling the
-    // ticker is what makes the right edge of the chart move in real time.
-    const loadPrice = async () => {
-      try {
-        const r = await fetch(`/api/ticker?symbol=${encodeURIComponent(symbol)}`, { headers: { accept: 'application/json' } });
-        const body = (await r.json()) as { rows?: { price?: number; ts_ms?: number }[] };
-        const row = body.rows?.[0];
-        if (alive && row?.price !== undefined) setLive({ price: row.price, at: row.ts_ms ?? Date.now() });
-      } catch {
-        /* the candle chart still works without the tick */
-      }
-    };
-    void load();
-    void loadPrice();
-    const poll = window.setInterval(() => void load(), 30000);
-    const pricePoll = window.setInterval(() => void loadPrice(), 1500);
-    const clock = window.setInterval(() => setTick((t) => t + 1), 1000);
-    return () => {
-      alive = false;
-      window.clearInterval(poll);
-      window.clearInterval(pricePoll);
-      window.clearInterval(clock);
-    };
-  }, [symbol, active]);
+  // Candles change rarely, the traded price changes constantly: two resources on
+  // different beats, both owned by the hook rather than by three hand-rolled
+  // timers. The one-second clock comes from useNow.
+  const chartPath = `/api/forecast/live-chart?${new URLSearchParams({ symbol, interval: active, horizon: '6', bars: '60' }).toString()}`;
+  const chart = useResource<Payload>(chartPath, { pollMs: 30000 });
+  const ticker = useResource<{ rows?: { price?: number; ts_ms?: number }[] }>(
+    `/api/ticker?symbol=${encodeURIComponent(symbol)}`,
+    { pollMs: 1500 },
+  );
+  const data = chart.data !== null && chart.data.ok ? chart.data : null;
+  const row = ticker.data?.rows?.[0];
+  const live = row?.price === undefined ? null : { price: row.price, at: row.ts_ms ?? Date.now() };
+  const tick = nowMs;
 
   // The same navigation the forecast chart has: wheel zooms at the cursor, drag
   // pans, double-click resets. Without it a live chart is a picture rather than a

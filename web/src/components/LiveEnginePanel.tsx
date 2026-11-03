@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ForecastChart } from './ForecastChart';
 import { LiveForecastChart } from './LiveForecastChart';
 import { ChartPanel } from './ChartPanel';
+import { useResource } from '../hooks/useResource';
+import { useNow } from '../hooks/useNow';
 import { TickerPicker } from './TickerPicker';
 
 interface Row {
@@ -46,8 +48,6 @@ interface Payload {
  * here can stall the search, and closing the tab stops nothing.
  */
 export function LiveEnginePanel() {
-  const [data, setData] = useState<Payload | null>(null);
-  const [age, setAge] = useState(0);
   // Selection is a symbol, not an index: an index silently snaps back to the
   // first tab whenever the panel re-renders, which is why the header kept
   // saying BTCUSDT after picking something else.
@@ -85,29 +85,12 @@ export function LiveEnginePanel() {
     setSaved(st.symbol);
   };
 
-  useEffect(() => {
-    let alive = true;
-    const load = async () => {
-      try {
-        const r = await fetch('/api/forecast/live-state', { headers: { accept: 'application/json' } });
-        const body = (await r.json()) as Payload;
-        if (alive) {
-          setData(body);
-          setAge(0);
-        }
-      } catch {
-        /* keep the last state on screen */
-      }
-    };
-    void load();
-    const id = window.setInterval(() => void load(), 2000);
-    const tick = window.setInterval(() => setAge((a) => a + 1), 1000);
-    return () => {
-      alive = false;
-      window.clearInterval(id);
-      window.clearInterval(tick);
-    };
-  }, []);
+  // One resource for the engine state; the age label comes from the shared clock
+  // rather than a second timer counting seconds by hand.
+  const engine = useResource<Payload>('/api/forecast/live-state', { pollMs: 2000 });
+  const nowMs = useNow();
+  const data = engine.data;
+  const age = engine.updatedMs === 0 ? 0 : Math.max(0, Math.round((nowMs - engine.updatedMs) / 1000));
 
   const states = data?.states ?? [];
   const current = states.find((st) => st.symbol === activeSymbol) ?? states[0];
@@ -153,7 +136,7 @@ export function LiveEnginePanel() {
             }
             setStopArmed(false);
             const next = data?.training === false ? 'on' : 'off';
-            void fetch(`/api/forecast/engine-control?training=${next}`).then(() => setAge(0));
+            void fetch(`/api/forecast/engine-control?training=${next}`).then(() => engine.reload());
           }}
         >
           {data?.training === false ? 'resume training' : stopArmed ? 'stop? click again' : 'stop training'}

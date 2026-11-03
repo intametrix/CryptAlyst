@@ -1,3 +1,4 @@
+import { useResource } from '../hooks/useResource';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { clock, int, num, pct } from '../format';
 import { subscribeStreamTally } from '../api';
@@ -26,8 +27,6 @@ type BusSortKey = 'topic' | 'msgs' | 'share';
  * the SSE status event; the grid fills from GET /api/bus.
  */
 export const BusPanel = memo(function BusPanel({ status }: Props) {
-  const [bus, setBus] = useState<BusStats | null>(null);
-  const [busLive, setBusLive] = useState(false);
   const [sortKey, setSortKey] = useState<BusSortKey>('msgs');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -45,31 +44,11 @@ export const BusPanel = memo(function BusPanel({ status }: Props) {
     };
   }, []);
 
-  useEffect(() => {
-    let dead = false;
-    const tick = async () => {
-      try {
-        const res = await fetch('/api/bus', { headers: { accept: 'application/json' } });
-        if (!res.ok) {
-          if (!dead) setBusLive(false);
-          return;
-        }
-        const body = (await res.json()) as BusStats;
-        if (!dead) {
-          setBus(body);
-          setBusLive(true);
-        }
-      } catch {
-        if (!dead) setBusLive(false);
-      }
-    };
-    void tick();
-    const id = window.setInterval(() => void tick(), 3000);
-    return () => {
-      dead = true;
-      window.clearInterval(id);
-    };
-  }, []);
+  // The bus statistics are a resource; the tally below is an event subscription
+  // and keeps its own flush, because it is not polling anything.
+  const busRes = useResource<BusStats>('/api/bus', { pollMs: 3000 });
+  const bus = busRes.data;
+  const busLive = busRes.error === null && busRes.data !== null;
 
   const topics = useMemo(() => {
     const bt = bus?.by_topic ?? {};
