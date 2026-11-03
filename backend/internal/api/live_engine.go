@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sort"
 
 	"pumpdump/backend/internal/binance"
 	"sync"
@@ -135,7 +136,55 @@ func (e *liveEngine) record(symbol, interval string, res map[string]any, secs fl
 	// worse, and the panel should still show the winner.
 	// Always publish the latest sweep so the chart moves every cycle; keep the
 	// best-ever configuration separately so the header never regresses.
-	st.Rows = rows
+	// Merge instead of replace: the GPU sweeps the volume family and the platform
+	// scores the rest, so replacing the board each cycle would erase one source
+	// with the other. Rows for the incoming methods are refreshed, the others stay.
+	merged := make([]map[string]any, 0, len(rows)+len(st.Rows))
+	seen := map[string]bool{}
+	for _, r := range rows {
+		if m, ok := r["method"].(string); ok {
+			seen[m] = true
+		}
+		merged = append(merged, r)
+	}
+	for _, r := range st.Rows {
+		if m, ok := r["method"].(string); ok && seen[m] {
+			continue
+		}
+		merged = append(merged, r)
+	}
+	// Keep the board diverse: the top forty rows of one model would hide the other
+	// fifteen, which defeats the point of scoring them.
+	byMethod := map[string][]map[string]any{}
+	order := []string{}
+	for _, r := range merged {
+		m, _ := r["method"].(string)
+		if _, ok := byMethod[m]; !ok {
+			order = append(order, m)
+		}
+		byMethod[m] = append(byMethod[m], r)
+	}
+	perMethod := 40 / max(len(order), 1)
+	if perMethod < 2 {
+		perMethod = 2
+	}
+	trimmed := make([]map[string]any, 0, 40)
+	for _, m := range order {
+		rowsFor := byMethod[m]
+		if len(rowsFor) > perMethod {
+			rowsFor = rowsFor[:perMethod]
+		}
+		trimmed = append(trimmed, rowsFor...)
+	}
+	sort.SliceStable(trimmed, func(i, j int) bool {
+		a, _ := trimmed[i]["r2"].(float64)
+		b, _ := trimmed[j]["r2"].(float64)
+		return a > b
+	})
+	if len(trimmed) > 40 {
+		trimmed = trimmed[:40]
+	}
+	st.Rows = trimmed
 	st.Series = series
 	st.UpdatedMS = time.Now().UnixMilli()
 	st.Seconds = secs
@@ -217,6 +266,12 @@ func (e *liveEngine) startWorker(s *Server, symbol string) {
 			if e.isPaused() {
 				time.Sleep(800 * time.Millisecond)
 				continue
+			}
+			// Every platform-side model is scored here, on the fast loop: the GPU
+			// ladder takes minutes per cycle, so putting this there meant the
+			// non-volume models were scored once in a blue moon.
+			if lres, lerr := s.localModelSweep(context.Background(), symbol, e.interval); lerr == nil && lres != nil {
+				e.record(symbol, e.interval, lres, 0)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			payload, perr := s.sweepPayloadFor(ctx, symbol, e.interval, 6, 540, []int{2}, false, nil)

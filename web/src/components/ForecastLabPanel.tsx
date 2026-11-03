@@ -1,4 +1,4 @@
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { num, text } from '../format';
 import { useSelection } from '../selection';
 import { useForecastOverlay } from '../hooks/useForecastOverlay';
@@ -404,6 +404,29 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
   const optWeights = optimized?.best?.params?.weights ?? [];
   const chartRef = useRf<HTMLDivElement | null>(null);
   const modelsRef = useRf<HTMLDivElement | null>(null);
+
+  /** The model list runs to ninety entries: it needs a filter, not a scroll. */
+  const [modelQuery, setModelQuery] = useState('');
+
+  const filteredModels = useMemo(() => {
+    const q = modelQuery.trim().toLowerCase();
+    if (q === '') return MODELS;
+    return MODELS.filter((mn) => mn.toLowerCase().includes(q) || modelDetails(mn).family.toLowerCase().includes(q));
+  }, [modelQuery]);
+
+  const groups = useMemo(() => {
+    const byFamily = new Map<string, string[]>();
+    for (const mn of filteredModels) {
+      const fam = modelDetails(mn).family;
+      const list = byFamily.get(fam);
+      if (list === undefined) byFamily.set(fam, [mn]);
+      else list.push(mn);
+    }
+    return [...byFamily.entries()]
+      .map(([family, items]) => ({ family, items }))
+      .sort((a, b) => a.family.localeCompare(b.family));
+  }, [filteredModels]);
+
   /** The side panel shows the selected model's adjustable parameters. */
   const [panelOpen, setPanelOpen] = useState(false);
   /** Chart layers, each independently switchable. */
@@ -674,44 +697,61 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
           Each model produces a different forecast. Choose one to train, then press forecast. The
           score column is how that model has actually performed on this symbol.
         </p>
+        <div className="fl-model-tools">
+          <input
+            className="fl-model-search"
+            value={modelQuery}
+            onChange={(e) => setModelQuery(e.target.value)}
+            placeholder="filter models by name or family"
+            aria-label="filter models"
+          />
+          <span className="fl-model-count">{filteredModels.length} of {MODELS.length}</span>
+        </div>
+
+        <div className="fl-model-row fl-model-row-head" role="presentation">
+          <span>model</span><span>lookback</span><span>params</span><span>output</span><span>MAPE</span><span>coverage</span>
+        </div>
         <div className="fl-models" ref={modelsRef}>
-          {MODELS.map((mn) => {
-            const row = scores.find((sc) => sc.model === mn);
-            const chosen = method === mn;
-            return (
-              <button
-                type="button"
-                key={mn}
-                className={`fl-model${chosen ? ' is-chosen' : ''}`}
-                aria-pressed={chosen}
-                onClick={() => {
-                  setMethod(mn);
-                  setPanelOpen(true);
-                }}
-              >
-                <span className="fl-model-name">
-                  {mn}
-                  {study?.best === mn && <span className="fl-model-best">best</span>}
-                  {chosen && <span className="fl-model-chosen">selected</span>}
-                </span>
-                <span className="fl-model-desc">{describeModel(mn)}</span>
-                <span className="fl-model-facts">
-                  <span className="fl-fact"><i>family</i>{modelDetails(mn).family}</span>
-                  <span className="fl-fact"><i>lookback</i>{modelDetails(mn).lookback}</span>
-                  <span className="fl-fact"><i>params</i>{modelDetails(mn).param}</span>
-                  <span className="fl-fact"><i>output</i>{modelDetails(mn).shape}</span>
-                  {row && (
-                    <>
-                      <span className="fl-fact fl-fact-score"><i>mape</i>{row.mape.toFixed(3)}%</span>
-                      <span className="fl-fact"><i>mae</i>{priceLabel(row.mae)}</span>
-                      <span className="fl-fact"><i>80% band</i>±{priceLabel(row.band80)}</span>
-                      <span className="fl-fact"><i>coverage</i>{(row.coverage80 * 100).toFixed(0)}%</span>
-                    </>
-                  )}
-                </span>
-              </button>
-            );
-          })}
+          {groups.map((g) => (
+            <section className="fl-model-group" key={g.family}>
+              <h4 className="fl-model-group-head">
+                {g.family} <span>{g.items.length}</span>
+              </h4>
+              <div className="fl-model-rows" role="list">
+                {g.items.map((mn) => {
+                  const row = scores.find((sc) => sc.model === mn);
+                  const chosen = method === mn;
+                  const d = modelDetails(mn);
+                  return (
+                    <button
+                      type="button"
+                      key={mn}
+                      role="listitem"
+                      className={`fl-model-row${chosen ? ' is-chosen' : ''}`}
+                      aria-pressed={chosen}
+                      title={describeModel(mn)}
+                      onClick={() => {
+                        setMethod(mn);
+                        setPanelOpen(true);
+                      }}
+                    >
+                      <span className="fl-model-row-name">
+                        {mn}
+                        {study?.best === mn && <span className="fl-model-best">best</span>}
+                        {chosen && <span className="fl-model-chosen">selected</span>}
+                      </span>
+                      <span>{d.lookback}</span>
+                      <span>{d.param}</span>
+                      <span>{d.shape}</span>
+                      <span className="num fl-model-row-mape">{row !== undefined ? `${row.mape.toFixed(3)}%` : '—'}</span>
+                      <span className="num">{row !== undefined ? `${(row.coverage80 * 100).toFixed(0)}%` : '—'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
+          {groups.length === 0 && <p className="fl-hint">no model matches “{modelQuery}”</p>}
         </div>
       </Section>
 

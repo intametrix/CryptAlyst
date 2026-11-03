@@ -4927,13 +4927,15 @@ table {
 
 /* model chooser: one row per model, what it produces, and how it has scored */
 .fl-model-note { margin: 0; font-size: 12px; color: #a9bacd; }
-.fl-models { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px; min-width: 0; min-height: 0; max-height: 340px; overflow-y: auto; }
-.fl-model { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 2px 10px; align-items: center; padding: 8px 10px; text-align: left; border: 1px solid #24313f; border-radius: 8px; background: #0f1822; color: #c8d6e4; font: inherit; cursor: pointer; min-width: 0; min-height: 0; }
+.fl-models { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
+.fl-model { display: flex; flex-direction: column; gap: 6px; align-items: stretch; height: 100%; padding: 10px 12px; text-align: left; border: 1px solid #24313f; border-radius: 9px; background: #0f1822; color: #c8d6e4; font: inherit; cursor: pointer; min-width: 0; min-height: 0; transition: border-color .15s ease, background .15s ease; }
 .fl-model:hover { border-color: #3a5a75; background: #12202c; }
 .fl-model.is-chosen { border-color: #6fd0ff; background: rgba(111, 208, 255, .1); }
-.fl-model-name { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #eaf2fb; min-width: 0; }
+.fl-model-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; min-height: 0; }
+.fl-model-name { font-size: 13px; font-weight: 600; color: #eaf2fb; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-model-badges { display: inline-flex; gap: 4px; flex: 0 0 auto; min-width: 0; min-height: 0; }
 .fl-model-best { padding: 1px 6px; border-radius: 999px; background: rgba(56, 211, 159, .18); color: #38d39f; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
-.fl-model-desc { grid-column: 1; font-size: 11.5px; color: #93a7bb; min-width: 0; }
+.fl-model-desc { font-size: 11.5px; line-height: 1.35; color: #93a7bb; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 31px; }
 .fl-model-metric { grid-column: 2; grid-row: 1 / span 2; font-size: 12px; color: #8fa3b8; }
 .fl-model.is-chosen .fl-model-metric { color: #6fd0ff; }
 
@@ -5008,7 +5010,7 @@ table {
    Its own 340px scrollbar started scrolled and ignored the resize grip, so the
    reader saw the tail of the list and a drag changed nothing. */
 .fl-models { max-height: none; overflow: visible; align-content: start; }
-.sec-body[style] .fl-models { flex: 1 1 auto; min-height: 0; overflow-y: auto; align-content: start; }
+.sec-body[style] .fl-models { flex: 1 1 auto; min-height: 0; overflow: visible; align-content: start; }
 
 /* An empty chart must not reserve a 320px void: until a forecast exists the
    section should be a compact hint, not a black hole in the page. */
@@ -5045,12 +5047,12 @@ table {
 
 /* A wall of 42 cards is not a layout: the grid stays inside a sensible height
    and scrolls, and it grows only when the section itself is resized. */
-.fl-models { max-height: 300px; overflow-y: auto; }
+.fl-models { max-height: none; overflow: visible; }
 .sec-body[style] .fl-models { max-height: none; flex: 1 1 auto; min-height: 0; }
 
 /* Model cards carry the facts behind each model, not just a name. */
-.fl-model-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px; min-width: 0; min-height: 0; }
-.fl-fact { display: inline-flex; align-items: baseline; gap: 5px; font-size: 11px; color: #c3d2e0; min-width: 0; }
+.fl-model-facts { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; min-height: 0; }
+.fl-fact { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 5px; background: #101c28; border: 1px solid #1e3040; font-size: 10px; color: #a9bacd; min-width: 0; white-space: nowrap; }
 .fl-fact i { font-style: normal; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #6b7f93; }
 .fl-fact-score { color: #ffb300; font-weight: 600; }
 
@@ -5450,3 +5452,30 @@ table {
 
 /* the delayed title bubble, used by every control with a title attribute */
 .dtip { position: fixed; z-index: 95; max-width: 320px; padding: 5px 9px; font-size: 11px; line-height: 1.35; color: #dff2ff; background: #10161d; border: 1px solid #2b4459; border-radius: 7px; transform: translateX(-50%); pointer-events: none; box-shadow: 0 6px 20px rgba(0, 0, 0, .45); }
+
+/* model cards: one predictable grid, so a row of them lines up */
+.fl-model-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: auto; padding-top: 7px; border-top: 1px solid #1b2a38; min-width: 0; min-height: 0; }
+.fl-metric { display: flex; flex-direction: column; gap: 1px; min-width: 0; min-height: 0; font-size: 11.5px; color: #c3d2e0; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-metric i { font-style: normal; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: #6b7f93; }
+.fl-metric-key { color: #ffb300; font-weight: 700; font-size: 12.5px; }
+.fl-model-metrics.is-empty .fl-metric { color: #4d6070; }
+.fl-model.is-chosen .fl-metric-key { color: #6fd0ff; }
+
+/* model picker: a filtered, grouped table rather than ninety cards */
+.fl-model-tools { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; min-width: 0; min-height: 0; }
+.fl-model-search { flex: 1 1 auto; min-width: 0; min-height: 0; padding: 5px 9px; font-size: 11.5px; color: #cfe8f7; background: #101c28; border: 1px solid #294054; border-radius: 7px; }
+.fl-model-search:focus { outline: none; border-color: #6fd0ff; }
+.fl-model-count { flex: 0 0 auto; font-size: 11px; color: #8fa3b8; font-variant-numeric: tabular-nums; }
+.fl-model-group { margin-bottom: 10px; min-width: 0; min-height: 0; }
+.fl-model-group-head { display: flex; align-items: baseline; gap: 6px; min-width: 0; min-height: 0; margin: 0 0 4px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6fd0ff; }
+.fl-model-group-head span { color: #6b7f93; letter-spacing: 0; }
+.fl-model-rows { display: flex; flex-direction: column; gap: 2px; min-width: 0; min-height: 0; }
+.fl-model-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 90px minmax(0, 1.2fr) 80px 84px 76px; align-items: center; gap: 8px; min-width: 0; min-height: 0; padding: 5px 8px; text-align: left; font: inherit; font-size: 11.5px; color: #c3d2e0; background: #0f1822; border: 1px solid transparent; border-radius: 6px; cursor: pointer; }
+.fl-model-row:hover { background: #12202c; border-color: #294054; }
+.fl-model-row.is-chosen { border-color: #6fd0ff; background: rgba(111, 208, 255, .1); }
+.fl-model-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-model-row-head { padding: 2px 8px; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #6b7f93; background: none; cursor: default; border-bottom: 1px solid #1b2a38; border-radius: 0; }
+.fl-model-row-head:hover { background: none; border-color: transparent; border-bottom-color: #1b2a38; }
+.fl-model-row-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 0; font-weight: 600; color: #eaf2fb; }
+.fl-model-row-mape { color: #ffb300; font-weight: 600; }
+.fl-model-row.is-chosen .fl-model-row-mape { color: #6fd0ff; }
