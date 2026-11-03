@@ -630,13 +630,12 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           key={`screen-${layoutNonce}`}
           screen={screen}
           onRefresh={refreshScreen}
-          tools={tools}
           onDrill={drillInto}
         />
 
         <SurveyPanel survey={survey} onRefresh={refreshSurvey} tools={tools} onDrill={drillInto} />
 
-        <MoversPanel tools={tools} />
+        <MoversPanel />
 
         <ModelsPanel />
 

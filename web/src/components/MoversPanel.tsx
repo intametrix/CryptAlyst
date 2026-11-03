@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { useResource } from '../hooks/useResource';
 import { num, pct, px, usd } from '../format';
 import { useSelection } from '../selection';
-import type { ToolsMsg } from '../types';
+import { useTools } from '../glossaryContext';
 import { ChartIcon } from './ChartIcon';
 import { ResizablePanel } from './Panel';
 import { Tooltip } from './Tooltip';
@@ -28,7 +28,8 @@ interface MoversMsg {
   min_quote_volume: number;
 }
 
-function MoverRow({ m, tools }: { m: Mover; tools: ToolsMsg | null }) {
+function MoverRow({ m }: { m: Mover }) {
+  const tools = useTools();
   const selection = useSelection();
   const up = m.change_pct_24h >= 0;
   return (
@@ -68,7 +69,7 @@ function MoverRow({ m, tools }: { m: Mover; tools: ToolsMsg | null }) {
  * The 24h movers: greatest gainers and losers, with the range-position read so a
  * +20% that is still AT its low reads differently from one pinned at its high.
  */
-export const MoversPanel = memo(function MoversPanel({ tools }: { tools: ToolsMsg | null }) {
+export const MoversPanel = memo(function MoversPanel() {
   // One resource: load, poll and failure handled once.
   const movers = useResource<MoversMsg>('/api/movers?limit=5', { pollMs: 10_000 }).data;
 
@@ -77,7 +78,7 @@ export const MoversPanel = memo(function MoversPanel({ tools }: { tools: ToolsMs
       <h3 className="cp-data-heading">{title}</h3>
       <ul className="turtle-rows">
         {(rows ?? []).map((m) => (
-          <MoverRow key={m.symbol} m={m} tools={tools} />
+          <MoverRow key={m.symbol} m={m} />
         ))}
       </ul>
     </section>

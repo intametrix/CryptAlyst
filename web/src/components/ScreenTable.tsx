@@ -18,7 +18,8 @@ import {
 import { useElementSize } from '../hooks/useElementSize';
 import { useSelection } from '../selection';
 import { SCREEN_COLUMNS, SCREEN_MAX_ROWS, visibleColumns, type Column, type SortKey } from '../columns';
-import type { ScreenMsg, ScreenRow, ToolsMsg } from '../types';
+import type { ScreenMsg, ScreenRow } from '../types';
+import { useTools } from '../glossaryContext';
 import { KindBadge } from './Badges';
 import { HeatBorder } from './HeatBorder';
 import { ResizablePanel } from './Panel';
@@ -27,7 +28,6 @@ import { Tooltip } from './Tooltip';
 interface Props {
   screen: ScreenMsg | null;
   onRefresh: () => void;
-  tools: ToolsMsg | null;
   /** Opens the trade drill-down for a symbol, seeded with this row. */
   onDrill?: (symbol: string, seed?: { screen: ScreenRow }) => void;
 }
@@ -48,7 +48,8 @@ function rowDetail(row: ScreenRow): string {
   ].join(' · ');
 }
 
-export const ScreenTable = memo(function ScreenTable({ screen, onRefresh, tools }: Props) {
+export const ScreenTable = memo(function ScreenTable({ screen, onRefresh }: Omit<Props, 'tools'>) {
+  const tools = useTools();
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const { ref, size } = useElementSize<HTMLDivElement>();
