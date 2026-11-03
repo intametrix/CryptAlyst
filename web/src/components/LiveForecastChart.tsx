@@ -20,7 +20,7 @@ interface Payload {
   branches?: number[][];
 }
 
-const PAD = { top: 18, right: 14, bottom: 26, left: 64 };
+const PAD = { top: 18, right: 70, bottom: 26, left: 14 };
 
 /**
  * Price now, and the next few bars with a funnel around them.

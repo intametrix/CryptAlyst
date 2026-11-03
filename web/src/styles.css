@@ -5466,3 +5466,9 @@ table {
 .dp-del { min-width: 0; min-height: 0; width: 20px; padding: 0; font-size: var(--fs-small); line-height: 18px; color: #6b7f93; background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer; }
 .dp-del:hover { color: #ff9aa6; border-color: #7d2f3a; }
 .dp-del.is-armed { color: #ffc9d0; background: #2a1216; border-color: #7d2f3a; font-size: var(--fs-micro); }
+
+/* the crosshair and its readout */
+.fchart-cross { stroke: rgba(111, 208, 255, .45); stroke-width: 1; stroke-dasharray: 3 3; }
+.fchart-cross-dot { fill: #6fd0ff; }
+.fchart-readout { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; min-height: 0; font-size: var(--fs-small); color: #dff2ff; }
+.fchart-readout-time { font-size: var(--fs-label); color: #8fa3b8; }

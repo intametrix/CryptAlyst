@@ -11,7 +11,7 @@ export interface ForecastSeries {
   mape?: number;
 }
 
-const PAD = { top: 14, right: 12, bottom: 34, left: 86 };
+const PAD = { top: 14, right: 78, bottom: 34, left: 16 };
 
 /** A palette that stays distinguishable on the dark panel. */
 const COLORS = ['#ffb300', '#4fc3f7', '#e879f9', '#2ee06a', '#ff8a4c', '#a78bfa', '#22d3ee'];
@@ -82,6 +82,8 @@ export function ForecastChart({
   // Hover highlights a line, click hides it: with several models drawn over each
   // other, pointing at one is the only way to see which is which.
   const [hovered, setHovered] = useState<string | null>(null);
+  /** Pointer position in series index space, for the crosshair readout. */
+  const [hover, setHover] = useState<number | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const toggle = (label: string) =>
     setHidden((prev) => {
@@ -92,6 +94,8 @@ export function ForecastChart({
     });
 
   const zoomPan = useZoomPan(Math.max((history?.length ?? 0) + actual.length, 1), width);
+
+  const allTimes = [...(historyTimes ?? []), ...times];
 
   const geom = useMemo(() => {
     const hist = history ?? [];
@@ -212,7 +216,7 @@ export function ForecastChart({
 
     return {
       vis,
-      actualLine, histLine, lines, simLines, futureLine, nTotal, xTotal, futTimes: future?.t ?? [], upper, lower, whiskers, ticks, xTicks, x, band90, band50, median,
+      actualLine, histLine, lines, simLines, futureLine, nTotal, xTotal, futTimes: future?.t ?? [], upper, lower, whiskers, ticks, xTicks, x, y, band90, band50, median, series: actualAll,
       nAll: actualAll.length, timesAll,
     };
   }, [times, actual, forecasts, width, height, sigma, fan, showWhiskers, history, historyTimes, paths, future, zoomPan.d0, zoomPan.d1]);
@@ -228,7 +232,15 @@ export function ForecastChart({
           role="img"
           onWheel={zoomPan.onWheel}
           onPointerDown={zoomPan.onPointerDown}
-          onPointerMove={zoomPan.onPointerMove}
+          onPointerMove={(e) => {
+            zoomPan.onPointerMove(e);
+            if (e.buttons !== 0) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const plotW = Math.max(1, rect.width - PAD.left - PAD.right);
+            const frac = Math.min(1, Math.max(0, (e.clientX - rect.left - PAD.left) / plotW));
+            setHover(Math.round(zoomPan.d0 + frac * (zoomPan.d1 - zoomPan.d0)));
+          }}
+          onPointerLeave={() => setHover(null)}
           onPointerUp={zoomPan.onPointerUp}
           onDoubleClick={zoomPan.reset}
           style={{ cursor: zoomPan.zoomed ? 'grab' : 'default', touchAction: 'none' }}
@@ -254,7 +266,7 @@ export function ForecastChart({
           {geom.ticks.map((tk) => (
             <g key={tk.label + tk.y.toFixed(0)}>
               <line x1={PAD.left} y1={tk.y} x2={width - PAD.right} y2={tk.y} className="fchart-grid" />
-              <text x={PAD.left - 6} y={tk.y + 3} textAnchor="end" className="fchart-axis-text">
+              <text x={width - PAD.right + 8} y={tk.y + 3} textAnchor="start" className="fchart-axis-text">
                 {tk.label}
               </text>
             </g>
@@ -297,6 +309,18 @@ export function ForecastChart({
             <polyline key={`sim${i}`} points={pts} className="fchart-sim" fill="none" />
           ))}
           <g clipPath="url(#fchart-clip)">
+            {hover !== null && hover >= 0 && hover < geom.series.length && (
+              <g>
+                <line
+                  x1={geom.x(hover)}
+                  y1={PAD.top}
+                  x2={geom.x(hover)}
+                  y2={height - PAD.bottom}
+                  className="fchart-cross"
+                />
+                <circle cx={geom.x(hover)} cy={geom.y(geom.series[hover] ?? 0)} r={3} className="fchart-cross-dot" />
+              </g>
+            )}
           {geom.upper !== '' && <polyline points={geom.upper} className="fchart-cone" fill="none" />}
           {geom.lower !== '' && <polyline points={geom.lower} className="fchart-cone" fill="none" />}
 
@@ -378,7 +402,16 @@ export function ForecastChart({
               </button>
             ))}
         </span>
-        <span className="fchart-note">scroll to zoom · drag to pan · double-click to fit</span>
+        {hover !== null && hover >= 0 && hover < geom.series.length ? (
+          <span className="fchart-readout num">
+            {priceLabel(geom.series[hover] ?? 0)}
+            <span className="fchart-readout-time">
+              {new Date(allTimes[hover] ?? 0).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </span>
+          </span>
+        ) : (
+          <span className="fchart-note">scroll to zoom · drag to pan · double-click to fit</span>
+        )}
         <span className="fchart-key"><span className="fchart-swatch swatch-err" />error</span>
         {fan !== null && fan !== undefined && (
           <span className="fchart-key"><span className="fchart-swatch swatch-fan" />predictive range 10-90%</span>
