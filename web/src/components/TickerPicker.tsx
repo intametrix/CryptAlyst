@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getJSON } from '../data/client';
 
 interface UniverseRow {
   symbol: string;
@@ -104,20 +105,17 @@ export function TickerPicker({
       // from the market feed. Joining them here keeps each service honest about
       // what it owns instead of duplicating a symbol list.
       const [refRes, mktRes] = await Promise.allSettled([
-        fetch('/api/instruments?limit=4000', { headers: { accept: 'application/json' } }),
-        fetch('/api/universe', { headers: { accept: 'application/json' } }),
+        getJSON<{ instruments?: InstrumentRow[] }>('/api/instruments?limit=4000'),
+        getJSON<{ symbols?: UniverseRow[] }>('/api/universe'),
       ]);
 
-      let instruments: InstrumentRow[] = [];
-      if (refRes.status === 'fulfilled' && refRes.value.ok) {
-        const body = (await refRes.value.json()) as { instruments?: InstrumentRow[] };
-        instruments = body.instruments ?? [];
-      }
-      let prices = new Map<string, UniverseRow>();
-      if (mktRes.status === 'fulfilled' && mktRes.value.ok) {
-        const body = (await mktRes.value.json()) as { symbols?: UniverseRow[] };
-        prices = new Map((body.symbols ?? []).map((r) => [r.symbol, r]));
-      }
+      // Identity and price are separate services; either may be down, and the picker
+      // still has to open with what it got.
+      const instruments: InstrumentRow[] =
+        refRes.status === 'fulfilled' ? (refRes.value.instruments ?? []) : [];
+      const prices = new Map<string, UniverseRow>(
+        mktRes.status === 'fulfilled' ? (mktRes.value.symbols ?? []).map((r: UniverseRow) => [r.symbol, r] as const) : [],
+      );
       if (dead) return;
 
       let rows: Ticker[];
