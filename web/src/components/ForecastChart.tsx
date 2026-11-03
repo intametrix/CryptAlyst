@@ -4,6 +4,13 @@ import { useZoomPan } from '../hooks/useZoomPan';
 import { ZOOM_PLAN_FALLBACK } from '../zoom';
 
 /** One model's forecast path, drawn against the same actual bars. */
+/** A future segment: values projected after the newest actual bar. */
+export interface Projection {
+  values: number[];
+  fan?: { p10: number[]; p25: number[]; p50: number[]; p75: number[]; p90: number[] } | null;
+  branches?: number[][] | null;
+}
+
 export interface ForecastSeries {
   label: string;
   values: number[];
@@ -53,6 +60,7 @@ export function ForecastChart({
   paths,
   symbol,
   future,
+  projection = null,
 }: {
   times: number[];
   actual: number[];
@@ -68,6 +76,12 @@ export function ForecastChart({
   future?: { t: number[]; v: number[] } | null;
   /** Individual simulated futures, drawn faintly behind the forecast. */
   paths?: number[][] | null;
+  /**
+   * A projection into the future from the newest actual point: the live chart's shape.
+   * Supplying this extends the time axis past the last bar, so the price and the
+   * projection share one scale and one zoom.
+   */
+  projection?: Projection | null;
   /** Price leading up to the forecast: the "before" that makes it a forecast. */
   history?: number[];
   historyTimes?: number[];
@@ -93,7 +107,10 @@ export function ForecastChart({
       return next;
     });
 
-  const zoomPan = useZoomPan(Math.max((history?.length ?? 0) + actual.length, 1), width);
+  const zoomPan = useZoomPan(
+    Math.max((history?.length ?? 0) + actual.length + (projection?.values.length ?? 0), 1),
+    width,
+  );
 
   const allTimes = [...(historyTimes ?? []), ...times];
 
@@ -123,10 +140,15 @@ export function ForecastChart({
     const plotW = Math.max(10, width - PAD.left - PAD.right);
     const plotH = Math.max(10, height - PAD.top - PAD.bottom);
     const n = actualAll.length;
+    // A projection extends the axis rather than getting its own: the price and the
+    // future share one scale, one zoom and one crosshair.
+    const proj = projection?.values ?? [];
+    const nAxis = Math.max(n + proj.length, 1);
     // Zoom maps a visible window of the series into the plot: the same geometry,
     // a narrower domain. Points outside are clipped by the plot's clip path.
     const zSpan = Math.max(zoomPan.d1 - zoomPan.d0, 1e-6);
     const x = (i: number) => PAD.left + ((i - zoomPan.d0) / zSpan) * plotW;
+    void nAxis;
     const y = (v: number) => PAD.top + plotH - ((v - y0) / (y1 - y0)) * plotH;
 
     const ticks: { y: number; label: string }[] = [];
@@ -209,6 +231,35 @@ export function ForecastChart({
       mape: f.mape,
     }));
 
+    // The projection: a line from the newest actual point through the projected values,
+    // a cone that widens with the horizon, and the individual branches behind it.
+    const projLine = proj.length === 0
+      ? ''
+      : [
+          `${x(n - 1).toFixed(1)},${y(actualAll[n - 1] ?? 0).toFixed(1)}`,
+          ...proj.map((v, i) => `${x(n + i).toFixed(1)},${y(v).toFixed(1)}`),
+        ].join(' ');
+    let projBand = '';
+    let projMedian = '';
+    const pf = projection?.fan ?? null;
+    if (pf !== null && pf !== undefined && pf.p10.length === proj.length) {
+      const up = pf.p90.map((v, i) => `${x(n + i).toFixed(1)},${y(v).toFixed(1)}`);
+      const dn = pf.p10.map((v, i) => `${x(n + i).toFixed(1)},${y(v).toFixed(1)}`).reverse();
+      projBand = [`${x(n - 1).toFixed(1)},${y(actualAll[n - 1] ?? 0).toFixed(1)}`, ...up, ...dn].join(' ');
+      projMedian = [
+        `${x(n - 1).toFixed(1)},${y(actualAll[n - 1] ?? 0).toFixed(1)}`,
+        ...pf.p50.map((v, i) => `${x(n + i).toFixed(1)},${y(v).toFixed(1)}`),
+      ].join(' ');
+    }
+    const projBranches = (projection?.branches ?? [])
+      .filter((b) => b.length === proj.length)
+      .map((b) =>
+        [
+          `${x(n - 1).toFixed(1)},${y(actualAll[n - 1] ?? 0).toFixed(1)}`,
+          ...b.map((v, i) => `${x(n + i).toFixed(1)},${y(v).toFixed(1)}`),
+        ].join(' '),
+      );
+
     const span = Math.max(n - 1, 1);
     const xTicks = [0, Math.round(span * 0.25), Math.round(span * 0.5), Math.round(span * 0.75), span].filter(
       (i, idx, arr) => i >= 0 && arr.indexOf(i) === idx,
@@ -217,9 +268,10 @@ export function ForecastChart({
     return {
       vis,
       actualLine, histLine, lines, simLines, futureLine, nTotal, xTotal, futTimes: future?.t ?? [], upper, lower, whiskers, ticks, xTicks, x, y, band90, band50, median, series: actualAll,
+      projLine, projBand, projMedian, projBranches,
       nAll: actualAll.length, timesAll,
     };
-  }, [times, actual, forecasts, width, height, sigma, fan, showWhiskers, history, historyTimes, paths, future, zoomPan.d0, zoomPan.d1]);
+  }, [times, actual, forecasts, width, height, sigma, fan, showWhiskers, history, historyTimes, paths, future, projection, zoomPan.d0, zoomPan.d1]);
 
   return (
     <div className={`fchart${geom === null ? ' is-empty' : ''}`}>
@@ -324,6 +376,12 @@ export function ForecastChart({
           {geom.upper !== '' && <polyline points={geom.upper} className="fchart-cone" fill="none" />}
           {geom.lower !== '' && <polyline points={geom.lower} className="fchart-cone" fill="none" />}
 
+          {geom.projBranches.map((pts, i) => (
+            <polyline key={`pb${i}`} points={pts} className="fchart-branch" fill="none" />
+          ))}
+          {geom.projBand !== '' && <polygon points={geom.projBand} className="fchart-band90" />}
+          {geom.projMedian !== '' && <polyline points={geom.projMedian} className="fchart-future" fill="none" strokeDasharray="4 3" />}
+          {geom.projLine !== '' && <polyline points={geom.projLine} className="fchart-future" fill="none" />}
           {geom.band90 !== '' && <polygon points={geom.band90} className="fchart-band90" />}
           {geom.band50 !== '' && <polygon points={geom.band50} className="fchart-band50" />}
           {geom.median !== '' && <polyline points={geom.median} className="fchart-median" fill="none" />}

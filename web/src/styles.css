@@ -5502,3 +5502,6 @@ table {
 .fl-model-row-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 0; font-weight: 600; color: #eaf2fb; }
 .fl-model-row-mape { color: var(--pal-warn); font-weight: 600; }
 .fl-model-row.is-chosen .fl-model-row-mape { color: var(--pal-accent); }
+
+/* individual simulated futures behind a live projection */
+.fchart-branch { stroke: rgba(255, 179, 0, .28); stroke-width: 1; }
