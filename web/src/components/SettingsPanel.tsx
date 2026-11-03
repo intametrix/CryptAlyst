@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { getJSON } from '../data/client';
+import { getJSON, postJSON } from '../data/client';
 
 /** GET /api/settings — live detection/universe thresholds. */
 export interface Settings {
@@ -82,13 +82,7 @@ export const SettingsPanel = memo(function SettingsPanel() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch('/api/settings/apply', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error(`POST /api/settings/apply ${res.status}`);
-      const next = (await res.json()) as Settings;
+      const next = await postJSON<Settings>('/api/settings/apply', body);
       setSettings(next);
       setDraft(Object.fromEntries(Object.entries(next).map(([k, v]) => [k, String(v)])));
       setApplied(true);

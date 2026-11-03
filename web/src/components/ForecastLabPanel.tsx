@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from 'react';
-import { getJSON } from '../data/client';
+import { getJSON, postJSON } from '../data/client';
 import { num, text } from '../format';
 import { useSelection } from '../selection';
 import { useResource } from '../hooks/useResource';
@@ -353,12 +353,7 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
           limit: '400',
           train: String(lookback),
         });
-        const res = await fetch(`/api/forecast/lab?${q.toString()}`, { headers: { accept: 'application/json' } });
-        if (!res.ok) {
-          if (!dead) setLive(false);
-          return;
-        }
-        const body = (await res.json()) as LabStudy;
+        const body = await getJSON<LabStudy>(`/api/forecast/lab?${q.toString()}`);
         if (!dead) {
           setStudy(body);
           setLive(true);
@@ -503,12 +498,9 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
     setOptimizing(true);
     setOptimized(null);
     try {
-      const res = await fetch('/api/forecast/optimize', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ symbol: sym, interval, horizon, train_bars: lookback, windows, iterations }),
+      const body = await postJSON<OptimizeResult>('/api/forecast/optimize', {
+        symbol: sym, interval, horizon, train_bars: lookback, windows, iterations,
       });
-      const body = (await res.json()) as OptimizeResult;
       setOptimized(body);
     } catch (e) {
       setOptimized({ ok: false, error: e instanceof Error ? e.message : String(e) });
@@ -520,12 +512,10 @@ export const ForecastLabPanel = memo(function ForecastLabPanel() {
   async function downloadMore() {
     setDownloading(true);
     try {
-      const res = await fetch('/api/history/download', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ symbol: sym, interval, bars: Math.min(1000, Math.max(needed * 2, 600)) }),
+      const body = await postJSON<Coverage>('/api/history/download', {
+        symbol: sym, interval, bars: Math.min(1000, Math.max(needed * 2, 600)),
       });
-      if (res.ok) setCoverage((await res.json()) as Coverage);
+      setCoverage(body);
     } catch {
       /* the unchanged coverage line reports the failure */
     } finally {
@@ -1040,9 +1030,8 @@ function NewInputs({ symbol, interval, horizon }: { symbol: string; interval: In
     setLoading(true);
     setError(null);
     const q = new URLSearchParams({ symbol, interval, horizon: String(horizon) });
-    fetch(`/api/forecast/features?${q.toString()}`, { headers: { accept: 'application/json' } })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
-      .then((body: { ok?: boolean; error?: string; rows?: FeatureRow[]; verdict?: string }) => {
+    getJSON<{ ok?: boolean; error?: string; rows?: FeatureRow[]; verdict?: string }>(`/api/forecast/features?${q.toString()}`)
+      .then((body) => {
         if (dead) return;
         if (body.ok === false) {
           setError(body.error ?? 'features unavailable');

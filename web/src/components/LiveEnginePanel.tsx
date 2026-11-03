@@ -82,7 +82,7 @@ export function LiveEnginePanel() {
       bars: String(st.best.bars), horizon: String(st.best.horizon),
       r2: String(st.best.r2), mape: String(st.best.mape_pct),
     });
-    await fetch(`/api/forecast/configs?${q.toString()}`, { method: 'POST' });
+    await postAction(`/api/forecast/configs?${q.toString()}`);
     setSaved(st.symbol);
   };
 
