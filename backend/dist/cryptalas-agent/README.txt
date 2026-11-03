@@ -36,6 +36,13 @@ The agent self-heals (restarts on hang) and self-updates from a
   ./install.sh --name gpu-1 --device cuda
   # then the agent pulls new builds from its -update-manifest URL.
 
+Supervisors (keep the agent alive forever)
+--------------------------------------------
+  supervise-cryptalas.sh   macOS/Linux — swap self-updates + restart on exit
+  supervise.bat            Windows — same, run this instead of cryptalas.exe
+  install.sh / install.bat register the OS-level supervisor automatically
+  (launchd on macOS, systemd on Linux, a scheduled task on Windows).
+
 Files
 -----
   cryptalas              macOS arm64
@@ -43,3 +50,4 @@ Files
   cryptalas.exe          Windows x86_64
   gpu/cuda_train.py      CUDA trainer (optional)
   install.sh / install.bat
+  supervise-cryptalas.sh / supervise.bat

@@ -54,6 +54,7 @@ const COLORS = {
   plusDi: '#2ee06a',
   minusDi: '#ff4d5e',
   rsi: '#22d3ee',
+  forecast: '#ffb300',
 } as const;
 
 /** Sub-pane line keys, each drawn on its own pane below the candles. */
@@ -70,9 +71,10 @@ export const OVERLAY_KEYS = [
   'ema20',
   'ema50',
   'sma200',
+  'forecast',
 ] as const;
 
-function lineStyleFor(key: string): { color: string; lineStyle?: LineStyle; width: 1 | 2 } {
+function lineStyleFor(key: string): { color: string; lineStyle?: LineStyle; width: 1 | 2 | 3 } {
   switch (key) {
     case 'donchian20_upper':
     case 'donchian20_lower':
@@ -84,6 +86,10 @@ function lineStyleFor(key: string): { color: string; lineStyle?: LineStyle; widt
       return { color: COLORS.ema20, width: 2 };
     case 'sma200':
       return { color: COLORS.sma200, width: LINE_WIDTH };
+    case 'forecast':
+      // The forecast is a claim, not a measurement: dashed and warm so it can
+      // never be mistaken for an indicator drawn from actual prices.
+      return { color: COLORS.forecast, lineStyle: LineStyle.Dashed, width: 3 };
     case 'ema50':
     default:
       return { color: COLORS.ema50, width: LINE_WIDTH };
@@ -464,13 +470,17 @@ export function PriceChart({
     if (handles === null) return;
     handles.volume.applyOptions({ visible: showVol });
     for (const [key, series] of handles.lines) {
-      const on = key.startsWith('donchian')
-        ? showDon
-        : key.startsWith('ema')
-          ? showEma
-          : key.startsWith('sma')
-            ? showSma
-            : false;
+      // The forecast is always visible: it is only present when a graded
+      // forecast exists, and gating it on ref data raced the data effect.
+      const on = key === 'forecast'
+        ? true
+        : key.startsWith('donchian')
+          ? showDon
+          : key.startsWith('ema')
+            ? showEma
+            : key.startsWith('sma')
+              ? showSma
+              : false;
       series.applyOptions({ visible: on });
     }
   }, [showVol, showDon, showEma, showSma, loadSeq]);

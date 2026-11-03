@@ -95,11 +95,11 @@ export const MoversPanel = memo(function MoversPanel({ tools }: { tools: ToolsMs
     };
   }, []);
 
-  const side = (rows: Mover[], title: string) => (
+  const side = (rows: Mover[] | null | undefined, title: string) => (
     <section className="movers-side">
       <h3 className="cp-data-heading">{title}</h3>
       <ul className="turtle-rows">
-        {rows.map((m) => (
+        {(rows ?? []).map((m) => (
           <MoverRow key={m.symbol} m={m} tools={tools} />
         ))}
       </ul>

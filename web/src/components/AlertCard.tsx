@@ -17,6 +17,7 @@ import {
   usd,
 } from '../format';
 import { useElementSize } from '../hooks/useElementSize';
+import { useContinuationValue } from '../hooks/useContinuation';
 import { useSelection } from '../selection';
 import { detectorLabel, prettifyEnum } from '../types';
 import type { AlertMsg, AlertMetrics, ToolsMsg } from '../types';
@@ -176,6 +177,7 @@ export const AlertCard = memo(function AlertCard({
   canon = null,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const continuation = useContinuationValue(alert.symbol);
   const { ref, size } = useElementSize<HTMLElement>();
   const selection = useSelection();
 
@@ -278,6 +280,14 @@ export const AlertCard = memo(function AlertCard({
             <SeverityBadge severity={alert.severity} canon={canon} />
           </button>
         </Tooltip>
+        {continuation !== undefined && (
+          <span
+            className={`pcont${continuation >= 0.55 ? ' is-high' : continuation <= 0.45 ? ' is-low' : ''}`}
+            title={`P(this move continues over the horizon) = ${continuation.toFixed(3)}. Fitted from resolved alert history and validated leave-one-symbol-out. The effect is small: read it as a ranking signal, not a prediction.`}
+          >
+            P(cont) <b>{continuation.toFixed(2)}</b>
+          </span>
+        )}
         <Tooltip
           keys={['score']}
           tools={tools}

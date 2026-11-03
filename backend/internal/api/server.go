@@ -11,6 +11,7 @@ import (
 	"log"
 	"mime"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -198,6 +199,12 @@ type Deps struct {
 	// KlinesCache collapses duplicate concurrent chart fetches so the browser
 	// can poll quickly without multiplying Binance REST weight.
 	KlinesCache *klinesCache
+	// AlertPath is the on-disk alert history. The quality model needs alerts
+	// spread across the window, not the newest ring, so it reads the file.
+	AlertPath string
+	// Refdata is the base URL of the security reference data service, which
+	// owns instrument identity (class, venue, status). Prices come from Market.
+	Refdata string
 	// TickerPump forwards coalesced per-symbol price ticks for live charts.
 	TickerPump *TickerPump
 	// Outlook reports event state, ETA to reversal and the short-horizon
@@ -210,8 +217,12 @@ type Deps struct {
 	// Market is the REST client used for chart klines. The survey and screen
 	// own their own clients, but the chart endpoint is ad-hoc per request, so
 	// it borrows this one.
-	Market        *binance.Client
-	Static        fs.FS
+	Market *binance.Client
+	Static fs.FS
+	// StaticDir, when set, serves the dashboard from disk instead of the
+	// embedded build. A UI change then needs only a browser refresh: no Go
+	// rebuild, no server restart.
+	StaticDir     string
 	ConfigSummary map[string]any
 	StartedAt     time.Time
 	Candidates    func() int64
@@ -231,6 +242,10 @@ func New(deps Deps) *Server { return &Server{deps: deps} }
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/health", s.handleHealth)
+	// /health is what probes and the reload script call. Without this route the
+	// SPA fallback answered it with index.html and a 200, so every readiness
+	// check passed while the server was still initialising.
+	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/api/bus", s.handleBus)
 	mux.HandleFunc("/api/config", s.handleConfig)
 	mux.HandleFunc("/api/settings", s.handleSettings)
@@ -239,6 +254,32 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/agents/register", s.handleAgentsRegister)
 	mux.HandleFunc("/api/agents/heartbeat", s.handleAgentsHeartbeat)
 	mux.HandleFunc("/api/compute", s.handleCompute)
+	mux.HandleFunc("/api/forecast/lab", s.handleForecastLab)
+	mux.HandleFunc("/api/forecast/verify", s.handleForecastVerify)
+	mux.HandleFunc("/api/forecast/optimize", s.handleForecastOptimize)
+	mux.HandleFunc("/api/agent/python", s.handleAgentPython)
+	mux.HandleFunc("/api/instruments", s.handleInstruments)
+	mux.HandleFunc("/api/features", s.handleFeatures)
+	mux.HandleFunc("/api/forecast/features", s.handleFeatureForecast)
+	mux.HandleFunc("/api/forecast/continuation", s.handleContinuation)
+	mux.HandleFunc("/api/forecast/alert-quality", s.handleAlertQuality)
+	mux.HandleFunc("/api/forecast/backtest", s.handleBacktest)
+	mux.HandleFunc("/api/forecast/optimize-backtest", s.handleOptimizeBacktest)
+	mux.HandleFunc("/api/forecast/auto-config", s.handleAutoConfig)
+	mux.HandleFunc("/api/forecast/gpu-sweep", s.handleGPUSweep)
+	mux.HandleFunc("/api/forecast/forward", s.handleForward)
+	mux.HandleFunc("/api/forecast/live-state", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, engine.snapshot())
+	})
+	mux.HandleFunc("/api/forecast/live-symbols", s.handleLiveSymbols)
+	mux.HandleFunc("/api/forecast/configs", s.handleConfigs)
+	mux.HandleFunc("/api/forecast/gpu-sweep-status", s.handleGPUSweepStatus)
+	mux.HandleFunc("/api/forecast/mlr", s.handleMLR)
+	mux.HandleFunc("/api/alerts/scored", s.handleAlertsScored)
+	mux.HandleFunc("/api/agent/install", s.handleAgentInstall)
+	mux.HandleFunc("/api/client-error", s.handleClientError)
+	mux.HandleFunc("/api/history/coverage", s.handleHistoryCoverage)
+	mux.HandleFunc("/api/history/download", s.handleHistoryDownload)
 	mux.HandleFunc("/api/universe", s.handleUniverse)
 	mux.HandleFunc("/api/flow", s.handleFlow)
 	mux.HandleFunc("/api/flow/history", s.handleFlowHistory)
@@ -323,8 +364,12 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 // --------------------------------------------------------------------------
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	// pid identifies WHICH process answered. With SO_REUSEPORT two instances can
+	// share the port during a handover, so a reload script needs this to tell
+	// "the new build is serving" from "the old build is still serving".
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":     "ok",
+		"pid":        os.Getpid(),
 		"uptime_sec": int(time.Since(s.deps.StartedAt).Seconds()),
 	})
 }
@@ -800,6 +845,24 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 // handleStatic serves the built dashboard, falling back to index.html so
 // client-side routes work on refresh.
 func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
+	if s.deps.StaticDir != "" {
+		// Dev mode: read from the working tree so a rebuilt bundle is picked up
+		// on refresh. Paths are cleaned and refused if they escape the directory.
+		clean := filepath.Clean("/" + strings.TrimPrefix(r.URL.Path, "/"))
+		full := filepath.Join(s.deps.StaticDir, filepath.FromSlash(clean))
+		if rel, err := filepath.Rel(s.deps.StaticDir, full); err == nil && !strings.HasPrefix(rel, "..") {
+			if st, err := os.Stat(full); err == nil && !st.IsDir() {
+				http.ServeFile(w, r, full)
+				return
+			}
+		}
+		index := filepath.Join(s.deps.StaticDir, "index.html")
+		if _, err := os.Stat(index); err == nil {
+			w.Header().Set("Cache-Control", "no-store")
+			http.ServeFile(w, r, index)
+			return
+		}
+	}
 	if s.deps.Static == nil {
 		http.Error(w, "dashboard not built", http.StatusNotFound)
 		return
@@ -877,4 +940,16 @@ func queryInt(r *http.Request, key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+// queryInt64 reads an int64 query parameter.
+func queryInt64(r *http.Request, key string, fallback int64) int64 {
+	raw := strings.TrimSpace(r.URL.Query().Get(key))
+	if raw == "" {
+		return fallback
+	}
+	if v, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return v
+	}
+	return fallback
 }

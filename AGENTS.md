@@ -7,6 +7,23 @@ instruction and this file collide, the instruction wins and this file is
 updated to match. Amendments are made by the human, or by an agent at the
 human's instruction, announced on the channel.
 
+## Rule A8 — DO ONLY WHAT WAS ASKED
+
+Set by the human. An instruction is a boundary, not a starting point.
+
+- **No unrequested artefacts.** No new scripts, tools, test harnesses, guard
+  files, docs, rules or configuration unless the human asked for them by name.
+  Useful is not the same as requested; "this would help" is not permission.
+- **No unrequested edits.** Not a rename, not a class name, not a tidy-up, not
+  a formatting pass. If it is not in the sentence the human wrote, it waits
+  until they ask.
+- **Answer the question that was asked.** When the human asks how to stop a
+  class of mistake, the answer is a description, not a new piece of software.
+- **Ambiguity gets one question, not an invention.** If the instruction can be
+  read two ways, ask which. Do not pick one and build around it.
+- **When told to stop or revert: stop or revert, immediately**, and say what
+  was undone. No defence, no explanation of why it was a good idea.
+
 ## Rule A1 — NEVER REMOVE FEATURES
 
 Features are added or fixed. They are never deleted, disabled by default

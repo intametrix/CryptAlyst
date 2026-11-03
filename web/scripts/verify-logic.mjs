@@ -25,6 +25,8 @@ import {
   markTitle,
   summarizeLatest,
 } from '../src/chartData.ts';
+import { AGENT_ACTIVE_MS, isAgentActive } from '../src/agentStatus.ts';
+import { HORIZON_CHOICES, TRAIN_CHOICES, barsFor, barsToHours, historyNeeded, horizonLabel, trainBars, trainLabel } from '../src/forecastHorizon.ts';
 import {
   resolveTooltip,
   LOCAL_TOOLS,
@@ -554,6 +556,47 @@ eq('familyOf classifies breakouts', familyOf('BREAKOUT_SHORT'), 'breakout');
 const a1 = ident('DUMP', { severity: 'CRITICAL', color: '#ff1744' });
 const a2 = ident('DUMP', { severity: 'CRITICAL', color: '#ff1744' });
 ok('identity is deterministic', JSON.stringify(a1) === JSON.stringify(a2));
+
+// --- agent liveness: inactive agents must not be listed ---------------------
+// The beacon interval is 30s, so 90s of silence means the agent is gone.
+const T0 = 1_700_000_000_000;
+eq('a freshly seen agent is active', isAgentActive(T0, T0), true);
+eq('an agent seen 30s ago is active', isAgentActive(T0, T0 + 30_000), true);
+eq('an agent seen 89s ago is still active', isAgentActive(T0, T0 + 89_000), true);
+eq('an agent silent for 90s is inactive', isAgentActive(T0, T0 + 90_000), false);
+eq('an agent silent for 10m is inactive', isAgentActive(T0, T0 + 600_000), false);
+eq('a never-seen agent (0) is inactive', isAgentActive(0, T0), false);
+eq('a never-seen agent (null) is inactive', isAgentActive(null, T0), false);
+eq('a never-seen agent (undefined) is inactive', isAgentActive(undefined, T0), false);
+eq('an unparseable timestamp is inactive', isAgentActive('nonsense', T0), false);
+eq('the active window is three beacons', AGENT_ACTIVE_MS, 90_000);
+ok('an active agent survives the filter', [T0, T0 + 1_000].every((t) => isAgentActive(t, T0 + 5_000)));
+ok('a dead agent is filtered out', ![T0 - 90_000, T0 - 3_600_000].some((t) => isAgentActive(t, T0)));
+
+// --- forecast horizons: human windows convert to bars ----------------------
+eq('1 day at 1h is 24 bars', barsFor(24, '1h'), 24);
+eq('1 week at 1h is 168 bars', barsFor(168, '1h'), 168);
+eq('1 month at 1h is 720 bars', barsFor(720, '1h'), 720);
+eq('1 day at 4h is 6 bars', barsFor(24, '4h'), 6);
+eq('1 day at 1m is 1440 bars', barsFor(24, '1m'), 1440);
+eq('1 day at 1d is 1 bar', barsFor(24, '1d'), 1);
+eq('a sub-bar window still asks for 1 bar', barsFor(0.1, '1d'), 1);
+eq('bars convert back to hours', barsToHours(24, '1h'), 24);
+eq('the round trip is stable at 4h', barsToHours(barsFor(168, '4h'), '4h'), 168);
+ok('every horizon choice converts to a positive bar count', HORIZON_CHOICES.every((c) => barsFor(c.hours, '1h') > 0));
+ok('the label names the window and the bars', horizonLabel(168, '1h').includes('1 week') && horizonLabel(168, '1h').includes('168'));
+eq('history needed adds the training window', historyNeeded(24, 60), 84);
+
+// --- training window: separate from the forecast window ---------------------
+eq('a 1-week train window at 1h is 168 bars', trainBars(168, '1h'), 168);
+eq('a 3-month train window at 1h is 2160 bars', trainBars(2160, '1h'), 2160);
+eq('a 1-day train window at 4h is 6 bars', trainBars(24, '4h'), 6);
+eq('"all history" means no limit', trainBars(0, '1h'), 0);
+ok('train and forecast windows are independent',
+  trainBars(720, '1h') === 720 && barsFor(168, '1h') === 168);
+ok('every training choice converts to a valid bar count',
+  TRAIN_CHOICES.every((c) => c.hours === 0 || trainBars(c.hours, '1h') > 0));
+ok('the training label states the bars', trainLabel(720, '1h').includes('1 month') && trainLabel(720, '1h').includes('720'));
 
 const summary = fail === 0 ? `${pass}/${pass + fail} checks passed` : `${pass}/${pass + fail} checks passed, ${fail} FAILED`;
 console.log(`verify: ${summary}`);

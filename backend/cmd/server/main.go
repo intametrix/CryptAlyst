@@ -27,6 +27,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -84,14 +85,51 @@ type options struct {
 	alertHistory         string
 	ledgerPath           string
 	ledgerHorizon        time.Duration
+	ledgerMaxMB          int64
+	ledgerKeep           int
+	ledgerReplayMB       int64
 	calibrationPath      string
 	microburstDir        string
 	agentBeaconPort      int
+	refdataURL           string
+	webDir               string
 }
 
 func main() {
 	log.SetFlags(log.Ltime)
 	opt := parseFlags()
+
+	// The dashboard must answer /health from the first second, not after the
+	// engine has replayed history. The handler is swapped once the real server is
+	// built, so probes and handovers see a truthful status instead of a refused
+	// connection for a minute.
+	var handlerBox atomic.Value
+	handlerBox.Store(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"status":"starting","pid":%d}`, os.Getpid())
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Fprint(w, `{"status":"starting"}`)
+	}))
+	earlyServer := &http.Server{
+		Addr:              opt.addr,
+		Handler:           http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handlerBox.Load().(http.Handler).ServeHTTP(w, r) }),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+	go func() {
+		ln, lerr := listenReusable(opt.addr)
+		if lerr != nil {
+			log.Printf("early bind %s failed: %v", opt.addr, lerr)
+			return
+		}
+		if serr := earlyServer.Serve(ln); serr != nil && serr != http.ErrServerClosed {
+			log.Printf("early server stopped: %v", serr)
+		}
+	}()
 
 	// Anchor the durable stores. Explicit per-store flags win; everything left
 	// at its default resolves under -data-dir, so alerts, the ledger, the
@@ -373,6 +411,12 @@ func main() {
 		rec, err := ledger.New(opt.ledgerPath, enginePrice{engine: engine}, ledger.Config{
 			Path:    opt.ledgerPath,
 			Horizon: opt.ledgerHorizon,
+			// Bounded on both ends: 256MB per file, four kept (1GB ceiling), and
+			// only the last 32MB replayed at startup. Unbounded growth is what
+			// filled the disk and made restarts take minutes.
+			MaxBytes:        opt.ledgerMaxMB << 20,
+			KeepFiles:       opt.ledgerKeep,
+			ReplayTailBytes: opt.ledgerReplayMB << 20,
 		})
 		if err != nil {
 			log.Printf("ledger disabled: %v", err)
@@ -450,11 +494,14 @@ func main() {
 		Graph:         graphCatalog,
 		Heat:          heatSvc,
 		KlinesCache:   api.NewKlinesCache(),
+		AlertPath:     opt.alertHistory,
+		Refdata:       opt.refdataURL,
 		TickerPump:    tickerPump,
 		Outlook:       outlookSvc,
 		Perf:          perfSvc,
 		Market:        client,
 		Static:        web.Dist(),
+		StaticDir:     opt.webDir,
 		ConfigSummary: summary,
 		StartedAt:     startedAt,
 		StreamUp:      stream.IsConnected,
@@ -464,6 +511,7 @@ func main() {
 	// loop needs the API's own selector; it decides for itself whether a session is
 	// live rather than being tied to the start/stop button.
 	go server.StartTurtleRotation(ctx)
+	go api.StartEngine(server) // continuous GPU optimisation, independent of any browser
 
 	// MARK ON A CLOCK. Without this, a position's price only moved when a NEW ALERT
 	// fired for it, so PnL sat frozen between alerts -- and because the 2N stop is
@@ -482,18 +530,8 @@ func main() {
 		return out
 	}, time.Second)
 
-	httpServer := &http.Server{
-		Addr:              opt.addr,
-		Handler:           server.Routes(),
-		ReadHeaderTimeout: 10 * time.Second,
-		// No WriteTimeout: the SSE stream is long-lived by design.
-	}
-	go func() {
-		log.Printf("dashboard: http://127.0.0.1%s", displayAddr(opt.addr))
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("http server failed: %v", err)
-		}
-	}()
+	handlerBox.Store(server.Routes())
+	log.Printf("dashboard: http://127.0.0.1%s", displayAddr(opt.addr))
 
 	<-ctx.Done()
 	// Cancelling ctx (via the signal handler) is what stops the stream and the
@@ -501,7 +539,7 @@ func main() {
 	log.Printf("shutting down")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = httpServer.Shutdown(shutdownCtx)
+	_ = earlyServer.Shutdown(shutdownCtx)
 	wg.Wait()
 }
 
@@ -553,6 +591,11 @@ func parseFlags() options {
 	flag.StringVar(&o.microburstDir, "microburst-dir", "microburst_out",
 		"directory of microburst_<N>s.json horizon models written by cmd/microburst; absent means no horizon forecast")
 	flag.IntVar(&o.agentBeaconPort, "agent-beacon-port", 8788, "UDP port to listen for agent beacons (0 disables)")
+	flag.StringVar(&o.refdataURL, "refdata", "http://127.0.0.1:8790", "security reference data service base URL (instrument identity)")
+	flag.Int64Var(&o.ledgerMaxMB, "ledger-max-mb", 256, "rotate the prediction ledger at this size (MB)")
+	flag.IntVar(&o.ledgerKeep, "ledger-keep", 4, "how many rotated ledger files to keep")
+	flag.Int64Var(&o.ledgerReplayMB, "ledger-replay-mb", 32, "replay only this much of the ledger tail at startup (MB)")
+	flag.StringVar(&o.webDir, "web-dir", "", "serve the dashboard from this directory instead of the embedded build (dev: UI changes need only a refresh)")
 	flag.DurationVar(&o.ledgerHorizon, "ledger-horizon", 15*time.Minute,
 		"how long a prediction is tracked before it is labelled")
 	flag.Parse()
@@ -1187,13 +1230,29 @@ func valueOr(v *float64, def float64) float64 {
 const beaconGroup = "239.255.42.99"
 
 func listenForAgentBeacons(reg *api.AgentRegistry, port int) {
-	conn, err := net.ListenMulticastUDP("udp", nil, &net.UDPAddr{IP: net.ParseIP(beaconGroup), Port: port})
+	group := net.ParseIP(beaconGroup)
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		log.Printf("agent beacon listener disabled: %v", err)
 		return
 	}
-	defer conn.Close()
-	log.Printf("agent beacon listener on UDP :%d", port)
+	joined := 0
+	for i := range ifaces {
+		ifi := ifaces[i]
+		if ifi.Flags&net.FlagUp == 0 || ifi.Flags&net.FlagMulticast == 0 {
+			continue
+		}
+		conn, err := net.ListenMulticastUDP("udp", &ifi, &net.UDPAddr{IP: group, Port: port})
+		if err != nil {
+			continue
+		}
+		joined++
+		go readBeacons(conn, reg)
+	}
+	log.Printf("agent beacon listener on UDP :%d (%s on %d interfaces)", port, beaconGroup, joined)
+}
+
+func readBeacons(conn *net.UDPConn, reg *api.AgentRegistry) {
 	buf := make([]byte, 65535)
 	for {
 		n, remote, err := conn.ReadFromUDP(buf)

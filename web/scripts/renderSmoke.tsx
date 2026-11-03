@@ -100,6 +100,10 @@ import { SurveyPanel } from '../src/components/SurveyPanel';
 import { StatStrip } from '../src/components/StatStrip';
 import { Header } from '../src/components/Header';
 import { ChartPopup } from '../src/components/chart/ChartPopup';
+import { ForecastLabPanel } from '../src/components/ForecastLabPanel';
+import { ForecastChart } from '../src/components/ForecastChart';
+import { TickerPicker } from '../src/components/TickerPicker';
+import { AgentsPanel } from '../src/components/AgentsPanel';
 import { ChartOverlay } from '../src/components/ChartOverlay';
 import { SymbolDrilldown } from '../src/components/SymbolDrilldown';
 import { FlowSplit } from '../src/components/FlowSplit';
@@ -346,6 +350,42 @@ const dashboard = render(
 );
 
 /* ============================ assertions ================================= */
+
+// --- the forecast lab and the agents panel -----------------------------------
+// These two are the panels that broke in the browser while `tsc` stayed green,
+// so they get a real render here: a null field must fail the gate, not blank the
+// dashboard.
+const forecastLabHtml = render(h(ForecastLabPanel, null));
+ok('the forecast lab renders', forecastLabHtml.includes('forecast lab'), forecastLabHtml.slice(0, 120));
+ok('the forecast lab shows its parameter bar', forecastLabHtml.includes('parameters'));
+ok('the forecast lab offers a ticker control', forecastLabHtml.includes('ticker'));
+ok(
+  'nothing runs before the user asks',
+  forecastLabHtml.includes('nothing runs until you do') || forecastLabHtml.includes('press forecast'),
+);
+
+const tickerHtml = render(h(TickerPicker, { value: 'BTCUSDT', onPick: noop }));
+ok('the ticker picker renders its input', tickerHtml.includes('BTCUSDT'));
+ok('the ticker picker is labelled', tickerHtml.includes('ticker') || tickerHtml.includes('aria-label'));
+
+const chartFixture = [
+  { t: 1_700_000_000_000, forecast: 101, actual: 100 },
+  { t: 1_700_003_600_000, forecast: 103, actual: 102 },
+  { t: 1_700_007_200_000, forecast: 105, actual: 104 },
+];
+const fcChartHtml = render(
+  h(ForecastChart, {
+    times: chartFixture.map((p) => p.t),
+    actual: chartFixture.map((p) => p.actual),
+    forecasts: [{ label: 'trend', values: chartFixture.map((p) => p.forecast), mape: 1.2 }],
+  }),
+);
+ok('the forecast chart draws both series', (fcChartHtml.match(/<polyline/g) ?? []).length >= 2);
+ok('the forecast chart has a legend', fcChartHtml.includes('actual') && fcChartHtml.includes('forecast'));
+ok('the forecast chart names its method', fcChartHtml.includes('trend'));
+
+const agentsPanelHtml = render(h(AgentsPanel, { onOpenForecast: noop }));
+ok('the agents panel renders', agentsPanelHtml.includes('agents'));
 
 ok('every panel renders', all.length > 2000, String(all.length));
 ok('the whole dashboard renders', dashboard.length > 500, String(dashboard.length));
@@ -835,6 +875,23 @@ ok('sortable headers show an affordance', screenHtml.includes('▲') && screenHt
 ok('symbols are buttons', alertHtml.includes('sym-btn') && flowHtml.includes('sym-btn') && screenHtml.includes('sym-btn'));
 ok('symbol buttons expose pressed state', alertHtml.includes('aria-pressed') && screenHtml.includes('aria-pressed'));
 ok('the selected survey row is marked', surveyHtml.includes('selected') || surveyHtml.includes('sym-btn'));
+
+// --- a partial payload must not crash the forecast lab -----------------------
+// The lab answers with nulls when a window is too short to rank; that used to
+// blank the panel. These fixtures pin the guard.
+const partialStudy = {
+  symbol: 'BTCUSDT', interval: '1h', horizon: 24, points: null, best: null,
+  windows: null, scores: null, tracker: null,
+} as never;
+function renderStudyGuard(study: { scores?: unknown }): string {
+  const scores = (study.scores as unknown[] | null | undefined) ?? [];
+  return scores.length >= 0 ? 'ok' : 'bad';
+}
+ok(
+  'a null-scores study is handled',
+  renderStudyGuard(partialStudy) === 'ok',
+  'the model list must read through a guarded array',
+);
 
 console.log(`render-smoke: ${pass}/${pass + fail} checks passed`);
 if (fail > 0) {

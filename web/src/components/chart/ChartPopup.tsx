@@ -20,6 +20,7 @@ import { BottomPanel } from './BottomPanel';
 import { DataColumn } from './DataColumn';
 import { EventsColumn } from './EventsColumn';
 import { OVERLAY_KEYS, PriceChart, type ChartZoomControls } from './PriceChart';
+import { useForecastOverlay } from '../../hooks/useForecastOverlay';
 
 export type { ChartZoomControls };
 
@@ -128,10 +129,19 @@ export function ChartPopup({
   /** Newest first, for the event list and the collapsed badge. */
   const chartEvents = useMemo(() => markerList.slice().reverse(), [markerList]);
   const latest = useMemo(() => summarizeLatest(data?.latest, bars), [data, bars]);
-  const overlaySeries = useMemo(
-    () => alignIndicators([...OVERLAY_KEYS, ...DATA_EXTRA_KEYS], data?.indicators, bars),
-    [data, bars],
-  );
+  /** Forecast graded on a holdout split, drawn as the 'forecast' overlay. */
+  /** Forecast overlay toggle: off means no request and the studies stay visible. */
+  const [showForecast, setShowForecast] = useState(true);
+  const forecast = useForecastOverlay(symbol, interval, showForecast);
+  /** True when a graded forecast is actually drawn, which changes the legend. */
+  const forecastOn = (forecast.series?.data.length ?? 0) > 0;
+  const overlaySeries = useMemo(() => {
+    const base = alignIndicators([...OVERLAY_KEYS, ...DATA_EXTRA_KEYS], data?.indicators, bars);
+    if (forecast.series && forecast.series.data.length > 0) {
+      return [...base.filter((s) => s.key !== 'forecast'), forecast.series];
+    }
+    return base;
+  }, [data, bars, forecast.series]);
 
   /* -- FLOW: 10s bins aggregated onto bar boundaries for the sub-pane --------- */
   const flow = useFlowHistory(symbol);
@@ -283,6 +293,23 @@ export function ChartPopup({
               onClick={() => setShowFlow((v) => !v)}
             >
               FLOW
+            </button>
+          </Tooltip>
+          <Tooltip
+            tone="chip"
+            keys={['forecast']}
+            tools={tools}
+            fallbackTitle="Forecast"
+            label="A graded forecast drawn against the bars that followed it. While it is on, the other studies are hidden so the forecast is unambiguous."
+            value={showForecast ? 'shown' : 'hidden'}
+          >
+            <button
+              type="button"
+              className={`chip chip-toggle${showForecast ? ' on' : ''}`}
+              aria-pressed={showForecast}
+              onClick={() => setShowForecast((v) => !v)}
+            >
+              FCT
             </button>
           </Tooltip>
           <Tooltip
@@ -472,6 +499,17 @@ export function ChartPopup({
 
       {/* ------------------------------------------------------- chart region -- */}
       <div className="cp-chart-region">
+        {forecastOn && (
+          <div className="cp-forecast-note">
+            <span className="cp-fc-swatch" aria-hidden="true" />
+            <span>
+              forecast · {forecast.result?.method ?? 'best'} ·{' '}
+              {forecast.result?.source === 'agent' ? 'agent' : 'platform'}/
+              {forecast.result?.device ?? 'cpu'} — other studies hidden so the forecast reads
+              clearly
+            </span>
+          </div>
+        )}
         <PriceChart
           symbol={symbol}
           interval={interval}
@@ -483,17 +521,32 @@ export function ChartPopup({
           markerList={markerList}
           overlaySeries={overlaySeries}
           flowSeries={flowSeries}
-          showVol={showVol}
-          showDon={showDon}
-          showEma={showEma}
-          showSma={showSma}
-          showFlow={showFlow}
-          showAtr={showAtr}
-          showAdx={showAdx}
-          showRsi={showRsi}
+          // Forecast mode: a graded forecast is on the chart, so every other
+          // study is suppressed. Indicators competing with the forecast make
+          // it impossible to see what the forecast is actually claiming.
+          showVol={forecastOn ? showVol : showVol}
+          showDon={forecastOn ? false : showDon}
+          showEma={forecastOn ? false : showEma}
+          showSma={forecastOn ? false : showSma}
+          showFlow={forecastOn ? false : showFlow}
+          showAtr={forecastOn ? false : showAtr}
+          showAdx={forecastOn ? false : showAdx}
+          showRsi={forecastOn ? false : showRsi}
           selectedEvent={selectedEvent}
           onSelectEvent={setSelectedEvent}
           onZoomControls={onZoomControls}
+        />
+        <ChartLegend
+          showForecast={forecastOn}
+          forecastLabel={forecast.result?.method ?? 'best'}
+          showVol={showVol}
+          showDon={forecastOn ? false : showDon}
+          showEma={forecastOn ? false : showEma}
+          showSma={forecastOn ? false : showSma}
+          showFlow={forecastOn ? false : showFlow}
+          showAtr={forecastOn ? false : showAtr}
+          showAdx={forecastOn ? false : showAdx}
+          showRsi={forecastOn ? false : showRsi}
         />
       </div>
 
@@ -515,6 +568,58 @@ export function ChartPopup({
           </div>
         </div>
       </BottomPanel>
+    </div>
+  );
+}
+
+/**
+ * What is actually on the chart.
+ *
+ * A candle chart with lines on it is ambiguous: a reader cannot tell which
+ * stroke is price, which is a study, and which is a claim about the future. The
+ * legend lists only what is currently drawn, so it can never describe something
+ * that is hidden.
+ */
+function ChartLegend(props: {
+  showForecast: boolean;
+  forecastLabel: string;
+  showVol: boolean;
+  showDon: boolean;
+  showEma: boolean;
+  showSma: boolean;
+  showFlow: boolean;
+  showAtr: boolean;
+  showAdx: boolean;
+  showRsi: boolean;
+}) {
+  const items: { key: string; label: string; swatch: string; dashed?: boolean }[] = [
+    { key: 'price', label: 'price (candles)', swatch: 'legend-updown' },
+  ];
+  if (props.showForecast) {
+    items.push({
+      key: 'forecast',
+      label: `forecast · ${props.forecastLabel}`,
+      swatch: 'legend-forecast',
+      dashed: true,
+    });
+  }
+  if (props.showVol) items.push({ key: 'vol', label: 'volume', swatch: 'legend-vol' });
+  if (props.showDon) items.push({ key: 'don', label: 'donchian 20/55', swatch: 'legend-don', dashed: true });
+  if (props.showEma) items.push({ key: 'ema', label: 'ema 20/50', swatch: 'legend-ema' });
+  if (props.showSma) items.push({ key: 'sma', label: 'sma 200', swatch: 'legend-sma' });
+  if (props.showFlow) items.push({ key: 'flow', label: 'flow', swatch: 'legend-flow' });
+  if (props.showAtr) items.push({ key: 'atr', label: 'atr', swatch: 'legend-atr' });
+  if (props.showAdx) items.push({ key: 'adx', label: 'adx', swatch: 'legend-adx' });
+  if (props.showRsi) items.push({ key: 'rsi', label: 'rsi', swatch: 'legend-rsi' });
+
+  return (
+    <div className="cp-legend" aria-label="chart legend">
+      {items.map((it) => (
+        <span className="cp-legend-item" key={it.key}>
+          <span className={`cp-legend-swatch ${it.swatch}${it.dashed ? ' is-dashed' : ''}`} aria-hidden="true" />
+          {it.label}
+        </span>
+      ))}
     </div>
   );
 }

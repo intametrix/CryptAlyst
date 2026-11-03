@@ -18,6 +18,15 @@ type NetIface struct {
 	Up   bool   `json:"up"`
 }
 
+// ActiveJob is one job currently executing on an agent.
+type ActiveJob struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Model     string `json:"model"`
+	Device    string `json:"device"`
+	ElapsedMS int64  `json:"elapsed_ms"`
+}
+
 // AgentInfo is one enrolled CryptALAS agent as reported by its /gpu endpoint.
 type AgentInfo struct {
 	ID         string `json:"id"`          // stable id; defaults to Host when unset
@@ -52,8 +61,11 @@ type AgentInfo struct {
 	JobsRunning  int        `json:"jobs_running"`
 	JobsDone     int        `json:"jobs_done"`
 	JobsFailed   int        `json:"jobs_failed"`
-	FirstSeen    int64      `json:"first_seen_ms"`
-	LastSeen     int64      `json:"last_seen_ms"`
+	// ActiveJobs is what the agent is doing at this instant: an install, a
+	// training run, a forecast. A count alone cannot tell you that.
+	ActiveJobs []ActiveJob `json:"active_jobs"`
+	FirstSeen  int64       `json:"first_seen_ms"`
+	LastSeen   int64       `json:"last_seen_ms"`
 }
 
 // AgentRegistry is the in-memory directory of enrolled agents. It is keyed by

@@ -6,6 +6,7 @@ import { useSelection } from '../selection';
 import type { AlertMsg, ToolsMsg } from '../types';
 import { alertKey, prettifyEnum } from '../types';
 import { AlertCard } from './AlertCard';
+import { useContinuationPoller } from '../hooks/useContinuation';
 import { ResizablePanel } from './Panel';
 
 interface Props {
@@ -45,6 +46,7 @@ export const AlertFeed = memo(function AlertFeed({
   canon = null,
 }: Props) {
   const selection = useSelection();
+  useContinuationPoller();
   const [onlySelected, setOnlySelected] = useState(false);
   // One clock for the whole feed: cards are memoised on it, so a tick re-renders
   // the feed's cards but not the surrounding panels, and unmounted cost is zero.

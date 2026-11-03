@@ -14,9 +14,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -70,9 +73,26 @@ type Config struct {
 	// pump can exceed this only if it does so between two 3s samples, in
 	// which case the next sample re-anchors.
 	MaxSampleJumpPct float64
+	// MaxBytes caps one ledger file before it is rotated. A ledger that grows
+	// without bound is what made restarts take minutes and filled the disk.
+	MaxBytes int64
+	// KeepFiles is how many rotated files survive; older ones are deleted.
+	KeepFiles int
+	// ReplayTailBytes bounds how much of the file is replayed at startup. Only
+	// unresolved predictions matter, and they are always the newest records.
+	ReplayTailBytes int64
 }
 
 func (c Config) withDefaults() Config {
+	if c.MaxBytes <= 0 {
+		c.MaxBytes = 512 << 20 // 512MB per file
+	}
+	if c.KeepFiles <= 0 {
+		c.KeepFiles = 3
+	}
+	if c.ReplayTailBytes <= 0 {
+		c.ReplayTailBytes = 64 << 20 // 64MB of tail is plenty for open state
+	}
 	if c.SampleInterval <= 0 {
 		c.SampleInterval = DefaultSampleInterval
 	}
@@ -190,8 +210,10 @@ type trackedState struct {
 // JSONLRecorder appends ledger records to a JSONL file and tracks open
 // predictions to their fixed-horizon label.
 type JSONLRecorder struct {
-	cfg    Config
-	market PriceFetcher
+	// written is the current file size, used to decide when to rotate.
+	written int64
+	cfg     Config
+	market  PriceFetcher
 
 	mu    sync.Mutex
 	open  map[string]*trackedState // predictions still being tracked
@@ -225,6 +247,9 @@ func New(path string, market PriceFetcher, cfg Config) (*JSONLRecorder, error) {
 	}
 	r.f = f
 	r.w = bufio.NewWriter(f)
+	if st, serr := f.Stat(); serr == nil {
+		r.written = st.Size()
+	}
 	return r, nil
 }
 
@@ -235,7 +260,7 @@ func New(path string, market PriceFetcher, cfg Config) (*JSONLRecorder, error) {
 // show impossible decreases and a resolution can under-report the true
 // excursions.
 func (r *JSONLRecorder) reload(path string) error {
-	raw, err := os.ReadFile(path)
+	raw, err := readTail(path, r.cfg.ReplayTailBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -566,7 +591,14 @@ func (r *JSONLRecorder) write(rec any) error {
 	if _, err := r.w.Write(append(b, '\n')); err != nil {
 		return err
 	}
-	return r.w.Flush()
+	r.written += int64(len(b) + 1)
+	if err := r.w.Flush(); err != nil {
+		return err
+	}
+	if r.cfg.MaxBytes > 0 && r.written >= r.cfg.MaxBytes {
+		r.rotate()
+	}
+	return nil
 }
 
 // Close flushes and closes the ledger file.
@@ -586,4 +618,97 @@ func (r *JSONLRecorder) SortOpenIDs() []string {
 	out := append([]string(nil), r.order...)
 	sort.Strings(out)
 	return out
+}
+
+// readTail returns at most maxBytes from the end of a file, dropping the first
+// partial line so the result always starts on a record boundary. Replaying the
+// whole ledger was the reason a restart took minutes once the file was large,
+// and only the newest records can still be unresolved.
+func readTail(path string, maxBytes int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	st, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	size := st.Size()
+	if size <= maxBytes || maxBytes <= 0 {
+		return os.ReadFile(path)
+	}
+	if _, err := f.Seek(size-maxBytes, io.SeekStart); err != nil {
+		return nil, err
+	}
+	buf := make([]byte, maxBytes)
+	n, err := io.ReadFull(f, buf)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return nil, err
+	}
+	buf = buf[:n]
+	// Skip the partial first line.
+	if i := bytes.IndexByte(buf, '\n'); i >= 0 && i+1 < len(buf) {
+		buf = buf[i+1:]
+	}
+	return buf, nil
+}
+
+// rotate closes the current file, moves it aside with a timestamp, and starts a
+// new one. Old rotated files beyond KeepFiles are deleted, which bounds disk
+// use instead of letting one file grow forever.
+func (r *JSONLRecorder) rotate() {
+	if r.f == nil {
+		return
+	}
+	_ = r.w.Flush()
+	_ = r.f.Close()
+	r.written = 0
+	base := r.f.Name()
+	rotated := fmt.Sprintf("%s.%d", base, time.Now().Unix())
+	if err := os.Rename(base, rotated); err != nil {
+		// If the rename fails, keep writing to the same file rather than losing
+		// records; the size check will try again.
+		if f, oerr := os.OpenFile(base, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); oerr == nil {
+			r.f = f
+			r.w = bufio.NewWriter(f)
+		}
+		return
+	}
+	f, err := os.OpenFile(base, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	r.f = f
+	r.w = bufio.NewWriter(f)
+	r.pruneRotated(base)
+}
+
+// pruneRotated keeps the newest KeepFiles rotations of base and deletes the rest.
+func (r *JSONLRecorder) pruneRotated(base string) {
+	dir := filepath.Dir(base)
+	prefix := filepath.Base(base) + "."
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	type rot struct {
+		path string
+		mod  time.Time
+	}
+	var rots []rot
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) {
+			continue
+		}
+		info, ierr := e.Info()
+		if ierr != nil {
+			continue
+		}
+		rots = append(rots, rot{path: filepath.Join(dir, e.Name()), mod: info.ModTime()})
+	}
+	sort.Slice(rots, func(i, j int) bool { return rots[i].mod.After(rots[j].mod) })
+	for i := r.cfg.KeepFiles; i < len(rots); i++ {
+		_ = os.Remove(rots[i].path)
+	}
 }

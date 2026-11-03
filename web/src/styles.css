@@ -4692,3 +4692,593 @@ table {
 .ag-rawd { margin-top: 14px; min-width: 0; }
 .ag-rawd summary { cursor: pointer; }
 @media (max-width: 720px) { .ag-dgrid { grid-template-columns: 1fr; } }
+
+/* ---------------------------------------------------------- forecast lab --- */
+/* Live grading of forecasting models: the chart shows the best model's
+   forecast next to the bars that actually followed, and the table below is the
+   leaderboard that choice came from. */
+.panel.fl-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; gap: 8px; height: calc(100vh - 96px); overflow-y: auto; padding: 10px; }
+.fl-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; min-height: 0; }
+.fl-ctl { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dim, #8494a8); min-width: 0; }
+.fl-ctl select { background: var(--panel, #0d1622); color: var(--text, #d7e2ee); border: 1px solid var(--border, #223046); border-radius: 6px; padding: 2px 6px; font-size: 11px; }
+.fl-live { margin-left: auto; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: #6b7b8f; }
+.fl-live.is-live { color: #38d39f; }
+.fl-real { fill: none; stroke: #4fc3f7; stroke-width: .8; vector-effect: non-scaling-stroke; }
+.fl-fc { fill: none; stroke: #ffb300; stroke-width: .8; stroke-dasharray: 3 2; vector-effect: non-scaling-stroke; }
+.fl-legend { display: flex; align-items: center; gap: 12px; font-size: 10px; color: var(--dim, #8494a8); min-width: 0; }
+.fl-key { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.fl-key::before { content: ''; width: 14px; height: 2px; display: inline-block; }
+.fl-key-real::before { background: #4fc3f7; }
+.fl-key-fc::before { background: #ffb300; }
+.fl-span { margin-left: auto; }
+.fl-table { display: flex; flex-direction: column; min-height: 0; min-width: 0; gap: 2px; overflow-y: auto; }
+.fl-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) minmax(0, .8fr) minmax(0, .6fr); gap: 8px; align-items: center; padding: 2px 4px; border-radius: 4px; font-size: 11px; min-width: 0; min-height: 0; }
+.fl-row-head { color: #6b7b8f; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; border-bottom: 1px solid var(--border, #223046); }
+.fl-row.is-best { background: rgba(56, 211, 159, .08); }
+.fl-row.is-best .fl-model { color: #38d39f; font-weight: 600; }
+.fl-row .fl-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fl-metric { position: relative; display: flex; align-items: center; min-width: 0; }
+.fl-bar { position: absolute; left: 0; top: 50%; transform: translateY(-50%); height: 12px; background: rgba(255, 179, 0, .18); border-radius: 3px; }
+.fl-metric .num { position: relative; padding-left: 4px; }
+.fl-note { margin: 0; font-size: 10px; color: #6b7b8f; }
+
+/* forecast result shown next to the job buttons: the line plus its error */
+.ag-err { color: #ff8a80; font-size: 11px; margin: 4px 0 0; }
+.ag-verify { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; margin-top: 8px; }
+.ag-vhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--dim, #8494a8); min-width: 0; }
+.ag-vmape { color: #ffb300; }
+.ag-vstats { display: flex; flex-wrap: wrap; gap: 10px; font-size: 10px; color: var(--dim, #8494a8); min-width: 0; }
+.ag-vstats b { color: var(--text, #d7e2ee); font-weight: 600; }
+.ag-vtable { display: flex; flex-direction: column; gap: 1px; max-height: 160px; overflow-y: auto; min-height: 0; min-width: 0; }
+.ag-vrow { display: grid; grid-template-columns: minmax(0, .4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, .9fr); gap: 6px; font-size: 10px; padding: 1px 2px; min-width: 0; min-height: 0; }
+.ag-vrow-head { color: #6b7b8f; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid var(--border, #223046); }
+.ag-pos { color: #ff8a80; }
+.ag-neg { color: #38d39f; }
+
+/* pointer to the real chart, instead of a second chart drawn here */
+.fl-hint { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--dim, #8494a8); min-width: 0; }
+.fl-open { padding: 2px 8px; font-size: 11px; }
+.ag-vhint { margin: 0; font-size: 10px; color: var(--dim, #8494a8); }
+
+/* forecast vs actual, the two columns the whole feature exists to show */
+.fl-cmp { display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; }
+.fl-cmp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--dim, #8494a8); min-width: 0; }
+.fl-cmp-mape { color: #ffb300; }
+.fl-cmp-table { display: flex; flex-direction: column; gap: 1px; max-height: 190px; overflow-y: auto; min-height: 0; min-width: 0; }
+.fl-cmp-row { display: grid; grid-template-columns: minmax(0, .4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; font-size: 11px; padding: 1px 2px; min-width: 0; min-height: 0; }
+.fl-cmp-row-head { color: #6b7b8f; text-transform: uppercase; font-size: 10px; letter-spacing: .05em; border-bottom: 1px solid var(--border, #223046); }
+.fl-cmp-fc { color: #ffb300; }
+.fl-cmp-real { color: #4fc3f7; }
+.fl-over { color: #ff8a80; }
+.fl-under { color: #38d39f; }
+.fl-cmp-stats { display: flex; flex-wrap: wrap; gap: 10px; font-size: 10px; color: var(--dim, #8494a8); min-width: 0; }
+.fl-cmp-stats b { color: var(--text, #d7e2ee); }
+
+/* the search is continuous: show how many iterations and what improved */
+.fl-track { display: flex; flex-direction: column; gap: 3px; font-size: 10px; color: var(--dim, #8494a8); min-width: 0; min-height: 0; }
+.fl-track-line { color: #6b7b8f; }
+.fl-track-item { color: #38d39f; }
+.fl-track-item b { color: #7ef0c0; font-weight: 600; }
+.fl-track-prev { color: #6b7b8f; }
+
+/* a coverage near the 80% target is the signal that the band is calibrated */
+.fl-cov-ok { color: #38d39f; }
+
+/* history depth for the chosen symbol, and the explicit "get more" action */
+.fl-cov { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-size: 10px; color: var(--dim, #8494a8); min-width: 0; }
+.fl-cov.is-short { color: #ffb300; }
+.fl-cov-warn { color: #ffb300; }
+.fl-cov-ok { color: #38d39f; }
+.fl-dl { padding: 2px 8px; font-size: 10px; }
+.fl-dur { color: #6b7b8f; }
+
+/* agent-side GPU hyperparameter search */
+.fl-opt { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.fl-opt-btn { padding: 3px 10px; font-size: 10px; }
+.fl-opt-out { font-size: 10px; color: #38d39f; min-width: 0; }
+.fl-opt-out b { color: #7ef0c0; }
+
+/* optimiser convergence trail */
+.fl-hist { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 10px; color: var(--dim, #8494a8); min-width: 0; }
+.fl-hist-label { color: #6b7b8f; text-transform: uppercase; letter-spacing: .05em; }
+.fl-hist-item { color: #38d39f; }
+
+/* a render error must explain itself, never blank the page */
+.err-boundary { display: flex; flex-direction: column; gap: 8px; padding: 16px; min-width: 0; min-height: 0; }
+.err-boundary h2 { margin: 0; font-size: 14px; color: #ff8a80; }
+.err-msg { margin: 0; font-size: 12px; color: #ffb300; }
+.err-hint { margin: 0; font-size: 11px; color: var(--dim, #8494a8); }
+.err-stack { margin: 0; max-height: 200px; overflow: auto; font-size: 10px; color: #6b7b8f; white-space: pre-wrap; }
+
+/* what the agent is doing right now */
+.ag-busy { display: flex; flex-direction: column; gap: 3px; margin: 4px 0; min-width: 0; min-height: 0; }
+.ag-busy-item { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; color: #ffb300; min-width: 0; }
+.ag-spin { display: inline-block; animation: ag-spin 1.4s linear infinite; }
+@keyframes ag-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* forecast mode banner: the chart is showing one forecast and nothing else */
+.cp-forecast-note { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; padding: 4px 8px; border: 1px solid rgba(255, 179, 0, .45); border-radius: 6px; background: rgba(255, 179, 0, .08); font-size: 10px; color: #ffb300; min-width: 0; }
+.cp-fc-swatch { width: 14px; height: 0; border-top: 2px dashed #ffb300; flex: 0 0 auto; }
+
+/* compact numeric inputs in the forecast parameter row */
+.fl-ctl input[type='number'] { width: 56px; background: var(--panel, #0d1622); color: var(--text, #d7e2ee); border: 1px solid var(--border, #223046); border-radius: 6px; padding: 2px 4px; font-size: 11px; }
+
+/* the ticker box is the primary control: give it weight and a label */
+.fl-ctl-ticker { color: #4fc3f7; }
+.fl-ctl-ticker .ag-sym { width: 108px; font-weight: 600; border-color: rgba(79, 195, 247, .5); }
+
+/* chart legend: only what is drawn right now */
+.cp-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 4px 2px 0; font-size: 10px; color: var(--dim, #8494a8); min-width: 0; }
+.cp-legend-item { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.cp-legend-swatch { width: 14px; height: 8px; border-radius: 2px; flex: 0 0 auto; }
+.cp-legend-swatch.is-dashed { height: 0; border-radius: 0; background: none; }
+.legend-updown { background: linear-gradient(90deg, #2ee06a 50%, #ff4d5e 50%); }
+.legend-vol { background: rgba(77, 141, 253, .55); }
+.legend-forecast { border-top: 2px dashed #ffb300; }
+.legend-don { border-top: 2px dashed #4d8dfd; }
+.legend-ema { background: linear-gradient(90deg, #22d3ee 50%, #f59e0b 50%); }
+.legend-sma { background: #e879f9; }
+.legend-flow { background: #4d8dfd; }
+.legend-atr { background: #fbbf24; }
+.legend-adx { background: #a78bfa; }
+.legend-rsi { background: #22d3ee; }
+
+/* ticker picker — ported from the chart lab's symbol control */
+.tp-wrap { position: relative; min-width: 0; }
+.tp-input { width: 118px; background: #0d1622; border: 1px solid rgba(79, 195, 247, .5); color: var(--text, #d7e2ee); border-radius: 7px; padding: 4px 9px; font: inherit; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+.tp-input:focus { outline: none; border-color: #4fc3f7; }
+.tp-list { position: absolute; left: 0; top: 30px; z-index: 60; width: 300px; max-height: 320px; overflow: auto; background: #0d151e; border: 1px solid #26333f; border-radius: 10px; box-shadow: 0 24px 50px -24px #000; }
+.tp-hint, .tp-empty { padding: 8px 10px; color: #4c5a6c; font-size: 10px; }
+.tp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 6px 10px; font-size: 12px; color: #9fb0c4; cursor: pointer; min-width: 0; min-height: 0; }
+.tp-row.is-active { background: #16232f; color: #e6edf6; }
+.tp-sym { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-quote { color: #4d5d70; }
+.tp-price { color: #5b6b7d; font-size: 11px; }
+.tp-chg { font-size: 10.5px; }
+.tp-chg.up { color: #2ee06a; }
+.tp-chg.down { color: #ff4d5e; }
+
+/* reference-data name shown beside the ticker */
+.tp-name { display: block; color: #3f4d5c; font-size: 9.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the parameter bar is the first thing on the forecast page: bordered, labelled,
+   and never scrolled away */
+.fl-param-bar { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border: 1px solid rgba(79, 195, 247, .35); border-radius: 8px; background: rgba(79, 195, 247, .05); min-width: 0; min-height: 0; }
+.fl-param-label { flex: 0 0 auto; padding-top: 5px; font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: #4fc3f7; }
+
+/* forecast vs actual: a measured, labelled chart with its own legend */
+.fchart { display: flex; flex-direction: column; gap: 4px; width: 100%; height: 340px; min-height: 0; min-width: 0; }
+.fchart-plot { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.fchart-svg { display: block; width: 100%; height: 100%; background: var(--panel, #0d1622); border: 1px solid var(--border, #223046); border-radius: 8px; }
+.fchart-grid { stroke: #1b2634; stroke-width: 1; }
+.fchart-axis-text { fill: #5b6b7d; font-size: 9px; font-family: var(--mono, monospace); }
+.fchart-actual { stroke: #4fc3f7; stroke-width: 1.6; }
+.fchart-forecast { stroke: #ffb300; stroke-width: 1.6; stroke-dasharray: 5 3; }
+.fchart-err { stroke: rgba(255, 77, 94, .35); stroke-width: 1; }
+.fchart-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 10px; color: var(--dim, #8494a8); min-width: 0; }
+.fchart-key { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.fchart-swatch { width: 14px; height: 2px; display: inline-block; }
+.swatch-actual { background: #4fc3f7; }
+.swatch-forecast { background: repeating-linear-gradient(90deg, #ffb300 0 4px, transparent 4px 7px); }
+.swatch-err { background: rgba(255, 77, 94, .5); }
+.fchart-note { margin-left: auto; color: #6b7b8f; }
+
+/* the forecast action is the primary control on this page */
+.fl-run { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; min-height: 0; }
+.fl-run-btn { padding: 6px 14px; font-size: 12px; font-weight: 600; color: #08131d; background: #4fc3f7; border: 1px solid #4fc3f7; border-radius: 8px; }
+.fl-run-btn:hover { background: #79d4ff; }
+.fl-run-hint { font-size: 10px; color: var(--dim, #8494a8); }
+
+/* the only thing a symbol choice reports: how much history exists */
+.fl-history { padding: 6px 10px; border: 1px solid var(--border, #223046); border-radius: 8px; background: rgba(255, 255, 255, .02); }
+.fl-history-label { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: #6b7b8f; }
+.fl-history-value { color: #d7e2ee; font-weight: 600; }
+.fl-history-span { color: #6b7b8f; }
+
+/* --------------------------------------------------------------------------
+   Legibility pass on the forecast workspace.
+   The panel is dense by nature; at 9–10px with dim greys the labels were not
+   readable on a normal display. Sizes go up, contrast goes up, and the muted
+   greys lighten enough to pass on a dark background.
+   -------------------------------------------------------------------------- */
+.panel.fl-panel { font-size: 13px; color: #dbe6f2; }
+.fl-panel .panel-head h2 { font-size: 13px; letter-spacing: .12em; color: #eaf2fb; }
+.fl-panel .panel-head .sub { font-size: 12px; color: #9fb2c6; }
+.fl-ctl { font-size: 12px; color: #a9bacd; }
+.fl-ctl select, .fl-ctl input[type='number'] { font-size: 12px; color: #e6eef8; border-color: #33465c; }
+.fl-param-label { font-size: 11px; color: #6fd0ff; }
+.fl-run-hint { font-size: 12px; color: #a9bacd; }
+.fl-run-btn { font-size: 13px; }
+.fl-live { font-size: 11px; color: #8fa3b8; }
+.fl-history-label { font-size: 11px; color: #93a7bb; }
+.fl-history-value { font-size: 13px; color: #f0f6fc; }
+.fl-history-span { font-size: 12px; color: #93a7bb; }
+.fl-cov-ok, .fl-cov-warn { font-size: 12px; }
+.fl-row { font-size: 12px; }
+.fl-row-head { font-size: 11px; color: #8fa3b8; }
+.fl-note { font-size: 11px; color: #8fa3b8; }
+.fl-track, .fl-hist { font-size: 11px; }
+.fchart-axis-text { font-size: 11px; fill: #9fb2c6; }
+.fchart-legend { font-size: 12px; color: #a9bacd; }
+.tp-input { font-size: 13px; }
+.tp-row { font-size: 13px; color: #bccbd9; }
+.tp-price { font-size: 12px; color: #8fa3b8; }
+.tp-chg { font-size: 12px; }
+.tp-name { font-size: 11px; color: #6c7f93; }
+
+/* --------------------------------------------------------------------------
+   Collapsible section: the shell for every part of the forecast workspace.
+   Generous padding and a clear header, because density without spacing is what
+   made the previous layout unreadable.
+   -------------------------------------------------------------------------- */
+.sec { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid #24313f; border-radius: 10px; background: #0c141d; overflow: hidden; }
+.sec-head { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #101a24; border-bottom: 1px solid #1d2a37; min-width: 0; min-height: 0; }
+.sec-toggle { display: inline-flex; align-items: center; gap: 9px; min-width: 0; background: none; border: 0; padding: 0; cursor: pointer; color: #e8f1fa; font: inherit; font-size: 13px; font-weight: 600; letter-spacing: .05em; }
+.sec-toggle:hover { color: #6fd0ff; }
+.sec-caret { display: inline-block; font-size: 11px; color: #6fd0ff; transition: transform .15s ease; }
+.sec-caret.is-open { transform: rotate(90deg); }
+.sec-title { text-transform: uppercase; }
+.sec-meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #93a7bb; min-width: 0; }
+.sec-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; min-width: 0; }
+.sec-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; min-width: 0; min-height: 0; }
+
+/* model chooser: one row per model, what it produces, and how it has scored */
+.fl-model-note { margin: 0; font-size: 12px; color: #a9bacd; }
+.fl-models { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 6px; min-width: 0; min-height: 0; max-height: 340px; overflow-y: auto; }
+.fl-model { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 2px 10px; align-items: center; padding: 8px 10px; text-align: left; border: 1px solid #24313f; border-radius: 8px; background: #0f1822; color: #c8d6e4; font: inherit; cursor: pointer; min-width: 0; min-height: 0; }
+.fl-model:hover { border-color: #3a5a75; background: #12202c; }
+.fl-model.is-chosen { border-color: #6fd0ff; background: rgba(111, 208, 255, .1); }
+.fl-model-name { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #eaf2fb; min-width: 0; }
+.fl-model-best { padding: 1px 6px; border-radius: 999px; background: rgba(56, 211, 159, .18); color: #38d39f; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+.fl-model-desc { grid-column: 1; font-size: 11.5px; color: #93a7bb; min-width: 0; }
+.fl-model-metric { grid-column: 2; grid-row: 1 / span 2; font-size: 12px; color: #8fa3b8; }
+.fl-model.is-chosen .fl-model-metric { color: #6fd0ff; }
+
+/* the forecast workspace: a scrolling stack of sections, generously spaced */
+.fl-workspace { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px 40px; max-width: 1500px; min-width: 0; min-height: 0; }
+.fl-workspace-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; min-width: 0; }
+.fl-workspace-head h2 { margin: 0; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: #eaf2fb; }
+.fl-workspace-sub { font-size: 13px; color: #9fb2c6; }
+.fl-footnote { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: #8fa3b8; }
+
+/* the comparison table was being compressed by the flex column it sits in:
+   rows fell to ~4px and the numbers overlapped into a smear. A minimum row
+   height and a non-shrinking container fix it. */
+.fl-cmp { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; }
+.fl-cmp-table { max-height: 260px; flex: 0 0 auto; }
+.fl-cmp-row { line-height: 18px; align-items: center; }
+.fl-cmp-row > span { min-height: 18px; }
+.fl-cmp-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; font-size: 12px; color: #c8d6e4; min-width: 0; }
+.fl-cmp-mape { color: #93a7bb; font-size: 12px; }
+
+/* the table is a flex column, so its rows were shrinking to fit instead of
+   scrolling: 24 rows squeezed into 10px each overlapped into a blur. */
+.fl-cmp-table .fl-cmp-row { flex: 0 0 auto; min-height: 20px; }
+.fl-cmp-table .fl-cmp-row > span { display: block; line-height: 20px; }
+
+/* the primary action is pinned under the header so it is never scrolled away */
+.fl-actionbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 10px 12px; border: 1px solid #2a3d50; border-radius: 10px; background: #0e1a25; box-shadow: 0 8px 18px -12px #000; min-width: 0; min-height: 0; }
+.fl-actionbar .fl-run-btn { padding: 8px 18px; font-size: 13px; }
+
+/* every section is resizable by dragging its bottom edge */
+.sec-grip { height: 7px; cursor: ns-resize; display: flex; align-items: center; justify-content: center; background: transparent; flex: 0 0 auto; }
+.sec-grip::before { content: ''; width: 42px; height: 3px; border-radius: 2px; background: #2c3f52; }
+.sec-grip:hover::before { background: #6fd0ff; }
+.sec-body { overflow-anchor: none; }
+
+/* A section must not clip its children's popovers. The ticker dropdown is
+   absolutely positioned and was being cut off by `overflow: hidden`, so its
+   rows were drawn but not clickable — clicks fell through and the typed text
+   won over the pick. */
+.sec { overflow: visible; }
+.sec-body { overflow: visible; }
+
+/* The action bar is FIXED to the viewport: the primary controls must be visible
+   at all times, whatever the scroll position or section heights. */
+.fl-actionbar { position: fixed; right: 28px; bottom: 28px; z-index: 300; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 14px; border: 1px solid #35506a; border-radius: 14px; background: #0f1d29; box-shadow: 0 18px 40px -12px #000, 0 0 0 1px rgba(111, 208, 255, .12); min-width: 0; min-height: 0; }
+.fl-actionbar .fl-run-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 0; min-height: 0; padding: 11px 20px; font-size: 14px; font-weight: 700; color: #04121b; background: #6fd0ff; border: 1px solid #6fd0ff; border-radius: 10px; cursor: pointer; }
+.fl-actionbar .fl-run-btn:hover { background: #9ee0ff; border-color: #9ee0ff; }
+.fl-actionbar .fl-opt-btn { display: inline-flex; align-items: center; gap: 8px; min-width: 0; min-height: 0; padding: 11px 16px; font-size: 13px; font-weight: 600; color: #cfe8f7; background: #16283a; border: 1px solid #35506a; border-radius: 10px; cursor: pointer; }
+.fl-actionbar .fl-opt-btn:hover:not(:disabled) { background: #1d3549; border-color: #6fd0ff; }
+.fl-actionbar .fl-opt-btn:disabled { opacity: .6; cursor: progress; }
+.fl-actionbar .fl-run-hint { font-size: 11px; color: #9fb2c6; }
+
+/* the two primary actions sit inline, immediately after the ticker chooser */
+.fl-controls .fl-run-btn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 0; padding: 7px 16px; font-size: 13px; font-weight: 700; color: #04121b; background: #6fd0ff; border: 1px solid #6fd0ff; border-radius: 9px; cursor: pointer; }
+.fl-controls .fl-run-btn:hover { background: #9ee0ff; border-color: #9ee0ff; }
+.fl-controls .fl-opt-btn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 0; padding: 7px 14px; font-size: 13px; font-weight: 600; color: #cfe8f7; background: #16283a; border: 1px solid #35506a; border-radius: 9px; cursor: pointer; }
+.fl-controls .fl-opt-btn:hover:not(:disabled) { background: #1d3549; border-color: #6fd0ff; }
+.fl-controls .fl-opt-btn:disabled { opacity: .6; cursor: progress; }
+
+/* the forecast's uncertainty envelope: a level forecast is flat, its error is not */
+.fchart-cone { stroke: rgba(255, 179, 0, .35); stroke-width: 1; stroke-dasharray: 2 4; }
+.swatch-cone { background: repeating-linear-gradient(90deg, rgba(255, 179, 0, .55) 0 2px, transparent 2px 5px); }
+
+/* overlay controls above the chart */
+.fl-runs { display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: #93a7bb; min-width: 0; min-height: 0; }
+.fl-runs-label { color: #6fd0ff; }
+.fl-runs-clear { min-width: 0; min-height: 0; padding: 3px 10px; font-size: 11px; color: #cfe8f7; background: #16283a; border: 1px solid #35506a; border-radius: 6px; cursor: pointer; }
+.fl-runs-clear:hover { border-color: #6fd0ff; }
+.fchart-mape { color: #8fa3b8; font-size: 10.5px; }
+
+/* The model list must show from the first card and follow the section's height.
+   Its own 340px scrollbar started scrolled and ignored the resize grip, so the
+   reader saw the tail of the list and a drag changed nothing. */
+.fl-models { max-height: none; overflow: visible; align-content: start; }
+.sec-body[style] .fl-models { flex: 1 1 auto; min-height: 0; overflow-y: auto; align-content: start; }
+
+/* An empty chart must not reserve a 320px void: until a forecast exists the
+   section should be a compact hint, not a black hole in the page. */
+.fchart.is-empty { height: auto; min-height: 0; }
+.fchart.is-empty .empty { margin: 0; padding: 18px 14px; text-align: left; color: #8fa3b8; }
+
+/* Parameters row: the controls sat in a cluster with a dead gap before IDLE.
+   Let the row breathe evenly and keep the status at the end of the line. */
+.fl-param-bar .fl-controls { gap: 14px; }
+.fl-param-bar .fl-live { margin-left: auto; }
+
+/* history statistics: labelled figures, not one run-on line */
+.fl-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 10px; min-width: 0; min-height: 0; }
+.fl-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid #24313f; border-radius: 8px; background: #0f1822; min-width: 0; min-height: 0; }
+.fl-stat-label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #7c8fa3; }
+.fl-stat-value { font-size: 14px; font-weight: 600; color: #eaf2fb; }
+.fl-stat-value.is-short { color: #ffb300; }
+.fl-stat-sub { font-size: 10.5px; color: #7c8fa3; }
+.fl-history-foot { display: flex; align-items: center; gap: 10px; font-size: 12px; min-width: 0; min-height: 0; }
+
+/* Model cards: the description wraps to as many lines as it needs, and the card
+   grows with it. Nothing is clipped, ever. */
+.fl-models .fl-model { align-items: start; row-gap: 3px; }
+.fl-models .fl-model-name { white-space: normal; }
+.fl-models .fl-model-desc { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.35; }
+
+/* Model cards: bigger, roomier, and readable at a glance. Fewer per row so each
+   description gets space instead of being squeezed into a narrow column. */
+.fl-models { grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); gap: 10px; }
+.fl-models .fl-model { padding: 12px 14px; gap: 4px 12px; border-radius: 10px; }
+.fl-models .fl-model-name { font-size: 14px; letter-spacing: .01em; }
+.fl-models .fl-model-desc { font-size: 12.5px; line-height: 1.45; color: #a7b8c9; }
+.fl-models .fl-model-metric { font-size: 13px; }
+
+/* A wall of 42 cards is not a layout: the grid stays inside a sensible height
+   and scrolls, and it grows only when the section itself is resized. */
+.fl-models { max-height: 300px; overflow-y: auto; }
+.sec-body[style] .fl-models { max-height: none; flex: 1 1 auto; min-height: 0; }
+
+/* Model cards carry the facts behind each model, not just a name. */
+.fl-model-facts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 4px; min-width: 0; min-height: 0; }
+.fl-fact { display: inline-flex; align-items: baseline; gap: 5px; font-size: 11px; color: #c3d2e0; min-width: 0; }
+.fl-fact i { font-style: normal; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #6b7f93; }
+.fl-fact-score { color: #ffb300; font-weight: 600; }
+
+/* the selected card is what gets sent for computation: say so on the card */
+.fl-model-chosen { padding: 1px 6px; border-radius: 999px; background: rgba(111, 208, 255, .18); color: #6fd0ff; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+
+/* adjustable parameters of the selected model */
+.fl-params { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; padding: 10px 12px; border: 1px solid #24313f; border-radius: 9px; background: #0f1822; min-width: 0; min-height: 0; }
+.fl-params-label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #6fd0ff; }
+.fl-param-field { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #a9bacd; min-width: 0; }
+.fl-param-field select { background: #0d1622; color: #e6eef8; border: 1px solid #33465c; border-radius: 6px; padding: 3px 6px; font-size: 12px; }
+.fl-params-model { color: #ffb300; font-size: 12px; font-weight: 600; }
+.fl-params-hint { font-size: 11.5px; color: #8fa3b8; }
+
+/* Model parameters live in a side panel: the card list stays readable and the
+   details of one model get real space. */
+.fl-side { position: fixed; right: 0; top: 0; bottom: 0; width: 380px; z-index: 400; display: flex; flex-direction: column; gap: 12px; padding: 18px; background: #0d1622; border-left: 1px solid #2a3d50; box-shadow: -18px 0 40px -18px #000; overflow-y: auto; min-width: 0; min-height: 0; }
+.fl-side-head { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 0; }
+.fl-side-head h3 { margin: 0; font-size: 16px; color: #eaf2fb; }
+.fl-side-close { margin-left: auto; background: #16283a; color: #cfe8f7; border: 1px solid #35506a; border-radius: 8px; width: 28px; height: 28px; font-size: 16px; cursor: pointer; min-width: 0; }
+.fl-side-desc { margin: 0; font-size: 13px; color: #a7b8c9; }
+.fl-side-facts { display: flex; flex-wrap: wrap; gap: 8px 16px; min-width: 0; }
+.fl-side-score { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; border: 1px solid #24313f; border-radius: 8px; background: #0f1822; font-size: 12px; color: #a9bacd; min-width: 0; min-height: 0; }
+.fl-side-score b { color: #eaf2fb; }
+.fl-side-note { margin: 0; font-size: 12px; color: #8fa3b8; }
+.fl-side-run { min-width: 0; min-height: 0; padding: 10px 14px; font-size: 13px; font-weight: 700; color: #04121b; background: #6fd0ff; border: 1px solid #6fd0ff; border-radius: 9px; cursor: pointer; }
+
+/* new inputs, graded against the flat line */
+.fl-inputs { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
+.fl-input { display: grid; grid-template-columns: minmax(0, 1fr) 84px 130px 110px; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid #24313f; border-radius: 8px; background: #0f1822; font-size: 12.5px; color: #c8d6e4; min-width: 0; min-height: 0; }
+.fl-input.is-helping { border-color: rgba(56, 211, 159, .5); }
+.fl-input-mape { color: #eaf2fb; font-weight: 600; }
+.fl-input-beta { color: #8fa3b8; font-size: 11.5px; }
+.fl-input-flag { font-size: 11px; color: #7c8fa3; }
+.fl-input-flag.is-helping { color: #38d39f; }
+
+/* a completed forecast announces itself beside the controls and jumps to the chart */
+.fl-jump { min-width: 0; min-height: 0; padding: 5px 12px; font-size: 12px; font-weight: 600; color: #04121b; background: #38d39f; border: 1px solid #38d39f; border-radius: 8px; cursor: pointer; }
+.fl-jump:hover { background: #5ee7b7; }
+
+/* the predictive fan: what a point forecast cannot show */
+.fchart-band90 { fill: rgba(255, 179, 0, .10); stroke: rgba(255, 179, 0, .25); stroke-width: 1; }
+.fchart-band50 { fill: rgba(255, 179, 0, .18); stroke: none; }
+.fchart-median { stroke: rgba(255, 179, 0, .75); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.swatch-fan { background: linear-gradient(90deg, rgba(255,179,0,.15), rgba(255,179,0,.45)); }
+
+/* P(continuation) on an alert: a ranking signal, not a prediction */
+.pcont { display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10.5px; letter-spacing: .03em; background: rgba(111, 208, 255, .10); border: 1px solid rgba(111, 208, 255, .30); color: #9fd8f5; min-width: 0; }
+.pcont b { font-weight: 700; color: #d5ecf9; }
+.pcont.is-high { background: rgba(56, 211, 159, .12); border-color: rgba(56, 211, 159, .40); color: #7ff0c4; }
+.pcont.is-high b { color: #b9ffe0; }
+.pcont.is-low { background: rgba(255, 122, 138, .10); border-color: rgba(255, 122, 138, .32); color: #ff9aa6; }
+.pcont.is-low b { color: #ffc9d0; }
+
+/* a level model's flat line is its output; say so where it is drawn */
+.fl-level-note { margin: 0 0 6px; padding: 8px 12px; border-left: 3px solid rgba(255, 179, 0, .55); background: rgba(255, 179, 0, .06); border-radius: 0 8px 8px 0; font-size: 12px; line-height: 1.5; color: #c3d2e0; min-width: 0; }
+.fl-level-note b { color: #ffb300; }
+
+/* the past the forecast extends from */
+.fchart-history { stroke: rgba(120, 145, 170, .75); stroke-width: 1.2; }
+.swatch-hist { background: rgba(120, 145, 170, .75); }
+
+/* multi-day backtest: the forecast line and what actually happened */
+.bt { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.bt-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-width: 0; min-height: 0; }
+.bt-label { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: #6fd0ff; }
+.bt-run { min-width: 0; min-height: 0; padding: 5px 12px; font-size: 12px; color: #cfe8f7; background: #16283a; border: 1px solid #35506a; border-radius: 8px; cursor: pointer; }
+.bt-run:hover:not(:disabled) { border-color: #6fd0ff; }
+.bt-run:disabled { opacity: .6; cursor: progress; }
+.bt-note { font-size: 11.5px; color: #8fa3b8; }
+.bt-metrics { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; color: #c3d2e0; min-width: 0; min-height: 0; }
+.bt-metrics span { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
+.bt-metrics i { font-style: normal; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6b7f93; }
+.bt-metrics b { color: #ffb300; }
+
+/* individual simulated futures: plausible shapes, not a prediction */
+.fchart-sim { stroke: rgba(255, 200, 90, .30); stroke-width: 1; }
+.swatch-sim { background: rgba(255, 200, 90, .45); }
+
+/* live model race: each backtest appears as it finishes */
+.ol { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.ol-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; min-height: 0; }
+.ol-run { min-width: 0; min-height: 0; padding: 5px 12px; font-size: 12px; color: #cfe8f7; background: #16283a; border: 1px solid #35506a; border-radius: 8px; cursor: pointer; }
+.ol-run:hover { border-color: #6fd0ff; }
+.ol-note { font-size: 11.5px; color: #8fa3b8; }
+.ol-board { display: flex; flex-direction: column; gap: 3px; min-width: 0; min-height: 0; }
+.ol-row { display: grid; grid-template-columns: 22px 118px 1fr 60px 62px; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; font-size: 12px; color: #c3d2e0; min-width: 0; min-height: 0; }
+.ol-row.is-best { background: rgba(255, 179, 0, .10); color: #ffe0a3; }
+.ol-rank { font-size: 10px; color: #6b7f93; text-align: right; }
+.ol-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ol-bar-wrap { display: block; height: 8px; background: #101c28; border-radius: 4px; overflow: hidden; min-width: 0; }
+.ol-bar-fill { display: block; height: 100%; background: linear-gradient(90deg, #2b5f7a, #6fd0ff); border-radius: 4px; transition: width .25s ease; }
+.ol-row.is-best .ol-bar-fill { background: linear-gradient(90deg, #7a5a12, #ffb300); }
+.ol-r2 { text-align: right; font-variant-numeric: tabular-nums; }
+.ol-mape { text-align: right; font-variant-numeric: tabular-nums; color: #8fa3b8; }
+
+/* window / horizon selectors for the race */
+.ol-ctl { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6b7f93; min-width: 0; min-height: 0; }
+.ol-chip { min-width: 0; min-height: 0; padding: 2px 8px; font-size: 11px; color: #9fb4c8; background: #101c28; border: 1px solid #294054; border-radius: 6px; cursor: pointer; }
+.ol-chip.on { color: #04202e; background: #6fd0ff; border-color: #6fd0ff; font-weight: 700; }
+.ol-name i { font-style: normal; font-size: 10px; color: #6b7f93; }
+.ol-row { grid-template-columns: 22px 150px 1fr 60px 62px; }
+
+/* watching the race full screen */
+.ol.is-full { position: fixed; inset: 0; z-index: 60; background: #0a1118; padding: 14px 18px; overflow: auto; }
+.ol.is-full .ol-board { max-height: 46vh; overflow: auto; }
+.ol.is-full .fchart { min-height: 42vh; }
+
+/* full-screen leaderboard: fixed row height so rows never collapse together */
+.ol.is-full .ol-board { gap: 2px; }
+.ol.is-full .ol-row { min-height: 20px; height: 20px; flex: 0 0 auto; }
+.ol.is-full .ol-bar-wrap { height: 10px; }
+
+/* ticker, so a chart identifies itself in a screenshot */
+.fchart-ticker { font-size: 13px; font-weight: 700; letter-spacing: .04em; fill: #dbe9f5; }
+
+/* GPU sweep: the vectorised path, visually distinct from the CPU race */
+.ol-gpu { border-color: #2f7d5b; color: #8ff0c2; background: #10241c; }
+.ol-gpu:hover { border-color: #4fe0a0; }
+
+/* live optimisation: sweeps, charts the leader, refines, repeats */
+.ol-live { border-color: #8a5cff; color: #d9c8ff; background: #1b1430; }
+.ol-live:hover { border-color: #b79bff; }
+
+/* the chart is the point: it sits above the ranking, never pushed off-screen */
+.ol .fchart { order: -1; }
+.ol { flex-direction: column; }
+.ol-bar { order: -2; }
+.ol-board { max-height: 44vh; overflow-y: auto; }
+
+/* cockpit legend under the race chart */
+.ol-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; min-width: 0; min-height: 0; font-size: 12px; color: #c3d2e0; }
+.ol-leg { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #101c28; border: 1px solid #294054; min-width: 0; }
+.ol-leg.is-best { border-color: #ffb300; background: rgba(255, 179, 0, .10); color: #ffe0a3; }
+.ol-leg b { color: #ffb300; }
+.ol-leg i { font-style: normal; font-size: 11px; color: #8fa3b8; font-variant-numeric: tabular-nums; }
+.ol-hist { font-size: 11px; color: #6fd0ff; }
+
+/* the key: what each line on the race chart means */
+.ol-key { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 6px 10px; border-radius: 8px; background: #0c1620; border: 1px solid #1e3242; font-size: 11.5px; color: #a9bccd; min-width: 0; min-height: 0; }
+.ol-key-title { font-size: 10px; letter-spacing: .14em; color: #6fd0ff; font-weight: 700; }
+.ol-key span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.ol-key-note { color: #6b7f93; }
+.k-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.k-actual { background: #4aa8ff; }
+.k-best { background: #ffb300; }
+.k-alt { background: #ff5d7a; }
+.k-err { background: #8f2233; }
+.ol-preset { border-color: #ffb300; color: #ffe0a3; background: #241c08; }
+.ol-preset:hover { border-color: #ffd166; }
+
+/* forward projection beyond the newest candle */
+.fchart-future { stroke: #6fd0ff; stroke-width: 2; stroke-dasharray: 4 4; }
+.swatch-future { background: #6fd0ff; }
+
+/* chart axes and an interactive key */
+.fchart-axis { stroke: #2a4257; stroke-width: 1; }
+.fchart-key.is-clickable { background: none; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; cursor: pointer; color: inherit; font: inherit; }
+.fchart-key.is-clickable:hover, .fchart-key.is-clickable.is-hot { border-color: #6fd0ff; background: rgba(111, 208, 255, .08); }
+.fchart-key.is-off { opacity: .40; text-decoration: line-through; }
+.fchart-forecast.is-dim { opacity: .22; }
+.fchart-forecast.is-hot { stroke-width: 2.6; }
+.fchart-actual.is-dim { opacity: .35; }
+
+/* live engine: a viewer onto server-side GPU workers */
+.le { display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.le-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; min-width: 0; min-height: 0; }
+.le-live { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-size: 10px; letter-spacing: .14em; font-weight: 700; color: #8ff0c2; }
+.le-live i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #38d39f; box-shadow: 0 0 8px #38d39f; animation: le-pulse 1.6s ease-in-out infinite; }
+@keyframes le-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.le-meta { font-size: 11.5px; color: #8fa3b8; }
+.le-tabs { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; min-height: 0; }
+.le-tab { display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 8px; background: #101c28; border: 1px solid #294054; color: #c3d2e0; cursor: pointer; font-size: 12px; min-width: 0; }
+.le-tab.is-on { border-color: #6fd0ff; background: rgba(111, 208, 255, .10); color: #dff2ff; }
+.le-tab b { font-weight: 700; }
+.le-tab span { font-size: 11px; color: #8fa3b8; font-variant-numeric: tabular-nums; }
+.le-facts { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 12px; color: #c3d2e0; min-width: 0; min-height: 0; }
+.le-facts span { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
+.le-facts i { font-style: normal; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #6b7f93; }
+.le-facts b { color: #ffb300; }
+.le-board { display: flex; flex-direction: column; gap: 2px; max-height: 30vh; overflow-y: auto; min-width: 0; min-height: 0; }
+.le-row { display: grid; grid-template-columns: 22px 1fr 92px 68px 62px; align-items: center; gap: 8px; padding: 3px 6px; border-radius: 6px; font-size: 12px; color: #c3d2e0; min-width: 0; min-height: 0; }
+.le-row.is-best { background: rgba(255, 179, 0, .10); color: #ffe0a3; }
+.le-rank { font-size: 10px; color: #6b7f93; text-align: right; }
+.le-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.le-params { font-size: 11px; color: #8fa3b8; }
+.le-r2, .le-mape { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* backtest parameter row */
+.bt-params { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-width: 0; min-height: 0; font-size: 11.5px; color: #8fa3b8; }
+.bt-params label { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 0; }
+.bt-params input, .bt-params select { min-width: 0; min-height: 0; padding: 3px 6px; font-size: 11.5px; color: #cfe8f7; background: #101c28; border: 1px solid #294054; border-radius: 6px; }
+
+/* full-screen view of the live engine */
+.le.is-full { position: fixed; inset: 0; z-index: 60; background: #0a1118; padding: 14px 18px; overflow: auto; }
+.le.is-full .le-board { max-height: 32vh; overflow-y: auto; }
+.le.is-full .fchart { min-height: 46vh; }
+.le-full { min-width: 0; min-height: 0; padding: 4px 10px; font-size: 11px; color: #cfe8f7; background: #16283a; border: 1px solid #35506a; border-radius: 6px; cursor: pointer; }
+.le-full:hover { border-color: #6fd0ff; }
+
+/* x axis: date/time labels and vertical guides */
+.fchart-grid-v { stroke: #16283a; stroke-width: 1; }
+.fchart-axis-text { font-size: 10.5px; fill: #8fa3b8; }
+
+/* add a symbol to the live engine */
+.le-add { display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 0; }
+.le-add input { min-width: 0; min-height: 0; width: 120px; padding: 4px 8px; font-size: 11.5px; text-transform: uppercase; color: #cfe8f7; background: #101c28; border: 1px solid #294054; border-radius: 6px; }
+.le-add button { min-width: 0; min-height: 0; padding: 4px 10px; font-size: 11px; color: #cfe8f7; background: #16283a; border: 1px solid #35506a; border-radius: 6px; cursor: pointer; }
+.le-add button:hover { border-color: #6fd0ff; }
+
+/* the ticker, in the panel header and on the plot */
+.le-ticker { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; margin: 0; padding: 6px 10px; border-radius: 8px; background: #0d1a25; border: 1px solid #1e3242; min-width: 0; min-height: 0; }
+.le-ticker b { font-size: 15px; letter-spacing: .02em; color: #e6f3ff; }
+.le-ticker span { font-size: 11.5px; color: #8fa3b8; font-variant-numeric: tabular-nums; }
+.fchart-ticker { font-size: 15px; font-weight: 700; letter-spacing: .03em; fill: #e6f3ff; }
+.fchart-ticker-sm { font-size: 11px; fill: #6b7f93; }
+
+/* the visible sweep: one chip per parameter step, newest highlighted */
+.le-trace { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 4px 6px; padding: 8px 10px; border-radius: 8px; background: #0b1620; border: 1px solid #1c2f40; min-width: 0; min-height: 0; }
+.le-trace-label { font-size: 11px; color: #8fa3b8; margin-right: 8px; min-width: 0; }
+.le-trace-label b { color: #ffb300; }
+.le-step { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; min-width: 34px; min-height: 0; padding: 2px 4px; border-radius: 5px; background: #101d29; border: 1px solid #1e3345; }
+.le-step.is-now { border-color: #ffb300; background: rgba(255, 179, 0, .12); }
+.le-step i { font-style: normal; font-size: 9px; color: #6b7f93; }
+.le-step b { font-size: 10.5px; color: #cfe8f7; font-variant-numeric: tabular-nums; }
+.le-step-bar { width: 100%; background: linear-gradient(180deg, #6fd0ff, #2b5f7a); border-radius: 2px; }
+.le-step.is-now .le-step-bar { background: linear-gradient(180deg, #ffd166, #a86f00); }
+
+/* save the winning configuration */
+.le-save { min-width: 0; min-height: 0; padding: 4px 10px; font-size: 11px; color: #8ff0c2; background: #10241c; border: 1px solid #2f7d5b; border-radius: 6px; cursor: pointer; }
+.le-save:hover:not(:disabled) { border-color: #4fe0a0; }
+.le-save:disabled { opacity: .5; cursor: default; }
+
+.le-trace-wait { font-style: normal; margin-left: 6px; color: #ffb300; }

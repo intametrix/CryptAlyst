@@ -46,8 +46,10 @@ func enableANSIConsole() error {
 	return nil
 }
 
-// detachProcess starts a command in a new, detached console on Windows so the
-// self-update helper can swap the exe even after the agent exits.
+// detachProcess gives the self-update helper its own console window so it can
+// show a short progress message while it swaps the exe.
 func detachProcess(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x00000008} // DETACHED_PROCESS
+	// CREATE_NEW_CONSOLE (0x00000010) — exactly one visible window for the
+	// helper, which prints its progress and closes itself when done.
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x00000010}
 }

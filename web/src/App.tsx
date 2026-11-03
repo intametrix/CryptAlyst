@@ -12,6 +12,9 @@ import { FlowSplit } from './components/FlowSplit';
 import { Header } from './components/Header';
 import { ScreenTable } from './components/ScreenTable';
 import { SettingsPanel } from './components/SettingsPanel';
+import { AgentsPanel } from './components/AgentsPanel';
+import { ForecastLabPanel } from './components/ForecastLabPanel';
+import { ErrorBoundary } from './ErrorBoundary';
 import { StatStrip } from './components/StatStrip';
 import { SurveyPanel } from './components/SurveyPanel';
 import { TooltipViewer } from './components/TooltipViewer';
@@ -53,16 +56,49 @@ function firstSymbol(screen: ScreenMsg | null, survey: SurveyMsg | null): string
 function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
   const heat = useHeatContext();
   const selection = useSelection();
+  /**
+   * The chart popup is opened by a user action, never by the initial URL or a
+   * stale hash. `prevSymbol` starts equal to the first selection, so a symbol
+   * restored from the address bar does not pop a chart at startup.
+   */
+  const [showChart, setShowChart] = useState(false);
+  const prevSymbol = useRef<string | null>(null);
+  const settledRef = useRef(false);
+  // The selection is restored from the URL in an effect, which looks identical
+  // to a user pick. Wait for the app to settle, then treat only *later* changes
+  // as deliberate: a restored symbol must never pop a chart on launch.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      prevSymbol.current = selection.symbol;
+      settledRef.current = true;
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (!settledRef.current) return;
+    if (selection.symbol === prevSymbol.current) return;
+    prevSymbol.current = selection.symbol;
+    setShowChart(selection.symbol !== null);
+  }, [selection.symbol]);
+
   const [activeHeat, setActiveHeat] = useState(0);
   // Top-level surface switch: the full overview, or the dedicated pump/dump
   // dashboard (owner ruling 2026-10-21: pump and dump is a first-class view).
   // Hash-addressable so the view is linkable and screenshot-able: #pumpdump.
-  const [view, setViewState] = useState<'main' | 'pumpdump' | 'bus' | 'settings'>(() => {
+  const [view, setViewState] = useState<'main' | 'pumpdump' | 'bus' | 'settings' | 'agents' | 'forecast'>(() => {
     if (typeof window === 'undefined') return 'main';
     const h = window.location.hash;
-    return h === '#pumpdump' ? 'pumpdump' : h === '#bus' ? 'bus' : h === '#settings' ? 'settings' : 'main';
+    return h === '#pumpdump' ? 'pumpdump' : h === '#bus' ? 'bus' : h === '#settings' ? 'settings' : h === '#agents' ? 'agents' : h === '#forecast' ? 'forecast' : 'main';
   });
-  const setView = useCallback((v: 'main' | 'pumpdump' | 'bus' | 'settings') => {
+  // The forecast view is its own workspace: an open chart popup would sit on
+  // top of it, so entering the view closes the chart.
+  useEffect(() => {
+    // Guarded on `symbol` so this cannot loop: clearSymbol only runs when a
+    // chart is actually open.
+    if (view === 'forecast' && selection.symbol !== null) selection.clearSymbol();
+  }, [view, selection.symbol, selection.clearSymbol, selection]);
+
+  const setView = useCallback((v: 'main' | 'pumpdump' | 'bus' | 'settings' | 'agents' | 'forecast') => {
     setViewState(v);
     if (typeof window !== 'undefined') {
       window.location.hash = v === 'main' ? '' : v;
@@ -472,11 +508,41 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           >
             settings
           </button>
+          <button
+            type="button"
+            className={`view-btn${view === 'agents' ? ' active' : ''}`}
+            aria-pressed={view === 'agents'}
+            onClick={() => setView('agents')}
+          >
+            agents
+          </button>
+          <button
+            type="button"
+            className={`view-btn${view === 'forecast' ? ' active' : ''}`}
+            aria-pressed={view === 'forecast'}
+            onClick={() => setView('forecast')}
+          >
+            forecast
+          </button>
         </nav>
 
         {view === 'settings' ? (
           <div className="settings-view">
-            <SettingsPanel />
+            <ErrorBoundary where="settings">
+              <SettingsPanel />
+            </ErrorBoundary>
+          </div>
+        ) : view === 'agents' ? (
+          <div className="settings-view">
+            <ErrorBoundary where="agents">
+              <AgentsPanel onOpenForecast={() => setView('forecast')} />
+            </ErrorBoundary>
+          </div>
+        ) : view === 'forecast' ? (
+          <div className="settings-view">
+            <ErrorBoundary where="forecast">
+              <ForecastLabPanel />
+            </ErrorBoundary>
           </div>
         ) : view === 'bus' ? (
           <div className="bus-grid">
@@ -569,11 +635,14 @@ function Dashboard({ onSeed }: { onSeed: (symbol: string) => void }) {
           (and disposes) the lightweight-charts instance, and picking a symbol
           again builds a fresh one.
         */}
-        {selection.symbol !== null && (
+        {showChart && selection.symbol !== null && (
           <ChartOverlay
             id="chart"
             title={`chart — ${selection.symbol} ${selection.interval}`}
-            onClose={selection.clearSymbol}
+            onClose={() => {
+              setShowChart(false);
+              selection.clearSymbol();
+            }}
           >
             <ChartPopup
               symbol={selection.symbol}

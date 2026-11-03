@@ -126,15 +126,24 @@ type Agent struct {
 	name       string
 
 	// live status for the terminal UI
-	lastBeacon   atomic.Int64 // UnixMilli of the last beacon sent
-	healthProbes atomic.Int64 // self-heal probes issued
-	healthFails  atomic.Int64 // self-heal probes that failed
-	rt           agentRuntime // runtime config for the TUI
-	netSpeed     netSpeedTracker
-	lastRegister atomic.Int64 // UnixMilli of the last successful platform register
-	connected    atomic.Bool  // true once the platform has acknowledged a register
-	updateState  atomic.Int64 // 0=none, 1=update available, 2=update received/applying
-	updateVer    string       // version being applied (guarded by nameMu)
+	lastBeacon    atomic.Int64 // UnixMilli of the last beacon sent
+	healthProbes  atomic.Int64 // self-heal probes issued
+	healthFails   atomic.Int64 // self-heal probes that failed
+	rt            agentRuntime // runtime config for the TUI
+	netSpeed      netSpeedTracker
+	lastRegister  atomic.Int64 // UnixMilli of the last successful platform register
+	connected     atomic.Bool  // true once the platform has acknowledged a register
+	updateState   atomic.Int64 // 0=none, 1=update available, 2=update received/applying
+	updateVer     string       // version being applied (guarded by nameMu)
+	historySource string       // base URL the last history_ref was fetched from
+
+	// Bounded work queue. Capacity is a resource limit, not an implementation
+	// detail: a GPU box cannot run ten trainings at once.
+	queue      chan queuedJob
+	workerOnce sync.Once
+	maxJobs    int
+	running    atomic.Int64 // jobs executing right now
+	rejected   atomic.Int64 // jobs refused because the queue was full
 }
 
 // NetIface is one network interface.
@@ -153,16 +162,77 @@ type agentRuntime struct {
 	beaconPort     int
 	beaconInterval time.Duration
 	manifest       string
+	marketdata     string // local marketdata base for history_ref ("" = none)
 	addr           string
 }
 
-func newAgent(stateDir, device, gitSHA, ollama, cudaRunner string) *Agent {
+// queuedJob is one unit of pending work.
+type queuedJob struct {
+	job      *Job
+	callback string
+}
+
+func newAgent(stateDir, device, gitSHA, ollama, cudaRunner string, maxJobs int) *Agent {
 	os.MkdirAll(stateDir, 0o755)
-	return &Agent{jobs: map[string]*Job{}, state: filepath.Join(stateDir, "jobs.jsonl"),
-		device: device, gitSHA: gitSHA, ollama: ollama, cudaRunner: cudaRunner}
+	if maxJobs < 1 {
+		// Auto: a quarter of the cores, capped. Training saturates a core (or a
+		// whole GPU) per job, so accepting unbounded work would make every job
+		// slower and the box unresponsive.
+		maxJobs = runtime.NumCPU() / 4
+		if maxJobs < 1 {
+			maxJobs = 1
+		}
+		if maxJobs > 8 {
+			maxJobs = 8
+		}
+	}
+	a := &Agent{
+		jobs: map[string]*Job{}, state: filepath.Join(stateDir, "jobs.jsonl"),
+		device: device, gitSHA: gitSHA, ollama: ollama, cudaRunner: cudaRunner,
+		maxJobs: maxJobs,
+		queue:   make(chan queuedJob, maxJobs*4),
+	}
+	for i := 0; i < maxJobs; i++ {
+		go a.worker()
+	}
+	return a
+}
+
+// ensureWorkers starts the pool if it was not started at construction. An
+// Agent built as a literal (tests, embedded use) still gets a bounded pool
+// rather than a nil channel that would reject every job.
+func (a *Agent) ensureWorkers() {
+	a.workerOnce.Do(func() {
+		if a.maxJobs < 1 {
+			a.maxJobs = runtime.NumCPU() / 4
+			if a.maxJobs < 1 {
+				a.maxJobs = 1
+			}
+			if a.maxJobs > 8 {
+				a.maxJobs = 8
+			}
+		}
+		if a.queue == nil {
+			a.queue = make(chan queuedJob, a.maxJobs*4)
+		}
+		for i := 0; i < a.maxJobs; i++ {
+			go a.worker()
+		}
+	})
+}
+
+// worker consumes the queue. Exactly maxJobs workers exist, so the number of
+// simultaneously running jobs is bounded by the machine's capacity.
+func (a *Agent) worker() {
+	for item := range a.queue {
+		a.running.Add(1)
+		a.run(item.job, item.callback)
+		a.running.Add(-1)
+	}
 }
 
 func (a *Agent) submit(model string, payload map[string]any, device, callback, jobType string) *Job {
+	a.ensureWorkers()
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if device == "" {
@@ -178,14 +248,30 @@ func (a *Agent) submit(model string, payload map[string]any, device, callback, j
 	}
 	a.jobs[id] = j
 	a.order = append(a.order, id)
-	go a.run(j, callback)
-	return j
+	log.Printf("job %s RECEIVED — type=%s model=%s device=%s payload=%d bytes",
+		id, jobType, model, device, jobPayloadBytes(payload))
+
+	// Enqueue without blocking: a full queue means the box is saturated, and
+	// the caller is told so rather than silently queuing unbounded work.
+	select {
+	case a.queue <- queuedJob{job: j, callback: callback}:
+		return j
+	default:
+		j.Status = "failed"
+		j.Error = "agent at capacity: queue full, retry later"
+		a.rejected.Add(1)
+		log.Printf("job %s REJECTED — queue full (max %d concurrent, %d queued)",
+			id, a.maxJobs, len(a.queue))
+		return j
+	}
 }
 
 func (a *Agent) run(j *Job, callback string) {
 	a.mu.Lock()
 	j.Status = "running"
 	a.mu.Unlock()
+	log.Printf("job %s RUNNING — type=%s model=%s device=%s", j.ID, j.Type, j.Model, j.Device)
+	started := time.Now()
 
 	// Route by job type. "ollama" hands off to the local Ollama on the GPU
 	// box; "train" runs our own algorithm (CPU now, JAX/CUDA behind -device).
@@ -196,6 +282,12 @@ func (a *Agent) run(j *Job, callback string) {
 		result = a.runOllama(j)
 	case "forecast":
 		result = a.runForecast(j)
+	case "train_sequence", "backtest_sweep":
+		result = a.runForecast(j) // same runner plumbing; the type selects the script
+	case "optimize":
+		result = a.runOptimize(j)
+	case "install":
+		result = a.runPipInstall(j)
 	case "backtest":
 		result = a.runBacktest(j)
 	case "train", "regression", "":
@@ -226,6 +318,19 @@ func (a *Agent) run(j *Job, callback string) {
 	}
 	a.mu.Unlock()
 
+	took := time.Since(started).Round(time.Millisecond)
+	if msg, failed := resultError(result); failed {
+		// A job that reports an error IS a failed job: the caller must see it in
+		// the status and the error field, not have it buried in the result.
+		a.mu.Lock()
+		j.Status = "failed"
+		j.Error = msg
+		a.mu.Unlock()
+		log.Printf("job %s FAILED after %s — %s", j.ID, took, msg)
+	} else {
+		log.Printf("job %s DONE in %s — %s", j.ID, took, digestResult(result))
+	}
+
 	a.persist()
 
 	if callback != "" {
@@ -253,14 +358,18 @@ func (a *Agent) persist() {
 // gpuReport is the /gpu payload.
 func (a *Agent) gpuReport() map[string]any {
 	return map[string]any{
-		"device":      a.device,
-		"arch":        runtime.GOARCH,
-		"num_cpu":     runtime.NumCPU(),
-		"go_version":  runtime.Version(),
-		"git_sha":     a.gitSHA,
-		"gpu_present": a.device == "gpu" || a.device == "cuda" || a.device == "metal",
-		"ollama":      a.ollamaStatus(),
-		"note":        "train jobs route to " + a.cudaRunner + " (JAX/CUDA with CPU fallback)",
+		"device":           a.device,
+		"arch":             runtime.GOARCH,
+		"num_cpu":          runtime.NumCPU(),
+		"max_jobs":         a.maxJobs,
+		"jobs_running_now": a.running.Load(),
+		"jobs_rejected":    a.rejected.Load(),
+		"active_jobs":      a.activeJobs(),
+		"go_version":       runtime.Version(),
+		"git_sha":          a.gitSHA,
+		"gpu_present":      a.device == "gpu" || a.device == "cuda" || a.device == "metal",
+		"ollama":           a.ollamaStatus(),
+		"note":             "train jobs route to " + a.cudaRunner + " (JAX/CUDA with CPU fallback)",
 	}
 }
 
@@ -315,11 +424,133 @@ func (a *Agent) runOllama(j *Job) map[string]any {
 	return map[string]any{"trained": true, "ollama": out, "model": model}
 }
 
+// activeJobs lists the jobs running right now, so the dashboard can show what
+// an agent is actually busy with (an install, a training run, a forecast)
+// instead of only a count.
+func (a *Agent) activeJobs() []map[string]any {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	now := time.Now().UnixMilli()
+	out := make([]map[string]any, 0, 4)
+	for _, id := range a.order {
+		j := a.jobs[id]
+		if j == nil || j.Status != "running" {
+			continue
+		}
+		out = append(out, map[string]any{
+			"id":         j.ID,
+			"type":       j.Type,
+			"model":      j.Model,
+			"device":     j.Device,
+			"elapsed_ms": now - j.Created,
+		})
+		if len(out) >= 8 {
+			break
+		}
+	}
+	return out
+}
+
+// probeRuntime asks the runner which interpreters on this box can reach a GPU.
+func (a *Agent) probeRuntime() map[string]any {
+	runner, err := a.resolveRunner("forecast.py")
+	if err != nil {
+		return map[string]any{"ok": false, "error": "runner unavailable: " + err.Error()}
+	}
+	out, cerr := exec.Command("python3", runner, "--probe").Output()
+	if cerr != nil {
+		return map[string]any{"ok": false, "error": cerr.Error()}
+	}
+	var res map[string]any
+	if err := json.Unmarshal(out, &res); err != nil {
+		return map[string]any{"ok": false, "error": "bad probe output: " + err.Error()}
+	}
+	res["ok"] = true
+	return res
+}
+
+// runPipInstall installs packages into the interpreter the runners use, so a
+// package installed here is visible to the jobs that need it.
+func (a *Agent) runPipInstall(j *Job) map[string]any {
+	rawArgs, _ := j.Payload["pip_args"].([]any)
+	args := make([]string, 0, len(rawArgs))
+	for _, v := range rawArgs {
+		if str, ok := v.(string); ok && str != "" {
+			args = append(args, str)
+		}
+	}
+	if len(args) == 0 {
+		return map[string]any{"ok": false, "error": "pip_args required"}
+	}
+
+	const pythonExe = "python3" // the interpreter the runners are executed with
+	cmd := exec.Command(pythonExe, append([]string{"-m", "pip"}, args...)...)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+
+	started := time.Now()
+	runErr := cmd.Run()
+	took := time.Since(started).Round(time.Second)
+
+	text := buf.String()
+	if len(text) > 4000 {
+		text = text[len(text)-4000:]
+	}
+	res := map[string]any{
+		"ok":      runErr == nil,
+		"command": pythonExe + " -m pip " + strings.Join(args, " "),
+		"took":    took.String(),
+		"output":  text,
+		"python":  pythonExe,
+		"runner":  "pip",
+	}
+	if runErr != nil {
+		res["error"] = runErr.Error()
+	}
+	return res
+}
+
+// runOptimize searches the model's hyperparameter space on the agent's own
+// hardware and returns the winning parameters.
+//
+// This is a job type rather than a platform-side loop because the search
+// evaluates thousands of candidates against several walk-forward windows; that
+// is dense array work, which is what a GPU on the agent is for.
+func (a *Agent) runOptimize(j *Job) map[string]any {
+	a.resolveHistory(j)
+	if err := j.Payload["series_error"]; err != nil {
+		return map[string]any{"ok": false, "error": err, "runner": "optimize.py"}
+	}
+	runner, rerr := a.resolveRunner("optimize.py")
+	if rerr != nil {
+		return map[string]any{"ok": false, "error": "optimizer unavailable: " + rerr.Error()}
+	}
+	b, _ := json.Marshal(j)
+	cmd := exec.Command("python3", runner)
+	cmd.Stdin = bytes.NewReader(b)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	if err := cmd.Run(); err != nil {
+		return map[string]any{"ok": false, "error": err.Error(), "detail": out.String()}
+	}
+	var res map[string]any
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		return map[string]any{"ok": false, "error": "bad optimizer output: " + err.Error(), "detail": out.String()}
+	}
+	return res
+}
+
 // runCUDA hands a train job to the Python CUDA runner (JAX/CUDA with a CPU
 // fallback) and returns its result, which reports the device actually used.
 func (a *Agent) runCUDA(j *Job) map[string]any {
 	b, _ := json.Marshal(j)
-	cmd := exec.Command("python3", a.cudaRunner)
+	runner, rerr := a.resolveRunner(filepath.Base(a.cudaRunner))
+	if rerr != nil {
+		return map[string]any{"trained": false, "error": "train runner unavailable: " + rerr.Error()}
+	}
+	cmd := exec.Command("python3", runner)
 	cmd.Stdin = bytes.NewReader(b)
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -328,6 +559,24 @@ func (a *Agent) runCUDA(j *Job) map[string]any {
 		return map[string]any{"trained": false, "error": err.Error(), "detail": out.String()}
 	}
 	var res map[string]any
+	// Runners print progress and warnings on the same pipe; the contract is that
+	// the last line is the JSON result, so read it that way.
+	// Scan backwards for the last line that parses as a JSON object. Progress
+	// output and warnings share the pipe, and taking only the final line assumes
+	// nothing was written after the result.
+	lines := bytes.Split(out.Bytes(), []byte{'\n'})
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := bytes.TrimSpace(lines[i])
+		if len(line) == 0 || line[0] != '{' {
+			continue
+		}
+		if json.Unmarshal(line, &res) == nil {
+			if i != len(lines)-1 {
+				res["runner_noise"] = true
+			}
+			break
+		}
+	}
 	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
 		return map[string]any{"trained": false, "error": "bad runner output: " + err.Error(), "detail": out.String()}
 	}
@@ -541,6 +790,8 @@ func main() {
 	updateManifest := flag.String("update-manifest", defaultManifest, "URL of the self-update manifest {version,binary,sha256} (defaults to the baked-in value)")
 	updateInterval := flag.Duration("update-interval", 5*time.Second, "how often to check for a new build")
 	name := flag.String("name", "", "friendly name for this agent (shown in the registry)")
+	maxJobs := flag.Int("max-jobs", 0, "concurrent jobs this agent will run (0 = auto from CPU count)")
+	marketdata := flag.String("marketdata", "http://127.0.0.1:8796", "local marketdata base URL for history_ref jobs (\"\" to disable)")
 	flag.Parse()
 
 	_ = enableANSIConsole()
@@ -550,13 +801,13 @@ func main() {
 		dev = detectGPU()
 		log.Printf("device auto -> %s", dev)
 	}
-	ag := newAgent(*stateDir, dev, *gitSHA, *ollama, *cudaRunner)
+	ag := newAgent(*stateDir, dev, *gitSHA, *ollama, *cudaRunner, *maxJobs)
 	ag.name = *name
 	host := *advertise
 	if host == "" {
 		host = autoHost(*addr)
 	}
-	ag.rt = agentRuntime{host: host, ip: localIP(), platform: *register, beaconPort: *beaconPort, beaconInterval: *beaconInterval, manifest: *updateManifest, addr: *addr}
+	ag.rt = agentRuntime{host: host, ip: localIP(), platform: *register, beaconPort: *beaconPort, beaconInterval: *beaconInterval, manifest: *updateManifest, addr: *addr, marketdata: *marketdata}
 	// When a real terminal is attached, show the live coloured panel + prompt
 	// while the HTTP server keeps running. No flag needed.
 	if *tty || *ui || isInteractive() {
@@ -654,12 +905,15 @@ func main() {
 // so any platform on the subnet discovers the agent with zero configuration;
 // when -register is set the same beacon is also POSTed to that platform.
 func beaconLoop(a *Agent, platform, host, device string, interval time.Duration, port int) {
-	name := a.Name()
-	if name == "" {
+	// fallbackName is only used when the agent has no name of its own; the
+	// live name is read on every beacon so a rename propagates immediately.
+	fallbackName := ""
+	if a.Name() == "" {
 		if h, err := os.Hostname(); err == nil {
-			name = h
+			fallbackName = h
 		}
 	}
+	currentName := func() string { return a.displayName(fallbackName) }
 	ip := localIP()
 	if host == "" {
 		host = "http://" + ip
@@ -674,7 +928,7 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 		b, _ := json.Marshal(map[string]any{
 			"id":            host,
 			"host":          host,
-			"name":          name,
+			"name":          currentName(),
 			"ip":            ip,
 			"device":        device,
 			"arch":          runtime.GOARCH,
@@ -768,7 +1022,7 @@ func beaconLoop(a *Agent, platform, host, device string, interval time.Duration,
 	emit := func() {
 		body := payload()
 		a.lastBeacon.Store(time.Now().UnixMilli())
-		log.Printf("beacon: SENT multicast %s:%d (name=%s)", beaconGroup, port, name)
+		log.Printf("beacon: SENT multicast %s:%d (name=%s)", beaconGroup, port, currentName())
 		if platform != "" {
 			log.Printf("beacon: registering to %s", platform)
 			post(body)
@@ -979,29 +1233,47 @@ func (a *Agent) selfUpdate(manifestURL string) error {
 		return err
 	}
 
-	// Windows / locked exe path: write a swap helper, launch it detached, and
-	// exit. The helper waits for this process to die, moves <exe>.new onto
-	// <exe>, then restarts the agent. Fully automatic — no manual step and no
-	// supervisor needed.
+	// Windows / locked exe path: write a swap helper, launch it in its own
+	// console, and exit. The helper shows brief progress, waits for this
+	// process to die, swaps the staged file in, then restarts the agent.
 	log.Printf("self-update: %s -> %s staged; swapping via helper + restart", a.gitSHA, m.Version)
 	header := exe + ".update.cmd"
-	lines := []string{
-		"@echo off",
-		"setlocal",
-		// Wait for the process to fully die so the exe is no longer locked,
-		// then swap the staged file in and restart it.
-		":wait",
-		"tasklist /FI \"IMAGENAME eq " + filepath.Base(exe) + "\" 2>nul | find /I \"" + filepath.Base(exe) + "\" >nul",
-		"if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)",
-		"move /Y " + strconv.Quote(newPath) + " " + strconv.Quote(exe) + " >nul",
-		"start \"\" " + strconv.Quote(exe) + " " + strings.Join(os.Args[1:], " "),
-	}
-	_ = os.WriteFile(header, []byte(strings.Join(lines, "\r\n")), 0o644)
+	script := swapHelperScript(exe, newPath, m.Version, a.gitSHA, os.Args[1:])
+	_ = os.WriteFile(header, []byte(script), 0o644)
 	cmd := exec.Command("cmd", "/C", header)
-	detachProcess(cmd) // Windows: new detached console; Unix: no-op
+	detachProcess(cmd) // Windows: own console window; Unix: no-op
 	_ = cmd.Start()
 	os.Exit(0)
 	return nil
+}
+
+// swapHelperScript builds the Windows helper that swaps a staged exe into
+// place. Every path is absolute, so the helper works from any working
+// directory; it prints brief progress and closes itself when finished.
+func swapHelperScript(exe, newPath, version, from string, args []string) string {
+	base := winBase(exe)
+	lines := []string{
+		"@echo off",
+		"setlocal",
+		"title CryptALAS update",
+		"echo.",
+		"echo   CryptALAS agent - updating to " + version,
+		"echo   from " + from,
+		"echo.",
+		"echo   waiting for the running agent to stop...",
+		// Wait for the process to fully die so the exe is no longer locked.
+		":wait",
+		"tasklist /FI " + winQuote("IMAGENAME eq "+base) + " 2>nul | find /I " + winQuote(base) + " >nul",
+		"if not errorlevel 1 (timeout /t 1 /nobreak >nul & goto wait)",
+		"echo   installing...",
+		"move /Y " + winQuote(newPath) + " " + winQuote(exe) + " >nul",
+		"if errorlevel 1 (echo   install FAILED & timeout /t 5 & exit /b 1)",
+		"echo   done - restarting agent " + version,
+		"timeout /t 1 /nobreak >nul",
+		"start \"\" " + winQuote(exe) + " " + strings.Join(args, " "),
+		"exit",
+	}
+	return strings.Join(lines, "\r\n")
 }
 
 func verifySHA256(path, want string) error {
@@ -1233,11 +1505,12 @@ func (a *Agent) renderStatus() {
 		return "  " + C + "║" + content + strings.Repeat(" ", w-visualLen(content)) + "║" + rst
 	}
 	fmt.Fprintf(&b, "  %s\n", top)
-	fmt.Fprintf(&b, "%s\n", lineIn(nameCol+center(name, w-2)+rst))
-	fmt.Fprintf(&b, "%s\n", lineIn(L+"NAME      "+nameCol+pad(name, 16)+rst))
-	fmt.Fprintf(&b, "%s\n", lineIn(L+"IP        "+ipCol+pad(ip, 16)+rst))
-	fmt.Fprintf(&b, "%s\n", lineIn(L+"VERSION   "+verCol+pad(verTxt, 16)+rst))
-	fmt.Fprintf(&b, "%s\n", lineIn(L+strings.Repeat("·", w-2)+rst))
+	const in = "  " // inner left margin, so text never touches the border
+	fmt.Fprintf(&b, "%s\n", lineIn(nameCol+center(name, w-4)+in+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(in+L+"NAME      "+nameCol+pad(name, 16)+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(in+L+"IP        "+ipCol+pad(ip, 16)+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(in+L+"VERSION   "+verCol+pad(verTxt, 16)+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(in+L+strings.Repeat("·", w-4)+in+rst))
 	stCol, stTxt := L, "running"
 	switch verState {
 	case 1:
@@ -1245,7 +1518,7 @@ func (a *Agent) renderStatus() {
 	case 2:
 		stCol, stTxt = rgb(120, 255, 160, bld), "✔ UPDATE RECEIVED"
 	}
-	fmt.Fprintf(&b, "%s\n", lineIn(stCol+pad(stTxt, w-2)+rst))
+	fmt.Fprintf(&b, "%s\n", lineIn(in+stCol+pad(stTxt, w-4)+in+rst))
 	fmt.Fprintf(&b, "  %s\n", bot)
 	fmt.Fprintf(&b, "  %s\n", line)
 
@@ -1491,8 +1764,32 @@ type gpuStats struct {
 
 // probeGPUStats reports the first GPU's model, total/used memory, count and
 // utilization via nvidia-smi. Zero values on a box without NVIDIA.
+// nvidiaSmiPath finds the NVIDIA tool. A Windows service can start with a
+// PATH that omits the driver's directory, so the standard install locations
+// are checked as well as PATH.
+func nvidiaSmiPath() string {
+	if p, err := exec.LookPath("nvidia-smi"); err == nil && p != "" {
+		return p
+	}
+	if runtime.GOOS == "windows" {
+		for _, c := range []string{
+			`C:\Windows\System32\nvidia-smi.exe`,
+			`C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe`,
+		} {
+			if fi, err := os.Stat(c); err == nil && !fi.IsDir() {
+				return c
+			}
+		}
+	}
+	return ""
+}
+
 func probeGPUStats() gpuStats {
-	out, err := exec.Command("nvidia-smi", "--query-gpu=name,memory.total,memory.used,utilization.gpu", "--format=csv,noheader,nounits").Output()
+	smi := nvidiaSmiPath()
+	if smi == "" {
+		return gpuStats{}
+	}
+	out, err := exec.Command(smi, "--query-gpu=name,memory.total,memory.used,utilization.gpu", "--format=csv,noheader,nounits").Output()
 	if err != nil {
 		return gpuStats{}
 	}
@@ -1619,6 +1916,16 @@ func (a *Agent) Name() string {
 	a.nameMu.RLock()
 	defer a.nameMu.RUnlock()
 	return a.name
+}
+
+// displayName is the name advertised on the wire: the live agent name when
+// one is set, otherwise the fallback (usually the host name). It reads the
+// name on every call so a rename reaches the platform on the next beacon.
+func (a *Agent) displayName(fallback string) string {
+	if n := a.Name(); n != "" {
+		return n
+	}
+	return fallback
 }
 
 // SetName changes the agent name and re-registers it under the new name on the
@@ -1825,9 +2132,33 @@ func (t *netSpeedTracker) current() (rxBps, txBps float64) {
 // runForecast runs a time-series forecast via gpu/forecast.py, resolving a
 // history_ref against the marketdata service first when present.
 func (a *Agent) runForecast(j *Job) map[string]any {
+	// Probe mode: report the python/runtime situation instead of forecasting.
+	if probe, _ := j.Payload["probe"].(bool); probe {
+		return a.probeRuntime()
+	}
 	a.resolveHistory(j)
+	if why, ok := j.Payload["series_error"].(string); ok && why != "" {
+		return map[string]any{"trained": false, "error": why, "runner": "forecast.py"}
+	}
 	b, _ := json.Marshal(j)
-	cmd := exec.Command("python3", "gpu/forecast.py")
+	// The foundation models have their own runner: they load pretrained weights
+	// rather than fitting on the series, so the arithmetic runner cannot serve
+	// them.
+	runnerName := "forecast.py"
+	if m := strings.ToLower(j.Model); strings.HasPrefix(m, "timestral") {
+		runnerName = "timestral_runner.py"
+	}
+	if strings.EqualFold(j.Type, "train_sequence") {
+		runnerName = "train_sequence.py"
+	}
+	if strings.EqualFold(j.Type, "backtest_sweep") {
+		runnerName = "backtest_sweep.py"
+	}
+	runner, rerr := a.resolveRunner(runnerName)
+	if rerr != nil {
+		return map[string]any{"trained": false, "error": "forecast runner unavailable: " + rerr.Error()}
+	}
+	cmd := exec.Command("python3", runner)
 	cmd.Stdin = bytes.NewReader(b)
 	var out bytes.Buffer
 	cmd.Stdout = &out
@@ -1848,7 +2179,10 @@ func (a *Agent) runBacktest(j *Job) map[string]any {
 	a.resolveHistory(j)
 	closes := extractCloses(j.Payload["series"])
 	if len(closes) < 5 {
-		return map[string]any{"error": "need >= 5 closes", "runner": "backtest"}
+		if why, ok := j.Payload["series_error"].(string); ok && why != "" {
+			return map[string]any{"error": why, "runner": "backtest"}
+		}
+		return map[string]any{"error": fmt.Sprintf("need >= 5 closes, got %d", len(closes)), "runner": "backtest"}
 	}
 	window := int(toFloat(j.Payload["window"]))
 	if window < 2 || window > len(closes) {
@@ -1895,13 +2229,20 @@ func (a *Agent) resolveHistory(j *Job) {
 	if !ok {
 		return
 	}
-	if s := fetchHistory(ref); s != nil {
+	if s := a.fetchHistory(ref); len(s) > 0 {
 		j.Payload["series"] = s
+		j.Payload["series_source"] = a.historySource
+		return
 	}
+	j.Payload["series_error"] = "no kline source reachable for " + fmt.Sprint(ref["symbol"])
+	log.Printf("job %s: history_ref %v produced no data", j.ID, ref["symbol"])
 }
 
-// fetchHistory pulls klines from the marketdata service and returns [{t,v}] closes.
-func fetchHistory(ref map[string]any) []map[string]any {
+// fetchHistory pulls closes for a job. A box that runs jobs often has no
+// marketdata service of its own, so after the local one we ask the platform
+// that registered us. The first source to return bars wins, and the source is
+// recorded on the payload so a result can be traced to its data.
+func (a *Agent) fetchHistory(ref map[string]any) []map[string]any {
 	symbol, _ := ref["symbol"].(string)
 	interval, _ := ref["interval"].(string)
 	if interval == "" {
@@ -1911,27 +2252,74 @@ func fetchHistory(ref map[string]any) []map[string]any {
 	if n := toFloat(ref["limit"]); n > 0 {
 		limit = int(n)
 	}
-	base, _ := ref["marketdata"].(string)
-	if base == "" {
-		base = "http://127.0.0.1:8796"
+
+	seen := map[string]bool{}
+	var bases []string
+	add := func(b string) {
+		b = strings.TrimRight(strings.TrimSpace(b), "/")
+		if b != "" && !seen[b] {
+			seen[b] = true
+			bases = append(bases, b)
+		}
 	}
-	u := fmt.Sprintf("%s/klines?symbol=%s&interval=%s&limit=%d", base, url.QueryEscape(symbol), url.QueryEscape(interval), limit)
-	resp, err := http.Get(u)
+	if b, ok := ref["marketdata"].(string); ok {
+		add(b)
+	}
+	if a.rt.marketdata != "" {
+		add(a.rt.marketdata) // a local marketdata service, when present
+	}
+	add(a.rt.platform) // the platform that registered this agent
+
+	for _, base := range bases {
+		for _, path := range []string{"/klines", "/api/klines"} {
+			if series := fetchSeries(base+path, symbol, interval, limit); len(series) > 0 {
+				a.historySource = base + path
+				return series
+			}
+		}
+	}
+	a.historySource = ""
+	return nil
+}
+
+// fetchSeries asks one kline endpoint (already including its path) for closes.
+// Two shapes are accepted because the marketdata service answers
+// {klines:[...]} while the platform's history API answers {bars:[...]}; both
+// carry t (ms) and c (close).
+func fetchSeries(endpoint, symbol, interval string, limit int) []map[string]any {
+	u := fmt.Sprintf("%s?symbol=%s&interval=%s&limit=%d",
+		endpoint, url.QueryEscape(symbol), url.QueryEscape(interval), limit)
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(u)
 	if err != nil {
 		return nil
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
 	var body struct {
 		Klines []struct {
 			T int64   `json:"t"`
 			C float64 `json:"c"`
 		} `json:"klines"`
+		Bars []struct {
+			T int64   `json:"t"`
+			C float64 `json:"c"`
+		} `json:"bars"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
 		return nil
 	}
-	out := make([]map[string]any, len(body.Klines))
-	for i, k := range body.Klines {
+	rows := body.Klines
+	if len(rows) == 0 {
+		rows = body.Bars
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, len(rows))
+	for i, k := range rows {
 		out[i] = map[string]any{"t": k.T, "v": k.C}
 	}
 	return out
@@ -2064,4 +2452,70 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(v)
+}
+
+// winBase returns the file name of a Windows path, splitting on both
+// separators so it behaves identically whichever host compiles the agent.
+func winBase(p string) string {
+	if i := strings.LastIndexAny(p, `\\/`); i >= 0 {
+		return p[i+1:]
+	}
+	return p
+}
+
+// winQuote wraps a path in double quotes for a Windows batch file. Unlike
+// strconv.Quote it does NOT escape backslashes — cmd.exe treats them
+// literally, so escaping would break every path.
+func winQuote(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, "") + `"`
+}
+
+// jobPayloadBytes reports the encoded size of a job payload, so the terminal
+// shows how much history was handed to the agent.
+func jobPayloadBytes(payload map[string]any) int {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return 0
+	}
+	return len(b)
+}
+
+// resultError reports the error carried by a job result, if any.
+func resultError(result map[string]any) (string, bool) {
+	if result == nil {
+		return "", false
+	}
+	if v, ok := result["error"]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s, true
+		}
+	}
+	return "", false
+}
+
+// digestResult is a one-line summary of what a job produced, so the terminal
+// shows the outcome without dumping the whole payload.
+func digestResult(result map[string]any) string {
+	if result == nil {
+		return "no result"
+	}
+	// forecast: show the span the numbers actually cover.
+	if f, ok := result["forecast"].([]any); ok && len(f) > 0 {
+		first := toFloat(f[0])
+		last := toFloat(f[len(f)-1])
+		return fmt.Sprintf("forecast %d points %.2f -> %.2f (method %v, last %v)",
+			len(f), first, last, result["method"], result["last"])
+	}
+	if present, ok := result["present"]; ok {
+		return fmt.Sprintf("backtest window %v present %v", result["window"], present)
+	}
+	parts := make([]string, 0, len(result))
+	for k := range result {
+		parts = append(parts, k)
+	}
+	sort.Strings(parts)
+	if len(parts) > 6 {
+		parts = parts[:6]
+	}
+	return "result fields: " + strings.Join(parts, ", ")
 }

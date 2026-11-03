@@ -42,10 +42,27 @@ def detect_device():
     except Exception:
         pass
     # nvidia-smi last: the driver is present but no python binding is installed.
-    import shutil
-    if shutil.which("nvidia-smi"):
+    if nvidia_smi():
         return "cuda"
     return "cpu"
+
+
+def nvidia_smi():
+    """Locate nvidia-smi. On Windows it is often absent from PATH even with a
+    healthy driver, so the standard install locations are checked too."""
+    import os
+    import shutil
+    found = shutil.which("nvidia-smi")
+    if found:
+        return found
+    if os.name == "nt":
+        for candidate in (
+            r"C:\Windows\System32\nvidia-smi.exe",
+            r"C:\Program Files\NVIDIA Corporation\NVSMI\nvidia-smi.exe",
+        ):
+            if os.path.exists(candidate):
+                return candidate
+    return None
 
 
 def logistic_cpu(rows):
@@ -149,17 +166,31 @@ def main():
     payload = job.get("payload") or {}
     rows = payload.get("rows") or job.get("rows") or []
 
+    # Report the device that ACTUALLY ran the fit, not merely the one detected:
+    # a failed accelerated attempt must never be presented as a GPU result.
     result = None
-    if requested in ("cuda", "gpu", "metal") and device in ("cuda", "metal"):
-        try:
-            result = fit_jax(rows, device)
-        except Exception:
-            result = None
+    compute = "cpu"
+    reason = ""
+    if requested in ("cuda", "gpu", "metal"):
+        if device in ("cuda", "metal"):
+            try:
+                result = fit_jax(rows, device)
+                compute = "jax"
+            except Exception as exc:
+                reason = "jax fit unavailable: %s" % exc
+        else:
+            reason = (
+                "no GPU runtime detected: neither jax nor torch is importable "
+                "and nvidia-smi was not found"
+            )
     if result is None:
         result = logistic_cpu(rows)
 
-    result["device"] = device
+    result["device"] = device if compute != "cpu" else "cpu"
     result["requested"] = requested or "auto"
+    result["compute"] = compute
+    if reason:
+        result["device_reason"] = reason
     result["trained"] = result.get("fit", False)
     result["runner"] = "cuda_train.py"
     print(json.dumps(result))

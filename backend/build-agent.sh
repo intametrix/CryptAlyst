@@ -17,13 +17,19 @@ GO="${GO:-go}"
 OUT=bin
 mkdir -p "$OUT"
 
-VERSION="${VERSION:-$(git rev-parse --short HEAD 2>/dev/null || echo dev)}"
+# Human-readable semver, from the nearest git tag, else a default bumped here.
+# This is what the TTY and registry DISPLAY. The git SHA remains the exact
+# build identity in the manifest for precise update comparison.
+VERSION_TAG="${VERSION_TAG:-$(git describe --tags --abbrev=0 2>/dev/null || echo v1.2.0)}"
+SHA="$(git rev-parse --short HEAD 2>/dev/null || echo dev)"
+# Full display version: human semver + short sha, e.g. "v1.2.0-a348efa".
+VERSION="${VERSION:-${VERSION_TAG#v}-${SHA}}"
 BUILDTIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 # Where the agent looks for updates by default. Point this at your release
 # host (GitHub releases, a static server, etc.). Override with MANIFEST_BASE.
-MANIFEST_BASE="${MANIFEST_BASE:-http://192.168.1.111:8899}"
+MANIFEST_BASE="${MANIFEST_BASE:-http://192.168.1.142:8899}"
 # Platform the agent registers to over HTTP (baked in so it needs no -register).
-REGISTER_URL="${REGISTER_URL:-http://192.168.1.111:8787}"
+REGISTER_URL="${REGISTER_URL:-http://192.168.1.142:8787}"
 
 manifest_for() { # manifest_for <os>
   case "$1" in
