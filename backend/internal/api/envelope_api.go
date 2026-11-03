@@ -2,8 +2,10 @@ package api
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 
 	"pumpdump/backend/internal/envelope"
 )
@@ -69,18 +71,48 @@ func (s *Server) handleEnvelopeStats(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{"counts": counts, "total": total, "path": envelopeJournalPath()})
 }
 
-// recordEnvelope writes a packet to the journal, ignoring failures: recording must
-// never fail the request that produced the payload.
+// recordEnvelope writes a packet to the journal and publishes it to the bus,
+// ignoring failures: neither the record nor the broadcast may fail the request that
+// produced the payload.
 func recordEnvelope(p envelope.Packet) {
 	if len(p.Data) == 0 {
 		return
 	}
-	j, err := envelope.OpenJournal(envelopeJournalPath())
-	if err != nil {
-		return
+	if j, err := envelope.OpenJournal(envelopeJournalPath()); err == nil {
+		_ = j.Record(p)
+		_ = j.Close()
 	}
-	_ = j.Record(p)
-	_ = j.Close()
+	publishEnvelope(p)
+}
+
+// busPublisher is the shared RabbitMQ connection, created on first use.
+var (
+	busOnce sync.Once
+	bus     *envelope.Bus
+)
+
+func envelopeBus() *envelope.Bus {
+	busOnce.Do(func() {
+		addr := os.Getenv("CRYPTALYST_STOMP")
+		if addr == "" {
+			addr = "127.0.0.1:61613"
+		}
+		login := os.Getenv("CRYPTALYST_STOMP_LOGIN")
+		if login == "" {
+			login = "cryptalyst"
+		}
+		pass := os.Getenv("CRYPTALYST_STOMP_PASSCODE")
+		if pass == "" {
+			pass = "cryptalyst"
+		}
+		bus = envelope.NewBus(addr, login, pass)
+	})
+	return bus
+}
+
+// publishEnvelope broadcasts a packet, tolerating a broker that is down.
+func publishEnvelope(p envelope.Packet) {
+	_ = envelopeBus().Publish(p)
 }
 
 var _ = strconv.Itoa
