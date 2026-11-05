@@ -930,3 +930,30 @@ Two defects surfaced while doing it, both mine:
 
 Result: Platform Master Plan 81 pages / 55 figures, Developer Guide 23 / 9, User Guide 17 / 7,
 Envelope 17 / 7.
+
+## The frontier chapter — ten ideas the record makes possible (Nov 5)
+
+The master plan gained a chapter that is not about honesty but about edge: ten ideas that only
+this platform can execute, because each one is a use of the journal rather than a better model.
+
+1. **The counterfactual engine** — replay any new model over the recorded past, with refs proving
+   what was knowable, so retroactive paper trading has zero look-ahead.
+2. **Net skill** — gross skill minus fees, spread, slippage and staleness, per pair, frame and
+   horizon: the only number that can pay.
+3. **Size by edge over band width, discounted by calibration error** — position size derived from
+   the model's own mismeasurement rather than from a fixed fraction.
+4. **Staleness-aware execution** — measure the edge-decay curve from the journal and refuse any
+   trade whose remaining edge at send time is below cost.
+5. **Per-pair, per-frame routing with off-policy evaluation** — a bandit that can score the models
+   it did not pick, because the journal records what they would have produced.
+6. **Conformal stops** — place stops at the tenth percentile the model itself advertises.
+7. **Operational telemetry as a regime feature** — refusal patterns are information.
+8. **Lead–lag graph** — who moves first, learned from the record.
+9. **Adversarial self-play for detectors** — synthetic pumps that pass the detector are false
+   positives an adversary could build.
+10. **Maker or taker chosen by a book forecast** — turn the spread from a cost into PnL.
+
+Each is stated as a hypothesis with a first experiment and a way to fail. The chapter names the
+three to build first — net skill, the counterfactual engine, staleness-aware execution — and says
+plainly that all nine collapse if the journal is not trustworthy, which is why correctness is
+Phase 1 and parity is the entry fee for every experiment.

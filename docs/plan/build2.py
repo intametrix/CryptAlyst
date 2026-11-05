@@ -30,6 +30,13 @@ def fig(n, cap, key=None):
         FIGNUM[key] = num
     return kit.fig(os.path.join(HERE, f"f{n}.png"), f"Figure {num} — {cap}")
 
+def xfig(n, cap, key=None):
+    num = len(ORDER) + 1
+    ORDER.append((num, cap, key))
+    if key:
+        FIGNUM[key] = num
+    return kit.fig(os.path.join(HERE, f"x{n}.png"), f"Figure {num} — {cap}")
+
 def efig(n, cap, key=None):
     num = len(ORDER) + 1
     ORDER.append((num, cap, key))
@@ -1300,6 +1307,89 @@ consumer  recorder :8801  →  lake bronze + journal index
 reader    /api/envelope/recent?topic=intel.forecast  →  the same packet"""))
 add(co("good", "What to do with the trace",
   "If the same packet appears at all four steps, the pipeline is intact and the only questions left are about the payload. If it disappears between the broker and the recorder, the fault is in one process and the bus view shows the gap. That is what traceability buys operationally: a broken chain tells you where, not just that."))
+
+add(ch("The frontier: ideas nobody has shipped"))
+add("""
+<p>The phases make the platform honest; the engine phase makes it measured. This chapter is the part that could make it the most accurate forecasting platform in this market — because the things that would make it so are not better models, they are things this platform can do that others cannot, for structural reasons.</p>
+<p>Each idea below is stated as a hypothesis with a first experiment and a way it can fail. None of them is promised; all of them are buildable on what already exists.</p>
+""")
+add(co("law", "The advantage nobody can copy quickly",
+  "A competitor can copy a model. They cannot copy a journal of packets whose refs prove what was knowable at the time, because they did not record it. Every idea in this chapter is a use of that record — which means the moat is not the idea, it is the provenance."))
+
+add("<h3>1 · The counterfactual engine: new models against the whole recorded past</h3>")
+add("""
+<p>Every model anybody thinks of can be run backwards over the journal — not over today's data, which is contaminated, but over the packets that record exactly which bars existed and at what age when a forecast was made. The result is retroactive paper trading with <b>zero look-ahead</b>, at a scale no backtest can match, because the refs prove the data availability rather than assuming it.</p>
+<p><b>Why nobody has done it:</b> backtesters assume they know what data existed. This platform recorded it, per packet, as references with ages.</p>
+""")
+add(xfig(1, "the counterfactual loop: a new model is replayed over the recorded past, must reproduce what would have been live, and only then reaches the gate", "counterfactual"))
+add(co("ex", "First experiment",
+  "Take the four families that disagree most on a given pair, replay each over sixty days of recorded packets, and measure net skill per frame. If the counterfactual engine and the live path disagree on any packet, the run is void — parity is the entry fee."))
+
+add("<h3>2 · Trade net skill, never gross skill</h3>")
+add("""
+<p>The number that pays is not accuracy; it is accuracy after fees, spread, slippage and staleness. A model can be 60% directionally right and lose money. Stated plainly: <b>net skill = gross skill − fees − spread − slippage − staleness</b>, and it is computed per pair, per frame, per horizon, from the record.</p>
+<p><b>Why nobody has done it:</b> most systems optimise a statistical score and hope it survives contact with costs. Here the cost model is part of the metric, so a model that cannot pay is visibly unpayable before it trades.</p>
+""")
+add(xfig(4, "net skill: the only number that can pay, computed per pair, frame and horizon", "netskill"))
+add(co("ex", "First experiment",
+  "Rank the forty-nine models by gross skill and by net skill on the same pairs, and show the two rankings side by side. If they are nearly the same, this idea is worth little; if they differ — and on tight frames they will — the difference is the alpha."))
+
+add("<h3>3 · Size by edge over band width, discounted by calibration error</h3>")
+add("""
+<p>Position size should be a function of <b>how far the projected move is from the band</b>, not of a fixed fraction. A forecast that projects a move three band-widths out deserves more than one that projects a third of a band — and the discount should be the pair's <i>historical coverage error</i>, because that is the model's own record of being wrong about its band.</p>
+<p><b>Why nobody has done it:</b> sizing on predicted volatility is common; sizing on <i>the model's own miscalibration, measured per pair and frame</i>, requires a coverage telemetry loop that most systems do not have.</p>
+""")
+add(co("law", "The formula, in one line",
+  "size ∝ (edge ÷ band width) × (1 − coverage error) ÷ cost of being wrong. Every term is measured from the record; none of them is a constant in a config file."))
+
+add("<h3>4 · Staleness-aware execution: trade the edge that survives the delay</h3>")
+add("""
+<p>Every impulse has an edge half-life. Measure it from the journal — how much of the projected move was still available 100 ms, 500 ms and 2 s after the packet was computed — and refuse any trade whose remaining edge at send time is below cost plus slippage. The TTL becomes a parameter derived from measurement rather than a round number.</p>
+<p><b>Why nobody has done it:</b> platforms tune latency; almost none <i>price</i> it, because pricing it needs the decay curve, and the decay curve needs packets that record when each number was computed.</p>
+""")
+add(xfig(3, "staleness-aware execution: the edge decay curve turns latency into a tradeable quantity", "staleness"))
+add(co("ex", "First experiment",
+  "For one pair and one frame, bucket recorded decisions by the age of the forecast they used, and plot realised edge against age. If edge does not decay, latency is not the constraint and this idea is cheap to reject."))
+
+add("<h3>5 · Route per pair, per frame, online — with off-policy evaluation</h3>")
+add("""
+<p>Different families win on different pairs and frames, and the winner changes with regime. A router that picks the model per context, learns from graded outcomes, and — crucially — evaluates the models it did <i>not</i> pick using the journal, is a bandit with a proper off-policy estimator. Most systems cannot do the last part, because they never recorded what the alternatives would have produced.</p>
+<p><b>Why nobody has done it:</b> off-policy evaluation needs a log of contexts, actions and outcomes at the packet level. This platform's journal is that log.</p>
+""")
+add(xfig(2, "model routing: context, choice, outcome, and an off-policy read of the paths not taken", "routing"))
+add(co("warn", "The trap this must avoid",
+  "A router that always picks the recent winner chases noise and will look brilliant for a week. The exploration budget must be a constant of the design, not an afterthought, and the router's own skill must be graded against the best single model — otherwise it is a complicated way to be average."))
+
+add("<h3>6 · Stops placed by conformal quantiles, not by percentages</h3>")
+add("""
+<p>If the band is calibrated, the tenth percentile of the path is an empirically honest place for a stop: it is the level the model itself says the price should rarely cross. Stops become a property of the distribution rather than a number a trader likes.</p>
+<p><b>Why nobody has done it:</b> it requires bands that hold their coverage — the thing the whole plan is built to measure.</p>
+""")
+
+add("<h3>7 · The platform's own telemetry as a regime feature</h3>")
+add("""
+<p>Refusal patterns are information. A spike in freshness refusals means the feed is late; a spike in edge-floor refusals means the market is quiet relative to the models' expectations; a change in the share of decisions that flip verdict within one forecast generation is a signature of regime instability. Feeding the platform's own operational record into the features is free, and nobody does it because nobody records it.</p>
+""")
+
+add("<h3>8 · Lead–lag graph, learned from the record</h3>")
+add("""
+<p>Build a directed graph of which pairs move first, from the recorded candles and ticks, and gate entries when the leader has already made the move. Buying the laggard after the leader's impulse is the most common way to be late and pay for it.</p>
+""")
+
+add("<h3>9 · Adversarial self-play for the detectors</h3>")
+add("""
+<p>Train a generator that produces synthetic pump sequences calibrated on the recorded detections, and use it to red-team the detector: every synthetic sequence that passes the detector is a false positive the adversary could have built. The journal supplies both the positive class and the calibration.</p>
+""")
+
+add("<h3>10 · Maker or taker, chosen by a forecast of the book</h3>")
+add("""
+<p>Forecast the book, not just the price: the shape ten seconds ahead decides whether a maker order fills or a taker order pays the spread. Choosing the order type from that forecast turns a cost centre into a source of PnL.</p>
+""")
+
+add(co("good", "Which three to build first",
+  "<b>Net skill</b>, because it reorders everything else. <b>The counterfactual engine</b>, because it turns the record into an experimental platform overnight. <b>Staleness-aware execution</b>, because it is the cheapest to test and the answer is useful even if the answer is “latency is not our constraint”. The other seven are worth building in the order the first three tell you to."))
+add(co("warn", "How this chapter could be wrong",
+  "Every idea here assumes the record is trustworthy — one defect in the journal and all nine collapse. That is why correctness is Phase 1 and why the parity test is the entry fee for every experiment in this chapter. A frontier built on a broken tape measure is a story, not a platform."))
 
 add(ch("List of figures"))
 add("<p>Every figure in this document, in order, with the chapter it belongs to.</p>")

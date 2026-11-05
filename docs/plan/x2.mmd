@@ -1,0 +1,21 @@
+flowchart TB
+  C["<b>context</b><br/>pair · frame · regime · volatility"]:::c_market
+  B{"<b>router</b><br/>which model has the best<br/>net skill in this context?"}
+  M1["trend family"]:::c_model
+  M2["damped family"]:::c_model
+  M3["analogue family"]:::c_model
+  M4["ensembles"]:::c_model
+  D["<b>decision</b><br/>one model, one packet,<br/>parent_cid recorded"]:::c_control
+  O["<b>outcome</b><br/>graded at the horizon"]:::c_intel
+  L["<b>the log</b><br/>off-policy evaluation:<br/>what would the others have done?"]:::c_store
+  C --> B
+  B --> M1 --> D
+  B --> M2 --> D
+  B --> M3 --> D
+  B --> M4 --> D
+  D --> O --> L --> B
+  classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+  classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+  classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+  classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+  classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;

@@ -1,0 +1,17 @@
+flowchart LR
+  A["<b>gross skill</b><br/>beats flat on the frame"]:::c_intel
+  B["− fees"]:::c_risk
+  C["− spread and slippage"]:::c_risk
+  D["− staleness"]:::c_risk
+  E["= <b>net skill</b><br/>the only number<br/>that can pay"]:::c_model
+  F{"positive on<br/>out-of-sample<br/>cuts?"}
+  G["size by<br/>edge ÷ band width"]:::c_control
+  H["do not trade<br/>this pair, this frame"]:::c_neutral
+  A --> B --> C --> D --> E --> F
+  F -->|yes| G
+  F -->|no| H
+  classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+  classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+  classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+  classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+  classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;

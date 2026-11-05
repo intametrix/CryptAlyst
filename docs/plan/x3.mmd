@@ -1,0 +1,21 @@
+flowchart LR
+  subgraph T["one impulse, against the clock"]
+    direction TB
+    t0["<b>t0</b> print arrives"]:::c_market
+    t1["<b>t1</b> window closes, score"]:::c_intel
+    t2["<b>t2</b> forecast published<br/>computed_at stamped"]:::c_model
+    t3["<b>t3</b> decision refers to it"]:::c_control
+    t4["<b>t4</b> order would be sent"]:::c_risk
+  end
+  E["<b>edge decay curve</b><br/>measured from the journal:<br/>how much edge survives<br/>each 100 ms of delay"]:::c_store
+  G{"is the edge left<br/>at t4 greater than<br/>cost + slippage?"}
+  t4 --> G
+  E --> G
+  G -->|yes| GO["act"]:::c_intel
+  G -->|no| NO["refuse —<br/>and record the refusal"]:::c_risk
+  classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+  classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+  classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+  classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+  classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+  classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
