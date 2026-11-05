@@ -204,7 +204,9 @@ body_md = body_md[body_md.index("# A History of the Platform"):]
 # markdown reader would escape the figure tags and print them as text.
 marker = "# Part 3 — Phase 1: Correctness (the foundation)"
 head_md, tail_md = body_md.split(marker, 1)
-html = convert(head_md, HERE, figfile) + ENGINE + convert(marker + tail_md, HERE, figfile)
+head_html, next_fig = convert(head_md, HERE, figfile)
+tail_html, _ = convert(marker + tail_md, HERE, figfile, start=next_fig)
+html = head_html + ENGINE + tail_html
 
 # the plan's own # headings become chapter bands, numbered in order
 # The plan numbers its own parts, so the band carries that number rather than a counter:

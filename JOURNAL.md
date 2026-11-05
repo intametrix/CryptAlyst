@@ -909,3 +909,24 @@ Two defects were fixed on the way, both mine: extracting the content out of the 
 dropped every figure (14 pages became 5), and the first build had no cover and no numbers.
 The build now reads the page and image counts back out of the produced PDF, so a missing
 figure cannot pass quietly again.
+
+## Every diagram redrawn, and the two bugs the redraw exposed (Nov 5)
+
+All eighty-one diagrams across the four documents are now rendered by one renderer with one
+theme and one palette: white background, role colours (market blue, intel green, model amber,
+risk red, control teal, store purple, neutral grey), 14 pt Helvetica, captured at 2× and
+cropped to the diagram itself.
+
+Two defects surfaced while doing it, both mine:
+
+1. **The plan's fifty-one diagrams carried their own colour scheme** and unclassed nodes fell
+   back to mermaid's grey. Every block is now rewritten to the platform's role classes, and
+   any node the author left unclassed is assigned `c_neutral` rather than left to the theme.
+2. **Figures were paired with the wrong captions, and after Part 3 the images restarted from
+   figure 1.** The document is converted in two halves (the engine-bay chapter is inserted
+   between them), and each half reset its own figure counter — so every figure after Part 3
+   showed an image from earlier in the document. The counter is now threaded across the
+   split, and captions are paired to figures by position in a second pass.
+
+Result: Platform Master Plan 81 pages / 55 figures, Developer Guide 23 / 9, User Guide 17 / 7,
+Envelope 17 / 7.

@@ -19,11 +19,12 @@ def inline(s):
     return s
 
 
-def convert(md, figdir, fig_path):
+def convert(md, figdir, fig_path, start=1):
     lines = md.split("\n")
     i, out = 0, []
     pending_title = pending_cap = None
-    fig_no = 0
+    fig_no = start - 1
+    figure_slots, captions = [], []
     list_open = None
 
     def close_list():
@@ -42,7 +43,7 @@ def convert(md, figdir, fig_path):
             pending_title = m.group(1); i += 1; continue
         m = re.match(r'<p class="figcap">(.*?)</p>', stripped)
         if m:
-            pending_cap = m.group(1); i += 1; continue
+            captions.append(m.group(1)); i += 1; continue
 
         if stripped.startswith("```"):
             lang = stripped[3:].strip()
@@ -54,8 +55,10 @@ def convert(md, figdir, fig_path):
             close_list()
             if lang == "mermaid":
                 fig_no += 1
-                cap = pending_cap or pending_title or ""
-                out.append(fig_path(fig_no, cap))
+                # the source puts the title before the block and the caption after it, so
+                # the caption is attached in a second pass, paired by position
+                out.append(fig_path(fig_no, pending_title or ""))
+                figure_slots.append(len(out) - 1)
             else:
                 out.append("<pre>" + "\n".join(body).replace("&", "&amp;")
                            .replace("<", "&lt;").replace(">", "&gt;") + "</pre>")
@@ -123,4 +126,9 @@ def convert(md, figdir, fig_path):
         out.append("<p>" + inline(" ".join(para)) + "</p>")
 
     close_list()
-    return "\n".join(out)
+    # pair each figure with the caption that follows it
+    for slot, cap in zip(figure_slots, captions):
+        if cap:
+            out[slot] = re.sub(r"<figcaption>.*?</figcaption>",
+                               f"<figcaption>{cap}</figcaption>", out[slot], flags=re.S)
+    return "\n".join(out), fig_no + 1
