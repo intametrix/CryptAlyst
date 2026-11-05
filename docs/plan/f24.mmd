@@ -1,0 +1,29 @@
+flowchart TD
+  T["scoring tick (~10s)"] --> F["structural filter<br/>liquidity floors, cap tier<br/>logged with every list"]
+  F --> Z["z-composite per candidate<br/>z = (x - rolling median) / MAD<br/>weights: versioned, fit offline"]
+  Z --> R["ranked suspect list<br/>top-N with scores"]
+  R --> ENV["intel.signal envelope<br/>refs to market generations<br/>TTL 10s"]
+  ENV --> UI["dashboard panel"]
+  ENV --> JR["journal (the labeled dataset)"]
+  subgraph confirm["confirmation tier (D4)"]
+    R -->|above theta| B["temporary book subscription<br/>imbalance, depth, order-size trend"]
+    B --> CONF{"confirms?"}
+    CONF -->|yes| AL["onset alert: P, severity by score<br/>rush-proxy + book evidence"]
+    CONF -->|no| DROP["quietly dropped; counted for precision stats"]
+  end
+
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef ext fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+
+class T proc;
+class ENV,JR data;
+class F,CONF decision;
+class R,UI,AL ok;
+class DROP err;
+class Z,B hot;

@@ -1,0 +1,15 @@
+sequenceDiagram
+  participant C as Consumer
+  participant K as Series cache
+  participant S as Candle store
+  participant G as Generation counter
+  C->>K: get(symbol, interval, generation)
+  alt hit, generation current
+    K-->>C: cached parsed series
+  else miss or stale generation
+    K->>S: fetch rows
+    S-->>K: rows
+    K-->>C: rows, cached
+  end
+  G->>K: generation bump on new candle
+  K->>K: invalidate precisely

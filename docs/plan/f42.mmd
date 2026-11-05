@@ -1,0 +1,9 @@
+stateDiagram-v2
+  [*] --> BootHalt: fail-halted until config loads
+  BootHalt --> Armed: operator confirms healthy
+  Armed --> Tripped: rule fires or human acts
+  Tripped --> Armed: human reset, audited
+  note right of Tripped
+    refuses everything, always visible banner,
+    never auto-resets, post-mortem written
+  end note

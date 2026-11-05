@@ -1,0 +1,55 @@
+flowchart TB
+  subgraph SRC["sources"]
+    BN["Binance REST + WebSocket"]
+    IMP["operator imports, evidence"]
+  end
+  subgraph ING["ingest"]
+    NORM["normalizers: bars, trades, books"]
+  end
+  subgraph STORE["storage"]
+    HIST["history store: candles per symbol+interval"]
+    JR["envelope journal: append-only, replayable"]
+  end
+  subgraph BUS["the envelope pipeline"]
+    PIPE["authority - keying - correlation - freshness"]
+  end
+  subgraph COMPUTE["compute"]
+    LAB["forecast lab: 40+ models, graded"]
+    DET["detectors: flow onset, breakout, reversal"]
+    ENG["execution engine - Phase 6"]
+    GPUX["GPU agent: sweep, optimize, timestral"]
+  end
+  subgraph SERVE["serve"]
+    API["JSON API, one mux"]
+    WEB["React dashboard"]
+    EXPX["envelope explorer :8802"]
+  end
+  OP["the operator: approves phases and rungs"]
+  BN --> NORM --> HIST
+  IMP --> JR
+  HIST --> PIPE
+  PIPE --> LAB
+  PIPE --> DET
+  LAB --> JR
+  DET --> JR
+  LAB --> API
+  DET --> API
+  ENG --> JR
+  GPUX <--> PIPE
+  API --> WEB
+  JR --> EXPX
+  WEB --> OP
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef ext fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class HIST,JR data;
+class PIPE decision;
+class BN,EXPX ext;
+class GPUX hot;
+class IMP,ENG,OP human;
+class DET,WEB ok;
+class NORM,LAB,API proc;

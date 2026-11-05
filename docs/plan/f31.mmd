@@ -1,0 +1,15 @@
+sequenceDiagram
+  participant P as Producer
+  participant AU as Authority
+  participant K as Keying
+  participant C as Correlation
+  participant F as Freshness
+  participant O as Operator
+  participant J as Journal
+  P->>AU: packet
+  AU->>K: allowed on this topic
+  K->>C: key and generation set
+  C->>F: cid, parent_cid chained
+  F->>O: age vs TTL passes
+  F-->>P: refused, quoted numbers
+  O->>J: result envelope appended

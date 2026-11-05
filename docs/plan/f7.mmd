@@ -1,0 +1,34 @@
+flowchart TD
+  subgraph external["External"]
+    BN["Binance REST + WebSocket"]
+    AGT["GPU agent host"]
+  end
+  subgraph platform["Platform (this repo)"]
+    SRV["Go server :8787<br/>ingest, detectors, forecast lab, API,<br/>static web host"]
+    REF["refdata :8790<br/>instrument identity"]
+    ENV["envelope journal + bus<br/>internal/envelope"]
+    GPU["gpu runners<br/>optimize, sweep, forecast, timestral"]
+    WEB["React dashboard<br/>web/ builds to backend/web/dist"]
+    EXP["envelope explorer :8802<br/>read-only lake view"]
+  end
+  BN --> SRV
+  SRV <--> ENV
+  SRV <--> GPU
+  AGT --- GPU
+  SRV --- REF
+  WEB --> SRV
+  EXP --- ENV
+
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef ext fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+
+class SRV,REF proc;
+class ENV,GPU data;
+class WEB ok;
+class BN,AGT,EXP ext;

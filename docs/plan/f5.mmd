@@ -1,0 +1,22 @@
+sequenceDiagram
+  participant V as Venue streams
+  participant I as Ingest
+  participant S as History store
+  participant B as Envelope pipeline
+  participant D as Detectors
+  participant L as Forecast lab
+  participant J as Journal
+  participant A as API
+  participant W as Dashboard
+  loop every bar close
+    V->>I: trades aggregated
+    I->>S: candle upserted
+    I->>B: market.candle packet
+    B->>J: appended, generation bumps
+    B->>D: fresh candles, refs checked
+    D->>J: alerts and suspect list when fired
+    B->>L: incremental re-score tick
+    L->>J: forecast grades
+  end
+  W->>A: poll lab + suspects
+  A-->>W: latest state, staleness quoted

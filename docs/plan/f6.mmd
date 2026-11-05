@@ -1,0 +1,22 @@
+flowchart TD
+  subgraph SERIES["the series, oldest to newest"]
+    direction LR
+    T1["training rows<br/>rows[:cut]"]
+    CUTL["the cut"]
+    H1["holdout<br/>rows[cut : cut+h]"]
+  end
+  T1 --> M["model trains here only"]
+  CUTL -.->|anchored at last train close| P["forecast path:<br/>horizon steps ahead"]
+  P -->|"graded against"| H1
+  NOTE["walk-forward purity: nothing past the cut is seen<br/>standardization, selection, calibration included"]
+  M --> NOTE
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef ext fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+class CUTL decision;
+class NOTE ext;
+class H1 hot;
+class T1 ok;
+class M,P proc;

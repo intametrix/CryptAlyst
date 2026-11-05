@@ -1,0 +1,29 @@
+flowchart TD
+  I1["ChartPanel incident:<br/>dead code deleted, smoke broke"] --> A1
+  I2["Trading-platform incident:<br/>reverted to 1f12a4c"] --> A7
+  I3["Sentinel disables without<br/>durability or post-mortems"] --> A6
+  I1 --> A2
+  A1["Rule A1: features are never removed"] --> R["AGENTS.md"]
+  A2["Rule A2: lint before done"] --> J
+  A3["Rule A3: generated data, no network, no wall clock"] --> J
+  A5["Rule A5: prove, disclose, leave it buildable"] --> J
+  A6["Rule A6: disables durable, post-mortemed,<br/>re-enable is a human act"] --> J
+  A7["Rule A7: no unrequested changes"] --> J
+  A8["Rule A8: do only what was asked"] --> J
+  J[" "] --> R
+  R --> V["2026 line-by-line math audit"] --> P["This master plan"]
+  V --> F1["F1-F10 found and fixed-first sequenced"]
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class A3 data;
+class R decision;
+classDef junction fill:transparent,stroke:transparent,color:transparent;
+class J junction;
+class I1,I2,I3,F1 err;
+class A6,A7,A8 human;
+class V,P ok;
+class A1,A2,A5 proc;

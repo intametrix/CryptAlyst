@@ -1,0 +1,19 @@
+flowchart TD
+  P1["Phase 1 - Correctness<br/>10-30 Nov 2026"] --> P2["Phase 2 - Detection<br/>Dec 2026"]
+  P1 --> P3["Phase 3 - Envelope adoption<br/>from 1 Dec 2026"]
+  P2 --> P4["Phase 4 - Forecasting edge<br/>from 5 Jan 2027"]
+  P3 --> P4
+  P4 --> P5["Phase 5 - Efficiency<br/>from 19 Jan 2027"]
+  P1 -.->|"shadow evidence starts early"| X1["X1 shadow trading<br/>from 20 Dec 2026"]
+  P5 --> X1
+  X1 --> X24["X2-X4 paper + gateway<br/>from 2 Feb 2027"]
+  X24 --> X56["X5-X6 live rungs<br/>from 5 Apr 2027, human-gated"]
+
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class P1,P2,P3 proc;
+class P4,P5 ok;
+class X1,X24 hot;
+class X56 human;

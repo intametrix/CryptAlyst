@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant A as Alarm
+  participant O as Operator
+  participant S as System
+  participant J as Journal
+  participant P as PostMortem
+  A->>O: freshness storm, refusal spike, trip
+  O->>S: contain: halt entries, kill switch if needed
+  S->>J: envelope snapshot of the moment
+  J->>P: facts: rule values, inputs, actor
+  P->>O: diagnosis + rule update proposal
+  O->>O: human approves rule change, audited

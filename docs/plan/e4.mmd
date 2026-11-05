@@ -1,0 +1,14 @@
+flowchart TB
+  subgraph T["one packet's life, with the clock"]
+    direction LR
+    s1["t₀ producer has work"]:::c_neutral
+    s2["t₁ interceptors<br/>microseconds"]:::c_control
+    s3["t₂ operator<br/>microseconds to seconds"]:::c_model
+    s4["t₃ transformer<br/>microseconds"]:::c_store
+    s5["t₄ journal append<br/>one line"]:::c_store
+    s6["t₅ bus publish<br/>best effort"]:::c_neutral
+    s7["t₆ consumers"]:::c_intel
+  end
+  s1 --> s2 --> s3 --> s4 --> s5 --> s6 --> s7
+  N["<b>the rule:</b> nothing after t₄ can fail<br/>the producer's request"]:::c_risk
+  s5 -.-> N

@@ -1,0 +1,35 @@
+flowchart TD
+  subgraph market["plane: market"]
+    M1["market.candle"]
+    M2["market.price ttl 2s"]
+    M3["market.book - new"]
+  end
+  subgraph intel["plane: intel"]
+    I1["intel.forecast ttl 60s"]
+    I2["intel.signal - new"]
+    I3["intel.flow.ta.board - new"]
+  end
+  subgraph model["plane: model"]
+    D1["model.decision"]
+    D2["model.fill - new"]
+    D3["model.pnl - new"]
+  end
+  subgraph system["plane: system"]
+    S1["system.error refusals"]
+  end
+  M1 --> I1
+  M3 --> I2
+  I1 --> D1
+  I2 --> D1
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class M1,M2,M3 data;
+class S1 err;
+class D2,D3 hot;
+class D1 human;
+class I2 ok;
+class I1,I3 proc;

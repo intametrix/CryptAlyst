@@ -1,0 +1,14 @@
+sequenceDiagram
+  participant D as Decision engine
+  participant G as Risk gateway
+  participant A as Adapter or simulator
+  participant J as Journal
+  D->>G: order intent
+  G->>G: per-order, position, heat, rate, regime
+  alt pass
+    G->>A: submit, idempotent client id
+    A-->>G: ack or fill report
+  else refuse
+    G-->>D: refusal envelope, quoted values
+  end
+  G->>J: verdict journaled always

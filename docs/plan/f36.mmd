@@ -1,0 +1,18 @@
+flowchart TD
+  MISS["miss: actual outside band"] --> UPD["alpha += gamma * (alpha - miss)"]
+  UPD --> Q["quantile of past residuals only"]
+  Q --> BAND["new band width"]
+  BAND --> OBS["next window observed"]
+  OBS --> MISS
+  OBS --> HIT["hit: coverage preserved"]
+  HIT --> OBS
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+class Q data;
+class OBS decision;
+class MISS err;
+class HIT ok;
+class UPD,BAND proc;

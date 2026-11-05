@@ -1,0 +1,22 @@
+flowchart TD
+  H["human<br/>approves phases, rungs, re-enables"]
+  DS["DeepSeek lane<br/>Go backend, engine, detectors"]
+  KI["KIMI lane<br/>web, docs pipeline, git"]
+  CH["channel<br/>COMMS_LOG + JOURNAL"]
+  RULES["AGENTS.md A1-A8<br/>the rulebook"]
+  H -->|explicit instruction| DS
+  H -->|explicit instruction| KI
+  DS <-->|daily work + disclosures| CH
+  KI <-->|daily work + disclosures| CH
+  RULES -. governs .- DS
+  RULES -. governs .- KI
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ext fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class KI data;
+class RULES decision;
+class CH ext;
+class H human;
+class DS proc;

@@ -1,0 +1,16 @@
+flowchart LR
+  subgraph FIXED["the envelope — fixed forever"]
+    direction LR
+    D["<b>data</b><br/>the payload"]:::c_intel
+    M["<b>meta</b><br/>who, what, when,<br/>under which cid"]:::c_control
+    R["<b>refs</b><br/>inputs by reference"]:::c_market
+  end
+  subgraph BAY["the engine bay — grows forever"]
+    direction LR
+    I["<b>interceptors</b><br/>what is <i>allowed</i><br/><i>say no, with a reason</i>"]:::c_risk
+    O["<b>operators</b><br/>what can be <i>computed</i><br/><i>produce data</i>"]:::c_model
+    T["<b>transformers</b><br/>what it <i>looks like</i><br/>same data, other shape"]:::c_store
+  end
+  BAY --> FIXED
+  FIXED --> J["journal · bus · lake"]:::c_store
+  J --> REP["replay = backtest"]:::c_intel

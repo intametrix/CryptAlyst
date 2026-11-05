@@ -1,0 +1,10 @@
+stateDiagram-v2
+  [*] --> Draft
+  Draft --> Suppressed: dedup or cooldown
+  Draft --> Fired: passes thresholds
+  Fired --> Confirmed: book tier confirms
+  Fired --> Dropped: book tier denies
+  Confirmed --> Resolved: outcome window closes
+  Resolved --> Graded: journal metrics computed
+  Graded --> [*]
+  Dropped --> [*]: counted for precision

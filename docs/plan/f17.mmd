@@ -1,0 +1,27 @@
+flowchart TD
+  APP["App.tsx: selection, heat, glossary providers"]
+  APP --> LABV["forecast lab + sub-panels"]
+  APP --> DETV["suspect list + detection quality"]
+  APP --> CHAV["chart popup: PriceChart + forecast overlay"]
+  APP --> DRV["symbol drill-down"]
+  APP --> EXEV["execution console - Phase 6, Rung 1"]
+  APP --> OPSV["ops panel"]
+  LABV --> HOOKS["hooks: useResource, useForecastOverlay, useOutlook"]
+  DETV --> HOOKS
+  CHAV --> HOOKS
+  HOOKS --> APIX["JSON API, defensive parsing throughout"]
+  DRV --> APIX
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef ext fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class CHAV data;
+class HOOKS decision;
+class APP ext;
+class OPSV hot;
+class EXEV human;
+class DETV ok;
+class LABV,DRV,APIX proc;

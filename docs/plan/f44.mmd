@@ -1,0 +1,21 @@
+flowchart TD
+  X1["Rung 1: shadow, 30 days"]
+  G2{"slippage within tolerance?"}
+  X2["Rung 2: paper, 60 days incl. vol regime"]
+  G3{"metrics hold, pen test clean?"}
+  X3["Rung 2: gateway + small live, human-gated"]
+  G4["quarterly re-approval"]
+  X6["scaled live, human-gated"]
+  X1 --> G2 --> X2 --> G3 --> X3 --> G4 --> X6
+  G2 -->|no| STOP["stop: the honesty crown keeps"]
+  G3 -->|no| STOP
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class G2,G3 decision;
+class STOP err;
+class X3,G4 human;
+class X6 ok;
+class X1,X2 proc;

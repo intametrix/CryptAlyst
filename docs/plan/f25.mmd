@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant M as market data
+  participant S as scanner/z-composite
+  participant J as envelope journal
+  participant G as nightly grader
+  participant P as dashboard panel
+  M->>S: trades/klines/ticker (per tick)
+  S->>J: intel.signal (suspect list) + alerts
+  G->>J: replay windows [onset-60m, onset+h]
+  G->>G: labels, thresholds, latency, hit-rates
+  G->>P: precision@budget, top-5@20s, latency histogram
+  Note over G,P: achieved numbers beside published baselines

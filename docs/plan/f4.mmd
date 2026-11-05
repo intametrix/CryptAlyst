@@ -1,0 +1,37 @@
+flowchart TD
+  SYM["Symbol"] -->|"traded at"| INT["Interval"]
+  INT -->|"rolls into bars"| BAR["Bar: o h l c v n tb"]
+  BAR -->|"series"| SER["CandleSeries"]
+  SER -->|"feeds"| MOD["Model registry entry"]
+  MOD -->|"produces"| FP["ForecastPath: horizon steps"]
+  CUT["Cut: len - horizon"] -->|"splits"| TR["train rows[:cut]"]
+  CUT -->|"holdout"| HO["rows[cut:cut+h]"]
+  TR --> MOD
+  FP -->|"graded vs"| HO
+  SER -->|"triggers"| AL["Alert: kind P D R B + severity"]
+  FP -->|"drives at decision time"| DEC["Decision"]
+  DEC -->|"sized"| RS["Risk in R: unit size, stop, target"]
+  RS -->|"through"| GW["Risk gateway checks"]
+  GW -->|"approved"| ORD["Order"]
+  ORD -->|"filled"| FL["Fill"]
+  FL -->|"marked"| PJ["PnL in R"]
+  JR2[("every packet journaled: cid + parent_cid + refs")]
+  SYM -.-> JR2
+  DEC -.-> JR2
+  ORD -.-> JR2
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef ext fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class BAR,SER,FL,JR2 data;
+class CUT,GW decision;
+class AL err;
+class SYM,INT ext;
+class HO hot;
+class DEC,RS human;
+class TR,PJ ok;
+class MOD,FP,ORD proc;

@@ -1,0 +1,14 @@
+sequenceDiagram
+  participant UI as Dashboard
+  participant API as Verify handler
+  participant ST as History store
+  participant MD as Model registry
+  participant JR as Envelope journal
+  UI->>API: POST /api/forecast/verify
+  API->>ST: rows for symbol+interval
+  API->>API: cut = len - horizon, once
+  API->>MD: dispatch on sliced train
+  MD-->>API: path(horizon)
+  API->>API: grade vs rows[cut:]
+  Note over API,JR: graded forecast journaled, candle refs attached
+  API-->>UI: metrics, fan, paths

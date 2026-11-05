@@ -1,0 +1,12 @@
+sequenceDiagram
+  participant ORG as Organizers
+  participant INS as Insiders and VIPs
+  participant MEM as Group members
+  participant ARB as Arbitrage bots
+  participant RET as Retail FOMO
+  ORG->>INS: target as obfuscated image seconds early
+  INS->>MEM: ranked signal wave
+  MEM->>ARB: member wave: rush proxy z spike
+  ARB->>RET: cross-venue propagation
+  Note over ORG,RET: detector fires at the member wave, 0-10s
+  RET->>RET: minutes late, the exit liquidity

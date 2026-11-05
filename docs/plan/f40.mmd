@@ -1,0 +1,23 @@
+flowchart TD
+  subgraph P1["plane 1: market - never starved"]
+    A1["detector ticks"]
+    A2["live chart"]
+  end
+  subgraph P2["plane 2: intel"]
+    B1["suspect list"]
+    B2["forecast grades"]
+  end
+  subgraph P3["plane 3: batch"]
+    C1["nightly sweep"]
+    C2["optimizer"]
+    C3["replay grading"]
+  end
+  A1 --> B1 --> C1
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+class C3 data;
+class A1,A2 err;
+class C1,C2 hot;
+class B1,B2 proc;

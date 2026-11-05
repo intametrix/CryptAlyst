@@ -1,0 +1,20 @@
+flowchart LR
+  subgraph OPS["operators — they compute"]
+    direction TB
+    o1["forecast<br/>bars → path"]:::c_model
+    o2["signal<br/>tape → alert"]:::c_model
+    o3["decision<br/>forecast + clock → verdict"]:::c_model
+    o4["sweep<br/>grid → best fit"]:::c_model
+    o5["backtest<br/>journal → grade"]:::c_model
+    o6["fill · pnl<br/>order → ledger"]:::c_model
+  end
+  subgraph TRS["transformers — they reshape"]
+    direction TB
+    t1["rollup<br/>ticks → candles"]:::c_store
+    t2["resample<br/>candles → other frame"]:::c_store
+    t3["normalise<br/>units, scales, rounding"]:::c_store
+    t4["project<br/>packet → view payload"]:::c_store
+    t5["redact<br/>drop what the caller may not see"]:::c_store
+  end
+  OPS --> TRS
+  TRS --> OUT["one shape the journal,<br/>the bus and the API all accept"]:::c_intel

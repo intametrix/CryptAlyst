@@ -1,0 +1,27 @@
+flowchart TD
+  S["a symbol, e.g. BTCUSDT"]
+  S --> C["candles per interval"]
+  S --> F["funding, open interest, taker flow"]
+  S --> A["alerts and suspect-list rows"]
+  S --> FC["graded forecasts per model"]
+  S --> CF["saved configs: method, lookback, tuned params"]
+  S --> D["decisions and orders - Phase 6"]
+  S --> O["outcomes: coverage, latency, pnl in R"]
+  C --> FC
+  F --> FC
+  FC --> D
+  A --> D
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef ok fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+classDef ext fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
+classDef hot fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef human fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
+class C data;
+class A err;
+class S ext;
+class F hot;
+class CF,D human;
+class O ok;
+class FC proc;

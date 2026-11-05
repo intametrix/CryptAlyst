@@ -1,0 +1,16 @@
+flowchart TD
+  PK["Packet: the only shape on the bus"]
+  PK --> D["data: raw json<br/>the payload, schema per topic"]
+  PK --> ME["meta: version, plane, topic, key,<br/>producer, generation, seq,<br/>cid, parent_cid, computed_at,<br/>received_at, compute_ms, hops, pipeline"]
+  PK --> RF["refs: what it consumed<br/>topic + key + generation + age_ms"]
+  ME --> FRESH["freshness = now - computed_at vs topic TTL<br/>allowed, or refused with quoted numbers"]
+  D --> OPX["operator computes"]
+  OPX --> JR3["journal append"]
+classDef proc fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+classDef data fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+classDef decision fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+classDef err fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
+class D,RF,JR3 data;
+class PK decision;
+class FRESH err;
+class ME,OPX proc;
