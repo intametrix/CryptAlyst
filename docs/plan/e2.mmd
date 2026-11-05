@@ -1,33 +1,23 @@
-flowchart TB
-  REQ["a producer offers a payload"] --> A
-  subgraph CHAIN["the chain, in this order, every time"]
+flowchart LR
+  IN["producer<br/>offers a payload"]:::c_neutral
+  subgraph CHK["four checks — each may refuse"]
     direction TB
-    A{"<b>authority</b><br/>is this producer registered<br/>for this topic?"}
-    A -->|no| X1["REFUSE<br/>unknown producer"]
-    A -->|yes| B{"<b>schema</b><br/>does the payload decode<br/>into the expected shape?"}
-    B -->|no| X2["REFUSE<br/>undecodable payload"]
-    B -->|yes| C{"<b>keying</b><br/>is a keyed topic published<br/>with its key?"}
-    C -->|no| X3["REFUSE<br/>missing key"]
-    C -->|yes| D{"<b>correlation</b><br/>mint cid, chain parent"}
-    D --> E{"<b>freshness</b><br/>age = now − computed_at<br/>within the topic TTL?"}
-    E -->|no| X4["REFUSE<br/>stale: age, limit"]
-    E -->|yes| F{"<b>budget</b><br/>is this operator within<br/>its cost or rate?"}
-    F -->|no| X5["REFUSE<br/>over budget"]
-    F -->|yes| GO["the operator runs"]
+    A{"authority<br/>registered producer?"}:::c_control
+    S{"schema<br/>decodes?"}:::c_control
+    K{"keying<br/>key present?"}:::c_control
+    F{"freshness<br/>within TTL?"}:::c_control
+    A -->|yes| S -->|yes| K -->|yes| F
   end
-  X1 --> ERR["system.error packet<br/>stage · rule · the number"]:::c_risk
-  X2 --> ERR
-  X3 --> ERR
-  X4 --> ERR
-  X5 --> ERR
-  GO --> OP["the computed payload"]:::c_model
-  classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
-  classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
-  classDef c_market fill:#dbe9fb,stroke:#1d4e89,color:#0b2545,stroke-width:2px;
-  classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
-  classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
-  classDef c_store fill:#e9e3f7,stroke:#5b3fa8,color:#2a1a55,stroke-width:2px;
+  IN --> A
+  F -->|yes| OP["<b>operator</b><br/>the compute"]:::c_model
+  OP --> T["transformer<br/>normalise"]:::c_model
+  T --> OUT["packet published"]:::c_intel
+  A -.->|no| X["<b>REFUSE</b><br/>stage · rule · number<br/>→ system.error"]:::c_risk
+  S -.->|no| X
+  K -.->|no| X
+  F -.->|no| X
   classDef c_neutral fill:#eef1f5,stroke:#4b5b6e,color:#1f2b38,stroke-width:2px;
-  class REQ c_neutral;
-  class A,B,C,E,F c_control;
-  class D c_control;
+  classDef c_control fill:#d8eef2,stroke:#0f6b7a,color:#08343c,stroke-width:2px;
+  classDef c_model fill:#ffe9c7,stroke:#b7791f,color:#4a2f00,stroke-width:2px;
+  classDef c_intel fill:#d9f2e3,stroke:#1d7a4d,color:#0d3b26,stroke-width:2px;
+  classDef c_risk fill:#fbdcdc,stroke:#a4232b,color:#4a0f13,stroke-width:2px;
