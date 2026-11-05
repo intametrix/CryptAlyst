@@ -32,7 +32,7 @@ h3 {{ font-size: 10.5pt; font-weight: bold; color: {MUTED}; margin: 10pt 0 3pt;
          border-bottom: 0.5pt solid #d8e0e8; padding: 5pt 0; margin: 8pt 0 12pt; }}
 figure {{ margin: 8pt 0; page-break-inside: avoid; text-align: center; }}
 figure img {{ max-width: 100%; max-height: 6.4in; width: auto; height: auto; }}
-figcaption {{ font-size: 8pt; font-style: italic; color: {MUTED}; margin-top: 3pt;
+figcaption {{ font-size: 9.5pt; font-weight: bold; color: #1F4E79; margin: 4pt 0 2pt;
               text-align: center; }}
 table {{ width: 100%; border-collapse: collapse; margin: 5pt 0 9pt; }}
 th {{ background: {ACCENT}; color: #ffffff; font-weight: bold; text-align: left;

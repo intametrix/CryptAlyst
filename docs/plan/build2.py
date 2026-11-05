@@ -20,11 +20,22 @@ MODELS = SNAP["models"]
 ROUTES = SNAP["routes"]
 SETTINGS = SNAP["settings"]
 
-def fig(n, cap):
-    return kit.fig(os.path.join(HERE, f"f{n}.png"), cap)
+FIGNUM = {}
+ORDER = []
 
-def efig(n, cap):
-    return kit.fig(os.path.join(HERE, f"e{n}.png"), cap)
+def fig(n, cap, key=None):
+    num = len(ORDER) + 1
+    ORDER.append((num, cap, key))
+    if key:
+        FIGNUM[key] = num
+    return kit.fig(os.path.join(HERE, f"f{n}.png"), f"Figure {num} — {cap}")
+
+def efig(n, cap, key=None):
+    num = len(ORDER) + 1
+    ORDER.append((num, cap, key))
+    if key:
+        FIGNUM[key] = num
+    return kit.fig(os.path.join(HERE, f"e{n}.png"), f"Figure {num} — {cap}")
 
 table, co, kpis, defs = kit.table, kit.callout, kit.kpis, kit.defs
 
@@ -114,10 +125,10 @@ add(defs([
 
 # ---------------------------------------------------------------------------
 add(ch("The envelope, as implemented"))
-add(efig(1, "Figure — the fixed shape and the roles around it: the packet is immutable; the interceptors decide whether it may exist."))
+add(efig(1, "the shape and the roles around it: the packet is immutable; the interceptors decide whether it may exist.", "the-shape-and-the-three-role"))
 
 add("""
-<p>Everything leans on one structure, so it is described here as the code does it. The packet is fixed; the pipeline in front of it has six stages, in this order: <b>authority → keying → correlation → freshness → operator → transformer</b>. The first four can refuse. The operator is the caller's compute. The transformer is normalisation only.</p>
+<p>Everything leans on one structure, so it is described here as the code does it ([[F:the-shape-and-the-three-roles-around-it]]). The packet is fixed; the pipeline in front of it has six stages, in this order: <b>authority → keying → correlation → freshness → operator → transformer</b>. The first four can refuse. The operator is the caller's compute. The transformer is normalisation only.</p>
 """)
 add(table(["stage", "what the code does", "can it refuse"], [
   ["<b>authority</b>", "looks the topic up in the registry and checks the producer is listed for it", "yes — “unknown topic”, or “producer may not write topic”"],
@@ -129,7 +140,7 @@ add(table(["stage", "what the code does", "can it refuse"], [
 ], ["14%", "60%", "26%"]))
 add(co("law", "The two properties the stage order buys",
   "A producer that may not write a topic never reaches the compute, because authority runs before the operator. And a payload computed from data older than the topic's TTL is refused with its own age quoted back at it. Both are properties of the order, not of any model."))
-add(efig(2, "Figure 1 — four refusing stages, then the operator, then the transformer. Only the operator may compute."))
+add(efig(2, "the pipeline: four stages may refuse, the operator computes, the transformer normalises", "four-refusing-stages-then-th"))
 add("""
 <h3>What a packet carries</h3>
 """)
@@ -165,10 +176,10 @@ add(table(["element", "state"], [
 
 # ---------------------------------------------------------------------------
 add(ch("Traceability: what the platform can prove"))
-add(fig(12, "Figure — the packet anatomy: data, meta and refs, with the fields a lineage walk reads."))
+add(fig(12, "the packet anatomy: data, meta and refs, with the fields a lineage walk reads.", "the-packet-anatomy"))
 
 add("""
-<p>Traceability is not a log file. It is the property that any number a user saw can be walked back to the inputs that produced it, and forward to what happened next. The envelope gives that property structurally: a packet names its producer, its generation, its inputs and its pipeline, and a decision names the packet it was made from.</p>
+<p>Traceability is not a log file; it is the walk shown in [[F:a-lineage-chain]]. It is the property that any number a user saw can be walked back to the inputs that produced it, and forward to what happened next. The envelope gives that property structurally: a packet names its producer, its generation, its inputs and its pipeline, and a decision names the packet it was made from.</p>
 """)
 add(table(["question", "where the answer lives", "how it is read"], [
   ["what did we compute, and from what?", "<code>meta</code> plus <code>refs</code> on the packet", "<code>/api/envelope/recent</code>, then <code>/api/envelope/chain?cid=</code>"],
@@ -179,7 +190,7 @@ add(table(["question", "where the answer lives", "how it is read"], [
 ], ["26%", "38%", "36%"]))
 add(co("note", "Why a cid and not a log correlation id",
   "A log id survives only as long as the log. A cid is minted at the boundary that created the work and travels inside the packet, so it survives rotation, copying, replay and the machine that produced it. The journal is the map from cid to everything."))
-add(fig(32, "Figure 2 — a lineage chain: a decision points at the forecast it was made from, and the forecast points at the candles it read."))
+add(fig(32, "a lineage chain: a decision points at the forecast it was made from", "a-lineage-chain"))
 add("""
 <h3>The three questions, answered from the record</h3>
 <p><b>What did we believe, and why?</b> Walk the chain backwards from a decision to the forecast and its refs; every stage is on the packet, so the answer is a page of JSON rather than an investigation.</p>
@@ -189,10 +200,10 @@ add("""
 
 # ---------------------------------------------------------------------------
 add(ch("Phase 1 — make every number true"))
-add(fig(20, "Figure — the F1 fix, before and after: the training slice ends at the cut, so the graded bars are never visible to the model."))
+add(fig(20, "the F1 fix: the training slice ends at the cut, so the graded bars are never visible to the model", "the-f1-fix-before-and-after"))
 
 add("""
-<p>The first phase fixes the ten defects and builds the machinery that would have caught them. No new capability ships until it is done: there is no point adding a detector to a platform whose grades are fiction.</p>
+<p>The first phase fixes the ten defects and builds the machinery that would have caught them. [[F:the-f1-fix]] shows the shape of the fix for the worst of them. No new capability ships until it is done: there is no point adding a detector to a platform whose grades are fiction.</p>
 """)
 add(table(["fix", "what changes", "how we know it worked"], [
   ["<b>F1</b>", "the verify handler slices the training window; the path anchors at the cut", "a leak test that fails if a graded index appears in the training slice"],
@@ -211,10 +222,10 @@ add(co("good", "Phase 1 exit gate",
 
 # ---------------------------------------------------------------------------
 add(ch("Phase 2 — detection and signals"))
-add(fig(24, "Figure — the suspect-list cascade: cheap features narrow the field before the expensive book pass runs."))
+add(fig(24, "the suspect-list cascade: cheap features narrow the field before the expensive book pass runs.", "the-suspect-list-cascade"))
 
 add("""
-<p>Onset detection fires when the move is visible. That is a definition, not a bug, and it is why onset alerts are worth less than they look. Phase 2 moves the platform from “tell me when it has started” to “rank the suspects seconds before the signal”, and makes the ranking gradeable so its precision can be stated at any operating point.</p>
+<p>Onset detection fires when the move is visible ([[F:the-two-tier-funnel]] shows why a second pass exists at all). That is a definition, not a bug, and it is why onset alerts are worth less than they look. Phase 2 moves the platform from “tell me when it has started” to “rank the suspects seconds before the signal”, and makes the ranking gradeable so its precision can be stated at any operating point.</p>
 """)
 add(table(["feature family", "what it measures", "why it is in the list"], [
   ["per-coin z-scores", "deviation from that coin's own behaviour", "absolute thresholds do not transfer between pairs — the most reproduced finding in the literature"],
@@ -223,7 +234,7 @@ add(table(["feature family", "what it measures", "why it is in the list"], [
   ["book shape", "depth, spread, and where it thins", "the one new infrastructure piece: a two-tier book feed"],
   ["cross-sectional rank", "how unusual this coin is today", "separates a market-wide move from a single-coin event"],
 ], ["22%", "30%", "48%"]))
-add(fig(27, "Figure 3 — the two-tier funnel: a cheap screen over the whole market, then a book-aware pass over the suspects only."))
+add(fig(27, "the two-tier funnel: a cheap screen across the market, an expensive pass on the suspects", "the-two-tier-funnel"))
 add(co("warn", "The number that has to be printed",
   "Minute-scale early warning of a pump, measured across the published literature, is roughly <b>19% top-5 precision</b>. The deliverable of this phase is a ranked list with a measured precision curve, not a promise that the list is right."))
 add("""
@@ -235,10 +246,10 @@ add(co("good", "Phase 2 exit gate",
 
 # ---------------------------------------------------------------------------
 add(ch("Phase 3 — the envelope does the work"))
-add(fig(33, "Figure — the topic registry as a map: planes down the side, producers across the top."))
+add(fig(33, "the topic registry as a map: planes down the side, producers across the top", "the-topic-registry-as-a-map"))
 
 add("""
-<p>Phase 3 is where the contract stops being architecture and becomes how the platform remembers. Forecasts and decisions already publish; this phase makes it universal, fills the silent producers, and adds the one interceptor rule that turns the whole thing into a look-ahead firewall.</p>
+<p>Phase 3 is where the contract stops being architecture and becomes how the platform remembers ([[F:the-topic-registry-as-a-map]] is the shape of what has to be filled). Forecasts and decisions already publish; this phase makes it universal, fills the silent producers, and adds the one interceptor rule that turns the whole thing into a look-ahead firewall.</p>
 """)
 add(co("law", "The refs validation rule",
   "A forecast packet must cite the candle generation it consumed. If its refs are stale, or the generation does not match the platform's current candle generation for that key, the packet is refused at authority. That single rule is the platform-wide firewall: a forecast cannot claim data it did not have."))
@@ -254,10 +265,10 @@ add(co("good", "Phase 3 exit gate",
 
 # ---------------------------------------------------------------------------
 add(ch("Phase 4 — the forecasting edge"))
-add(fig(34, "Figure — the promotion gate: an evidence file, not a preference."))
+add(fig(34, "the promotion gate: an evidence file, not a preference.", "the-promotion-gate"))
 
 add("""
-<p>This is the phase everyone assumes comes first. It comes fourth because an edge measurement is worth nothing if the tape measure is wrong, and after Phase 1 it is not.</p>
+<p>This is the phase everyone assumes comes first, and [[F:the-promotion-gate]] is what it has to pass. It comes fourth because an edge measurement is worth nothing if the tape measure is wrong, and after Phase 1 it is not.</p>
 """)
 add(table(["job", "what changes", "why it is not optional"], [
   ["calibrated bands", "coverage becomes a first-class metric with telemetry and a promotion rule", "a 90% cone that holds 60% of outcomes is decoration"],
@@ -270,10 +281,10 @@ add(co("good", "Phase 4 exit gate",
 
 # ---------------------------------------------------------------------------
 add(ch("Phase 5 — speed and efficiency"))
-add(fig(38, "Figure — cache invalidation: the key carries the generation, so a stale key misses instead of returning."))
+add(fig(38, "cache invalidation: the key carries the generation, so a stale key misses instead of returning.", "cache-invalidation"))
 
 add("""
-<p>Efficiency work is where honesty usually dies quietly: a cache that returns a slightly different series, an incremental scorer that drifts from the full computation, a sweep that starves the live path it exists to serve. This phase is defined by its constraints as much as its targets.</p>
+<p>Efficiency work is where honesty usually dies quietly ([[F:cache-invalidation]] is the mechanism that keeps it honest).: a cache that returns a slightly different series, an incremental scorer that drifts from the full computation, a sweep that starves the live path it exists to serve. This phase is defined by its constraints as much as its targets.</p>
 """)
 add(table(["work", "the constraint that keeps it honest"], [
   ["one spec → every runtime's kernels", "parity in the gate, per model, on every cut"],
@@ -287,10 +298,10 @@ add(co("good", "Phase 5 exit gate",
 
 # ---------------------------------------------------------------------------
 add(ch("Phase 6 — the ladder to execution"))
-add(fig(42, "Figure — the kill-switch states: every path to stopped is short, and only a human leaves it."))
+add(fig(42, "the kill-switch states: every path to stopped is short, and only a human leaves it.", "the-kill-switch-states"))
 
 add("""
-<p>Automated execution is not a feature that gets switched on. It is a ladder climbed one rung at a time, with evidence at each rung and a human signature before the next. The purpose of the ladder is to make it structurally hard to lose money faster than the platform can learn.</p>
+<p>Automated execution is not a feature that gets switched on; it is a ladder ([[F:the-evidence-ladder]]), and [[F:the-kill-switch-states]] is the one rung that must never be automated. It is a ladder climbed one rung at a time, with evidence at each rung and a human signature before the next. The purpose of the ladder is to make it structurally hard to lose money faster than the platform can learn.</p>
 """)
 add(table(["rung", "what runs", "what must be true before the next"], [
   ["<b>shadow</b>", "the engine decides; nothing is sent", "decisions reproduce on replay; refusal reasons visible"],
@@ -302,11 +313,11 @@ add(table(["rung", "what runs", "what must be true before the next"], [
 ], ["14%", "36%", "50%"]))
 add(co("law", "The rules that do not bend at any rung",
   "A kill switch a human resets and no process can. A daily loss limit enforced in the gateway rather than the strategy. Caps that are configuration, not code. Freshness checked before the order is built. And re-enabling anything, or raising a cap, is a human act — durable across restarts and written to the audit trail."))
-add(fig(44, "Figure 4 — the evidence ladder: each rung is a claim, and each claim needs the evidence file of the rung below it."))
+add(fig(44, "the evidence ladder: each rung is a claim, and each claim needs a file to support it", "the-evidence-ladder"))
 
 # ---------------------------------------------------------------------------
 add(ch("The next phase: a market-leading forecast engine, with DMA behind it"))
-add(fig(50, "Figure — the roadmap: the phases in order, each gated by the one before it."))
+add(fig(50, "the roadmap: the phases in order, each gated by the one before it.", "the-roadmap"))
 
 add("""
 <p>The six phases make the platform honest, fast and recorded. They do not make it the best forecast engine in the market, and they are not meant to. This is the phase that does: a forecast engine specified as a measurable claim, and — behind an evidence gate, never in front of it — a direct-market-access path that can act on what the engine concludes.</p>
@@ -322,7 +333,7 @@ add(table(["dimension", "the measure", "the bar to beat"], [
 ], ["16%", "44%", "40%"]))
 add(co("law", "The rule that keeps the claim honest",
   "A model is promoted only on out-of-sample evidence from the record, never on in-sample fit, never on a single symbol, and never on a single regime. Promotion is a gate with a written evidence file, and the file is attached to the packet that the promotion produces. If the claim cannot be restated as a number in chapter 24's dictionary, it is not a claim."))
-add(fig(21, "Figure 5 — one spec, every runtime. The engine the operator uses and the engine the GPU sweeps are the same description, so a promotion cannot mean two different formulas."))
+add(fig(21, "one spec, every runtime: what the operator runs and what the GPU sweeps are one description", "one-spec-every-runtime-the-e"))
 
 add("""
 <h3>The engine, layer by layer</h3>
@@ -350,7 +361,7 @@ add(table(["component", "responsibility", "the safety property it enforces"], [
   ["<b>ledger</b>", "fills, fees, slippage and PnL, journaled", "every number that affects capital is a packet"],
   ["<b>supervisor</b>", "watches divergence between intent and fill", "a divergence beyond tolerance descends a rung, automatically"],
 ], ["16%", "40%", "44%"]))
-add(fig(43, "Figure 6 — the gateway's evaluation: every intent is checked against the limits before it can become an order."))
+add(fig(43, "the gateway evaluation: every intent is checked against the limits before it can become an order", "the-gateway-evaluation-s-eva"))
 add(co("warn", "The honest ordering",
   "Auto-trade is the last thing built and the first thing switched off. If the engine's coverage does not hold, or its skill versus flat is not positive on out-of-sample cuts, the DMA path stays at the shadow rung — and the document says so in the same breath as the ambition, because a plan that promises both the engine and the profits is a brochure."))
 
@@ -382,10 +393,10 @@ add(co("warn", "The two things the catalogue cannot tell you",
 
 # ---------------------------------------------------------------------------
 add(ch("Calibration and uncertainty"))
-add(fig(36, "Figure — the ACI update loop: coverage drift feeds the next band width."))
+add(fig(36, "the ACI update loop: coverage drift feeds the next band width.", "the-aci-update-loop"))
 
 add("""
-<p>A forecast without a band is a number pretending to be a fact. The band is the part that says how much to believe the number, and it is the part that is almost always wrong. This chapter is about what the platform does to make the band mean something.</p>
+<p>A forecast without a band is a number pretending to be a fact. [[F:the-coverage-telemetry-loop]] is how the band is judged. The band is the part that says how much to believe the number, and it is the part that is almost always wrong. This chapter is about what the platform does to make the band mean something.</p>
 """)
 add(table(["mechanism", "what it does", "how it is judged"], [
   ["<b>bootstrap fan</b>", "resamples training residuals to produce percentiles of the path", "coverage at 50/80/90 versus advertised; width versus a naive constant band"],
@@ -393,16 +404,16 @@ add(table(["mechanism", "what it does", "how it is judged"], [
   ["<b>ACI</b>", "an online update that widens or narrows the band as coverage drifts", "coverage over rolling windows; the width trend during a regime change"],
   ["<b>λ calibration</b>", "scales the fan by a fitted factor", "whether one λ holds across pairs or needs to be per pair"],
 ], ["16%", "34%", "50%"]))
-add(fig(35, "Figure 7 — the coverage telemetry loop: every resolved window compares the band it advertised with what happened, and the result feeds the next band."))
+add(fig(35, "the coverage telemetry loop loop: every resolved window compares the band it advertised with what happened, and the result feeds the next band.", "the-coverage-telemetry-loop"))
 add(co("law", "The claim the band has to earn",
   "A 90% band holds 90% of outcomes. Not 60%, not 97% — and if it cannot hold its own number, the band is removed from the surface rather than relabelled. This is the single most falsifiable claim in the document, which is why it is the one that gets telemetry."))
 
 # ---------------------------------------------------------------------------
 add(ch("Backtests and replay"))
-add(fig(25, "Figure — the grading loop: cut, forecast, wait, grade, and feed the scorecard."))
+add(fig(25, "the grading loop: cut, forecast, wait, grade, and feed the scorecard.", "the-grading-loop"))
 
 add("""
-<p>The old platform's weakest property was that the backtest and the live path shared intent but not code: they could disagree, and nobody could say which was right. Here the two are the same function, applied to a recorded packet instead of a fresh one.</p>
+<p>The old platform's weakest property was that the backtest and the live path shared intent but not code — [[F:backtest-equals-replay]] is the answer to that.: they could disagree, and nobody could say which was right. Here the two are the same function, applied to a recorded packet instead of a fresh one.</p>
 """)
 add(table(["step", "live path", "replay path"], [
   ["inputs", "the newest bars", "the bars recorded in the packet's refs"],
@@ -413,14 +424,14 @@ add(table(["step", "live path", "replay path"], [
 ], ["16%", "42%", "42%"]))
 add(co("good", "Why replay is the strongest test in the system",
   "It exercises the whole chain against history the platform cannot change: the packet, the refs, the rule, the price that followed. When a decision rule changes, the scorecard changes — which makes the change visible rather than invisible. That is the property that makes an honest leaderboard possible."))
-add(fig(30, "Figure 8 — backtest equals replay: the journal is the dataset, and the decision function is shared."))
+add(fig(30, "backtest equals replay: the journal is the dataset, and the decision function is shared.", "backtest-equals-replay"))
 
 # ---------------------------------------------------------------------------
 add(ch("Storage: three surfaces and what each is for"))
-add(fig(46, "Figure — retention per plane: the journal keeps everything; the lake keeps everything longer."))
+add(fig(46, "retention per plane: the journal keeps every packet; the lake keeps them longer", "retention-per-plane"))
 
 add("""
-<p>Four surfaces, each with one job. The rule that keeps them coherent is that any number a user saw must be reproducible from one of them.</p>
+<p>Four surfaces, each with one job ([[F:the-store-layout]]). The rule that keeps them coherent is that any number a user saw must be reproducible from one of them.</p>
 """)
 add(table(["surface", "path", "written by", "answers"], [
   ["bar store", "<code>data/history/SYMBOL-INTERVAL.jsonl</code>", "<code>fetchAndStore</code>", "what the forecast read"],
@@ -432,14 +443,14 @@ add(pre("""{"open_time":1793732400000,"open":77691.39,"high":77720.1,"low":77640
  "close":77701.2,"volume":12.84,"close_time":1793732459999}"""))
 add(co("note", "Why the journal is a file and not a table",
   "A file replays in one pass, tails, copies and diffs. It never blocks a publisher, and a corrupt line is one line. The lake is the database-shaped store; the journal is the index the decision path reads."))
-add(fig(19, "Figure 9 — the store layout: the bar store answers forecasts, the journal answers history, the lake holds everything."))
+add(fig(19, "the store layout: the bar store answers forecasts, the journal answers history, the lake holds everything.", "the-store-layout"))
 
 # ---------------------------------------------------------------------------
 add(ch("GPU compute and the agent"))
-add(fig(47, "Figure — job scheduling: a sweep is one job, and a forecast never queues behind it."))
+add(fig(47, "job scheduling: a sweep is one job, and a forecast never queues behind it.", "job-scheduling"))
 
 add("""
-<p>The GPU tier exists for one job that the CPU tier cannot do in a useful time: sweeping a parameter grid across many lookbacks and windows and grading every combination walk-forward. Everything else the platform does is cheap enough to stay on the platform.</p>
+<p>The GPU tier exists for one job that the CPU tier cannot do in a useful time ([[F:compute-topology]]), and [[F:job-scheduling]] is what stops it starving the live path.: sweeping a parameter grid across many lookbacks and windows and grading every combination walk-forward. Everything else the platform does is cheap enough to stay on the platform.</p>
 """)
 add(table(["capability", "endpoint", "what it is for"], [
   ["device and liveness", "GET /gpu", "the board shows what is computing, on which device"],
@@ -449,12 +460,12 @@ add(table(["capability", "endpoint", "what it is for"], [
 ], ["22%", "22%", "56%"]))
 add(co("warn", "The failure mode the fallback prevents",
   "If the GPU box is off, the platform scores locally and the board still moves. That is deliberate: an accelerator that is required is not an accelerator, it is a dependency. What the fallback must never do is produce a different answer for the same model name — which is exactly what finding F7 was."))
-add(fig(18, "Figure 10 — compute topology: platform, agent and GPU as three tiers of one registry, with the local fallback kept honest by a parity test."))
+add(fig(18, "compute topology: platform, agent and GPU as three tiers of one registry, with the local fallback kept honest by a parity test.", "compute-topology"))
 
 # ---------------------------------------------------------------------------
 add(ch("The dashboard: what the UI has to say"))
 add("""
-<p>The dashboard is where every honesty claim in this document becomes visible, or does not. It is not a shop window: it is the place where a number is either traceable to its packet or is decoration.</p>
+<p>The dashboard is where every honesty claim in this document becomes visible, or does not ([[F:the-dashboard-information-architecture]]). It is not a shop window: it is the place where a number is either traceable to its packet or is decoration.</p>
 """)
 add(table(["view", "the question it answers", "the honesty surface it carries"], [
   ["<b>overview</b>", "what is moving right now", "live alerts, leaderboard, split, screen, survey, movers"],
@@ -466,12 +477,12 @@ add(table(["view", "the question it answers", "the honesty surface it carries"],
 ], ["16%", "34%", "50%"]))
 add(co("good", "The three surfaces this plan adds",
   "<b>Coverage against advertised coverage</b>, per model and frame — the band's own report card. <b>The suspect list with its precision curve</b> — Phase 2's deliverable, where a trader would look. <b>The decision trail</b> — for any past moment, the chain from price to forecast to verdict, in one click. None of the three exists today, and all three are cheap once the packets do."))
-add(fig(48, "Figure 11 — the dashboard's information architecture: six views, and what each draws from."))
+add(fig(48, "the dashboard information architecture's information architecture: six views, and what each draws from.", "the-dashboard-information-ar"))
 
 # ---------------------------------------------------------------------------
 add(ch("Flows, end to end"))
 add("""
-<p>Seven flows, each a chain of packets. Reading them in order is the shortest way to understand what the platform does: the first four exist, the last three are what this plan adds.</p>
+<p>Seven flows, each a chain of packets ([[F:a-day-in-the-life-of-a-tick]] is the first of them, and [[F:the-envelope-chain-for-one-decision]] the third). Reading them in order is the shortest way to understand what the platform does: the first four exist, the last three are what this plan adds.</p>
 """)
 add(table(["flow", "the chain", "state"], [
   ["market → bar", "venue → <code>market.candle</code> → bar store", "shipped"],
@@ -482,12 +493,12 @@ add(table(["flow", "the chain", "state"], [
   ["decision → intent", "<code>model.decision</code> → risk gateway → order intent", "Phase 6"],
   ["intent → fill → PnL", "adapter → <code>model.fill</code> → <code>model.pnl</code>", "Phase 6"],
 ], ["18%", "60%", "22%"]))
-add(fig(5, "Figure 12 — a day in the life of a tick: how one trade print travels from the venue to the journal."))
-add(fig(8, "Figure 13 — the envelope chain for one decision: each stage adds a packet, and each packet names its parent."))
+add(fig(5, "a day in the life of a tick: how one trade print travels from the venue to the journal.", "a-day-in-the-life-of-a-tick"))
+add(fig(8, "the envelope chain for one decision: each stage adds a packet, and each packet names its parent", "the-envelope-chain-for-one-d"))
 
 # ---------------------------------------------------------------------------
 add(ch("Compliance and audit"))
-add(fig(49, "Figure — incident response: who is told, in what order, and what is recorded at each step."))
+add(fig(49, "incident response: who is told, in what order, and what is recorded at each step.", "incident-response"))
 
 add("""
 <p>Compliance here is not a filing exercise. It is the ability to answer, months later, who decided what, on which evidence, under whose authority, and with which limits in force. Every one of those answers is a packet or a log line that this plan makes durable.</p>
@@ -506,7 +517,7 @@ add(co("note", "The test a regulator would actually apply",
 # ---------------------------------------------------------------------------
 add(ch("Operations, security and reliability"))
 add("""
-<p>Six processes, one machine, and a network where the GPU workers live. The platform is designed so that each process can be restarted alone and no process holds state that only lives in memory.</p>
+<p>Six processes, one machine, and a network where the GPU workers live ([[F:the-service-and-port-map]]). The platform is designed so that each process can be restarted alone and no process holds state that only lives in memory.</p>
 """)
 add(table(["process", "port", "what breaks without it"], [
   ["platform", "8787", "nothing works"],
@@ -516,14 +527,14 @@ add(table(["process", "port", "what breaks without it"], [
   ["RabbitMQ", "61613 / 15672", "packets are journalled but not broadcast"],
   ["model books", "8799", "the Python books stop"],
 ], ["18%", "14%", "68%"]))
-add(fig(9, "Figure 14 — the service and port map."))
+add(fig(9, "the service and port map.", "the-service-and-port-map"))
 add(co("warn", "The three failure modes worth rehearsing",
   "<b>A full disk</b> stops the recorder and the platform keeps answering — by design, and it is why recording never fails a request. <b>A silent recorder</b> is the one that bites: the bus view is the only place it shows. <b>A dead market feed</b> leaves the last price in place, so every move reads zero — flat charts are a feed symptom before they are a model symptom."))
 
 # ---------------------------------------------------------------------------
 add(ch("The adversary"))
 add("""
-<p>A detection programme that assumes a static adversary works for one quarter. This chapter states what a manipulator does to avoid us, and what we hold that they cannot cheaply remove.</p>
+<p>A detection programme that assumes a static adversary works for one quarter ([[F:the-pump-wave-actor-by-actor]] is the sequence it has to keep up with). This chapter states what a manipulator does to avoid us, and what we hold that they cannot cheaply remove.</p>
 """)
 add(table(["evasion", "what it costs them", "what we already have"], [
   ["slower, longer accumulation", "time, and a bigger footprint in the book", "per-coin baselines over long windows"],
@@ -534,7 +545,7 @@ add(table(["evasion", "what it costs them", "what we already have"], [
 ], ["24%", "34%", "42%"]))
 add(co("note", "The honest limit",
   "Every counter here is a cost imposed, not an immunity. The defensible claim is narrower: the platform measures the cost it imposes, because every detection is graded and every grade is journaled. A detector that stops working shows up as a falling precision curve rather than as silence."))
-add(fig(26, "Figure 15 — the pump wave, actor by actor: who does what, in what order, and which of our features each stage leaves a trace in."))
+add(fig(26, "the pump wave, actor by actor: who does what, in what order, and which feature each stage leaves a trace in", "the-pump-wave-actor-by-actor"))
 
 # ---------------------------------------------------------------------------
 add(ch("Risk register"))
@@ -736,7 +747,7 @@ add(co("good", "Why the file is the deliverable",
 
 # ---------------------------------------------------------------------------
 add(ch("The audit, finding by finding"))
-add(fig(23, "Figure — the test corpus at a glance: what the gate exercises, and what it does not."))
+add(fig(23, "the test corpus at a glance: what the gate exercises, and what it does not", "the-test-corpus-at-a-glance"))
 
 add("""
 <p>The summary table in chapter 2 states what was wrong. This chapter states it the way an engineer needs it: what the code did, what it should have done, what it changed for a user, and the test that now prevents it. It is deliberately specific, because a defect described vaguely cannot be verified as fixed.</p>
@@ -884,7 +895,7 @@ add(co("note", "How to read the column that matters",
   "“Needs volume” is not a limitation, it is a data dependency: on a pair with thin or missing volume the model is not run rather than run on zeros. “Runs where” is a parity statement — a model listed as platform-only has no GPU implementation, and a model in both must produce the same numbers in both, which the parity harness asserts on every cut."))
 
 add(ch("Signals: the detector families"))
-add(fig(28, "Figure — the alert lifecycle, as states: draft, suppressed, fired, confirmed, graded."))
+add(fig(28, "the alert lifecycle, as states: draft, suppressed, fired, confirmed, graded.", "the-alert-lifecycle-as-state"))
 
 add("""
 <p>A signal is a claim that something is happening, and the platform's detectors make four kinds of claim. Each has its own trigger, its own features and its own characteristic failure.</p>
@@ -973,7 +984,7 @@ add(co("law", "Why a limits chapter belongs in a plan",
 
 add(ch("Sequencing and dependencies"))
 add("""
-<p>The phases are not parallel. Each depends on the honesty of the one before it, and the dependencies explain why there is no shortcut to the engine phase.</p>
+<p>The phases are not parallel ([[F:the-phase-dependency-graph]]). Each depends on the honesty of the one before it, and the dependencies explain why there is no shortcut to the engine phase.</p>
 """)
 add(table(["phase", "depends on", "because"], [
   ["correctness", "nothing", "it is the foundation everything else is measured on"],
@@ -984,7 +995,7 @@ add(table(["phase", "depends on", "because"], [
   ["execution ladder", "everything above", "each rung grades the engine against the rung below"],
   ["the engine phase", "forecasting edge and envelope", "the five claims are all measured through the record"],
 ], ["24%", "30%", "46%"]))
-add(fig(51, "Figure 16 — the phase dependency graph: nothing downstream can be judged before what it depends on is honest."))
+add(fig(51, "the phase dependency graph: nothing downstream can be judged before what it depends on is honest.", "the-phase-dependency-graph"))
 
 add(ch("Phase task lists"))
 add("<p>Each phase broken into the tasks that make its exit gate reachable. The sizes are relative, not calendar: <b>large</b> means a task that will surface work nobody scheduled.</p>")
@@ -1290,6 +1301,10 @@ reader    /api/envelope/recent?topic=intel.forecast  →  the same packet"""))
 add(co("good", "What to do with the trace",
   "If the same packet appears at all four steps, the pipeline is intact and the only questions left are about the payload. If it disappears between the broker and the recorder, the fault is in one process and the bus view shows the gap. That is what traceability buys operationally: a broken chain tells you where, not just that."))
 
+add(ch("List of figures"))
+add("<p>Every figure in this document, in order, with the chapter it belongs to.</p>")
+add(table(["#", "figure"], [(str(n), c) for n, c, _ in ORDER], ["8%", "92%"]))
+
 add(ch("Reference"))
 add("<h3>Metrics</h3>")
 add(table(["metric", "definition", "how it is read"], [
@@ -1335,6 +1350,19 @@ add(defs([
 # ---------------------------------------------------------------------------
 # Assembly. Pass one marks each chapter band with a unique token so the page it lands on can
 # be found by exact text rather than guessed; pass two prints the real contents numbers.
+def resolve_refs(html):
+    """Prose says [[F:key]]; the reader sees "Figure 7"."""
+    def repl(m):
+        key = m.group(1)
+        n = FIGNUM.get(key)
+        if n is None:                       # keys are slugged from captions; match on prefix
+            for k, v in FIGNUM.items():
+                if k.startswith(key[:18]):
+                    n = v
+                    break
+        return f"Figure {n}" if n else "the figure"
+    return re.sub(r"\[\[F:([a-z0-9-]+)\]\]", repl, html)
+
 def numbered_html(tokens):
     counter = [0]
     def repl(m):
@@ -1342,7 +1370,7 @@ def numbered_html(tokens):
         n = counter[0]
         mark = f' <span style="font-size:6pt;color:#b0b6bf">CH{n}MARK</span>' if tokens else ""
         return f'<h2 class="chapter"><span class="num">{n}</span>{m.group(1)}{mark}</h2>'
-    return re.sub(r"<!--CH\|([^>]+?)-->", repl, "".join(B))
+    return re.sub(r"<!--CH\|([^>]+?)-->", repl, resolve_refs("".join(B)))
 
 TITLES = [(i + 1, t) for i, t in enumerate(MARKERS)]
 OUT = os.path.join(DOCS, "CryptAlyst-Master-Plan.pdf")
