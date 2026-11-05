@@ -31,7 +31,7 @@ h3 {{ font-size: 10.5pt; font-weight: bold; color: {MUTED}; margin: 10pt 0 3pt;
 .meta {{ font-size: 8.5pt; color: {MUTED}; border-top: 0.5pt solid #d8e0e8;
          border-bottom: 0.5pt solid #d8e0e8; padding: 5pt 0; margin: 8pt 0 12pt; }}
 figure {{ margin: 8pt 0; page-break-inside: avoid; text-align: center; }}
-figure img {{ max-width: 100%; max-height: 5.4in; width: auto; height: auto; }}
+figure img {{ max-width: 100%; max-height: 6.4in; width: auto; height: auto; }}
 figcaption {{ font-size: 8pt; font-style: italic; color: {MUTED}; margin-top: 3pt;
               text-align: center; }}
 table {{ width: 100%; border-collapse: collapse; margin: 5pt 0 9pt; }}
@@ -47,7 +47,7 @@ code {{ font-family: "Courier New", Courier, monospace; font-size: 8.5pt; }}
 .note {{ border-left: 2.5pt solid {ACCENT}; background: #eef5fa; padding: 6pt 9pt; margin: 7pt 0; }}
 .warn {{ border-left: 2.5pt solid #a4232b; background: #fdf0f2; padding: 6pt 9pt; margin: 7pt 0; }}
 ul, ol {{ margin: 4pt 0 6pt 16pt; padding: 0; }} li {{ margin: 2pt 0; }}
-.toc {{ display: grid; grid-template-columns: 1fr 1fr; column-gap: 22pt; font-size: 9.5pt; margin: 6pt 0 4pt; }}
+.toc {{ display: grid; grid-template-columns: 1fr 1fr; column-gap: 22pt; font-size: 9pt; margin: 6pt 0 4pt; }}
 .toc div {{ break-inside: avoid; margin: 1.5pt 0; }}
 h2.chapter:first-of-type {{ page-break-before: avoid; }}
 h2.chapter {{ font-size: 15.5pt; font-weight: bold; color: #ffffff; background: {ACCENT};
@@ -62,6 +62,16 @@ h3 {{ border-bottom: 0.5pt solid #d8e0e8; padding-bottom: 2pt; }}
 .co.good {{ border-color: #1d7a4d; background: #eff8f2; }} .co.good b.t {{ color: #1d7a4d; }}
 .co.ex   {{ border-color: #b7791f; background: #fdf6ea; }} .co.ex b.t {{ color: #b7791f; }}
 .co.law  {{ border-color: #5b3fa8; background: #f3f0fb; }} .co.law b.t {{ color: #5b3fa8; }}
+
+.tocpage {{ margin-top: 10pt; }}
+.tocpage h2 {{ border: none; margin: 0 0 2pt; }}
+.tocrow {{ display: flex; align-items: baseline; gap: 4pt; margin: 0 0 3.5pt; font-size: 10pt; }}
+.tocrow .n {{ min-width: 20pt; color: {ACCENT}; font-weight: bold; }}
+.tocrow .t {{ color: #1a1a1a; }}
+.tocrow .dots {{ flex: 1; border-bottom: 0.75pt dotted #b0b6bf; margin: 0 3pt 2.5pt; }}
+.tocrow .p {{ min-width: 18pt; text-align: right; color: {MUTED}; font-variant-numeric: tabular-nums; }}
+.tocrow.sub {{ margin-left: 24pt; font-size: 9pt; }}
+.tocrow.sub .n {{ min-width: 0; }}
 .kpis {{ display: flex; gap: 6pt; margin: 8pt 0; page-break-inside: avoid; }}
 .kpi {{ flex: 1; border-top: 3pt solid {ACCENT}; background: #f4f7fa; padding: 6pt 7pt; }}
 .kpi .v {{ font-size: 15pt; font-weight: bold; color: {ACCENT}; line-height: 1.1; }}
@@ -144,6 +154,49 @@ def kpis(items):
 def defs(pairs):
     body = "".join(f'<dt>{k}</dt><dd>{v}</dd>' for k, v in pairs)
     return f'<dl class="defs">{body}</dl>'
+
+
+def contents(entries, title="Contents"):
+    """A contents page: one chapter per line, dot leaders, page number on the right."""
+    rows = "".join(
+        f'<div class="tocrow"><span class="n">{n}</span><span class="t">{t}</span>'
+        f'<span class="dots"></span><span class="p">{p if p else ""}</span></div>'
+        for n, t, p in entries)
+    return f'<div class="tocpage"><h2>{title}</h2>{rows}</div>'
+
+
+def find_pages(pdf_path, titles):
+    """Which body page each chapter starts on.
+
+    A chapter band prints its number and title adjacent, so the extracted text often reads
+    "3The envelope" with no space. The title alone is the reliable needle — restricted to
+    the top of the page, where a band sits — with a whole-page search as the fallback.
+    """
+    from pypdf import PdfReader
+    reader = PdfReader(pdf_path)
+    pages = [" ".join((pg.extract_text() or "").split()) for pg in reader.pages]
+    bodies = [str(t).split(" ", 1)[-1] if str(t)[:2].strip().isdigit() else str(t) for t in titles]
+    needles = {" ".join(b.split()): t for b, t in zip(bodies, titles)}
+
+    first = 1
+    for i, text in enumerate(pages[1:], start=1):
+        if sum(1 for n in needles if n[:30] in text) < 4:
+            first = i
+            break
+
+    found = {}
+    for needle, original in needles.items():
+        for i, text in enumerate(pages[first:], start=first):
+            if needle[:40] and needle[:40] in text[:220]:
+                found[original] = i
+                break
+        else:
+            for i, text in enumerate(pages[first:], start=first):
+                if needle[:40] and needle[:40] in text:
+                    found[original] = i
+                    break
+    return found
+
 
 def fig(path, caption):
     b64 = base64.b64encode(open(path, "rb").read()).decode()
